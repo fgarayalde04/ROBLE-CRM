@@ -1,0 +1,29 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --rc-dark:        #2D3F52;
+    --rc-dark-mid:    #354A5E;
+    --rc-green:       #16A34A;
+    --rc-green-light: #DCFCE7;
+    --warm-white:     #F4F6F8;
+    --surface:        #FFFFFF;
+    --border:         #E2E8F0;
+    --border-soft:    #EEF0F4;
+    --text-primary:   #2D3F52;
+    --text-secondary: #4A5568;
+    --text-muted:     #9CA3AF;
+  }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    background-color: var(--warm-white);
+    color: var(--text-primary);
+  }
+}

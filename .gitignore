@@ -1,0 +1,6 @@
+.env.local
+node_modules
+.next
+.DS_Store
+*.tsbuildinfo
+import-broker-data.js
