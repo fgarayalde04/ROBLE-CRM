@@ -4,3 +4,4 @@ node_modules
 .DS_Store
 *.tsbuildinfo
 import-broker-data.js
+.vercel
