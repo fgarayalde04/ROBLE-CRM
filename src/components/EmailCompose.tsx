@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import EmailAutocomplete from './EmailAutocomplete'
 
 interface Props {
   defaultTo?: string
@@ -79,19 +80,18 @@ export default function EmailCompose({ defaultTo = '', onSent, onClose }: Props)
       <div className="flex-1 space-y-0 divide-y divide-[#EEF0F4] border border-[#E2E8F0] rounded-lg overflow-hidden">
         <div className="flex items-center gap-2 px-3 py-2">
           <span className="text-[11px] text-gray-400 w-10 shrink-0">Para</span>
-          <input
+          <EmailAutocomplete
             value={to}
-            onChange={(e) => setTo(e.target.value)}
+            onChange={setTo}
             placeholder="destinatario@ejemplo.com"
             className="flex-1 text-sm text-gray-800 outline-none placeholder:text-gray-300 bg-transparent"
-            required
           />
         </div>
         <div className="flex items-center gap-2 px-3 py-2">
           <span className="text-[11px] text-gray-400 w-10 shrink-0">CC</span>
-          <input
+          <EmailAutocomplete
             value={cc}
-            onChange={(e) => setCc(e.target.value)}
+            onChange={setCc}
             placeholder="cc@ejemplo.com"
             className="flex-1 text-sm text-gray-800 outline-none placeholder:text-gray-300 bg-transparent"
           />

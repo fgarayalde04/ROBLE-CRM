@@ -18,8 +18,11 @@ export const dynamic = 'force-dynamic'
 
 const ADVISORS = ['Francisco', 'Guillermo', 'Sandra', 'Ines', 'Javier', 'Fernando - Federico']
 
+type SortKey = 'nombre' | 'created_at' | 'updated_at'
+type SortDir = 'asc' | 'desc'
+
 interface Props {
-  searchParams: { q?: string; advisor?: string; tab?: string }
+  searchParams: { q?: string; advisor?: string; tab?: string; sort?: string; dir?: string }
 }
 
 function timeAgo(dateStr: string | null | undefined): string {
@@ -46,6 +49,9 @@ export default async function ClientsPage({ searchParams }: Props) {
     : searchParams.tab === 'todos' ? 'todos'
     : 'activos'
 
+  const activeSort: SortKey = (searchParams.sort as SortKey) ?? 'updated_at'
+  const activeDir:  SortDir = (searchParams.dir  as SortDir) ?? 'desc'
+
   let clients: Client[] = []
   let taskCounts: Record<string, number> = {}
   let totalActivos = 0
@@ -65,8 +71,15 @@ export default async function ClientsPage({ searchParams }: Props) {
 
     let query = supabaseAdmin
       .from('clients')
-      .select('id, first_name, last_name, status, advisor, onedrive_folder_url, updated_at, closed_at, closed_by, close_reason')
-      .order('updated_at', { ascending: false })
+      .select('id, first_name, last_name, status, advisor, onedrive_folder_url, updated_at, created_at, closed_at, closed_by, close_reason')
+
+    if (activeSort === 'nombre') {
+      query = query
+        .order('last_name',  { ascending: activeDir === 'asc' })
+        .order('first_name', { ascending: activeDir === 'asc' })
+    } else {
+      query = query.order(activeSort, { ascending: activeDir === 'asc' })
+    }
 
     if (activeTab === 'activos') {
       query = query.eq('status', 'activo')
@@ -112,10 +125,28 @@ export default async function ClientsPage({ searchParams }: Props) {
     if (searchParams.q) merged.q = searchParams.q
     if (searchParams.advisor) merged.advisor = searchParams.advisor
     if (activeTab !== 'activos') merged.tab = activeTab
+    if (activeSort !== 'updated_at') merged.sort = activeSort
+    if (activeDir !== 'desc') merged.dir = activeDir
     Object.assign(merged, params)
     Object.keys(merged).forEach((k) => { if (!merged[k]) delete merged[k] })
     const qs = new URLSearchParams(merged).toString()
     return `/clients${qs ? `?${qs}` : ''}`
+  }
+
+  function sortHref(col: SortKey) {
+    const newDir: SortDir = activeSort === col && activeDir === 'asc' ? 'desc' : 'asc'
+    return filterHref({ sort: col, dir: newDir })
+  }
+
+  function SortIcon({ col }: { col: SortKey }) {
+    const active = activeSort === col
+    return (
+      <svg className={`ml-1 w-3 h-3 ${active ? 'text-[#2D3F52]' : 'text-gray-300'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+        {!active && <path strokeLinecap="round" strokeLinejoin="round" d="M8 9l4-4 4 4M16 15l-4 4-4-4" />}
+        {active && activeDir === 'asc'  && <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />}
+        {active && activeDir === 'desc' && <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />}
+      </svg>
+    )
   }
 
   function tabHref(tab: string) {
@@ -255,12 +286,20 @@ export default async function ClientsPage({ searchParams }: Props) {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-100">
               <tr>
-                <th className="px-5 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Nombre</th>
+                <th className="px-5 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide">
+                  <Link href={sortHref('nombre')} className="inline-flex items-center hover:text-[#2D3F52] transition-colors">
+                    Nombre<SortIcon col="nombre" />
+                  </Link>
+                </th>
                 <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Asesor</th>
                 <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Fecha cierre</th>
                 <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Cerrado por</th>
                 <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Motivo</th>
-                <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Últ. actividad</th>
+                <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide">
+                  <Link href={sortHref('created_at')} className="inline-flex items-center hover:text-[#2D3F52] transition-colors">
+                    Fecha de alta<SortIcon col="created_at" />
+                  </Link>
+                </th>
                 <th className="px-4 py-3" />
               </tr>
             </thead>
@@ -284,7 +323,9 @@ export default async function ClientsPage({ searchParams }: Props) {
                   </td>
                   <td className="px-4 py-3 text-xs text-gray-500">{c.closed_by ?? <span className="text-gray-300">—</span>}</td>
                   <td className="px-4 py-3 text-xs text-gray-400 max-w-[200px] truncate">{c.close_reason ?? <span className="text-gray-300">—</span>}</td>
-                  <td className="px-4 py-3 text-xs text-gray-400">{timeAgo(c.updated_at)}</td>
+                  <td className="px-4 py-3 text-xs text-gray-400">
+                    {c.created_at ? format(new Date(c.created_at), "d MMM yyyy", { locale: es }) : '—'}
+                  </td>
                   <td className="px-4 py-3">
                     <ClientStatusToggle
                       clientId={c.id}
@@ -311,11 +352,19 @@ export default async function ClientsPage({ searchParams }: Props) {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-100">
               <tr>
-                <th className="px-5 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Nombre</th>
+                <th className="px-5 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide">
+                  <Link href={sortHref('nombre')} className="inline-flex items-center hover:text-[#2D3F52] transition-colors">
+                    Nombre<SortIcon col="nombre" />
+                  </Link>
+                </th>
                 <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Asesor</th>
                 <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Estado</th>
                 <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Tareas</th>
-                <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Últ. actividad</th>
+                <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide">
+                  <Link href={sortHref('created_at')} className="inline-flex items-center hover:text-[#2D3F52] transition-colors">
+                    Fecha de alta<SortIcon col="created_at" />
+                  </Link>
+                </th>
                 <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Carpeta</th>
                 <th className="px-3 py-3" />
               </tr>
@@ -354,7 +403,9 @@ export default async function ClientsPage({ searchParams }: Props) {
                         </Link>
                       ) : <span className="text-gray-300 text-xs">—</span>}
                     </td>
-                    <td className="px-4 py-3 text-xs text-gray-400">{timeAgo(c.updated_at)}</td>
+                    <td className="px-4 py-3 text-xs text-gray-400">
+                      {c.created_at ? format(new Date(c.created_at), "d MMM yyyy", { locale: es }) : '—'}
+                    </td>
                     <td className="px-4 py-3">
                       <FolderButton path={c.onedrive_folder_url} label="Abrir" />
                     </td>

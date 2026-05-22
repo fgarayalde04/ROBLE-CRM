@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import type { Event, EventType } from '@/types/platform'
 import { supabase } from '@/lib/supabase/client'
+import EmailAutocomplete from './EmailAutocomplete'
 
 interface ClientOption { id: string; first_name: string; last_name: string; client_number: string }
 interface Props { initial?: Partial<Event>; mode: 'new' | 'edit' }
@@ -224,9 +225,9 @@ export default function EventForm({ initial, mode }: Props) {
         <h2 className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest">Participantes y opciones</h2>
         <div className="grid grid-cols-2 gap-4">
           <Field label="Participantes (emails, separados por coma)" span={2}>
-            <input
+            <EmailAutocomplete
               value={form.participants}
-              onChange={(e) => set('participants', e.target.value)}
+              onChange={(v) => set('participants', v)}
               placeholder="juan@empresa.com, maria@empresa.com"
               className={inputClass}
             />

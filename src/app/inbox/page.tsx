@@ -14,6 +14,16 @@ type ClientPartial = {
   updated_at: string
 }
 
+type TodayEvent = {
+  id: string
+  title: string
+  type: string
+  event_date: string
+  start_time: string | null
+  end_time: string | null
+  description: string | null
+}
+
 export const metadata: Metadata = { title: 'Inbox operativo' }
 export const dynamic = 'force-dynamic'
 
@@ -37,6 +47,7 @@ export default async function InboxPage() {
     { data: openingsRaw },
     { data: bcuRaw },
     { data: clientsRaw },
+    { data: todayEventsRaw },
   ] = await Promise.all([
     supabaseAdmin
       .from('tasks')
@@ -56,12 +67,18 @@ export default async function InboxPage() {
       .select('id, client_number, first_name, last_name, status, advisor, created_at, updated_at')
       .gte('created_at', thirtyDaysAgoStr)
       .order('created_at', { ascending: false }),
+    supabaseAdmin
+      .from('events')
+      .select('id, title, type, event_date, start_time, end_time, description')
+      .eq('event_date', todayStr)
+      .order('start_time', { ascending: true, nullsFirst: false }),
   ])
 
   const tasks = tasksRaw ?? []
   const openings = openingsRaw ?? []
   const bcuRecords = bcuRaw ?? []
   const clients = clientsRaw ?? []
+  const todayEvents: TodayEvent[] = (todayEventsRaw ?? []) as TodayEvent[]
 
   const overdue_tasks = tasks.filter(
     (t) => t.due_date && t.due_date < todayStr
@@ -90,5 +107,5 @@ export default async function InboxPage() {
     },
   }
 
-  return <InboxClient initialData={data} />
+  return <InboxClient initialData={data} todayEvents={todayEvents} />
 }

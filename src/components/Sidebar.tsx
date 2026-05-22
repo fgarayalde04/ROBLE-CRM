@@ -45,8 +45,9 @@ const nav: NavSection[] = [
   {
     label: 'Recursos',
     items: [
-      { href: '/recursos', label: 'Biblioteca', subtitle: 'Documentos y recursos', icon: LibraryIcon, permission: 'recursos' },
-      { href: '/claves',   label: 'Claves',     subtitle: 'Bóveda de accesos',     icon: KeyIcon,     permission: 'claves' },
+      { href: '/recursos',    label: 'Biblioteca', subtitle: 'Documentos y recursos', icon: LibraryIcon,      permission: 'recursos' },
+      { href: '/claves',      label: 'Claves',     subtitle: 'Bóveda de accesos',     icon: KeyIcon,          permission: 'claves' },
+      { href: '/mi-carpeta',  label: 'Mi carpeta', subtitle: 'Archivos personales',   icon: FolderPersonalIcon, permission: 'calendar' },
     ],
   },
   {
@@ -275,4 +276,11 @@ function KeyIcon({ className }: { className?: string }) {
 }
 function SyncIcon({ className }: { className?: string }) {
   return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" /></svg>
+}
+function FolderPersonalIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v8.25A2.25 2.25 0 004.5 16.5h15a2.25 2.25 0 002.25-2.25V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z" />
+    </svg>
+  )
 }

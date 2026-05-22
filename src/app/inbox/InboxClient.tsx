@@ -15,6 +15,16 @@ type ClientPartial = {
   updated_at: string
 }
 
+type TodayEvent = {
+  id: string
+  title: string
+  type: string
+  event_date: string
+  start_time: string | null
+  end_time: string | null
+  description: string | null
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type TaskRow = {
@@ -161,10 +171,49 @@ function PrioritySelector({
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export default function InboxClient({ initialData }: { initialData: InboxData }) {
+const EVENT_TYPE_COLOR: Record<string, string> = {
+  reunion:     'bg-blue-100 text-blue-700 border-blue-200',
+  llamada:     'bg-green-100 text-green-700 border-green-200',
+  vencimiento: 'bg-red-100 text-red-700 border-red-200',
+  seguimiento: 'bg-yellow-100 text-yellow-700 border-yellow-200',
+}
+
+interface EmailPreview {
+  id: string
+  threadId: string
+  fromName: string
+  fromEmail: string
+  subject: string
+  snippet: string
+  date: string
+  isUnread: boolean
+}
+
+function emailTimeLabel(isoDate: string): string {
+  const d = new Date(isoDate)
+  const now = new Date()
+  const diffMin = Math.floor((now.getTime() - d.getTime()) / 60000)
+  if (diffMin < 60) return `${diffMin}m`
+  const diffH = Math.floor(diffMin / 60)
+  if (diffH < 24) return `${diffH}h`
+  return d.toLocaleDateString('es-UY', { day: '2-digit', month: '2-digit' })
+}
+
+export default function InboxClient({ initialData, todayEvents = [] }: { initialData: InboxData; todayEvents?: TodayEvent[] }) {
   const [data, setData] = useState<InboxData>(initialData)
   const [activeFilter, setActiveFilter] = useState<FilterKey>('todos')
   const [completing, setCompleting] = useState<Set<string>>(new Set())
+  const [emails, setEmails] = useState<EmailPreview[]>([])
+  const [emailsLoading, setEmailsLoading] = useState(false)
+
+  useEffect(() => {
+    setEmailsLoading(true)
+    fetch('/api/gmail/inbox')
+      .then((r) => r.json())
+      .then((d) => setEmails((d.messages ?? []).slice(0, 5)))
+      .catch(() => {})
+      .finally(() => setEmailsLoading(false))
+  }, [])
 
   // Auto-refresh every 60 seconds
   const refresh = useCallback(async () => {
@@ -290,6 +339,87 @@ export default function InboxClient({ initialData }: { initialData: InboxData })
       <div className="mb-6">
         <h1 className="text-2xl font-semibold text-[#2D3F52]">Inbox operativo</h1>
         <p className="mt-0.5 text-sm text-gray-500">Todo lo pendiente de la empresa</p>
+      </div>
+
+      {/* Hoy en agenda */}
+      {todayEvents.length > 0 && (
+        <div className="mb-5">
+          <div className="flex items-center gap-2 mb-2">
+            <Link href="/events" className="text-xs font-semibold text-[#2D3F52] hover:underline">
+              Hoy en agenda
+            </Link>
+            <span className="text-xs text-gray-400">({todayEvents.length})</span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {todayEvents.map((ev) => {
+              const colorCls = EVENT_TYPE_COLOR[ev.type] ?? 'bg-gray-100 text-gray-600 border-gray-200'
+              const timeStr = ev.start_time ? ev.start_time.slice(0, 5) + ' · ' : ''
+              return (
+                <span
+                  key={ev.id}
+                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs border ${colorCls}`}
+                  title={ev.description ?? undefined}
+                >
+                  {timeStr}{ev.title}
+                </span>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Últimos emails */}
+      <div className="mb-5 bg-white border border-[#E2E8F0] rounded-lg overflow-hidden">
+        <div className="px-4 py-3 border-b border-[#EEF0F4] flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <svg className="w-3.5 h-3.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+            </svg>
+            <span className="text-xs font-semibold text-[#2D3F52]">Últimos emails</span>
+          </div>
+          <Link href="/mail" className="text-[11px] text-blue-600 hover:underline font-medium">
+            Ver todos →
+          </Link>
+        </div>
+
+        {emailsLoading ? (
+          <div className="px-4 py-4 text-xs text-gray-400 animate-pulse">Cargando…</div>
+        ) : emails.length === 0 ? (
+          <div className="px-4 py-5 text-center">
+            <p className="text-xs text-gray-400">No hay emails recientes.</p>
+            <Link href="/mail" className="text-xs text-blue-500 hover:underline mt-1 inline-block">
+              Ir a Mail
+            </Link>
+          </div>
+        ) : (
+          <ul className="divide-y divide-[#EEF0F4]">
+            {emails.map((m) => (
+              <li key={m.id}>
+                <Link
+                  href="/mail"
+                  className="flex items-start gap-3 px-4 py-3 hover:bg-[#F9FAFB] transition-colors"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <p className={`text-[12px] truncate ${m.isUnread ? 'font-bold text-gray-900' : 'font-semibold text-gray-700'}`}>
+                        {m.subject}
+                      </p>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {m.isUnread && <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />}
+                        <span className="text-[10px] text-gray-400">{emailTimeLabel(m.date)}</span>
+                      </div>
+                    </div>
+                    <p className="text-[11px] text-gray-500 truncate mt-0.5">
+                      <span className="font-medium">{m.fromName || m.fromEmail}</span>
+                      <span className="text-gray-400 mx-1">·</span>
+                      <span className="text-gray-400">{m.snippet}</span>
+                    </p>
+                  </div>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
       {/* Summary badges */}

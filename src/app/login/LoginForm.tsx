@@ -68,8 +68,7 @@ export default function LoginForm() {
         setLoading(false)
         return
       }
-      const from = searchParams.get('from') ?? '/'
-      router.push(from)
+      router.push('/inbox')
       router.refresh()
     } catch {
       setFormError('Error de conexión')
