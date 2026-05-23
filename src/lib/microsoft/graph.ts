@@ -91,6 +91,23 @@ export async function getDriveItem(
   return res.json()
 }
 
+// Download the content of a drive file as ArrayBuffer
+export async function downloadDriveFile(
+  driveId: string,
+  itemId: string,
+  token: string
+): Promise<ArrayBuffer> {
+  const url = `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${itemId}/content`
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  if (!res.ok) {
+    const err = await res.text()
+    throw new Error(`Graph download error ${driveId}/${itemId}: ${err}`)
+  }
+  return res.arrayBuffer()
+}
+
 // Check if Microsoft Graph is configured
 export function isGraphConfigured(): boolean {
   return !!(

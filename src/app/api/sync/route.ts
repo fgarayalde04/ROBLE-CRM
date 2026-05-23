@@ -6,15 +6,17 @@ import {
   syncBancoCentralLocal,
   syncBancoCentralInternacional,
   syncResources,
+  syncScoring,
 } from '@/lib/microsoft/sync'
 
-type SyncType = 'clientes' | 'bcu_local' | 'bcu_internacional' | 'recursos' | 'all'
+type SyncType = 'clientes' | 'bcu_local' | 'bcu_internacional' | 'recursos' | 'scoring' | 'all'
 
 const SYNC_FNS: Record<Exclude<SyncType, 'all'>, () => Promise<unknown>> = {
   clientes: syncClients,
   bcu_local: syncBancoCentralLocal,
   bcu_internacional: syncBancoCentralInternacional,
   recursos: syncResources,
+  scoring: syncScoring,
 }
 
 async function markRunning(types: string[]) {

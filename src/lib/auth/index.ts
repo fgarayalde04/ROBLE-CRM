@@ -97,15 +97,15 @@ export type Permission =
   | 'panel' | 'tasks' | 'clients' | 'openings' | 'banco_central'
   | 'calendar' | 'deadlines' | 'ceo_dashboard' | 'kpis'
   | 'pagos' | 'impuestos' | 'liquidacion' | 'recursos' | 'claves'
-  | 'admin' | 'sincronizacion'
+  | 'admin' | 'sincronizacion' | 'suitability'
 
 const ROLE_PERMISSIONS: Record<UserRole, Permission[] | ['*']> = {
   admin:      ['*'],
-  ceo:        ['panel','clients','openings','tasks','banco_central','calendar','deadlines','ceo_dashboard','kpis','pagos','impuestos','liquidacion','recursos'],
-  direccion:  ['panel','clients','openings','tasks','banco_central','calendar','deadlines','ceo_dashboard','kpis','liquidacion','recursos'],
-  asesor:     ['panel','clients','openings','tasks','calendar','deadlines','recursos'],
+  ceo:        ['panel','clients','openings','tasks','banco_central','calendar','deadlines','ceo_dashboard','kpis','pagos','impuestos','liquidacion','recursos','suitability'],
+  direccion:  ['panel','clients','openings','tasks','banco_central','calendar','deadlines','ceo_dashboard','kpis','liquidacion','recursos','suitability'],
+  asesor:     ['panel','clients','openings','tasks','calendar','deadlines','recursos','suitability'],
   asistente:  ['panel','clients','openings','tasks','banco_central','calendar','deadlines','recursos'],
-  compliance: ['panel','banco_central','calendar','deadlines','recursos'],
+  compliance: ['panel','banco_central','calendar','deadlines','recursos','suitability'],
 }
 
 export function hasPermission(role: UserRole, permission: Permission, userPermissions?: Permission[]): boolean {
@@ -122,7 +122,7 @@ export function hasPermission(role: UserRole, permission: Permission, userPermis
 export function getPermissions(role: UserRole): Permission[] {
   const perms = ROLE_PERMISSIONS[role]
   if (perms[0] === '*') {
-    return ['panel','clients','openings','tasks','banco_central','calendar','deadlines','ceo_dashboard','kpis','pagos','impuestos','liquidacion','recursos','admin','claves','sincronizacion']
+    return ['panel','clients','openings','tasks','banco_central','calendar','deadlines','ceo_dashboard','kpis','pagos','impuestos','liquidacion','recursos','admin','claves','sincronizacion','suitability']
   }
   return perms as Permission[]
 }

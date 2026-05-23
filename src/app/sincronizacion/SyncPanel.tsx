@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type SyncType = 'clientes' | 'bcu_local' | 'bcu_internacional'
+type SyncType = 'clientes' | 'bcu_local' | 'bcu_internacional' | 'scoring'
 
 interface SyncStatus {
   id: string
@@ -32,9 +32,10 @@ const SYNC_CARDS: {
   label: string
   subtitle: string
 }[] = [
-  { type: 'clientes', label: 'Clientes', subtitle: 'Carpetas por asesor en SharePoint' },
-  { type: 'bcu_local', label: 'BCU Local', subtitle: 'Legajos Cundry' },
+  { type: 'clientes',         label: 'Clientes',          subtitle: 'Carpetas por asesor en SharePoint' },
+  { type: 'bcu_local',        label: 'BCU Local',         subtitle: 'Legajos Cundry' },
   { type: 'bcu_internacional', label: 'BCU Internacional', subtitle: 'Legajos Geliene' },
+  { type: 'scoring',          label: 'Scoring',           subtitle: 'Carteras para análisis de riesgo' },
 ]
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
