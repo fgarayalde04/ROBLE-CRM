@@ -5,6 +5,74 @@
 
 import * as XLSX from 'xlsx'
 
+// ─── Client metadata extracted from document header rows ──────────────────────
+
+export interface ClientMeta {
+  client_name?:   string
+  client_number?: string
+  account?:       string
+  date?:          string
+}
+
+/**
+ * Scan the first ~15 rows of a sheet looking for client name / account number.
+ * Typical patterns:  "Cliente: APELLIDO, Nombre"
+ *                    "Nombre del cliente: ..."
+ *                    "Account: 12345"
+ *                    "Cuenta: ..."
+ */
+const CLIENT_NAME_LABELS = [
+  'cliente', 'client', 'nombre', 'name', 'titular', 'holder',
+  'cuenta a nombre de', 'account name', 'investor', 'inversor',
+]
+const CLIENT_NUMBER_LABELS = [
+  'cuenta', 'account', 'n° cliente', 'numero de cliente', 'client number',
+  'account number', 'n° cuenta', 'numero cuenta', 'codigo', 'code',
+]
+const DATE_LABELS = [
+  'fecha', 'date', 'al', 'as of', 'periodo', 'period',
+]
+
+function extractMetaFromRows(rows: unknown[][]): ClientMeta {
+  const meta: ClientMeta = {}
+  const scanRows = rows.slice(0, 20)
+
+  for (const row of scanRows) {
+    for (let i = 0; i < row.length - 1; i++) {
+      const cell  = String(row[i] ?? '').toLowerCase().trim().replace(/[:\s]+$/, '')
+      const value = String(row[i + 1] ?? '').trim()
+      if (!value || value.length < 2) continue
+
+      if (!meta.client_name && CLIENT_NAME_LABELS.some(l => cell.includes(l))) {
+        meta.client_name = value
+      }
+      if (!meta.client_number && CLIENT_NUMBER_LABELS.some(l => cell.includes(l))) {
+        meta.client_number = value
+      }
+      if (!meta.date && DATE_LABELS.some(l => cell === l || cell.startsWith(l))) {
+        meta.date = value
+      }
+    }
+
+    // Also check for patterns like "Cliente: SMITH, John" in a single cell
+    for (const cell of row) {
+      const s = String(cell ?? '').trim()
+      if (!meta.client_name) {
+        const m = s.match(/^(?:cliente|client|titular|nombre)[:\s]+(.+)/i)
+        if (m && m[1].trim().length > 2) meta.client_name = m[1].trim()
+      }
+      if (!meta.client_number) {
+        const m = s.match(/^(?:cuenta|account|n[°º]?\s*cliente|client\s*number)[:\s#]+(.+)/i)
+        if (m && m[1].trim().length > 1) meta.client_number = m[1].trim()
+      }
+    }
+
+    if (meta.client_name && meta.client_number) break
+  }
+
+  return meta
+}
+
 export interface RawPosition {
   raw_name:       string
   raw_identifier: string
@@ -143,8 +211,12 @@ function fillWeights(positions: RawPosition[]): RawPosition[] {
 
 // ─── Public parsers ───────────────────────────────────────────────────────────
 
-export function parseCSV(text: string): RawPosition[] {
-  // Detect delimiter
+export interface ParseResult {
+  positions: RawPosition[]
+  meta:      ClientMeta
+}
+
+export function parseCSV(text: string): ParseResult {
   const firstLine = text.split('\n')[0]
   const delimiter = firstLine.includes(';') ? ';' : ','
 
@@ -153,33 +225,44 @@ export function parseCSV(text: string): RawPosition[] {
     .map(l => l.trim())
     .filter(Boolean)
 
-  if (lines.length < 2) return []
+  if (lines.length < 2) return { positions: [], meta: {} }
 
-  const headers = lines[0].split(delimiter).map(h => h.replace(/^"|"$/g, '').trim())
-  const rows = lines.slice(1).map(line =>
+  const allRows = lines.map(line =>
     line.split(delimiter).map(cell => cell.replace(/^"|"$/g, '').trim())
   )
 
-  return fillWeights(rowsToPositions(headers, rows))
+  // Find the header row (first row with ≥2 recognizable columns)
+  let headerRowIdx = 0
+  for (let i = 0; i < Math.min(15, allRows.length); i++) {
+    if (allRows[i].filter(c => matchColumn(c)).length >= 2) { headerRowIdx = i; break }
+  }
+
+  const meta     = extractMetaFromRows(allRows.slice(0, headerRowIdx))
+  const headers  = allRows[headerRowIdx]
+  const dataRows = allRows.slice(headerRowIdx + 1)
+
+  return { positions: fillWeights(rowsToPositions(headers, dataRows)), meta }
 }
 
-export function parseExcel(buffer: ArrayBuffer): RawPosition[] {
+export function parseExcel(buffer: ArrayBuffer): ParseResult {
   const wb = XLSX.read(buffer, { type: 'array' })
   const ws = wb.Sheets[wb.SheetNames[0]]
   const data = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: '' })
 
-  if (!data || data.length < 2) return []
+  if (!data || data.length < 2) return { positions: [], meta: {} }
 
   // Find the header row — first row with recognizable column names
   let headerRowIdx = 0
-  for (let i = 0; i < Math.min(10, data.length); i++) {
+  for (let i = 0; i < Math.min(20, data.length); i++) {
     const row = data[i] as unknown[]
     const recognized = row.filter(cell => matchColumn(String(cell))).length
     if (recognized >= 2) { headerRowIdx = i; break }
   }
 
+  // Scan pre-header rows for client metadata
+  const meta    = extractMetaFromRows((data.slice(0, headerRowIdx) as unknown[][]))
   const headers = (data[headerRowIdx] as unknown[]).map(h => String(h))
   const rows    = (data.slice(headerRowIdx + 1) as unknown[][])
 
-  return fillWeights(rowsToPositions(headers, rows))
+  return { positions: fillWeights(rowsToPositions(headers, rows)), meta }
 }

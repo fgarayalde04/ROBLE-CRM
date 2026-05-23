@@ -424,109 +424,47 @@ export async function syncScoring(): Promise<SyncResult> {
   try {
     const token = await getGraphToken()
 
-    // List top-level client folders
-    const topItems = await listFolderChildren(driveId, folderId, token)
+    // Flat folder — all files live directly inside Scoring/ (no subfolders)
+    const items = await listFolderChildren(driveId, folderId, token)
+    const spreadsheets = items.filter(f =>
+      f.file && (
+        SPREADSHEET_MIME.includes(f.file.mimeType) ||
+        /\.(xlsx|xls|csv)$/i.test(f.name)
+      )
+    )
+    result.found = spreadsheets.length
 
-    for (const item of topItems) {
-      if (item.folder) {
-        // It's a client subfolder — list files inside
-        const clientFolder = item.name.trim()
-
-        // Try to match client by folder name pattern "12345 - NAME"
-        let clientId: string | null = null
-        const numMatch = clientFolder.match(/^(\d+)\s*[-–]\s*(.+)/)
-        if (numMatch) {
-          const { data } = await supabaseAdmin
-            .from('clients')
-            .select('id')
-            .eq('client_number', numMatch[1])
-            .maybeSingle()
-          clientId = data?.id ?? null
+    for (const file of spreadsheets) {
+      try {
+        const fields = {
+          name:           file.name,
+          client_folder:  null,   // no subfolder — client identified from file content
+          client_id:      null,   // resolved later when the file is analyzed
+          drive_id:       driveId,
+          item_id:        file.id,
+          web_url:        file.webUrl,
+          file_size:      file.size ?? null,
+          mime_type:      file.file?.mimeType ?? null,
+          last_modified:  file.lastModifiedDateTime ?? null,
+          last_synced_at: new Date().toISOString(),
+          updated_at:     new Date().toISOString(),
         }
 
-        try {
-          const files = await listFolderChildren(driveId, item.id, token)
-          const spreadsheets = files.filter(f =>
-            f.file && (
-              SPREADSHEET_MIME.includes(f.file.mimeType) ||
-              /\.(xlsx|xls|csv)$/i.test(f.name)
-            )
-          )
-          result.found += spreadsheets.length
+        const { data: existing } = await supabaseAdmin
+          .from('scoring_files')
+          .select('id')
+          .eq('item_id', file.id)
+          .maybeSingle()
 
-          for (const file of spreadsheets) {
-            try {
-              const fields = {
-                name:             file.name,
-                client_folder:    clientFolder,
-                client_id:        clientId,
-                drive_id:         driveId,
-                item_id:          file.id,
-                web_url:          file.webUrl,
-                file_size:        file.size ?? null,
-                mime_type:        file.file?.mimeType ?? null,
-                last_modified:    file.lastModifiedDateTime ?? null,
-                last_synced_at:   new Date().toISOString(),
-                updated_at:       new Date().toISOString(),
-              }
-
-              const { data: existing } = await supabaseAdmin
-                .from('scoring_files')
-                .select('id')
-                .eq('item_id', file.id)
-                .maybeSingle()
-
-              if (existing) {
-                await supabaseAdmin.from('scoring_files').update(fields).eq('id', existing.id)
-                result.updated++
-              } else {
-                await supabaseAdmin.from('scoring_files').insert(fields)
-                result.created++
-              }
-            } catch (e: unknown) {
-              result.errors.push(`File ${file.name}: ${e instanceof Error ? e.message : String(e)}`)
-            }
-          }
-        } catch (e: unknown) {
-          result.errors.push(`Folder ${clientFolder}: ${e instanceof Error ? e.message : String(e)}`)
+        if (existing) {
+          await supabaseAdmin.from('scoring_files').update(fields).eq('id', existing.id)
+          result.updated++
+        } else {
+          await supabaseAdmin.from('scoring_files').insert(fields)
+          result.created++
         }
-
-      } else if (item.file) {
-        // File at root level (no subfolder)
-        if (!SPREADSHEET_MIME.includes(item.file.mimeType) && !/\.(xlsx|xls|csv)$/i.test(item.name)) continue
-        result.found++
-
-        try {
-          const fields = {
-            name:           item.name,
-            client_folder:  null,
-            client_id:      null,
-            drive_id:       driveId,
-            item_id:        item.id,
-            web_url:        item.webUrl,
-            file_size:      item.size ?? null,
-            mime_type:      item.file?.mimeType ?? null,
-            last_modified:  item.lastModifiedDateTime ?? null,
-            last_synced_at: new Date().toISOString(),
-            updated_at:     new Date().toISOString(),
-          }
-
-          const { data: existing } = await supabaseAdmin
-            .from('scoring_files')
-            .select('id')
-            .eq('item_id', item.id)
-            .maybeSingle()
-
-          if (existing) {
-            await supabaseAdmin.from('scoring_files').update(fields).eq('id', existing.id)
-            result.updated++
-          } else {
-            await supabaseAdmin.from('scoring_files').insert(fields)
-            result.created++
-          }
-        } catch (e: unknown) {
-          result.errors.push(`Root file ${item.name}: ${e instanceof Error ? e.message : String(e)}`)
-        }
+      } catch (e: unknown) {
+        result.errors.push(`File ${file.name}: ${e instanceof Error ? e.message : String(e)}`)
       }
     }
 

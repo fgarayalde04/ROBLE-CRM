@@ -24,14 +24,19 @@ export async function POST(req: Request) {
     // Parse the file
     const fileName = file.name
     const ext = fileName.split('.').pop()?.toLowerCase()
-    let rawPositions
+    let rawPositions: ReturnType<typeof parseCSV>['positions']
+    let fileMeta:     ReturnType<typeof parseCSV>['meta'] = {}
 
     if (ext === 'csv' || ext === 'txt') {
       const text = await file.text()
-      rawPositions = parseCSV(text)
+      const result = parseCSV(text)
+      rawPositions = result.positions
+      fileMeta     = result.meta
     } else if (ext === 'xlsx' || ext === 'xls') {
       const buffer = await file.arrayBuffer()
-      rawPositions = parseExcel(buffer)
+      const result = parseExcel(buffer)
+      rawPositions = result.positions
+      fileMeta     = result.meta
     } else {
       return NextResponse.json({ error: 'Formato no soportado. Use CSV o Excel (.xlsx).' }, { status: 400 })
     }
@@ -40,12 +45,15 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'No se encontraron posiciones en el archivo.' }, { status: 400 })
     }
 
+    // If no client was specified manually, try to detect from file content
+    const resolvedClientName = clientName || fileMeta.client_name || null
+
     // Create the review record first
     const { data: review, error: reviewErr } = await supabaseAdmin
       .from('portfolio_reviews')
       .insert({
         client_id:      clientId || null,
-        client_name:    clientName || null,
+        client_name:    resolvedClientName,
         client_profile: clientProfile,
         uploaded_by:    session.id,
         file_name:      fileName,

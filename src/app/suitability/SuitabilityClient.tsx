@@ -342,8 +342,8 @@ function OneDriveTab({ onClose }: { onClose: () => void }) {
       } else {
         setEntries(prev => prev.map(e => ({ ...e, status: 'error', error: data.error ?? 'Error desconocido' })))
       }
-    } catch (e: any) {
-      setEntries(prev => prev.map(e => ({ ...e, status: 'error', error: e.message })))
+    } catch (err: any) {
+      setEntries(prev => prev.map(e => ({ ...e, status: 'error', error: err.message })))
     }
 
     setProcessing(false)
