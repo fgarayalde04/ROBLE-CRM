@@ -39,6 +39,7 @@ export async function GET() {
       'Geliene International SA': 'Geliene International SA',
       'Operaciones': 'Operaciones',
       'Productos': 'Productos',
+      'Scoring': 'Scoring',
     }
 
     result.root_folders = {}
