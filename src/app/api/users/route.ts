@@ -28,14 +28,14 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     await requireAdmin()
-    const { name, email, password, role } = await req.json()
+    const { name, email, password, role, must_change_password } = await req.json()
     if (!name || !password || !role) {
       return NextResponse.json({ error: 'Nombre, contraseña y rol son requeridos' }, { status: 400 })
     }
     const hash = await bcrypt.hash(password, 12)
     const { data, error } = await supabaseAdmin
       .from('crm_users')
-      .insert({ name, email: email?.toLowerCase().trim() || null, password_hash: hash, role, active: true })
+      .insert({ name, email: email?.toLowerCase().trim() || null, password_hash: hash, role, active: true, must_change_password: must_change_password ?? true })
       .select('id, name, email, role, active, created_at')
       .single()
     if (error) throw error

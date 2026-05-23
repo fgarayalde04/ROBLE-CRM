@@ -6,6 +6,29 @@ export const dynamic = 'force-dynamic'
 
 const GMAIL_BASE = 'https://gmail.googleapis.com/gmail/v1'
 
+/**
+ * Decode RFC 2047 encoded-word tokens like:
+ *   =?UTF-8?B?<base64>?=   (Base64)
+ *   =?UTF-8?Q?<qp>?=       (Quoted-Printable)
+ */
+function decodeRfc2047(s: string): string {
+  return s.replace(/=\?([^?]+)\?([BQbq])\?([^?]*)\?=/g, (_, charset, encoding, encoded) => {
+    try {
+      if (encoding.toUpperCase() === 'B') {
+        return Buffer.from(encoded, 'base64').toString('utf8')
+      } else {
+        // Quoted-Printable: replace _ with space, then decode =XX
+        const qp = encoded.replace(/_/g, ' ').replace(/=([0-9A-Fa-f]{2})/g, (_m: string, h: string) =>
+          String.fromCharCode(parseInt(h, 16))
+        )
+        return qp
+      }
+    } catch {
+      return s
+    }
+  })
+}
+
 function parseAddresses(raw: string): Array<{ name: string; email: string }> {
   if (!raw) return []
   return raw.split(',').map((part) => {
@@ -13,7 +36,7 @@ function parseAddresses(raw: string): Array<{ name: string; email: string }> {
     const match = part.match(/^(.+?)\s*<(.+?)>$/)
     if (match) {
       return {
-        name:  match[1].trim().replace(/^["']|["']$/g, ''),
+        name:  decodeRfc2047(match[1].trim().replace(/^["']|["']$/g, '')),
         email: match[2].trim().toLowerCase(),
       }
     }

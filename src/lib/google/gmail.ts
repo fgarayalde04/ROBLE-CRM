@@ -69,6 +69,30 @@ export async function sendEmail(
   return res.json()
 }
 
+/** Create a Gmail draft */
+export async function createDraft(
+  accessToken: string,
+  input: SendEmailInput
+): Promise<{ id: string; message: GmailMessage }> {
+  const raw = encodeEmail(input)
+
+  const res = await fetch(`${GMAIL_BASE}/users/me/drafts`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ message: { raw } }),
+  })
+
+  if (!res.ok) {
+    const err = await res.text()
+    throw new Error(`Gmail draft failed: ${err}`)
+  }
+
+  return res.json()
+}
+
 // ─── Inbox / read ─────────────────────────────────────────────────────────────
 
 export interface InboxMessage {

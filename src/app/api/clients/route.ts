@@ -42,6 +42,16 @@ export async function POST(req: Request) {
       description: `Cliente ${payload.first_name} ${payload.last_name} creado`,
     })
 
+    // Auto-create a pending opening so it appears in Aperturas
+    await supabaseAdmin.from('account_openings').insert({
+      client_id:   data.id,
+      folder_name: `${payload.first_name} ${payload.last_name}`,
+      advisor:     payload.advisor ?? null,
+      onedrive_url: payload.onedrive_folder_url ?? null,
+      status:      'carpeta_creada',
+      start_date:  new Date().toISOString().split('T')[0],
+    })
+
     return NextResponse.json(data)
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 400 })

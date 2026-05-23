@@ -125,7 +125,7 @@ function ResourceCard({
       <div className="flex gap-3">
         <PdfIcon />
         <div className="flex-1 min-w-0 pr-12">
-          <p className="font-medium text-gray-900 text-sm leading-tight truncate">{resource.name}</p>
+          <p className="font-medium text-gray-900 text-sm leading-snug break-words">{resource.name}</p>
           <span className="inline-block mt-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">
             {CATEGORY_LABELS[resource.category] ?? resource.category}
           </span>

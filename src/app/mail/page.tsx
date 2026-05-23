@@ -73,6 +73,7 @@ export default async function MailPage() {
         <MailPageClient
           googleEmail={googleEmail}
           sentLogs={sentLogs ?? []}
+          gmailConnected={isConnected as boolean}
         />
       )}
     </div>

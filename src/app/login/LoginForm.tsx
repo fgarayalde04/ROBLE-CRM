@@ -68,7 +68,11 @@ export default function LoginForm() {
         setLoading(false)
         return
       }
-      router.push('/inbox')
+      if (data.must_change_password) {
+        router.push('/change-password')
+      } else {
+        router.push('/inbox')
+      }
       router.refresh()
     } catch {
       setFormError('Error de conexión')

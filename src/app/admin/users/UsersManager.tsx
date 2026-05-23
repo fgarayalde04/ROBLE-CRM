@@ -126,6 +126,7 @@ export default function UsersManager({ initialUsers, pendingUsers: initialPendin
   const [selectedUser, setSelectedUser] = useState<CrmUser | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [createdPassword, setCreatedPassword] = useState<string | null>(null)
 
   // Create / Edit form state
   const [form, setForm] = useState({ name: '', email: '', password: '', role: 'asesor' as UserRole })
@@ -144,6 +145,7 @@ export default function UsersManager({ initialUsers, pendingUsers: initialPendin
   function openCreate() {
     setForm({ name: '', email: '', password: '', role: 'asesor' })
     setError('')
+    setCreatedPassword(null)
     setModal('create')
   }
 
@@ -186,6 +188,7 @@ export default function UsersManager({ initialUsers, pendingUsers: initialPendin
     setModal(null)
     setSelectedUser(null)
     setError('')
+    setCreatedPassword(null)
   }
 
   async function handleCreate(e: React.FormEvent) {
@@ -196,12 +199,12 @@ export default function UsersManager({ initialUsers, pendingUsers: initialPendin
       const res = await fetch('/api/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
+        body: JSON.stringify({ ...form, must_change_password: true }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Error al crear usuario')
       setUsers((u) => [...u, data].sort((a, b) => a.name.localeCompare(b.name)))
-      closeModal()
+      setCreatedPassword(form.password)
     } catch (err: any) {
       setError(err.message)
     } finally {
@@ -511,12 +514,22 @@ export default function UsersManager({ initialUsers, pendingUsers: initialPendin
       {/* CREATE / EDIT modal */}
       {(modal === 'create' || modal === 'edit') && (
         <Modal
-          title={modal === 'create' ? 'Nuevo usuario' : `Editar · ${selectedUser?.name}`}
+          title={modal === 'create' ? (createdPassword ? '¡Usuario creado!' : 'Nuevo usuario') : `Editar · ${selectedUser?.name}`}
           onClose={closeModal}
           wide={modal === 'edit'}
         >
+          {/* Success state after creation */}
+          {modal === 'create' && createdPassword && (
+            <CreatedPasswordPanel
+              password={createdPassword}
+              name={form.name}
+              email={form.email}
+              onClose={closeModal}
+            />
+          )}
+
           {/* Tabs — only in edit mode */}
-          {modal === 'edit' && (
+          {!createdPassword && modal === 'edit' && (
             <div className="flex border-b border-gray-100 mb-4 -mx-5 px-5">
               {(['info', 'permisos'] as EditTab[]).map((tab) => (
                 <button
@@ -535,7 +548,7 @@ export default function UsersManager({ initialUsers, pendingUsers: initialPendin
             </div>
           )}
 
-          <form onSubmit={modal === 'create' ? handleCreate : handleEdit}>
+          {!createdPassword && <form onSubmit={modal === 'create' ? handleCreate : handleEdit}>
             {/* Info tab */}
             {(modal === 'create' || editTab === 'info') && (
               <div className="space-y-4">
@@ -571,13 +584,13 @@ export default function UsersManager({ initialUsers, pendingUsers: initialPendin
                   </select>
                 </Field>
                 {modal === 'create' && (
-                  <Field label="Contraseña">
+                  <Field label="Contraseña temporal" hint="El usuario deberá cambiarla al ingresar">
                     <input
-                      type="password"
+                      type="text"
                       value={form.password}
                       onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
                       required
-                      placeholder="Mínimo 8 caracteres"
+                      placeholder="Ej: Roble2025!"
                       className={INPUT_CLS}
                     />
                   </Field>
@@ -719,7 +732,7 @@ export default function UsersManager({ initialUsers, pendingUsers: initialPendin
                 {loading ? 'Guardando...' : modal === 'create' ? 'Crear usuario' : 'Guardar cambios'}
               </button>
             </div>
-          </form>
+          </form>}
         </Modal>
       )}
 
@@ -784,6 +797,61 @@ export default function UsersManager({ initialUsers, pendingUsers: initialPendin
         </Modal>
       )}
     </>
+  )
+}
+
+// ─── Created password panel ────────────────────────────────────────────────────
+
+function CreatedPasswordPanel({ password, name, email, onClose }: { password: string; name: string; email: string; onClose: () => void }) {
+  const [copied, setCopied] = useState(false)
+
+  async function handleCopy() {
+    await navigator.clipboard.writeText(password)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  return (
+    <div className="space-y-5 py-1">
+      <div className="flex items-center gap-3 p-4 bg-green-50 border border-green-200 rounded-xl">
+        <div className="w-9 h-9 rounded-full bg-green-100 flex items-center justify-center shrink-0">
+          <svg className="w-5 h-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+          </svg>
+        </div>
+        <div>
+          <p className="text-sm font-semibold text-green-800">{name} fue creado correctamente</p>
+          <p className="text-xs text-green-600 mt-0.5">{email}</p>
+        </div>
+      </div>
+
+      <div>
+        <p className="text-xs font-medium text-gray-600 mb-2">Contraseña temporal — compartila con el usuario</p>
+        <div className="flex items-center gap-2 p-3.5 bg-amber-50 border border-amber-200 rounded-xl">
+          <code className="flex-1 text-sm font-mono font-bold text-amber-800 tracking-wider">{password}</code>
+          <button
+            type="button"
+            onClick={handleCopy}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors"
+            style={{ backgroundColor: copied ? '#16A34A' : '#2D3F52', color: 'white' }}
+          >
+            {copied ? (
+              <><svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>Copiada</>
+            ) : (
+              <><svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>Copiar</>
+            )}
+          </button>
+        </div>
+        <p className="text-[11px] text-amber-700 mt-2 flex items-center gap-1">
+          <svg className="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" /></svg>
+          Al ingresar por primera vez, el sistema le pedirá que cambie esta contraseña.
+        </p>
+      </div>
+
+      <button type="button" onClick={onClose} className={BTN_PRIMARY + ' w-full'}>
+        Cerrar
+      </button>
+    </div>
   )
 }
 

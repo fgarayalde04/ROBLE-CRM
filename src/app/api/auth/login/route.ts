@@ -12,7 +12,7 @@ export async function POST(req: Request) {
 
     const { data: user, error } = await supabaseAdmin
       .from('crm_users')
-      .select('id, name, email, role, password_hash, active, permissions')
+      .select('id, name, email, role, password_hash, active, permissions, must_change_password')
       .eq('email', email.toLowerCase().trim())
       .single()
 
@@ -39,7 +39,11 @@ export async function POST(req: Request) {
       role: user.role,
     })
 
-    const res = NextResponse.json({ ok: true, user: { id: user.id, name: user.name, role: user.role } })
+    const res = NextResponse.json({
+      ok: true,
+      user: { id: user.id, name: user.name, role: user.role },
+      must_change_password: user.must_change_password ?? false,
+    })
     res.cookies.set(SESSION_COOKIE, token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
