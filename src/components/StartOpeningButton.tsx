@@ -34,7 +34,7 @@ export default function StartOpeningButton({ openingId }: { openingId: string })
       onMouseEnter={e => { if (!loading) (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#15803d' }}
       onMouseLeave={e => { if (!loading) (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#16A34A' }}
     >
-      {loading ? '...' : 'Comenzar'}
+      {loading ? '...' : 'Comenzar apertura'}
     </button>
   )
 }

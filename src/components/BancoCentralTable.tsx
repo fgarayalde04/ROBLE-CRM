@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useMemo, useEffect } from 'react'
-import FolderButton from '@/components/FolderButton'
+import OneDriveFolderButton from '@/components/OneDriveFolderButton'
 
 // ─── Checkbox localStorage backup ───────────────────────────────────────────
 // Persists checkbox state keyed by folder_path so that even if DB records
@@ -54,6 +54,9 @@ export interface BancoCentralRecord {
   customer_number: string | null
   folder_name: string
   folder_path: string
+  drive_id: string | null
+  item_id: string | null
+  web_url: string | null
   type: 'local' | 'internacional'
   fa: string | null
   ficha: boolean
@@ -502,7 +505,12 @@ export default function BancoCentralTable({ initialRecords }: { initialRecords: 
 
                     {/* Carpeta */}
                     <td className="px-3 py-2.5">
-                      <FolderButton path={record.folder_path} label="Abrir" />
+                      <OneDriveFolderButton
+                        driveId={record.drive_id}
+                        itemId={record.item_id}
+                        webUrl={record.web_url}
+                        label="Abrir carpeta"
+                      />
                     </td>
 
                     {/* Estado + acción */}

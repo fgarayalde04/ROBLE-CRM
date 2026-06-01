@@ -84,7 +84,7 @@ const PRIORITY_DOT: Record<string, string> = {
 }
 
 const STATUS_LABEL: Partial<Record<OpeningStatus, string>> = {
-  carpeta_creada: 'Carpeta creada',
+  carpeta_creada: 'Pendiente de apertura',
   recolectando_informacion: 'Recolectando info',
   documentacion_incompleta: 'Doc. incompleta',
   documentacion_completa: 'Doc. completa',

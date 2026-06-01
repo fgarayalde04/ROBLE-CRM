@@ -5,7 +5,7 @@ import { getDocuments, getTasks, getDeadlines } from '@/lib/supabase/queries'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import StatusBadge from '@/components/StatusBadge'
 import ComplianceBlock from '@/components/ComplianceBlock'
-import FolderButton from '@/components/FolderButton'
+import OneDriveFolderButton from '@/components/OneDriveFolderButton'
 import ClientCloseButton from '@/components/ClientCloseButton'
 import DeleteClientButton from '@/components/DeleteClientButton'
 import { format } from 'date-fns'
@@ -99,8 +99,14 @@ export default async function ClientDetailPage({ params }: Props) {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {client.onedrive_folder_url && (
-            <FolderButton path={client.onedrive_folder_url} label="Abrir carpeta" variant="badge" />
+          {((client.drive_id && client.item_id) || client.web_url || client.onedrive_folder_url) && (
+            <OneDriveFolderButton
+              driveId={client.drive_id}
+              itemId={client.item_id}
+              webUrl={client.web_url ?? client.onedrive_folder_url}
+              label="Abrir carpeta"
+              variant="badge"
+            />
           )}
           <Link
             href={`/clients/${client.id}/edit`}
@@ -183,10 +189,16 @@ export default async function ClientDetailPage({ params }: Props) {
             </dl>
           </div>
 
-          {client.onedrive_folder_url && (
+          {((client.drive_id && client.item_id) || client.web_url || client.onedrive_folder_url) && (
             <div className="bg-white rounded-lg border border-gray-200 p-5">
               <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-3">Carpeta</h2>
-              <FolderButton path={client.onedrive_folder_url} label="Abrir carpeta del cliente" variant="badge" />
+              <OneDriveFolderButton
+                driveId={client.drive_id}
+                itemId={client.item_id}
+                webUrl={client.web_url ?? client.onedrive_folder_url}
+                label="Abrir carpeta del cliente"
+                variant="badge"
+              />
             </div>
           )}
 

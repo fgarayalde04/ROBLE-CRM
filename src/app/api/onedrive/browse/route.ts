@@ -26,13 +26,15 @@ export async function GET(req: Request) {
     // Get user's OneDrive config
     const cfg = await getUserOneDriveConfig(session.id, session.role)
 
-    // Admins can browse using any driveId/folderId
+    // Linked CRM folders can be browsed by any authenticated user. The CRM is
+    // the access gate; Graph is used server-side so SharePoint browser cookies
+    // are not required.
     const isAdmin = session.role === 'admin'
 
     let driveId: string
     let folderId: string
 
-    if (isAdmin && requestedDriveId && requestedFolderId) {
+    if (requestedDriveId && requestedFolderId) {
       driveId  = requestedDriveId
       folderId = requestedFolderId
     } else if (isAdmin && requestedDriveId && !requestedFolderId) {

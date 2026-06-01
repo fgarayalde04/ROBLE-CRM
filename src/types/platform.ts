@@ -76,6 +76,9 @@ export interface Client {
   advisor: string | null
   notes: string | null
   onedrive_folder_url: string | null
+  drive_id: string | null
+  item_id: string | null
+  web_url: string | null
   client_type: ClientType
   created_at: string
   updated_at: string
@@ -134,6 +137,7 @@ export interface Task {
   description: string | null
   client_id: string | null
   client?: Client
+  created_by: string | null
   responsible: string | null
   priority: TaskPriority
   status: TaskStatus
@@ -145,6 +149,14 @@ export interface Task {
   checklist_items?: TaskChecklistItem[]
   created_at: string
   updated_at: string
+}
+
+export interface TaskShare {
+  id: string
+  task_id: string
+  user_name: string
+  shared_by: string | null
+  created_at: string
 }
 
 export interface TaskChecklistItem {

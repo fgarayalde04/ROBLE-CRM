@@ -10,6 +10,50 @@ export interface SyncResult {
 
 // The advisor subfolders to look for under Clientes/
 const ADVISOR_FOLDERS = ['Francisco', 'Guillermo', 'Sandra', 'Ines', 'Javier', 'Fernando - Federico']
+const DEFAULT_OPENING_CHECKLIST = [
+  'Ficha de cliente hecha',
+  'Cedulas conseguidas',
+  'Comprobante de domicilio recibido',
+  'Informacion de madre/padre completa',
+  'Perfil de riesgo completado',
+  'Formularios enviados al cliente',
+  'Formularios firmados recibidos',
+  'Documentacion revisada internamente',
+  'Documentacion enviada al banco',
+  'Confirmacion del banco recibida',
+  'Numero de cliente asignado',
+  'Cuenta marcada como activa',
+]
+
+function parseClientFolderName(folderName: string): {
+  clientNumber: string | null
+  displayName: string
+} {
+  const numMatch = folderName.match(/^(\d+)\s*[-–]\s*(.+)/)
+  if (numMatch) {
+    return { clientNumber: numMatch[1], displayName: numMatch[2].trim() }
+  }
+  return { clientNumber: null, displayName: folderName }
+}
+
+function normalizeKey(value: string | null | undefined): string {
+  return (value ?? '').trim().toLowerCase().replace(/\s+/g, ' ')
+}
+
+interface ExistingClientMatch {
+  id: string
+  status: string | null
+}
+
+async function createDefaultOpeningChecklist(openingId: string) {
+  await supabaseAdmin.from('opening_checklist_items').insert(
+    DEFAULT_OPENING_CHECKLIST.map((title, sort_order) => ({
+      opening_id: openingId,
+      title,
+      sort_order,
+    }))
+  )
+}
 
 async function logSync(
   syncType: string,
@@ -33,8 +77,16 @@ async function logSync(
 
 // ── Sync Clientes ────────────────────────────────────────────────────────────
 // Reads: CLIENTES_DRIVE_ID / CLIENTES_FOLDER_ID
-// Structure: Clientes/ > AdvisorName/ > "ClientNumber - Client Name"/
-// Upserts into: clients table (source='sharepoint', drive_id, item_id, web_url, etc.)
+// Structure: Clientes/ > AdvisorName/ > folder per client
+//
+// Rules (source of truth = folder.createdDateTime from OneDrive):
+//   • item_id already in clients          → UPDATE fields only, never touch apertura
+//   • item_id already in account_openings → SKIP (no duplicates)
+//   • createdDateTime < CUTOFF_DATE       → INSERT into clients (historical)
+//   • createdDateTime ≥ CUTOFF_DATE       → INSERT into account_openings (new)
+
+// Folders created before this date are historical clients, not openings.
+const HISTORICAL_CUTOFF = new Date('2026-06-02T00:00:00Z')
 
 export async function syncClients(): Promise<SyncResult> {
   const startedAt = new Date()
@@ -50,15 +102,34 @@ export async function syncClients(): Promise<SyncResult> {
     return result
   }
 
+  // Load all item_ids already tracked — primary key is item_id (onedrive folder id)
+  const knownClientIds = new Set<string>()
+  const knownOpeningIds = new Set<string>()
+  try {
+    const { data: existingClients } = await supabaseAdmin
+      .from('clients')
+      .select('item_id')
+      .not('item_id', 'is', null)
+    for (const c of existingClients ?? []) if (c.item_id) knownClientIds.add(c.item_id)
+
+    const { data: existingOpenings } = await supabaseAdmin
+      .from('account_openings')
+      .select('item_id')
+      .not('item_id', 'is', null)
+    for (const o of existingOpenings ?? []) if (o.item_id) knownOpeningIds.add(o.item_id)
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e)
+    result.errors.push(`Failed to load known IDs: ${msg}`)
+    await logSync('clientes', 'error', result, startedAt, msg)
+    return result
+  }
+
   try {
     const token = await getGraphToken()
 
-    // List top-level advisor folders
     const advisorFolders = await listFolderChildren(driveId, folderId, token)
     const targetAdvisors = advisorFolders.filter(
-      f =>
-        f.folder &&
-        ADVISOR_FOLDERS.some(a => f.name.toLowerCase().includes(a.toLowerCase()))
+      f => f.folder && ADVISOR_FOLDERS.some(a => f.name.toLowerCase().includes(a.toLowerCase()))
     )
 
     for (const advisorFolder of targetAdvisors) {
@@ -70,126 +141,90 @@ export async function syncClients(): Promise<SyncResult> {
 
         for (const clientFolder of onlyFolders) {
           try {
-            // Parse "12345 - LASTNAME FIRSTNAME" or "LASTNAME, FIRSTNAME"
             const folderName = clientFolder.name.trim()
-            let clientNumber: string | null = null
-            let firstName = ''
-            let lastName = ''
-
-            const numMatch = folderName.match(/^(\d+)\s*[-–]\s*(.+)/)
-            if (numMatch) {
-              clientNumber = numMatch[1]
-              const namePart = numMatch[2].trim()
-              const parts = namePart.split(/\s+/)
-              lastName = parts[0] ?? ''
-              firstName = parts.slice(1).join(' ')
-            } else {
-              const commaMatch = folderName.match(/^([^,]+),\s*(.+)/)
-              if (commaMatch) {
-                lastName = commaMatch[1].trim()
-                firstName = commaMatch[2].trim()
-              } else {
-                const parts = folderName.split(/\s+/)
-                lastName = parts[0] ?? folderName
-                firstName = parts.slice(1).join(' ')
-              }
-            }
-
-            const spFields = {
-              source: 'sharepoint',
-              drive_id: driveId,
-              item_id: clientFolder.id,
-              web_url: clientFolder.webUrl,
-              parent_path: advisorName,
-              last_synced_at: new Date().toISOString(),
-              advisor: advisorName,
-            }
-
-            const OPENINGS_CUTOFF = new Date('2026-05-16T00:00:00Z')
-            const folderCreated = clientFolder.createdDateTime
+            const { clientNumber, displayName } = parseClientFolderName(folderName)
+            const itemId = clientFolder.id
+            const createdAt = clientFolder.createdDateTime
               ? new Date(clientFolder.createdDateTime)
               : null
-            const isPostCutoff = folderCreated ? folderCreated > OPENINGS_CUTOFF : false
 
-            // Upsert by item_id — atomic, safe for concurrent syncs
-            const { data: upserted, error: upsertErr } = await supabaseAdmin
-              .from('clients')
-              .upsert(
-                {
-                  first_name: firstName || folderName,
-                  last_name: lastName,
-                  client_number: clientNumber,
-                  status: isPostCutoff ? 'prospecto' : 'activo',
-                  ...spFields,
-                },
-                { onConflict: 'item_id', ignoreDuplicates: false }
-              )
-              .select('id, created_at, updated_at')
-              .maybeSingle()
-
-            if (upsertErr) {
-              result.errors.push(`Upsert ${folderName}: ${upsertErr.message}`)
+            // ── 1. Already a client → update SharePoint fields only ──
+            if (knownClientIds.has(itemId)) {
+              await supabaseAdmin
+                .from('clients')
+                .update({
+                  drive_id: driveId,
+                  web_url: clientFolder.webUrl,
+                  onedrive_folder_url: clientFolder.webUrl,
+                  parent_path: advisorName,
+                  advisor: advisorName,
+                  last_synced_at: new Date().toISOString(),
+                })
+                .eq('item_id', itemId)
+              result.updated++
               continue
             }
 
-            const clientId = upserted?.id ?? null
-            // New if created_at equals updated_at (just inserted)
-            const isNewClient = !!(clientId && isPostCutoff &&
-              upserted?.created_at && upserted?.updated_at &&
-              Math.abs(new Date(upserted.created_at).getTime() - new Date(upserted.updated_at).getTime()) < 2000)
-
-            if (upserted) {
-              // Rough check: if created_at ≈ now it's new, else updated
-              const ageMs = Date.now() - new Date(upserted.created_at).getTime()
-              if (ageMs < 5000) result.created++
-              else result.updated++
+            // ── 2. Already in account_openings → skip (no duplicates) ──
+            if (knownOpeningIds.has(itemId)) {
+              continue
             }
 
-            // Auto-create apertura only for new clients in folders created after May 16, 2026
-            const OPENINGS_CUTOFF = new Date('2026-05-16T00:00:00Z')
-            const folderCreated = clientFolder.createdDateTime
-              ? new Date(clientFolder.createdDateTime)
-              : null
+            // ── 3. Brand new folder — decide by creation date ──
+            const isHistorical = !createdAt || createdAt < HISTORICAL_CUTOFF
 
-            if (isNewClient && clientId && folderCreated && folderCreated > OPENINGS_CUTOFF) {
-              const { data: newOpening, error: openingErr } = await supabaseAdmin
+            if (isHistorical) {
+              // Historical folder → goes directly to Clients
+              const { error: insertErr } = await supabaseAdmin
+                .from('clients')
+                .insert({
+                  first_name: '',
+                  last_name: displayName,
+                  client_number: clientNumber,
+                  status: 'activo',
+                  source: 'sharepoint',
+                  drive_id: driveId,
+                  item_id: itemId,
+                  web_url: clientFolder.webUrl,
+                  onedrive_folder_url: clientFolder.webUrl,
+                  parent_path: advisorName,
+                  advisor: advisorName,
+                  last_synced_at: new Date().toISOString(),
+                })
+              if (insertErr) {
+                result.errors.push(`Insert client ${folderName}: ${insertErr.message}`)
+              } else {
+                result.created++
+                knownClientIds.add(itemId)
+              }
+            } else {
+              // New folder (≥ Jun 2) → goes to Apertura de Cuenta
+              const { data: opening, error: openingErr } = await supabaseAdmin
                 .from('account_openings')
                 .insert({
-                  client_id: clientId,
+                  client_id: null,
                   folder_name: folderName,
                   advisor: advisorName,
                   status: 'carpeta_creada',
                   priority: 'normal',
                   start_date: new Date().toISOString().split('T')[0],
+                  item_id: itemId,
+                  drive_id: driveId,
+                  web_url: clientFolder.webUrl,
                 })
                 .select('id')
-                .maybeSingle()
-
+                .single()
               if (openingErr) {
-                result.errors.push(`Opening insert for ${folderName}: ${openingErr.message}`)
-              }
-
-              if (newOpening?.id) {
-                const checklist = [
-                  { title: 'Ficha de cliente', sort_order: 0 },
-                  { title: 'Perfil de inversor', sort_order: 1 },
-                  { title: 'Cédula / Documento de identidad', sort_order: 2 },
-                  { title: 'Documentación legal', sort_order: 3 },
-                  { title: 'Cuestionario del asesor', sort_order: 4 },
-                  { title: 'Formularios enviados al cliente', sort_order: 5 },
-                  { title: 'Formularios firmados recibidos', sort_order: 6 },
-                  { title: 'Documentación enviada al banco', sort_order: 7 },
-                  { title: 'Aprobación del banco', sort_order: 8 },
-                  { title: 'Cuenta abierta', sort_order: 9 },
-                ]
-                await supabaseAdmin.from('opening_checklist_items').insert(
-                  checklist.map(item => ({ opening_id: newOpening.id, ...item }))
-                )
+                result.errors.push(`Opening insert ${folderName}: ${openingErr.message}`)
+              } else {
+                await createDefaultOpeningChecklist(opening.id)
+                result.created++
+                knownOpeningIds.add(itemId)
               }
             }
           } catch (e: unknown) {
             const msg = e instanceof Error ? e.message : String(e)
-            result.errors.push(`Client folder ${clientFolder.name}: ${msg}`)
+            result.errors.push(`Folder ${clientFolder.name}: ${msg}`)
           }
         }
       } catch (e: unknown) {

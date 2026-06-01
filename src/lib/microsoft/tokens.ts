@@ -65,7 +65,7 @@ async function doRefresh(refreshToken: string): Promise<MsTokenPayload | null> {
           client_secret: process.env.MICROSOFT_CLIENT_SECRET!,
           refresh_token: refreshToken,
           scope:
-            'openid email profile User.Read Calendars.Read Calendars.ReadWrite offline_access',
+            'openid email profile User.Read Files.Read.All Sites.Read.All Calendars.Read Calendars.ReadWrite offline_access',
         }),
       }
     )

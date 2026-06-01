@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { unstable_noStore as noStore } from 'next/cache'
 import { cookies } from 'next/headers'
 import { supabaseAdmin } from '@/lib/supabase/admin'
+import { getSession } from '@/lib/auth'
 import type { Task, Client } from '@/types/platform'
 import StatusBadge from '@/components/StatusBadge'
 import TaskCompleteButton from '@/components/TaskCompleteButton'
@@ -13,9 +14,10 @@ export const metadata: Metadata = { title: 'Pendientes' }
 
 type TaskWithClient = Task & {
   client: Pick<Client, 'id' | 'first_name' | 'last_name' | 'client_number'> | null
+  task_shares?: { user_name: string }[]
 }
 
-type View = 'mine' | 'team' | 'overdue' | 'completed'
+type View = 'mine' | 'shared' | 'created' | 'team' | 'pending' | 'overdue' | 'completed'
 
 interface Props {
   searchParams: { view?: string; responsible?: string; status?: string; q?: string }
@@ -24,48 +26,114 @@ interface Props {
 export default async function TasksPage({ searchParams }: Props) {
   noStore()
 
+  const session = await getSession()
+  const isSupervisor = !!session && ['admin', 'ceo', 'direccion'].includes(session.role)
   const cookieStore = cookies()
-  const currentUser = cookieStore.get('rc_user_name')?.value ?? null
+  const currentUser = session?.name ?? cookieStore.get('rc_user_name')?.value ?? null
 
   const rawView = searchParams.view as View | undefined
-  const view: View = rawView ?? (currentUser ? 'mine' : 'team')
+  const requestedView: View = rawView ?? 'mine'
+  const view: View = requestedView === 'team' && !isSupervisor ? 'mine' : requestedView
 
   const today = new Date().toISOString().split('T')[0]
+  const openStatuses = ['pendiente', 'en_proceso', 'bloqueado']
+  const taskSelect = '*, client:clients(id, first_name, last_name, client_number), task_shares(user_name)'
 
-  let query = supabaseAdmin
-    .from('tasks')
-    .select('*, client:clients(id, first_name, last_name, client_number)')
+  const { data: sharedRefs } = currentUser
+    ? await supabaseAdmin.from('task_shares').select('task_id').eq('user_name', currentUser)
+    : { data: [] as any[] }
+  const sharedTaskIds = Array.from(new Set((sharedRefs ?? []).map((r: any) => r.task_id).filter(Boolean)))
 
-  if (view === 'mine' && currentUser) {
-    query = query.eq('responsible', currentUser)
-    query = query.in('status', ['pendiente', 'en_proceso', 'bloqueado'])
-    query = query.order('due_date', { ascending: true, nullsFirst: false })
-  } else if (view === 'overdue') {
-    query = query
-      .in('status', ['pendiente', 'en_proceso', 'bloqueado'])
-      .lt('due_date', today)
-      .order('due_date', { ascending: true, nullsFirst: false })
-  } else if (view === 'completed') {
-    query = query
-      .eq('status', 'completado')
-      .order('completed_at', { ascending: false })
-      .limit(50)
-  } else {
-    // team view — no responsible filter
-    if (searchParams.status) query = query.eq('status', searchParams.status)
-    else query = query.in('status', ['pendiente', 'en_proceso', 'bloqueado'])
-    query = query.order('due_date', { ascending: true, nullsFirst: false })
+  async function runTaskQuery(builder: any) {
+    const { data, error } = await builder
+    if (error) throw error
+    return (data ?? []) as TaskWithClient[]
   }
 
-  if (searchParams.q) {
-    query = query.ilike('title', `%${searchParams.q}%`)
+  function uniqueTasks(rows: TaskWithClient[]) {
+    const map = new Map<string, TaskWithClient>()
+    for (const row of rows) map.set(row.id, row)
+    return Array.from(map.values())
   }
 
   let tasks: TaskWithClient[] = []
   try {
-    const { data, error } = await query
-    if (error) throw error
-    tasks = (data ?? []) as TaskWithClient[]
+    const applySearch = (builder: any) =>
+      searchParams.q ? builder.ilike('title', `%${searchParams.q}%`) : builder
+
+    if (view === 'mine' && currentUser) {
+      const [responsibleRows, createdRows, sharedRows] = await Promise.all([
+        runTaskQuery(applySearch(
+          supabaseAdmin.from('tasks').select(taskSelect).in('status', openStatuses).eq('responsible', currentUser)
+        )),
+        runTaskQuery(applySearch(
+          supabaseAdmin.from('tasks').select(taskSelect).in('status', openStatuses).eq('created_by', currentUser)
+        )),
+        sharedTaskIds.length
+          ? runTaskQuery(applySearch(
+              supabaseAdmin.from('tasks').select(taskSelect).in('status', openStatuses).in('id', sharedTaskIds)
+            ))
+          : Promise.resolve([]),
+      ])
+      tasks = uniqueTasks([...responsibleRows, ...createdRows, ...sharedRows])
+    } else if (view === 'shared' && currentUser) {
+      tasks = sharedTaskIds.length
+        ? await runTaskQuery(applySearch(
+            supabaseAdmin.from('tasks').select(taskSelect).in('status', openStatuses).in('id', sharedTaskIds)
+          ))
+        : []
+    } else if (view === 'created' && currentUser) {
+      tasks = await runTaskQuery(applySearch(
+        supabaseAdmin.from('tasks').select(taskSelect).in('status', openStatuses).eq('created_by', currentUser)
+      ))
+    } else if (view === 'overdue') {
+      const baseRows = currentUser && !isSupervisor
+        ? uniqueTasks([
+            ...(await runTaskQuery(applySearch(supabaseAdmin.from('tasks').select(taskSelect).in('status', openStatuses).eq('responsible', currentUser)))),
+            ...(await runTaskQuery(applySearch(supabaseAdmin.from('tasks').select(taskSelect).in('status', openStatuses).eq('created_by', currentUser)))),
+            ...(sharedTaskIds.length ? await runTaskQuery(applySearch(supabaseAdmin.from('tasks').select(taskSelect).in('status', openStatuses).in('id', sharedTaskIds))) : []),
+          ])
+        : await runTaskQuery(applySearch(supabaseAdmin.from('tasks').select(taskSelect).in('status', openStatuses)))
+      tasks = baseRows.filter((t) => t.due_date && t.due_date < today)
+    } else if (view === 'completed') {
+      tasks = await runTaskQuery(applySearch(
+        supabaseAdmin.from('tasks').select(taskSelect).eq('status', 'completado').order('completed_at', { ascending: false }).limit(50)
+      ))
+      if (currentUser && !isSupervisor) {
+        tasks = tasks.filter((t) =>
+          t.responsible === currentUser ||
+          t.created_by === currentUser ||
+          sharedTaskIds.includes(t.id)
+        )
+      }
+    } else if (view === 'pending' && currentUser && !isSupervisor) {
+      const [responsibleRows, createdRows, sharedRows] = await Promise.all([
+        runTaskQuery(applySearch(
+          supabaseAdmin.from('tasks').select(taskSelect).in('status', openStatuses).eq('responsible', currentUser)
+        )),
+        runTaskQuery(applySearch(
+          supabaseAdmin.from('tasks').select(taskSelect).in('status', openStatuses).eq('created_by', currentUser)
+        )),
+        sharedTaskIds.length
+          ? runTaskQuery(applySearch(
+              supabaseAdmin.from('tasks').select(taskSelect).in('status', openStatuses).in('id', sharedTaskIds)
+            ))
+          : Promise.resolve([]),
+      ])
+      tasks = uniqueTasks([...responsibleRows, ...createdRows, ...sharedRows])
+    } else {
+      let query = supabaseAdmin.from('tasks').select(taskSelect)
+      if (searchParams.status) query = query.eq('status', searchParams.status)
+      else query = query.in('status', openStatuses)
+      tasks = await runTaskQuery(applySearch(query))
+    }
+
+    tasks = tasks.sort((a, b) => {
+      if (a.due_date && b.due_date) return a.due_date.localeCompare(b.due_date)
+      if (a.due_date) return -1
+      if (b.due_date) return 1
+      return a.title.localeCompare(b.title)
+    })
   } catch {
     tasks = []
   }
@@ -75,10 +143,18 @@ export default async function TasksPage({ searchParams }: Props) {
   let kpiOverdue = 0
   let kpiUrgent = 0
   try {
-    const { data: allOpen } = await supabaseAdmin
+    const { data: allOpenRaw } = await supabaseAdmin
       .from('tasks')
-      .select('id, priority, due_date, status')
+      .select('id, priority, due_date, status, responsible, created_by')
       .in('status', ['pendiente', 'en_proceso', 'bloqueado'])
+
+    const allOpen = currentUser && !isSupervisor
+      ? (allOpenRaw ?? []).filter((t: any) =>
+          t.responsible === currentUser ||
+          t.created_by === currentUser ||
+          sharedTaskIds.includes(t.id)
+        )
+      : (allOpenRaw ?? [])
 
     if (allOpen) {
       kpiOpen = allOpen.length
@@ -91,12 +167,15 @@ export default async function TasksPage({ searchParams }: Props) {
 
   const tabs: { label: string; value: View; href: string }[] = [
     { label: 'Mis tareas', value: 'mine', href: '/tasks?view=mine' },
-    { label: 'Equipo', value: 'team', href: '/tasks?view=team' },
+    { label: 'Compartidas conmigo', value: 'shared', href: '/tasks?view=shared' },
+    { label: 'Creadas por mí', value: 'created', href: '/tasks?view=created' },
+    ...(isSupervisor ? [{ label: 'Equipo', value: 'team' as View, href: '/tasks?view=team' }] : []),
+    { label: 'Pendientes', value: 'pending', href: '/tasks?view=pending' },
     { label: 'Vencidas', value: 'overdue', href: '/tasks?view=overdue' },
     { label: 'Completadas', value: 'completed', href: '/tasks?view=completed' },
   ]
 
-  const showResponsible = view === 'team' || view === 'overdue'
+  const showResponsible = view === 'team' || view === 'overdue' || view === 'shared' || view === 'created'
 
   return (
     <div className="p-8">
@@ -142,10 +221,14 @@ export default async function TasksPage({ searchParams }: Props) {
           <span>
             Filtrando por:{' '}
             <span className="font-medium text-[#2D3F52]">{currentUser}</span>
-            {' · '}
-            <Link href="/tasks?view=team" className="text-[#16A34A] hover:underline">
-              ver equipo completo
-            </Link>
+            {isSupervisor && (
+              <>
+                {' · '}
+                <Link href="/tasks?view=team" className="text-[#16A34A] hover:underline">
+                  ver equipo completo
+                </Link>
+              </>
+            )}
           </span>
         ) : (
           <span>
@@ -235,6 +318,9 @@ export default async function TasksPage({ searchParams }: Props) {
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
                   Cliente
                 </th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                  Compartida con
+                </th>
                 {showResponsible && (
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
                     Responsable
@@ -287,6 +373,15 @@ export default async function TasksPage({ searchParams }: Props) {
                         >
                           {t.client.first_name} {t.client.last_name}
                         </Link>
+                      ) : (
+                        <span className="text-gray-300">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-gray-500">
+                      {t.task_shares && t.task_shares.length > 0 ? (
+                        <span className="text-xs">
+                          {t.task_shares.map((s) => s.user_name).join(', ')}
+                        </span>
                       ) : (
                         <span className="text-gray-300">—</span>
                       )}

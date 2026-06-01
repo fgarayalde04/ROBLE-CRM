@@ -15,9 +15,8 @@ export async function GET() {
   authUrl.searchParams.set('client_id', clientId)
   authUrl.searchParams.set('response_type', 'code')
   authUrl.searchParams.set('redirect_uri', redirectUri)
-  authUrl.searchParams.set('scope', 'openid email profile User.Read')
+  authUrl.searchParams.set('scope', 'openid email profile User.Read Files.Read.All Sites.Read.All offline_access')
   authUrl.searchParams.set('response_mode', 'query')
-  authUrl.searchParams.set('prompt', 'select_account')
 
   return NextResponse.redirect(authUrl.toString())
 }

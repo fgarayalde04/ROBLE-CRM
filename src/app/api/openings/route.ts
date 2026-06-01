@@ -56,6 +56,95 @@ export async function POST(req: Request) {
 export async function PUT(req: Request) {
   try {
     const { id, ...payload } = await req.json()
+
+    // When "Comenzar" is clicked (status → recolectando_informacion):
+    // If the opening doesn't have a client yet, create one from the stored folder data.
+    if (payload.status === 'recolectando_informacion') {
+      const { data: opening, error: fetchErr } = await supabaseAdmin
+        .from('account_openings')
+        .select('client_id, folder_name, advisor, item_id, drive_id, web_url, onedrive_url')
+        .eq('id', id)
+        .single()
+      if (fetchErr) throw fetchErr
+
+      if (!opening.client_id && opening.item_id) {
+        const folderName: string = opening.folder_name ?? ''
+        let clientNumber: string | null = null
+        let displayName = folderName
+        const numMatch = folderName.match(/^(\d+)\s*[-–]\s*(.+)/)
+        if (numMatch) {
+          clientNumber = numMatch[1]
+          displayName = numMatch[2].trim()
+        }
+
+        const { data: existingClient, error: existingClientErr } = await supabaseAdmin
+          .from('clients')
+          .select('id')
+          .eq('item_id', opening.item_id)
+          .maybeSingle()
+
+        if (existingClientErr) throw existingClientErr
+
+        let clientId = existingClient?.id ?? null
+
+        if (!clientId) {
+          const { data: newClient, error: clientErr } = await supabaseAdmin
+            .from('clients')
+            .insert({
+              first_name: '',
+              last_name: displayName,
+              client_number: clientNumber,
+              status: 'activo',
+              source: 'sharepoint',
+              drive_id: opening.drive_id,
+              item_id: opening.item_id,
+              web_url: opening.web_url ?? opening.onedrive_url,
+              onedrive_folder_url: opening.onedrive_url ?? opening.web_url,
+              advisor: opening.advisor,
+              last_synced_at: new Date().toISOString(),
+            })
+            .select('id')
+            .single()
+
+          if (clientErr) throw clientErr
+          clientId = newClient.id
+        } else {
+          await supabaseAdmin
+            .from('clients')
+            .update({
+              status: 'activo',
+              drive_id: opening.drive_id,
+              web_url: opening.web_url ?? opening.onedrive_url,
+              onedrive_folder_url: opening.onedrive_url ?? opening.web_url,
+              advisor: opening.advisor,
+              updated_at: new Date().toISOString(),
+              last_synced_at: new Date().toISOString(),
+            })
+            .eq('id', clientId)
+        }
+
+        payload.client_id = clientId
+      } else if (opening.client_id) {
+        await supabaseAdmin
+          .from('clients')
+          .update({
+            status: 'activo',
+            drive_id: opening.drive_id,
+            web_url: opening.web_url ?? opening.onedrive_url,
+            onedrive_folder_url: opening.onedrive_url ?? opening.web_url,
+            advisor: opening.advisor,
+            updated_at: new Date().toISOString(),
+            last_synced_at: new Date().toISOString(),
+          })
+          .eq('id', opening.client_id)
+      }
+
+      const now = new Date().toISOString()
+      payload.status = 'cuenta_abierta'
+      payload.opened_date = now.split('T')[0]
+      payload.account_opened_at = now
+    }
+
     const { data, error } = await supabaseAdmin
       .from('account_openings')
       .update(payload)
@@ -63,14 +152,6 @@ export async function PUT(req: Request) {
       .select()
       .single()
     if (error) throw error
-
-    // When "Comenzar" is clicked (status → recolectando_informacion), activate the client
-    if (payload.status === 'recolectando_informacion' && data?.client_id) {
-      await supabaseAdmin
-        .from('clients')
-        .update({ status: 'activo', updated_at: new Date().toISOString() })
-        .eq('id', data.client_id)
-    }
 
     return NextResponse.json(data)
   } catch (err: any) {

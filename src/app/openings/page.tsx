@@ -16,7 +16,7 @@ export const metadata: Metadata = { title: 'Apertura de cuentas' }
 export const dynamic = 'force-dynamic'
 
 const STATUS_LABEL: Record<OpeningStatus, string> = {
-  carpeta_creada: 'Carpeta creada',
+  carpeta_creada: 'Pendiente de apertura',
   recolectando_informacion: 'Recolectando info',
   documentacion_incompleta: 'Doc. incompleta',
   documentacion_completa: 'Doc. completa',

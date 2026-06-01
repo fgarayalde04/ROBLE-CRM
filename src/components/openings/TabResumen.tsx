@@ -7,7 +7,7 @@ import type { AccountOpening, OpeningChecklistItem, OpeningStatus } from '@/type
 import { differenceInDays, parseISO } from 'date-fns'
 
 const STATUS_OPTIONS: { value: OpeningStatus; label: string }[] = [
-  { value: 'carpeta_creada', label: 'Carpeta creada' },
+  { value: 'carpeta_creada', label: 'Pendiente de apertura' },
   { value: 'recolectando_informacion', label: 'Recolectando informacion' },
   { value: 'documentacion_incompleta', label: 'Documentacion incompleta' },
   { value: 'documentacion_completa', label: 'Documentacion completa' },

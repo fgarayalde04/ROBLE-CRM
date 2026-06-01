@@ -4,7 +4,7 @@ import { unstable_noStore as noStore } from 'next/cache'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import { getSession } from '@/lib/auth'
 import type { Client } from '@/types/platform'
-import FolderButton from '@/components/FolderButton'
+import OneDriveFolderButton from '@/components/OneDriveFolderButton'
 import ClientStatusToggle from '@/components/ClientStatusToggle'
 import DeleteClientButton from '@/components/DeleteClientButton'
 import { format } from 'date-fns'
@@ -71,7 +71,7 @@ export default async function ClientsPage({ searchParams }: Props) {
 
     let query = supabaseAdmin
       .from('clients')
-      .select('id, first_name, last_name, status, advisor, onedrive_folder_url, updated_at, created_at, closed_at, closed_by, close_reason')
+      .select('id, first_name, last_name, status, advisor, onedrive_folder_url, drive_id, item_id, web_url, updated_at, created_at, closed_at, closed_by, close_reason')
 
     if (activeSort === 'nombre') {
       query = query
@@ -407,7 +407,12 @@ export default async function ClientsPage({ searchParams }: Props) {
                       {c.created_at ? format(new Date(c.created_at), "d MMM yyyy", { locale: es }) : '—'}
                     </td>
                     <td className="px-4 py-3">
-                      <FolderButton path={c.onedrive_folder_url} label="Abrir" />
+                      <OneDriveFolderButton
+                        driveId={c.drive_id}
+                        itemId={c.item_id}
+                        webUrl={c.web_url ?? c.onedrive_folder_url}
+                        label="Abrir carpeta"
+                      />
                     </td>
                     <td className="px-3 py-3">
                       <DeleteClientButton

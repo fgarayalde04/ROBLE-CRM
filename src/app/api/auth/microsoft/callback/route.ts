@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import { createSession, SESSION_COOKIE, SESSION_MAX_AGE } from '@/lib/auth'
+import { storeMsTokens } from '@/lib/microsoft/tokens'
 
 export const dynamic = 'force-dynamic'
 
@@ -35,7 +36,7 @@ export async function GET(req: NextRequest) {
           code,
           redirect_uri:  redirectUri,
           grant_type:    'authorization_code',
-          scope:         'openid email profile User.Read',
+          scope:         'openid email profile User.Read Files.Read.All Sites.Read.All offline_access',
         }),
       }
     )
@@ -45,7 +46,8 @@ export async function GET(req: NextRequest) {
       return NextResponse.redirect(`${base}/login?error=microsoft_token`)
     }
 
-    const { access_token } = await tokenRes.json()
+    const tokenData = await tokenRes.json()
+    const { access_token, refresh_token, expires_in } = tokenData
 
     // ── 2. Get user profile from Microsoft Graph ──────────────────────────────
     const meRes = await fetch('https://graph.microsoft.com/v1.0/me', {
@@ -108,6 +110,14 @@ export async function GET(req: NextRequest) {
         maxAge:   SESSION_MAX_AGE,
         path:     '/',
       })
+      await storeMsTokens(
+        {
+          access_token,
+          refresh_token,
+          expires_at: Math.floor(Date.now() / 1000) + (expires_in ?? 3600),
+        },
+        res
+      )
       return res
     }
 

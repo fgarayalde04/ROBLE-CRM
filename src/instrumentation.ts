@@ -3,7 +3,7 @@
  * Sets up automatic SharePoint sync on a configurable interval.
  *
  * Configure via .env.local:
- *   SYNC_INTERVAL_MINUTES=60   (default: 60 — runs every hour)
+ *   SYNC_INTERVAL_MINUTES=1    (default: 1 — runs every minute)
  *   SYNC_ON_STARTUP=true       (default: true — syncs immediately on startup)
  */
 
@@ -18,10 +18,11 @@ export async function register() {
     return
   }
 
-  const { syncClients } = await import('@/lib/microsoft/sync')
+  const { syncAll } = await import('@/lib/microsoft/sync')
   const { supabaseAdmin } = await import('@/lib/supabase/admin')
 
-  const intervalMins = parseInt(process.env.SYNC_INTERVAL_MINUTES ?? '60', 10)
+  const parsedInterval = parseInt(process.env.SYNC_INTERVAL_MINUTES ?? '1', 10)
+  const intervalMins = Number.isFinite(parsedInterval) && parsedInterval > 0 ? parsedInterval : 1
   const runOnStartup = process.env.SYNC_ON_STARTUP !== 'false'
 
   const MONTH_NAMES = [
@@ -52,7 +53,7 @@ export async function register() {
     console.log('[auto-sync] Starting scheduled sync...')
     try {
       await maybeResetPayments()
-      await syncClients()
+      await syncAll()
       console.log('[auto-sync] Sync complete.')
     } catch (e) {
       console.error('[auto-sync] Error:', e)

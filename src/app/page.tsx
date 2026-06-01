@@ -10,7 +10,7 @@ export const metadata: Metadata = { title: 'Panel del día | Roble Capital' }
 export const dynamic = 'force-dynamic'
 
 const OPENING_STATUS_LABEL: Record<string, string> = {
-  carpeta_creada: 'Carpeta creada',
+  carpeta_creada: 'Pendiente de apertura',
   recolectando_informacion: 'Recolectando info',
   documentacion_incompleta: 'Doc. incompleta',
   documentacion_completa: 'Doc. completa',
@@ -62,6 +62,14 @@ function firstName(fullName: string): string {
   return fullName.split(' ')[0]
 }
 
+function uniqueById(rows: any[]): any[] {
+  const map = new Map<string, any>()
+  for (const row of rows) {
+    if (row?.id) map.set(row.id, row)
+  }
+  return Array.from(map.values())
+}
+
 export default async function PanelDelDiaPage() {
   noStore()
 
@@ -74,31 +82,43 @@ export default async function PanelDelDiaPage() {
   const fourteenDaysAgo = new Date(Date.now() - 14 * 86_400_000).toISOString()
   const formattedDate = format(new Date(), "EEEE d 'de' MMMM", { locale: es })
 
-  // ─── Personal tasks (always filtered by user) ────────────────────────────────
-  const myTasksQuery = supabaseAdmin
-    .from('tasks')
-    .select('id, title, priority, due_date, responsible, client:clients(id, first_name, last_name)')
-    .in('status', ['pendiente', 'en_proceso'])
-    .eq('responsible', userName)
-    .order('due_date', { ascending: true })
-    .limit(10)
+  const taskSelect = 'id, title, priority, due_date, responsible, created_by, status, client:clients(id, first_name, last_name), task_shares(user_name)'
+  const openTaskStatuses = ['pendiente', 'en_proceso', 'bloqueado']
+  const { data: sharedRefs } = userName
+    ? await supabaseAdmin.from('task_shares').select('task_id').eq('user_name', userName)
+    : { data: [] as any[] }
+  const sharedTaskIds = Array.from(new Set((sharedRefs ?? []).map((r: any) => r.task_id).filter(Boolean)))
 
-  const myOverdueQuery = supabaseAdmin
-    .from('tasks')
-    .select('id, title, due_date, responsible, client:clients(id, first_name, last_name)')
-    .in('status', ['pendiente', 'en_proceso', 'bloqueado'])
-    .eq('responsible', userName)
-    .lt('due_date', today)
-    .order('due_date', { ascending: true })
-    .limit(10)
+  // ─── Personal tasks: responsible + created by me + shared with me ───────────
+  const tasksResponsibleQuery = userName
+    ? supabaseAdmin
+        .from('tasks')
+        .select(taskSelect)
+        .in('status', openTaskStatuses)
+        .eq('responsible', userName)
+        .order('due_date', { ascending: true, nullsFirst: false })
+        .limit(20)
+    : Promise.resolve({ data: [], error: null })
 
-  const myUrgentQuery = supabaseAdmin
-    .from('tasks')
-    .select('id, title, due_date, responsible, client:clients(id, first_name, last_name)')
-    .in('status', ['pendiente', 'en_proceso'])
-    .eq('responsible', userName)
-    .eq('priority', 'urgente')
-    .limit(6)
+  const tasksCreatedQuery = userName
+    ? supabaseAdmin
+        .from('tasks')
+        .select(taskSelect)
+        .in('status', openTaskStatuses)
+        .eq('created_by', userName)
+        .order('due_date', { ascending: true, nullsFirst: false })
+        .limit(20)
+    : Promise.resolve({ data: [], error: null })
+
+  const tasksSharedQuery = sharedTaskIds.length > 0
+    ? supabaseAdmin
+        .from('tasks')
+        .select(taskSelect)
+        .in('status', openTaskStatuses)
+        .in('id', sharedTaskIds)
+        .order('due_date', { ascending: true, nullsFirst: false })
+        .limit(20)
+    : Promise.resolve({ data: [], error: null })
 
   // Personal openings (filtered by advisor for non-wide roles)
   const myOpeningsQuery = isWideRole
@@ -136,9 +156,9 @@ export default async function PanelDelDiaPage() {
         .limit(0) // returns empty for non-wide (already tracked in myOverdue)
 
   const [
-    myTasksR,
-    myOverdueR,
-    myUrgentR,
+    tasksResponsibleR,
+    tasksCreatedR,
+    tasksSharedR,
     myOpeningsR,
     companyOverdueR,
     noResponsibleTasksR,
@@ -147,11 +167,12 @@ export default async function PanelDelDiaPage() {
     todayEventsR,
     upcomingDeadlinesR,
     recentActivityR,
+    unreadNotificationsR,
     pendingBcuR,
   ] = await Promise.all([
-    myTasksQuery,
-    myOverdueQuery,
-    myUrgentQuery,
+    tasksResponsibleQuery,
+    tasksCreatedQuery,
+    tasksSharedQuery,
     myOpeningsQuery,
 
     // Company overdue (wide roles only)
@@ -200,26 +221,53 @@ export default async function PanelDelDiaPage() {
     // Eventos de hoy
     supabaseAdmin
       .from('events')
-      .select('id, title, type, start_time, client:clients(id, first_name, last_name)')
+      .select('id, title, type, start_time, created_by, participants, client:clients(id, first_name, last_name)')
       .eq('event_date', today)
       .order('start_time', { ascending: true }),
 
     // Vencimientos próximos
-    supabaseAdmin
-      .from('deadlines')
-      .select('id, title, due_date, category, client:clients(id, first_name, last_name)')
-      .eq('status', 'pendiente')
-      .gte('due_date', today)
-      .lte('due_date', sevenDaysLater)
-      .order('due_date', { ascending: true })
-      .limit(6),
+    (isWideRole
+      ? supabaseAdmin
+          .from('deadlines')
+          .select('id, title, due_date, category, responsible, client:clients(id, first_name, last_name)')
+          .eq('status', 'pendiente')
+          .gte('due_date', today)
+          .lte('due_date', sevenDaysLater)
+          .order('due_date', { ascending: true })
+          .limit(6)
+      : supabaseAdmin
+          .from('deadlines')
+          .select('id, title, due_date, category, responsible, client:clients(id, first_name, last_name)')
+          .eq('status', 'pendiente')
+          .eq('responsible', userName)
+          .gte('due_date', today)
+          .lte('due_date', sevenDaysLater)
+          .order('due_date', { ascending: true })
+          .limit(6)),
 
     // Actividad reciente
-    supabaseAdmin
-      .from('activity_log')
-      .select('id, description, user_name, entity_type, created_at')
-      .order('created_at', { ascending: false })
-      .limit(10),
+    (isWideRole
+      ? supabaseAdmin
+          .from('activity_log')
+          .select('id, description, user_name, entity_type, created_at')
+          .order('created_at', { ascending: false })
+          .limit(10)
+      : supabaseAdmin
+          .from('activity_log')
+          .select('id, description, user_name, entity_type, created_at')
+          .eq('user_name', userName)
+          .order('created_at', { ascending: false })
+          .limit(10)),
+
+    userName
+      ? supabaseAdmin
+          .from('notifications')
+          .select('id, title, message, entity_type, entity_id, created_at')
+          .eq('user_name', userName)
+          .is('read_at', null)
+          .order('created_at', { ascending: false })
+          .limit(5)
+      : Promise.resolve({ data: [], error: null }),
 
     // BCU compliance pendiente
     supabaseAdmin
@@ -229,17 +277,31 @@ export default async function PanelDelDiaPage() {
       .eq('lista_verificacion', false),
   ])
 
-  const myTasks = (myTasksR.data ?? []) as any[]
-  const myOverdue = (myOverdueR.data ?? []) as any[]
-  const myUrgent = (myUrgentR.data ?? []) as any[]
+  const myTasks = uniqueById([
+    ...((tasksResponsibleR.data ?? []) as any[]),
+    ...((tasksCreatedR.data ?? []) as any[]),
+    ...((tasksSharedR.data ?? []) as any[]),
+  ]).sort((a, b) => {
+    if (a.due_date && b.due_date) return a.due_date.localeCompare(b.due_date)
+    if (a.due_date) return -1
+    if (b.due_date) return 1
+    return a.title.localeCompare(b.title)
+  }).slice(0, 20)
+  const myOverdue = myTasks.filter((t: any) => t.due_date && t.due_date < today).slice(0, 10)
+  const myUrgent = myTasks.filter((t: any) => t.priority === 'urgente').slice(0, 6)
   const myOpenings = (myOpeningsR.data ?? []) as any[]
   const companyOverdue = isWideRole ? ((companyOverdueR.data ?? []) as any[]) : myOverdue
   const noResponsibleTasks = (noResponsibleTasksR.data ?? []) as any[]
   const stuckOpenings = (stuckOpeningsR.data ?? []) as any[]
   const staleOpenings = (staleOpeningsR.data ?? []) as any[]
-  const todayEvents = (todayEventsR.data ?? []) as any[]
+  const todayEvents = ((todayEventsR.data ?? []) as any[]).filter((event: any) => {
+    if (isWideRole) return true
+    const participants = Array.isArray(event.participants) ? event.participants : []
+    return event.created_by === userName || participants.includes(userName)
+  })
   const upcomingDeadlines = (upcomingDeadlinesR.data ?? []) as any[]
   const recentActivity = (recentActivityR.data ?? []) as any[]
+  const unreadNotifications = (unreadNotificationsR.data ?? []) as any[]
   const pendingBcuCount = pendingBcuR.count ?? 0
 
   // Tasks due today (from my tasks)
@@ -319,14 +381,14 @@ export default async function PanelDelDiaPage() {
           <Section
             label="A"
             title="Mi trabajo"
-            subtitle={`Tareas asignadas a ${firstName(userName)} · ${isWideRole ? 'Todas las aperturas' : 'Mis aperturas'}`}
+            subtitle={`Mis tareas y compartidas con ${firstName(userName)} · ${isWideRole ? 'Todas las aperturas' : 'Mis aperturas'}`}
           >
             <div className="grid grid-cols-1 md:grid-cols-2 gap-0 divide-y md:divide-y-0 md:divide-x divide-gray-100">
 
               {/* Tareas personales */}
               <div>
                 <div className="px-4 pt-3 pb-2 flex items-center justify-between">
-                  <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Mis tareas</span>
+                  <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Mis tareas + compartidas</span>
                   <Link href="/tasks" className="text-[11px] text-blue-500 hover:underline">Ver todas</Link>
                 </div>
                 {myTasks.length === 0 ? (
@@ -347,9 +409,13 @@ export default async function PanelDelDiaPage() {
                           </Link>
                           {t.client && (
                             <p className="text-[11px] text-gray-400 mt-0.5 truncate">
-                              {t.client.first_name} {t.client.last_name}
+                              Cliente: {t.client.first_name} {t.client.last_name}
                             </p>
                           )}
+                          <p className="text-[10px] text-gray-400 mt-0.5 truncate">
+                            Responsable: {t.responsible ?? 'Sin asignar'}
+                            {t.task_shares?.length > 0 ? ` · Compartida con: ${t.task_shares.map((s: any) => s.user_name).join(', ')}` : ''}
+                          </p>
                         </div>
                         {t.priority && t.priority !== 'media' && (
                           <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded shrink-0 ${PRIORITY_COLOR[t.priority]}`}>
@@ -372,7 +438,7 @@ export default async function PanelDelDiaPage() {
                           </Link>
                           <div className="flex items-center gap-2 mt-0.5">
                             {t.client && (
-                              <span className="text-[11px] text-gray-400 truncate">{t.client.first_name} {t.client.last_name}</span>
+                              <span className="text-[11px] text-gray-400 truncate">Cliente: {t.client.first_name} {t.client.last_name}</span>
                             )}
                             {t.due_date && (
                               <span className="text-[10px] text-gray-400 shrink-0">
@@ -380,6 +446,10 @@ export default async function PanelDelDiaPage() {
                               </span>
                             )}
                           </div>
+                          <p className="text-[10px] text-gray-400 mt-0.5 truncate">
+                            Responsable: {t.responsible ?? 'Sin asignar'}
+                            {t.task_shares?.length > 0 ? ` · Compartida con: ${t.task_shares.map((s: any) => s.user_name).join(', ')}` : ''}
+                          </p>
                         </div>
                         {t.priority && t.priority !== 'media' && (
                           <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded shrink-0 ${PRIORITY_COLOR[t.priority]}`}>
@@ -645,11 +715,34 @@ export default async function PanelDelDiaPage() {
             )}
           </Section>
 
+          {unreadNotifications.length > 0 && (
+            <Section
+              label="N"
+              title="Notificaciones"
+              subtitle="Tareas compartidas contigo"
+            >
+              <ul className="divide-y divide-gray-50">
+                {unreadNotifications.map((n: any) => (
+                  <li key={n.id}>
+                    <Link
+                      href={n.entity_type === 'task' ? `/tasks?view=shared&highlight=${n.entity_id}` : '/'}
+                      className="block px-4 py-3 hover:bg-gray-50 transition-colors"
+                    >
+                      <p className="text-xs font-semibold text-[#2D3F52]">{n.title}</p>
+                      <p className="text-xs text-gray-600 mt-0.5">{n.message}</p>
+                      <p className="text-[10px] text-gray-400 mt-1">{timeAgo(n.created_at)}</p>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </Section>
+          )}
+
           {/* ── D. ACTIVIDAD RECIENTE ── */}
           <Section
             label="D"
             title="Actividad reciente"
-            subtitle="Últimas acciones del equipo"
+            subtitle={isWideRole ? 'Últimas acciones del equipo' : 'Tus últimas acciones'}
           >
             {recentActivity.length === 0 ? (
               <p className="px-4 py-4 text-xs text-gray-400">Sin actividad registrada.</p>

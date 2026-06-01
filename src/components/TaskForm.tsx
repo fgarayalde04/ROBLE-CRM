@@ -1,9 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { Task, TaskPriority, TaskStatus } from '@/types/platform'
 import ClientSearchInput from '@/components/ClientSearchInput'
+
+type TeamMember = { id: string; name: string }
 
 interface Props {
   initial?: Partial<Task>
@@ -21,6 +23,8 @@ export default function TaskForm({
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([])
+  const [sharedWith, setSharedWith] = useState<string[]>([])
 
   const [form, setForm] = useState({
     title: initial?.title ?? '',
@@ -33,8 +37,21 @@ export default function TaskForm({
     notes: initial?.notes ?? '',
   })
 
+  useEffect(() => {
+    fetch('/api/team-members')
+      .then((r) => r.json())
+      .then((data) => setTeamMembers(Array.isArray(data) ? data : []))
+      .catch(() => setTeamMembers([]))
+  }, [])
+
   function set(field: keyof typeof form, value: string) {
     setForm((p) => ({ ...p, [field]: value }))
+  }
+
+  function toggleSharedUser(name: string) {
+    setSharedWith((prev) =>
+      prev.includes(name) ? prev.filter((u) => u !== name) : [...prev, name]
+    )
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -51,6 +68,7 @@ export default function TaskForm({
         status: form.status,
         due_date: form.due_date || null,
         notes: form.notes.trim() || null,
+        shared_with: sharedWith,
       }
       if (preselectedOpeningId) payload.opening_id = preselectedOpeningId
 
@@ -153,6 +171,36 @@ export default function TaskForm({
               onChange={(e) => set('due_date', e.target.value)}
               className={inputClass}
             />
+          </Field>
+          <Field label="Compartir con" span={2}>
+            {teamMembers.length === 0 ? (
+              <p className="text-xs text-gray-400">No hay usuarios cargados para compartir.</p>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {teamMembers.map((member) => {
+                  const disabled = member.name === form.responsible.trim()
+                  return (
+                    <label
+                      key={member.id}
+                      className={`flex items-center gap-2 rounded border px-3 py-2 text-sm ${
+                        disabled
+                          ? 'border-gray-100 bg-gray-50 text-gray-300'
+                          : 'border-gray-200 bg-white text-gray-700 hover:border-[#16A34A]'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={sharedWith.includes(member.name)}
+                        disabled={disabled}
+                        onChange={() => toggleSharedUser(member.name)}
+                        className="h-4 w-4 rounded border-gray-300 text-[#16A34A] focus:ring-[#16A34A]"
+                      />
+                      <span>{member.name}</span>
+                    </label>
+                  )
+                })}
+              </div>
+            )}
           </Field>
         </div>
       </section>

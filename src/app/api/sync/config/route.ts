@@ -15,10 +15,11 @@ export async function GET() {
     'CLIENTES_FOLDER_ID',
   ]
   const missing = vars.filter(v => !process.env[v])
+  const parsedInterval = parseInt(process.env.SYNC_INTERVAL_MINUTES ?? '1', 10)
 
   return NextResponse.json({
     configured: missing.length === 0,
     missingVars: missing,
-    intervalMinutes: parseInt(process.env.SYNC_INTERVAL_MINUTES ?? '60', 10),
+    intervalMinutes: Number.isFinite(parsedInterval) && parsedInterval > 0 ? parsedInterval : 1,
   })
 }

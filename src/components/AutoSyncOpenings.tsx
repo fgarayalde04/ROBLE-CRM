@@ -4,8 +4,8 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
 /**
- * Runs silently on mount — calls POST /api/sync-clientes to detect new
- * folders in the Clientes OneDrive folder and auto-create openings.
+ * Runs silently on mount — calls POST /api/sync to detect new folders in the
+ * Clientes OneDrive folder and apply the same sync rules as the scheduler.
  * Shows a subtle badge only when new openings were actually added.
  */
 export default function AutoSyncOpenings() {
@@ -17,12 +17,17 @@ export default function AutoSyncOpenings() {
 
     async function run() {
       try {
-        const res = await fetch('/api/sync-clientes', { method: 'POST' })
+        const res = await fetch('/api/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'clientes' }),
+        })
         if (!res.ok || cancelled) return
         const data = await res.json()
         if (cancelled) return
-        if (data.created > 0) {
-          setNewCount(data.created)
+        const created = data.results?.clientes?.created ?? 0
+        if (created > 0) {
+          setNewCount(created)
           router.refresh()
         }
       } catch {
