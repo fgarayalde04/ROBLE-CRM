@@ -105,7 +105,7 @@ export async function syncClients(): Promise<SyncResult> {
               advisor: advisorName,
             }
 
-            // Try to match by client_number first, then by item_id
+            // Try to match by client_number, then item_id, then folder_name (manual entries)
             let existing: { id: string } | null = null
             if (clientNumber) {
               const { data } = await supabaseAdmin
@@ -122,6 +122,23 @@ export async function syncClients(): Promise<SyncResult> {
                 .eq('item_id', clientFolder.id)
                 .maybeSingle()
               existing = data
+            }
+            // Last resort: match via account_openings.folder_name (handles manually-entered clients)
+            if (!existing) {
+              const { data: opening } = await supabaseAdmin
+                .from('account_openings')
+                .select('client_id')
+                .ilike('folder_name', folderName)
+                .not('client_id', 'is', null)
+                .maybeSingle()
+              if (opening?.client_id) {
+                const { data } = await supabaseAdmin
+                  .from('clients')
+                  .select('id')
+                  .eq('id', opening.client_id)
+                  .maybeSingle()
+                existing = data
+              }
             }
 
             if (existing) {
