@@ -9,6 +9,8 @@ import {
   syncScoring,
 } from '@/lib/microsoft/sync'
 
+export const maxDuration = 300 // 5 minutes — enough for full sync
+
 type SyncType = 'clientes' | 'bcu_local' | 'bcu_internacional' | 'recursos' | 'scoring' | 'all'
 
 const SYNC_FNS: Record<Exclude<SyncType, 'all'>, () => Promise<unknown>> = {
@@ -19,14 +21,14 @@ const SYNC_FNS: Record<Exclude<SyncType, 'all'>, () => Promise<unknown>> = {
   scoring: syncScoring,
 }
 
-async function markRunning(types: string[]) {
-  for (const t of types) {
-    await supabaseAdmin.from('sync_logs').insert({
-      sync_type: t,
-      status: 'running',
-      started_at: new Date().toISOString(),
-    })
-  }
+// Reset any sync_logs stuck in "running" for more than 10 minutes
+async function resetStuckSyncs() {
+  const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString()
+  await supabaseAdmin
+    .from('sync_logs')
+    .update({ status: 'error', message: 'Timeout — se canceló automáticamente', finished_at: new Date().toISOString() })
+    .eq('status', 'running')
+    .lt('started_at', tenMinutesAgo)
 }
 
 export async function POST(req: NextRequest) {
@@ -50,13 +52,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid sync type' }, { status: 400 })
   }
 
-  // Write "running" markers immediately so the UI picks them up
-  await markRunning(targets)
+  // Reset any stuck syncs before starting
+  await resetStuckSyncs()
 
-  // Fire each sync in the background — don't await
+  // Run syncs and await them — Vercel kills background work after response
+  const results: Record<string, unknown> = {}
   for (const t of targets) {
-    SYNC_FNS[t]().catch(console.error)
+    try {
+      results[t] = await SYNC_FNS[t]()
+    } catch (e: any) {
+      results[t] = { error: e.message }
+    }
   }
 
-  return NextResponse.json({ status: 'started', types: targets }, { status: 202 })
+  return NextResponse.json({ status: 'done', results })
 }

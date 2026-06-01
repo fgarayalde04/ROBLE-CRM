@@ -86,6 +86,7 @@ function statusBadge(status: string, running: boolean) {
 export default function SyncPanel() {
   const [statusMap, setStatusMap] = useState<Record<string, SyncStatus>>({})
   const [config, setConfig] = useState<SyncConfig | null>(null)
+  const [running, setRunning] = useState<SyncType | 'all' | null>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const fetchStatus = useCallback(async () => {
@@ -112,29 +113,27 @@ export default function SyncPanel() {
     fetchConfig()
   }, [fetchStatus, fetchConfig])
 
-  // Auto-refresh every 3s while any sync_type shows "running" in the DB
-  const anyRunning = Object.values(statusMap).some(s => s.status === 'running')
+  const anyRunning = running !== null
 
+  // Stop polling — sync now awaits on the server side
   useEffect(() => {
-    if (anyRunning) {
-      pollRef.current = setInterval(() => {
-        fetchStatus()
-      }, 3000)
-    } else {
-      if (pollRef.current) clearInterval(pollRef.current)
-    }
     return () => {
       if (pollRef.current) clearInterval(pollRef.current)
     }
-  }, [anyRunning, fetchStatus])
+  }, [])
 
   async function runSync(type: SyncType | 'all') {
-    await fetch('/api/sync', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type }),
-    })
-    await fetchStatus()
+    setRunning(type)
+    try {
+      await fetch('/api/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type }),
+      })
+      await fetchStatus()
+    } finally {
+      setRunning(null)
+    }
   }
 
   return (
