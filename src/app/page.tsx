@@ -261,15 +261,15 @@ export default async function PanelDelDiaPage({ searchParams }: PageProps) {
     (isWideRole
       ? supabaseAdmin
           .from('activity_log')
-          .select('id, description, user_name, entity_type, created_at')
+          .select('id, description, user_name, entity_type, entity_id, created_at')
           .order('created_at', { ascending: false })
-          .limit(10)
+          .limit(25)
       : supabaseAdmin
           .from('activity_log')
-          .select('id, description, user_name, entity_type, created_at')
+          .select('id, description, user_name, entity_type, entity_id, created_at')
           .eq('user_name', userName)
           .order('created_at', { ascending: false })
-          .limit(10)),
+          .limit(25)),
 
     userName
       ? supabaseAdmin
@@ -322,7 +322,26 @@ export default async function PanelDelDiaPage({ searchParams }: PageProps) {
     return event.created_by === userName || participants.includes(userName)
   })
   const upcomingDeadlines = (upcomingDeadlinesR.data ?? []) as any[]
-  const recentActivity = (recentActivityR.data ?? []) as any[]
+
+  // Filter recent activity: exclude entries for completed tasks
+  const recentActivityRaw = (recentActivityR.data ?? []) as any[]
+  const taskIdsInActivity = Array.from(new Set(
+    recentActivityRaw
+      .filter((a: any) => a.entity_type === 'task' && a.entity_id)
+      .map((a: any) => a.entity_id as string)
+  ))
+  const completedTaskSet = new Set<string>()
+  if (taskIdsInActivity.length > 0) {
+    const { data: completedTasks } = await supabaseAdmin
+      .from('tasks')
+      .select('id')
+      .in('id', taskIdsInActivity)
+      .eq('status', 'completado')
+    for (const t of completedTasks ?? []) completedTaskSet.add(t.id)
+  }
+  const recentActivity = recentActivityRaw
+    .filter((a: any) => !(a.entity_type === 'task' && a.entity_id && completedTaskSet.has(a.entity_id)))
+    .slice(0, 10)
   const unreadNotifications = (unreadNotificationsR.data ?? []) as any[]
   const pendingBcuCount = pendingBcuR.count ?? 0
 
