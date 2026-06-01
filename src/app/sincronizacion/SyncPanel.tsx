@@ -115,14 +115,12 @@ export default function SyncPanel() {
 
   const anyRunning = running !== null
 
-  // Stop polling — sync now awaits on the server side
   useEffect(() => {
-    return () => {
-      if (pollRef.current) clearInterval(pollRef.current)
-    }
+    return () => { if (pollRef.current) clearInterval(pollRef.current) }
   }, [])
 
   async function runSync(type: SyncType | 'all') {
+    if (running !== null) return // prevent concurrent triggers
     setRunning(type)
     try {
       await fetch('/api/sync', {
@@ -134,6 +132,10 @@ export default function SyncPanel() {
     } finally {
       setRunning(null)
     }
+  }
+
+  function isCardRunning(type: SyncType) {
+    return running === type || running === 'all'
   }
 
   return (
@@ -191,7 +193,7 @@ export default function SyncPanel() {
               (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#4A7C35'
           }}
         >
-          {anyRunning ? 'Sincronizando...' : 'Sincronizar ahora'}
+          {running === 'all' ? 'Sincronizando...' : 'Sincronizar ahora'}
         </button>
       </div>
 
@@ -254,21 +256,19 @@ export default function SyncPanel() {
               <div className="mt-auto pt-1">
                 <button
                   onClick={() => runSync(type)}
-                  disabled={anyRunning}
-                  className="w-full py-1.5 rounded-lg text-white text-xs font-medium transition-colors disabled:opacity-50"
-                  style={{
-                    backgroundColor: anyRunning ? '#6b7280' : '#4A7C35',
-                  }}
+                  disabled={isCardRunning(type)}
+                  className="w-full py-1.5 rounded-lg text-white text-xs font-medium transition-colors disabled:opacity-60"
+                  style={{ backgroundColor: isCardRunning(type) ? '#6b7280' : '#4A7C35' }}
                   onMouseEnter={e => {
-                    if (!anyRunning)
+                    if (!isCardRunning(type))
                       (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#3D6A2C'
                   }}
                   onMouseLeave={e => {
-                    if (!anyRunning)
+                    if (!isCardRunning(type))
                       (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#4A7C35'
                   }}
                 >
-                  {isRunning ? 'Sincronizando...' : 'Sincronizar'}
+                  {isCardRunning(type) ? 'Sincronizando...' : 'Sincronizar'}
                 </button>
               </div>
             </div>
