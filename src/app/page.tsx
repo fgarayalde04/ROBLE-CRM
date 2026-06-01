@@ -70,12 +70,24 @@ function uniqueById(rows: any[]): any[] {
   return Array.from(map.values())
 }
 
-export default async function PanelDelDiaPage() {
+function sortByDueDate(a: any, b: any): number {
+  if (a.due_date && b.due_date) return a.due_date.localeCompare(b.due_date)
+  if (a.due_date) return -1
+  if (b.due_date) return 1
+  return (a.title ?? '').localeCompare(b.title ?? '')
+}
+
+interface PageProps { searchParams: { taskView?: string } }
+
+export default async function PanelDelDiaPage({ searchParams }: PageProps) {
   noStore()
 
   const session = await getSession()
   const isWideRole = session ? WIDE_ROLES.includes(session.role) : false
   const userName = session?.name ?? ''
+
+  const taskViewParam = (searchParams.taskView ?? 'mine') as string
+  const effectiveTaskView = taskViewParam === 'team' && !isWideRole ? 'mine' : taskViewParam
 
   const today = new Date().toISOString().split('T')[0]
   const sevenDaysLater = new Date(Date.now() + 7 * 86_400_000).toISOString().split('T')[0]
@@ -277,16 +289,26 @@ export default async function PanelDelDiaPage() {
       .eq('lista_verificacion', false),
   ])
 
-  const myTasks = uniqueById([
+  const allMyTasksCombined = uniqueById([
     ...((tasksResponsibleR.data ?? []) as any[]),
     ...((tasksCreatedR.data ?? []) as any[]),
     ...((tasksSharedR.data ?? []) as any[]),
-  ]).sort((a, b) => {
-    if (a.due_date && b.due_date) return a.due_date.localeCompare(b.due_date)
-    if (a.due_date) return -1
-    if (b.due_date) return 1
-    return a.title.localeCompare(b.title)
-  }).slice(0, 20)
+  ]).sort(sortByDueDate)
+
+  let myTasks: any[]
+  switch (effectiveTaskView) {
+    case 'shared':
+      myTasks = uniqueById((tasksSharedR.data ?? []) as any[]).sort(sortByDueDate).slice(0, 20)
+      break
+    case 'created':
+      myTasks = uniqueById((tasksCreatedR.data ?? []) as any[]).sort(sortByDueDate).slice(0, 20)
+      break
+    case 'overdue':
+      myTasks = allMyTasksCombined.filter((t: any) => t.due_date && t.due_date < today).slice(0, 20)
+      break
+    default:
+      myTasks = allMyTasksCombined.slice(0, 20)
+  }
   const myOverdue = myTasks.filter((t: any) => t.due_date && t.due_date < today).slice(0, 10)
   const myUrgent = myTasks.filter((t: any) => t.priority === 'urgente').slice(0, 6)
   const myOpenings = (myOpeningsR.data ?? []) as any[]
@@ -381,15 +403,42 @@ export default async function PanelDelDiaPage() {
           <Section
             label="A"
             title="Mi trabajo"
-            subtitle={`Mis tareas y compartidas con ${firstName(userName)} · ${isWideRole ? 'Todas las aperturas' : 'Mis aperturas'}`}
+            subtitle={`${effectiveTaskView === 'shared' ? 'Compartidas conmigo' : effectiveTaskView === 'created' ? 'Creadas por mí' : effectiveTaskView === 'overdue' ? 'Tareas vencidas' : 'Mis tareas + compartidas'} · ${isWideRole ? 'Todas las aperturas' : 'Mis aperturas'}`}
           >
             <div className="grid grid-cols-1 md:grid-cols-2 gap-0 divide-y md:divide-y-0 md:divide-x divide-gray-100">
 
               {/* Tareas personales */}
               <div>
-                <div className="px-4 pt-3 pb-2 flex items-center justify-between">
-                  <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Mis tareas + compartidas</span>
-                  <Link href="/tasks" className="text-[11px] text-blue-500 hover:underline">Ver todas</Link>
+                <div className="px-4 pt-3 pb-2 flex items-center justify-between gap-2">
+                  <div className="flex gap-0.5 flex-wrap">
+                    {[
+                      { label: 'Mías', value: 'mine' },
+                      { label: 'Compartidas', value: 'shared' },
+                      { label: 'Creadas', value: 'created' },
+                      { label: 'Vencidas', value: 'overdue' },
+                    ].map((tab) => (
+                      <Link
+                        key={tab.value}
+                        href={`/?taskView=${tab.value}`}
+                        className={`px-2 py-0.5 text-[10px] font-medium rounded transition-colors ${
+                          effectiveTaskView === tab.value
+                            ? 'bg-[#2D3F52] text-white'
+                            : 'text-gray-500 hover:text-[#2D3F52] hover:bg-gray-100'
+                        }`}
+                      >
+                        {tab.label}
+                      </Link>
+                    ))}
+                    {isWideRole && (
+                      <Link
+                        href="/tasks?view=team"
+                        className="px-2 py-0.5 text-[10px] font-medium rounded text-gray-500 hover:text-[#2D3F52] hover:bg-gray-100 transition-colors"
+                      >
+                        Equipo →
+                      </Link>
+                    )}
+                  </div>
+                  <Link href="/tasks" className="text-[11px] text-blue-500 hover:underline shrink-0">Ver todas</Link>
                 </div>
                 {myTasks.length === 0 ? (
                   <p className="px-4 py-3 text-xs text-gray-400">Sin tareas pendientes.</p>
@@ -404,18 +453,26 @@ export default async function PanelDelDiaPage() {
                     {myTasksToday.map((t: any) => (
                       <li key={t.id} className="px-4 py-2.5 flex items-start justify-between gap-2 bg-blue-50/20">
                         <div className="flex-1 min-w-0">
-                          <Link href="/tasks" className="text-sm text-gray-800 hover:text-[#2D3F52] font-medium leading-snug block truncate">
+                          <Link href={`/tasks/${t.id}`} className="text-sm text-gray-800 hover:text-[#2D3F52] font-medium leading-snug block truncate">
                             {t.title}
                           </Link>
-                          {t.client && (
-                            <p className="text-[11px] text-gray-400 mt-0.5 truncate">
-                              Cliente: {t.client.first_name} {t.client.last_name}
-                            </p>
-                          )}
-                          <p className="text-[10px] text-gray-400 mt-0.5 truncate">
-                            Responsable: {t.responsible ?? 'Sin asignar'}
-                            {t.task_shares?.length > 0 ? ` · Compartida con: ${t.task_shares.map((s: any) => s.user_name).join(', ')}` : ''}
-                          </p>
+                          <div className="flex items-center flex-wrap gap-1.5 mt-0.5">
+                            {t.client && (
+                              <span className="text-[10px] text-gray-500 truncate">
+                                {t.client.first_name} {t.client.last_name}
+                              </span>
+                            )}
+                            {t.responsible && (
+                              <span className="text-[10px] text-gray-400">
+                                · {t.responsible}
+                              </span>
+                            )}
+                            {t.task_shares?.length > 0 && (
+                              <span className="text-[10px] text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded">
+                                + {t.task_shares.map((s: any) => s.user_name).join(', ')}
+                              </span>
+                            )}
+                          </div>
                         </div>
                         {t.priority && t.priority !== 'media' && (
                           <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded shrink-0 ${PRIORITY_COLOR[t.priority]}`}>
@@ -433,23 +490,27 @@ export default async function PanelDelDiaPage() {
                     {myTasksFuture.slice(0, 5).map((t: any) => (
                       <li key={t.id} className="px-4 py-2.5 flex items-start justify-between gap-2">
                         <div className="flex-1 min-w-0">
-                          <Link href="/tasks" className="text-sm text-gray-800 hover:text-[#2D3F52] font-medium leading-snug block truncate">
+                          <Link href={`/tasks/${t.id}`} className="text-sm text-gray-800 hover:text-[#2D3F52] font-medium leading-snug block truncate">
                             {t.title}
                           </Link>
-                          <div className="flex items-center gap-2 mt-0.5">
+                          <div className="flex items-center flex-wrap gap-1.5 mt-0.5">
                             {t.client && (
-                              <span className="text-[11px] text-gray-400 truncate">Cliente: {t.client.first_name} {t.client.last_name}</span>
+                              <span className="text-[10px] text-gray-500 truncate">{t.client.first_name} {t.client.last_name}</span>
                             )}
                             {t.due_date && (
                               <span className="text-[10px] text-gray-400 shrink-0">
                                 {format(new Date(t.due_date + 'T00:00:00'), 'd MMM', { locale: es })}
                               </span>
                             )}
+                            {t.responsible && (
+                              <span className="text-[10px] text-gray-400 shrink-0">· {t.responsible}</span>
+                            )}
+                            {t.task_shares?.length > 0 && (
+                              <span className="text-[10px] text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded shrink-0">
+                                + {t.task_shares.map((s: any) => s.user_name).join(', ')}
+                              </span>
+                            )}
                           </div>
-                          <p className="text-[10px] text-gray-400 mt-0.5 truncate">
-                            Responsable: {t.responsible ?? 'Sin asignar'}
-                            {t.task_shares?.length > 0 ? ` · Compartida con: ${t.task_shares.map((s: any) => s.user_name).join(', ')}` : ''}
-                          </p>
                         </div>
                         {t.priority && t.priority !== 'media' && (
                           <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded shrink-0 ${PRIORITY_COLOR[t.priority]}`}>

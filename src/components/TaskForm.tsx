@@ -134,11 +134,16 @@ export default function TaskForm({
             />
           </Field>
           <Field label="Responsable">
-            <input
+            <select
               value={form.responsible}
               onChange={(e) => set('responsible', e.target.value)}
-              className={inputClass}
-            />
+              className={selectClass}
+            >
+              <option value="">Sin asignar</option>
+              {teamMembers.map((m) => (
+                <option key={m.id} value={m.name}>{m.name}</option>
+              ))}
+            </select>
           </Field>
           <Field label="Prioridad">
             <select
