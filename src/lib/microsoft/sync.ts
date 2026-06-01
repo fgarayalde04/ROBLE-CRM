@@ -105,72 +105,44 @@ export async function syncClients(): Promise<SyncResult> {
               advisor: advisorName,
             }
 
-            // Try to match by client_number, then item_id, then folder_name (manual entries)
-            let existing: { id: string } | null = null
-            if (clientNumber) {
-              const { data } = await supabaseAdmin
-                .from('clients')
-                .select('id')
-                .eq('client_number', clientNumber)
-                .maybeSingle()
-              existing = data
-            }
-            if (!existing) {
-              const { data } = await supabaseAdmin
-                .from('clients')
-                .select('id')
-                .eq('item_id', clientFolder.id)
-                .maybeSingle()
-              existing = data
-            }
-            // Last resort: match via account_openings.folder_name (handles manually-entered clients)
-            if (!existing) {
-              const { data: opening } = await supabaseAdmin
-                .from('account_openings')
-                .select('client_id')
-                .ilike('folder_name', folderName)
-                .not('client_id', 'is', null)
-                .maybeSingle()
-              if (opening?.client_id) {
-                const { data } = await supabaseAdmin
-                  .from('clients')
-                  .select('id')
-                  .eq('id', opening.client_id)
-                  .maybeSingle()
-                existing = data
-              }
-            }
+            const OPENINGS_CUTOFF = new Date('2026-05-16T00:00:00Z')
+            const folderCreated = clientFolder.createdDateTime
+              ? new Date(clientFolder.createdDateTime)
+              : null
+            const isPostCutoff = folderCreated ? folderCreated > OPENINGS_CUTOFF : false
 
-            let clientId: string | null = null
-            let isNewClient = false
-
-            if (existing) {
-              await supabaseAdmin.from('clients').update(spFields).eq('id', existing.id)
-              result.updated++
-              clientId = existing.id
-            } else {
-              // New folders post-cutoff start as 'prospecto' (pending Comenzar)
-              // Existing folders are assumed already opened → 'activo'
-              const OPENINGS_CUTOFF_CHECK = new Date('2026-05-16T00:00:00Z')
-              const folderCreatedCheck = clientFolder.createdDateTime
-                ? new Date(clientFolder.createdDateTime)
-                : null
-              const isPostCutoff = folderCreatedCheck ? folderCreatedCheck > OPENINGS_CUTOFF_CHECK : false
-
-              const { data: newClient } = await supabaseAdmin
-                .from('clients')
-                .insert({
+            // Upsert by item_id — atomic, safe for concurrent syncs
+            const { data: upserted, error: upsertErr } = await supabaseAdmin
+              .from('clients')
+              .upsert(
+                {
                   first_name: firstName || folderName,
                   last_name: lastName,
                   client_number: clientNumber,
                   status: isPostCutoff ? 'prospecto' : 'activo',
                   ...spFields,
-                })
-                .select('id')
-                .maybeSingle()
-              result.created++
-              clientId = newClient?.id ?? null
-              isNewClient = !!clientId && isPostCutoff
+                },
+                { onConflict: 'item_id', ignoreDuplicates: false }
+              )
+              .select('id, created_at, updated_at')
+              .maybeSingle()
+
+            if (upsertErr) {
+              result.errors.push(`Upsert ${folderName}: ${upsertErr.message}`)
+              continue
+            }
+
+            const clientId = upserted?.id ?? null
+            // New if created_at equals updated_at (just inserted)
+            const isNewClient = !!(clientId && isPostCutoff &&
+              upserted?.created_at && upserted?.updated_at &&
+              Math.abs(new Date(upserted.created_at).getTime() - new Date(upserted.updated_at).getTime()) < 2000)
+
+            if (upserted) {
+              // Rough check: if created_at ≈ now it's new, else updated
+              const ageMs = Date.now() - new Date(upserted.created_at).getTime()
+              if (ageMs < 5000) result.created++
+              else result.updated++
             }
 
             // Auto-create apertura only for new clients in folders created after May 16, 2026
