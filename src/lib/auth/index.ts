@@ -97,13 +97,13 @@ export type Permission =
   | 'panel' | 'tasks' | 'clients' | 'openings' | 'banco_central'
   | 'calendar' | 'deadlines' | 'ceo_dashboard' | 'kpis'
   | 'pagos' | 'impuestos' | 'liquidacion' | 'recursos' | 'claves'
-  | 'admin' | 'sincronizacion' | 'suitability'
+  | 'admin' | 'sincronizacion' | 'suitability' | 'factsheet' | 'proposals'
 
 const ROLE_PERMISSIONS: Record<UserRole, Permission[] | ['*']> = {
   admin:      ['*'],
-  ceo:        ['panel','clients','openings','tasks','banco_central','calendar','deadlines','ceo_dashboard','kpis','pagos','impuestos','liquidacion','recursos','suitability'],
-  direccion:  ['panel','clients','openings','tasks','banco_central','calendar','deadlines','ceo_dashboard','kpis','liquidacion','recursos','suitability'],
-  asesor:     ['panel','clients','openings','tasks','calendar','deadlines','recursos','suitability'],
+  ceo:        ['panel','clients','openings','tasks','banco_central','calendar','deadlines','ceo_dashboard','kpis','pagos','impuestos','liquidacion','recursos','suitability','factsheet','proposals'],
+  direccion:  ['panel','clients','openings','tasks','banco_central','calendar','deadlines','ceo_dashboard','kpis','liquidacion','recursos','suitability','factsheet','proposals'],
+  asesor:     ['panel','clients','openings','tasks','calendar','deadlines','recursos','suitability','factsheet','proposals'],
   asistente:  ['panel','clients','openings','tasks','banco_central','calendar','deadlines','recursos'],
   compliance: ['panel','banco_central','calendar','deadlines','recursos','suitability'],
 }
@@ -122,7 +122,7 @@ export function hasPermission(role: UserRole, permission: Permission, userPermis
 export function getPermissions(role: UserRole): Permission[] {
   const perms = ROLE_PERMISSIONS[role]
   if (perms[0] === '*') {
-    return ['panel','clients','openings','tasks','banco_central','calendar','deadlines','ceo_dashboard','kpis','pagos','impuestos','liquidacion','recursos','admin','claves','sincronizacion','suitability']
+    return ['panel','clients','openings','tasks','banco_central','calendar','deadlines','ceo_dashboard','kpis','pagos','impuestos','liquidacion','recursos','admin','claves','sincronizacion','suitability','factsheet','proposals']
   }
   return perms as Permission[]
 }

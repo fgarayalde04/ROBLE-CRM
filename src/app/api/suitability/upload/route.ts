@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import { getSession } from '@/lib/auth'
-import { parseCSV, parseExcel } from '@/lib/portfolio-parser'
+import { parseCSV, parseExcel, parsePDF } from '@/lib/portfolio-parser'
 import { identifyInstrument } from '@/lib/openfigi'
-import { scoreFromFIGI, calculatePortfolioScore, generateExplanation, scoreToProfile } from '@/lib/risk-scoring'
+import { scoreFromFIGI, scoreFallback, calculatePortfolioScore, generateExplanation, scoreToProfile } from '@/lib/risk-scoring'
 
 export const maxDuration = 60 // 60s for OpenFIGI calls
 
@@ -37,8 +37,13 @@ export async function POST(req: Request) {
       const result = parseExcel(buffer)
       rawPositions = result.positions
       fileMeta     = result.meta
+    } else if (ext === 'pdf') {
+      const buffer = await file.arrayBuffer()
+      const result = await parsePDF(buffer)
+      rawPositions = result.positions
+      fileMeta     = result.meta
     } else {
-      return NextResponse.json({ error: 'Formato no soportado. Use CSV o Excel (.xlsx).' }, { status: 400 })
+      return NextResponse.json({ error: 'Formato no soportado. Use CSV, Excel (.xlsx) o PDF.' }, { status: 400 })
     }
 
     if (!rawPositions.length) {
@@ -58,6 +63,7 @@ export async function POST(req: Request) {
         uploaded_by:    session.id,
         file_name:      fileName,
         notes:          notes || null,
+        advisor:        fileMeta.advisor ?? null,
         portfolio_score:     null,
         portfolio_profile:   null,
         classified_weight:   null,
@@ -163,6 +169,10 @@ export async function POST(req: Request) {
 
     const positionInserts: ScoredInsert[] = rawPositions.map(p => {
       const classified = figiMap.get(p.raw_identifier)
+        ?? (() => {
+          const fb = scoreFallback(p.raw_name, p.identifier_type)
+          return fb ? { asset_class: fb.assetClass, risk_score: fb.riskScore, category: fb.category, figi: null } : null
+        })()
       return {
         review_id:             reviewId,
         raw_name:              p.raw_name,
@@ -178,7 +188,7 @@ export async function POST(req: Request) {
         asset_class:           classified?.asset_class ?? null,
         risk_score:            classified?.risk_score ?? null,
         category:              classified?.category ?? null,
-        classification_status: classified ? 'classified' : 'pending',
+        classification_status: classified ? (figiMap.has(p.raw_identifier) ? 'classified' : 'manual') : 'pending',
       }
     })
 

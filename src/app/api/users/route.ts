@@ -28,14 +28,24 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     await requireAdmin()
-    const { name, email, password, role, must_change_password } = await req.json()
+    const { name, email, password, role, must_change_password, onedrive_drive_id, onedrive_folder_id, onedrive_folder_path } = await req.json()
     if (!name || !password || !role) {
       return NextResponse.json({ error: 'Nombre, contraseña y rol son requeridos' }, { status: 400 })
     }
     const hash = await bcrypt.hash(password, 12)
     const { data, error } = await supabaseAdmin
       .from('crm_users')
-      .insert({ name, email: email?.toLowerCase().trim() || null, password_hash: hash, role, active: true, must_change_password: must_change_password ?? true })
+      .insert({
+        name,
+        email: email?.toLowerCase().trim() || null,
+        password_hash: hash,
+        role,
+        active: true,
+        must_change_password: must_change_password ?? true,
+        onedrive_drive_id:    onedrive_drive_id    ?? null,
+        onedrive_folder_id:   onedrive_folder_id   ?? null,
+        onedrive_folder_path: onedrive_folder_path ?? null,
+      })
       .select('id, name, email, role, active, created_at')
       .single()
     if (error) throw error
@@ -48,7 +58,7 @@ export async function POST(req: Request) {
 export async function PUT(req: Request) {
   try {
     await requireAdmin()
-    const { id, password, name, email, role, active, permissions } = await req.json()
+    const { id, password, name, email, role, active, permissions, onedrive_drive_id, onedrive_folder_id, onedrive_folder_path } = await req.json()
     if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
 
     const update: Record<string, unknown> = { updated_at: new Date().toISOString() }
@@ -58,12 +68,15 @@ export async function PUT(req: Request) {
     if (active !== undefined)      update.active = active
     if (permissions !== undefined) update.permissions = permissions
     if (password)                  update.password_hash = await bcrypt.hash(password, 12)
+    if (onedrive_drive_id   !== undefined) update.onedrive_drive_id   = onedrive_drive_id   || null
+    if (onedrive_folder_id  !== undefined) update.onedrive_folder_id  = onedrive_folder_id  || null
+    if (onedrive_folder_path !== undefined) update.onedrive_folder_path = onedrive_folder_path || null
 
     const { data, error } = await supabaseAdmin
       .from('crm_users')
       .update(update)
       .eq('id', id)
-      .select('id, name, email, role, active, permissions')
+      .select('id, name, email, role, active, permissions, onedrive_drive_id, onedrive_folder_id, onedrive_folder_path')
       .single()
     if (error) throw error
     return NextResponse.json(data)

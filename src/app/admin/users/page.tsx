@@ -17,7 +17,7 @@ export default async function UsersPage() {
   const [usersRes, advisorsRes] = await Promise.all([
     supabaseAdmin
       .from('crm_users')
-      .select('id, name, email, role, active, permissions, created_at, updated_at')
+      .select('id, name, email, role, active, permissions, onedrive_drive_id, onedrive_folder_id, onedrive_folder_path, created_at, updated_at')
       .order('name'),
     supabaseAdmin
       .from('clients')

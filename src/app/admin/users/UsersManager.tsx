@@ -13,6 +13,9 @@ interface CrmUser {
   role: UserRole
   active: boolean
   permissions: Permission[] | null
+  onedrive_drive_id: string | null
+  onedrive_folder_id: string | null
+  onedrive_folder_path: string | null
   created_at: string
   updated_at: string | null
 }
@@ -116,7 +119,16 @@ interface Props {
 }
 
 type ModalType = 'create' | 'edit' | 'delete' | 'reset_password' | null
-type EditTab = 'info' | 'permisos'
+type EditTab = 'info' | 'permisos' | 'onedrive'
+
+interface BrowseItem {
+  id: string
+  name: string
+  isFolder: boolean
+  webUrl: string
+}
+
+const DEFAULT_DRIVE_ID = process.env.NEXT_PUBLIC_DEFAULT_DRIVE_ID ?? ''
 
 export default function UsersManager({ initialUsers, pendingUsers: initialPending, currentUserId, advisorFolders }: Props) {
   const router = useRouter()
@@ -130,6 +142,12 @@ export default function UsersManager({ initialUsers, pendingUsers: initialPendin
 
   // Create / Edit form state
   const [form, setForm] = useState({ name: '', email: '', password: '', role: 'asesor' as UserRole })
+  // Create — personal folder picker
+  const [personalFolders,       setPersonalFolders]       = useState<{ id: string; name: string; driveId: string }[]>([])
+  const [personalFoldersLoading, setPersonalFoldersLoading] = useState(false)
+  const [selectedPersonalFolder, setSelectedPersonalFolder] = useState<{ id: string; name: string; driveId: string } | null>(null)
+  const [newFolderForUser,       setNewFolderForUser]       = useState(false)
+  const [creatingPersonalFolder, setCreatingPersonalFolder] = useState(false)
   // Permissions state for edit modal
   const [editTab, setEditTab] = useState<EditTab>('info')
   const [customPerms, setCustomPerms] = useState<Permission[] | null>(null)
@@ -137,6 +155,15 @@ export default function UsersManager({ initialUsers, pendingUsers: initialPendin
   const [seeAllFolders, setSeeAllFolders] = useState(false)
   const [allowedFolders, setAllowedFolders] = useState<string[]>([])
   const [folderPermsLoading, setFolderPermsLoading] = useState(false)
+  // OneDrive folder assignment state
+  const [onedriveDriveId,   setOnedriveDriveId]   = useState('')
+  const [onedriveFolderId,  setOnedriveFolderId]   = useState('')
+  const [onedriveFolderPath, setOnedriveFolderPath] = useState('')
+  const [browsing,          setBrowsing]           = useState(false)
+  const [browseLoading,     setBrowseLoading]       = useState(false)
+  const [browseItems,       setBrowseItems]         = useState<BrowseItem[]>([])
+  const [browseStack,       setBrowseStack]         = useState<{ id: string; name: string }[]>([])
+  const [browseError,       setBrowseError]         = useState('')
   // Reset password state
   const [newPassword, setNewPassword] = useState('')
   // Delete confirmation
@@ -146,7 +173,16 @@ export default function UsersManager({ initialUsers, pendingUsers: initialPendin
     setForm({ name: '', email: '', password: '', role: 'asesor' })
     setError('')
     setCreatedPassword(null)
+    setSelectedPersonalFolder(null)
+    setNewFolderForUser(false)
     setModal('create')
+    // Load personal folders in background
+    setPersonalFoldersLoading(true)
+    fetch('/api/onedrive/personal-folders')
+      .then(r => r.json())
+      .then(d => { if (d.folders) setPersonalFolders(d.folders) })
+      .catch(() => {})
+      .finally(() => setPersonalFoldersLoading(false))
   }
 
   async function openEdit(user: CrmUser) {
@@ -155,6 +191,13 @@ export default function UsersManager({ initialUsers, pendingUsers: initialPendin
     setCustomPerms(user.permissions ?? null)
     setEditTab('info')
     setError('')
+    setOnedriveDriveId(user.onedrive_drive_id ?? '')
+    setOnedriveFolderId(user.onedrive_folder_id ?? '')
+    setOnedriveFolderPath(user.onedrive_folder_path ?? '')
+    setBrowsing(false)
+    setBrowseStack([])
+    setBrowseItems([])
+    setBrowseError('')
     setModal('edit')
 
     // Load folder permissions
@@ -168,6 +211,60 @@ export default function UsersManager({ initialUsers, pendingUsers: initialPendin
       }
     } catch {}
     setFolderPermsLoading(false)
+  }
+
+  async function startBrowse() {
+    const driveId = onedriveDriveId.trim() || process.env.NEXT_PUBLIC_CLIENTES_DRIVE_ID || ''
+    if (!driveId) { setBrowseError('Ingresá un Drive ID primero'); return }
+    setBrowsing(true)
+    setBrowseStack([{ id: 'root', name: 'Raíz' }])
+    await loadBrowse(driveId, 'root')
+  }
+
+  async function loadBrowse(driveId: string, folderId: string) {
+    setBrowseLoading(true)
+    setBrowseError('')
+    try {
+      const res  = await fetch(`/api/onedrive/browse?driveId=${encodeURIComponent(driveId)}&folderId=${encodeURIComponent(folderId)}`)
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Error al cargar')
+      setBrowseItems(
+        (data.items ?? []).map((i: any) => ({
+          id: i.id,
+          name: i.name,
+          isFolder: !!i.folder,
+          webUrl: i.webUrl,
+        }))
+      )
+    } catch (e: any) {
+      setBrowseError(e.message)
+    } finally {
+      setBrowseLoading(false)
+    }
+  }
+
+  async function browseInto(item: BrowseItem) {
+    if (!item.isFolder) return
+    const driveId = onedriveDriveId.trim() || process.env.NEXT_PUBLIC_CLIENTES_DRIVE_ID || ''
+    setBrowseStack(s => [...s, { id: item.id, name: item.name }])
+    await loadBrowse(driveId, item.id)
+  }
+
+  async function browseBack(index: number) {
+    const driveId = onedriveDriveId.trim() || process.env.NEXT_PUBLIC_CLIENTES_DRIVE_ID || ''
+    const newStack = browseStack.slice(0, index + 1)
+    setBrowseStack(newStack)
+    await loadBrowse(driveId, newStack[newStack.length - 1].id)
+  }
+
+  function selectBrowseFolder(item: BrowseItem) {
+    const driveId = onedriveDriveId.trim() || process.env.NEXT_PUBLIC_CLIENTES_DRIVE_ID || ''
+    setOnedriveDriveId(driveId)
+    setOnedriveFolderId(item.id)
+    const pathParts = browseStack.slice(1).map(s => s.name)
+    pathParts.push(item.name)
+    setOnedriveFolderPath(pathParts.join(' / '))
+    setBrowsing(false)
   }
 
   function openDelete(user: CrmUser) {
@@ -196,19 +293,43 @@ export default function UsersManager({ initialUsers, pendingUsers: initialPendin
     setLoading(true)
     setError('')
     try {
+      // If "crear nueva carpeta" is checked, create it first
+      let folder = selectedPersonalFolder
+      if (newFolderForUser && !folder) {
+        setCreatingPersonalFolder(true)
+        const firstName = form.name.split(' ')[0] ?? form.name
+        const folderRes  = await fetch('/api/onedrive/personal-folders', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: firstName }),
+        })
+        const folderData = await folderRes.json()
+        setCreatingPersonalFolder(false)
+        if (!folderRes.ok) throw new Error(`Carpeta: ${folderData.error}`)
+        folder = { id: folderData.id, name: folderData.name, driveId: folderData.driveId }
+      }
+
+      const body: any = { ...form, must_change_password: true }
+      if (folder) {
+        body.onedrive_drive_id    = folder.driveId
+        body.onedrive_folder_id   = folder.id
+        body.onedrive_folder_path = `Carpetas Personales / ${folder.name}`
+      }
+
       const res = await fetch('/api/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, must_change_password: true }),
+        body: JSON.stringify(body),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Error al crear usuario')
-      setUsers((u) => [...u, data].sort((a, b) => a.name.localeCompare(b.name)))
+      setUsers((u) => [...u, { ...data, onedrive_drive_id: body.onedrive_drive_id ?? null, onedrive_folder_id: body.onedrive_folder_id ?? null, onedrive_folder_path: body.onedrive_folder_path ?? null }].sort((a, b) => a.name.localeCompare(b.name)))
       setCreatedPassword(form.password)
     } catch (err: any) {
       setError(err.message)
     } finally {
       setLoading(false)
+      setCreatingPersonalFolder(false)
     }
   }
 
@@ -224,6 +345,9 @@ export default function UsersManager({ initialUsers, pendingUsers: initialPendin
         email: form.email,
         role: form.role,
         permissions: customPerms,
+        onedrive_drive_id:    onedriveDriveId.trim()    || null,
+        onedrive_folder_id:   onedriveFolderId.trim()   || null,
+        onedrive_folder_path: onedriveFolderPath.trim() || null,
       }
       if (form.password) body.password = form.password
       const res = await fetch('/api/users', {
@@ -319,7 +443,7 @@ export default function UsersManager({ initialUsers, pendingUsers: initialPendin
       // Move from pending to users list
       const approved = pending.find(p => p.id === userId)
       if (approved) {
-        setUsers(prev => [...prev, { ...approved, active: true, role: data.role as UserRole, permissions: data.permissions }])
+        setUsers(prev => [...prev, { ...approved, active: true, role: data.role as UserRole, permissions: data.permissions, onedrive_drive_id: null, onedrive_folder_id: null, onedrive_folder_path: null }])
         setPending(prev => prev.filter(p => p.id !== userId))
       }
     } catch { alert('Error al aprobar') }
@@ -426,6 +550,7 @@ export default function UsersManager({ initialUsers, pendingUsers: initialPendin
               <th className="text-left px-4 py-3 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Email</th>
               <th className="text-left px-4 py-3 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Rol</th>
               <th className="text-left px-4 py-3 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Estado</th>
+              <th className="text-left px-4 py-3 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">OneDrive</th>
               <th className="px-4 py-3" />
             </tr>
           </thead>
@@ -464,6 +589,16 @@ export default function UsersManager({ initialUsers, pendingUsers: initialPendin
                   >
                     {user.active ? 'Activo' : 'Inactivo'}
                   </button>
+                </td>
+                <td className="px-4 py-3">
+                  {user.onedrive_folder_id ? (
+                    <span title={user.onedrive_folder_path ?? user.onedrive_folder_id} className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded text-[10px] font-medium max-w-[120px] truncate">
+                      <svg className="w-3 h-3 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" /></svg>
+                      <span className="truncate">{user.onedrive_folder_path?.split('/').pop() ?? 'Asignado'}</span>
+                    </span>
+                  ) : (
+                    <span className="text-[10px] text-gray-300">—</span>
+                  )}
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-1 justify-end">
@@ -531,18 +666,30 @@ export default function UsersManager({ initialUsers, pendingUsers: initialPendin
           {/* Tabs — only in edit mode */}
           {!createdPassword && modal === 'edit' && (
             <div className="flex border-b border-gray-100 mb-4 -mx-5 px-5">
-              {(['info', 'permisos'] as EditTab[]).map((tab) => (
+              {(['info', 'permisos', 'onedrive'] as EditTab[]).map((tab) => (
                 <button
                   key={tab}
                   type="button"
-                  onClick={() => setEditTab(tab)}
-                  className={`px-4 py-2 text-xs font-semibold border-b-2 transition-colors capitalize ${
+                  onClick={() => {
+                    setEditTab(tab)
+                    setBrowsing(false)
+                    // Load personal folders when switching to OneDrive tab
+                    if (tab === 'onedrive' && personalFolders.length === 0) {
+                      setPersonalFoldersLoading(true)
+                      fetch('/api/onedrive/personal-folders')
+                        .then(r => r.json())
+                        .then(d => { if (d.folders) setPersonalFolders(d.folders) })
+                        .catch(() => {})
+                        .finally(() => setPersonalFoldersLoading(false))
+                    }
+                  }}
+                  className={`px-4 py-2 text-xs font-semibold border-b-2 transition-colors ${
                     editTab === tab
                       ? 'border-[#2D3F52] text-[#2D3F52]'
                       : 'border-transparent text-gray-400 hover:text-gray-600'
                   }`}
                 >
-                  {tab === 'info' ? 'Información' : 'Permisos'}
+                  {tab === 'info' ? 'Información' : tab === 'permisos' ? 'Permisos' : 'OneDrive'}
                 </button>
               ))}
             </div>
@@ -605,6 +752,89 @@ export default function UsersManager({ initialUsers, pendingUsers: initialPendin
                       className={INPUT_CLS}
                     />
                   </Field>
+                )}
+
+                {/* ── Personal Folder picker (create only) ── */}
+                {modal === 'create' && (
+                  <div className="border-t border-gray-100 pt-4">
+                    <p className="text-[10px] font-semibold tracking-widest uppercase text-gray-400 mb-3">
+                      Carpeta Personal · OneDrive
+                    </p>
+
+                    {personalFoldersLoading ? (
+                      <div className="flex items-center gap-2 text-xs text-gray-400 animate-pulse py-2">
+                        <span className="w-3 h-3 border-2 border-gray-200 border-t-gray-400 rounded-full animate-spin" />
+                        Cargando carpetas…
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {/* Grid of existing folders */}
+                        <div className="grid grid-cols-3 gap-1.5 max-h-36 overflow-y-auto pr-1">
+                          {/* "Sin asignar" option */}
+                          <button
+                            type="button"
+                            onClick={() => { setSelectedPersonalFolder(null); setNewFolderForUser(false) }}
+                            className={`flex flex-col items-center gap-1 p-2 rounded-lg border text-[11px] transition-all ${
+                              !selectedPersonalFolder && !newFolderForUser
+                                ? 'border-gray-300 bg-gray-50 text-gray-500 font-medium'
+                                : 'border-transparent text-gray-400 hover:border-gray-200 hover:bg-gray-50'
+                            }`}
+                          >
+                            <span className="text-lg">🚫</span>
+                            <span>Sin carpeta</span>
+                          </button>
+
+                          {personalFolders.map(f => (
+                            <button
+                              key={f.id}
+                              type="button"
+                              onClick={() => { setSelectedPersonalFolder(f); setNewFolderForUser(false) }}
+                              className={`flex flex-col items-center gap-1 p-2 rounded-lg border text-[11px] transition-all ${
+                                selectedPersonalFolder?.id === f.id
+                                  ? 'border-[#2D3F52] bg-[#2D3F52]/5 text-[#2D3F52] font-semibold'
+                                  : 'border-transparent text-gray-600 hover:border-gray-200 hover:bg-gray-50'
+                              }`}
+                            >
+                              <span className="text-xl">📁</span>
+                              <span className="truncate w-full text-center leading-tight">{f.name}</span>
+                            </button>
+                          ))}
+
+                          {/* Create new folder option */}
+                          <button
+                            type="button"
+                            onClick={() => { setNewFolderForUser(true); setSelectedPersonalFolder(null) }}
+                            className={`flex flex-col items-center gap-1 p-2 rounded-lg border text-[11px] transition-all ${
+                              newFolderForUser
+                                ? 'border-emerald-400 bg-emerald-50 text-emerald-700 font-semibold'
+                                : 'border-dashed border-gray-200 text-gray-400 hover:border-gray-300 hover:bg-gray-50'
+                            }`}
+                          >
+                            <span className="text-xl">📁✨</span>
+                            <span>Nueva carpeta</span>
+                          </button>
+                        </div>
+
+                        {/* Confirmation chip */}
+                        {selectedPersonalFolder && (
+                          <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-[#2D3F52]/5 border border-[#2D3F52]/20 rounded-lg">
+                            <span className="text-sm">📁</span>
+                            <span className="text-xs font-medium text-[#2D3F52]">
+                              Carpetas Personales / <strong>{selectedPersonalFolder.name}</strong>
+                            </span>
+                          </div>
+                        )}
+                        {newFolderForUser && (
+                          <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-emerald-50 border border-emerald-200 rounded-lg">
+                            <span className="text-sm">📁✨</span>
+                            <span className="text-xs font-medium text-emerald-700">
+                              Se creará <strong>Carpetas Personales / {form.name.split(' ')[0] || '…'}</strong>
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
             )}
@@ -725,11 +955,83 @@ export default function UsersManager({ initialUsers, pendingUsers: initialPendin
               </div>
             )}
 
+            {/* OneDrive tab */}
+            {modal === 'edit' && editTab === 'onedrive' && (
+              <div className="space-y-4">
+                <p className="text-[10px] font-semibold tracking-widest uppercase text-gray-400">
+                  Carpeta Personal · OneDrive
+                </p>
+
+                {/* Current assignment */}
+                {onedriveFolderId ? (
+                  <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg">
+                    <svg className="w-4 h-4 text-green-600 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" /></svg>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-green-800 truncate">{onedriveFolderPath || 'Carpeta asignada'}</p>
+                    </div>
+                    <button type="button" onClick={() => { setOnedriveFolderId(''); setOnedriveFolderPath(''); setOnedriveDriveId('') }} className="text-green-400 hover:text-red-500 transition-colors">
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
+                  </div>
+                ) : (
+                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                    <p className="text-xs text-amber-700">Sin carpeta asignada. Seleccioná una de la lista.</p>
+                  </div>
+                )}
+
+                {/* Folder grid from Carpetas Personales */}
+                {personalFoldersLoading ? (
+                  <div className="flex items-center gap-2 text-xs text-gray-400 animate-pulse py-2">
+                    <span className="w-3 h-3 border-2 border-gray-200 border-t-gray-400 rounded-full animate-spin" />
+                    Cargando carpetas…
+                  </div>
+                ) : personalFolders.length === 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPersonalFoldersLoading(true)
+                      fetch('/api/onedrive/personal-folders')
+                        .then(r => r.json())
+                        .then(d => { if (d.folders) setPersonalFolders(d.folders) })
+                        .catch(() => {})
+                        .finally(() => setPersonalFoldersLoading(false))
+                    }}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-3 border-2 border-dashed border-gray-200 rounded-lg text-xs text-gray-500 hover:border-[#2D3F52] hover:text-[#2D3F52] transition-colors"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" /></svg>
+                    Cargar carpetas de OneDrive
+                  </button>
+                ) : (
+                  <div className="grid grid-cols-3 gap-1.5 max-h-52 overflow-y-auto pr-1">
+                    {personalFolders.map(f => (
+                      <button
+                        key={f.id}
+                        type="button"
+                        onClick={() => {
+                          setOnedriveDriveId(f.driveId)
+                          setOnedriveFolderId(f.id)
+                          setOnedriveFolderPath(`Carpetas Personales / ${f.name}`)
+                        }}
+                        className={`flex flex-col items-center gap-1 p-2 rounded-lg border text-[11px] transition-all ${
+                          onedriveFolderId === f.id
+                            ? 'border-[#2D3F52] bg-[#2D3F52]/5 text-[#2D3F52] font-semibold'
+                            : 'border-transparent text-gray-600 hover:border-gray-200 hover:bg-gray-50'
+                        }`}
+                      >
+                        <span className="text-2xl">📁</span>
+                        <span className="truncate w-full text-center leading-tight">{f.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
             {error && <div className="mt-3"><ErrorMsg msg={error} /></div>}
             <div className="flex gap-2 pt-4">
               <button type="button" onClick={closeModal} className={BTN_SECONDARY}>Cancelar</button>
               <button type="submit" disabled={loading} className={BTN_PRIMARY}>
-                {loading ? 'Guardando...' : modal === 'create' ? 'Crear usuario' : 'Guardar cambios'}
+                {creatingPersonalFolder ? 'Creando carpeta…' : loading ? 'Guardando...' : modal === 'create' ? 'Crear usuario' : 'Guardar cambios'}
               </button>
             </div>
           </form>}

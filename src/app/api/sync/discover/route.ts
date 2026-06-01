@@ -86,6 +86,20 @@ export async function GET() {
       result.LEGAJOS_GELIENE_FOLDER_ID = legajesGeliene ?? null
     }
 
+    // Drill into Scoring to list its direct children (files + subfolders)
+    const scoringId = result.root_folders['Scoring']?.id
+    if (scoringId) {
+      const url = `https://graph.microsoft.com/v1.0/drives/${DRIVE_ID}/items/${scoringId}/children?$select=id,name,webUrl,file,folder,size,lastModifiedDateTime&$top=50`
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+      if (res.ok) {
+        const data = await res.json()
+        result.scoring_contents = (data.value ?? []).map((i: any) => ({
+          id: i.id, name: i.name, isFile: !!i.file, isFolder: !!i.folder,
+          mimeType: i.file?.mimeType, size: i.size,
+        }))
+      }
+    }
+
     // Drill into Operaciones to find Recursos or similar
     const opId = result.root_folders['Operaciones']?.id
     if (opId) {

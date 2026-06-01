@@ -5,6 +5,7 @@ import { getSession } from '@/lib/auth'
 import BancoCentralTable, { type BancoCentralRecord } from '@/components/BancoCentralTable'
 import SyncBancoCentralButton from '@/components/SyncBancoCentralButton'
 import MonitoreoPanel from '@/components/MonitoreoPanel'
+import ScoringPanel from '@/components/ScoringPanel'
 
 export const dynamic = 'force-dynamic'
 
@@ -28,8 +29,12 @@ export default async function BancoCentralPage({
   const session = await getSession()
   const folderFilter = session?.allowed_folders ?? null
 
-  // Top-level section: 'legajos' | 'monitoreo'
-  const section = searchParams.section === 'monitoreo' ? 'monitoreo' : 'legajos'
+  // Top-level section: 'legajos' | 'monitoreo' | 'scoring'
+  const section = searchParams.section === 'monitoreo'
+    ? 'monitoreo'
+    : searchParams.section === 'scoring'
+      ? 'scoring'
+      : 'legajos'
 
   // Legajos sub-tab: 'local' | 'internacional'
   const legajosTab = searchParams.tab === 'internacional' ? 'internacional' : 'local'
@@ -86,6 +91,7 @@ export default async function BancoCentralPage({
         {[
           { key: 'legajos',   label: 'Legajos clientes',     icon: '📁' },
           { key: 'monitoreo', label: 'Monitoreo trimestral', icon: '📊' },
+          { key: 'scoring',   label: 'Scoring de cartera',   icon: '📈' },
         ].map(({ key, label, icon }) => (
           <Link
             key={key}
@@ -196,6 +202,11 @@ export default async function BancoCentralPage({
 
           <MonitoreoPanel key={monTab} user={session} entity={monTab} />
         </>
+      )}
+
+      {/* ══════════════════ SCORING DE CARTERA ══════════════════ */}
+      {section === 'scoring' && session && (
+        <ScoringPanel isAdmin={session.role === 'admin'} />
       )}
     </div>
   )

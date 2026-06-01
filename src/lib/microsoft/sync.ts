@@ -414,11 +414,12 @@ export async function syncScoring(): Promise<SyncResult> {
     return result
   }
 
-  const SPREADSHEET_MIME = [
+  const SCORING_MIME = [
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // xlsx
     'application/vnd.ms-excel',                                           // xls
     'text/csv',
     'text/plain',
+    'application/pdf',
   ]
 
   try {
@@ -428,8 +429,8 @@ export async function syncScoring(): Promise<SyncResult> {
     const items = await listFolderChildren(driveId, folderId, token)
     const spreadsheets = items.filter(f =>
       f.file && (
-        SPREADSHEET_MIME.includes(f.file.mimeType) ||
-        /\.(xlsx|xls|csv)$/i.test(f.name)
+        SCORING_MIME.includes(f.file.mimeType) ||
+        /\.(xlsx|xls|csv|pdf)$/i.test(f.name)
       )
     )
     result.found = spreadsheets.length

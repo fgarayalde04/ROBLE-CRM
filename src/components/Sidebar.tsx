@@ -22,10 +22,16 @@ const nav: NavSection[] = [
   {
     label: 'Operación',
     items: [
-      { href: '/clients',       label: 'Clientes',      subtitle: 'Gestión de clientes',   icon: UsersIcon,      permission: 'clients' },
-      { href: '/openings',      label: 'Aperturas',     subtitle: 'Nuevas cuentas',         icon: OpeningIcon,    permission: 'openings' },
-      { href: '/suitability',   label: 'Suitability',   subtitle: 'Risk monitor de carteras', icon: SuitabilityIcon, permission: 'suitability' },
-      { href: '/banco-central', label: 'Banco Central', subtitle: 'Monitoreo BCU',          icon: ShieldIcon,     permission: 'banco_central' },
+      { href: '/clients',       label: 'Clientes',      subtitle: 'Gestión de clientes',          icon: UsersIcon,   permission: 'clients' },
+      { href: '/openings',      label: 'Aperturas',     subtitle: 'Nuevas cuentas',                icon: OpeningIcon, permission: 'openings' },
+      { href: '/banco-central', label: 'Banco Central', subtitle: 'Legajos · Monitoreo · Scoring', icon: ShieldIcon,  permission: 'banco_central' },
+    ],
+  },
+  {
+    label: 'Inversiones',
+    items: [
+      { href: '/factsheet',  label: 'Factsheet',  subtitle: 'Informe de portafolio',   icon: FactsheetIcon, permission: 'factsheet' },
+      { href: '/propuestas', label: 'Propuestas', subtitle: 'Propuestas de inversión', icon: ProposalIcon,  permission: 'proposals' },
     ],
   },
   {
@@ -46,9 +52,9 @@ const nav: NavSection[] = [
   {
     label: 'Recursos',
     items: [
-      { href: '/recursos',    label: 'Biblioteca', subtitle: 'Documentos y recursos', icon: LibraryIcon,      permission: 'recursos' },
-      { href: '/claves',      label: 'Claves',     subtitle: 'Bóveda de accesos',     icon: KeyIcon,          permission: 'claves' },
-      { href: '/mi-carpeta',  label: 'Mi carpeta', subtitle: 'Archivos personales',   icon: FolderPersonalIcon, permission: 'calendar' },
+      { href: '/recursos',    label: 'Biblioteca', subtitle: 'Documentos y recursos', icon: LibraryIcon,        permission: 'recursos' },
+      { href: '/claves',      label: 'Claves',     subtitle: 'Bóveda de accesos',     icon: KeyIcon,            permission: 'claves' },
+      { href: '/mi-carpeta',  label: 'Mi carpeta', subtitle: 'Documentos en OneDrive', icon: FolderPersonalIcon, permission: 'panel' },
     ],
   },
   {
@@ -69,12 +75,12 @@ const nav: NavSection[] = [
 ]
 
 const ROLE_PERMISSIONS: Record<string, Permission[]> = {
-  admin:      ['panel','tasks','clients','openings','banco_central','calendar','deadlines','pagos','impuestos','ceo_dashboard','kpis','liquidacion','recursos','claves','admin','sincronizacion'],
-  ceo:        ['panel','tasks','clients','openings','banco_central','calendar','deadlines','pagos','impuestos','ceo_dashboard','kpis','liquidacion','recursos','claves'],
-  direccion:  ['panel','tasks','clients','openings','banco_central','calendar','deadlines','ceo_dashboard','kpis','liquidacion','recursos','claves'],
-  asesor:     ['panel','tasks','clients','openings','calendar','deadlines','recursos'],
+  admin:      ['panel','tasks','clients','openings','banco_central','calendar','deadlines','pagos','impuestos','ceo_dashboard','kpis','liquidacion','recursos','claves','admin','sincronizacion','suitability','factsheet','proposals'],
+  ceo:        ['panel','tasks','clients','openings','banco_central','calendar','deadlines','pagos','impuestos','ceo_dashboard','kpis','liquidacion','recursos','claves','suitability','factsheet','proposals'],
+  direccion:  ['panel','tasks','clients','openings','banco_central','calendar','deadlines','ceo_dashboard','kpis','liquidacion','recursos','claves','suitability','factsheet','proposals'],
+  asesor:     ['panel','tasks','clients','openings','calendar','deadlines','recursos','suitability','factsheet','proposals'],
   asistente:  ['panel','tasks','clients','openings','banco_central','calendar','deadlines','recursos'],
-  compliance: ['panel','banco_central','calendar','deadlines','recursos'],
+  compliance: ['panel','banco_central','calendar','deadlines','recursos','suitability'],
 }
 
 function canSee(user: SessionUser, permission: Permission): boolean {
@@ -296,6 +302,21 @@ function FolderPersonalIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v8.25A2.25 2.25 0 004.5 16.5h15a2.25 2.25 0 002.25-2.25V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z" />
+    </svg>
+  )
+}
+function FactsheetIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+    </svg>
+  )
+}
+
+function ProposalIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0118 16.5h-2.25m-7.5 0h7.5m-7.5 0l-1 3m8.5-3l1 3m0 0l.5 1.5m-.5-1.5h-9.5m0 0l-.5 1.5M9 11.25v1.5M12 9v3.75m3-6v6" />
     </svg>
   )
 }
