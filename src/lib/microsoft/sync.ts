@@ -157,6 +157,57 @@ export async function syncClients(): Promise<SyncResult> {
                 .select('id')
                 .maybeSingle()
               result.created++
+
+              // Auto-create apertura only for folders created after May 16, 2026
+              const OPENINGS_CUTOFF = new Date('2026-05-16T00:00:00Z')
+              const folderCreated = clientFolder.createdDateTime
+                ? new Date(clientFolder.createdDateTime)
+                : null
+
+              if (newClient?.id && folderCreated && folderCreated > OPENINGS_CUTOFF) {
+                const { data: existingOpening } = await supabaseAdmin
+                  .from('account_openings')
+                  .select('id')
+                  .eq('client_id', newClient.id)
+                  .maybeSingle()
+
+                if (!existingOpening) {
+                  const { data: newOpening, error: openingErr } = await supabaseAdmin
+                    .from('account_openings')
+                    .insert({
+                      client_id: newClient.id,
+                      folder_name: folderName,
+                      advisor: advisorName,
+                      status: 'carpeta_creada',
+                      priority: 'normal',
+                      start_date: new Date().toISOString().split('T')[0],
+                    })
+                    .select('id')
+                    .maybeSingle()
+
+                  if (openingErr) {
+                    result.errors.push(`Opening insert for ${folderName}: ${openingErr.message}`)
+                  }
+
+                  if (newOpening?.id) {
+                    const checklist = [
+                      { title: 'Ficha de cliente', sort_order: 0 },
+                      { title: 'Perfil de inversor', sort_order: 1 },
+                      { title: 'Cédula / Documento de identidad', sort_order: 2 },
+                      { title: 'Documentación legal', sort_order: 3 },
+                      { title: 'Cuestionario del asesor', sort_order: 4 },
+                      { title: 'Formularios enviados al cliente', sort_order: 5 },
+                      { title: 'Formularios firmados recibidos', sort_order: 6 },
+                      { title: 'Documentación enviada al banco', sort_order: 7 },
+                      { title: 'Aprobación del banco', sort_order: 8 },
+                      { title: 'Cuenta abierta', sort_order: 9 },
+                    ]
+                    await supabaseAdmin.from('opening_checklist_items').insert(
+                      checklist.map(item => ({ opening_id: newOpening.id, ...item }))
+                    )
+                  }
+                }
+              }
             }
           } catch (e: unknown) {
             const msg = e instanceof Error ? e.message : String(e)
