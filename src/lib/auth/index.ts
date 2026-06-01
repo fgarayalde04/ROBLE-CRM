@@ -58,9 +58,11 @@ export async function getSession(): Promise<SessionUser | null> {
 
     const extra: Partial<SessionUser> = {}
 
-    if (userData?.permissions?.length) {
-      extra.permissions = userData.permissions as Permission[]
-    }
+    // Always sync permissions from DB — if DB is null, clear any JWT-cached value
+    // so the sidebar falls back to role defaults (which include factsheet/proposals)
+    extra.permissions = userData?.permissions?.length
+      ? (userData.permissions as Permission[])
+      : undefined
 
     // Admin always sees all — no folder restriction
     if (user.role === 'admin') {
