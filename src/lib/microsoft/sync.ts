@@ -165,8 +165,13 @@ export async function syncClients(): Promise<SyncResult> {
               isNewClient = !!clientId
             }
 
-            // Auto-create apertura only for genuinely new clients (not pre-existing ones)
-            if (isNewClient && clientId) {
+            // Auto-create apertura only for new clients in folders created after May 16, 2026
+            const OPENINGS_CUTOFF = new Date('2026-05-16T00:00:00Z')
+            const folderCreated = clientFolder.createdDateTime
+              ? new Date(clientFolder.createdDateTime)
+              : null
+
+            if (isNewClient && clientId && folderCreated && folderCreated > OPENINGS_CUTOFF) {
               const { data: newOpening, error: openingErr } = await supabaseAdmin
                 .from('account_openings')
                 .insert({
