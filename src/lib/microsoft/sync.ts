@@ -149,20 +149,28 @@ export async function syncClients(): Promise<SyncResult> {
               result.updated++
               clientId = existing.id
             } else {
+              // New folders post-cutoff start as 'prospecto' (pending Comenzar)
+              // Existing folders are assumed already opened → 'activo'
+              const OPENINGS_CUTOFF_CHECK = new Date('2026-05-16T00:00:00Z')
+              const folderCreatedCheck = clientFolder.createdDateTime
+                ? new Date(clientFolder.createdDateTime)
+                : null
+              const isPostCutoff = folderCreatedCheck ? folderCreatedCheck > OPENINGS_CUTOFF_CHECK : false
+
               const { data: newClient } = await supabaseAdmin
                 .from('clients')
                 .insert({
                   first_name: firstName || folderName,
                   last_name: lastName,
                   client_number: clientNumber,
-                  status: 'activo',
+                  status: isPostCutoff ? 'prospecto' : 'activo',
                   ...spFields,
                 })
                 .select('id')
                 .maybeSingle()
               result.created++
               clientId = newClient?.id ?? null
-              isNewClient = !!clientId
+              isNewClient = !!clientId && isPostCutoff
             }
 
             // Auto-create apertura only for new clients in folders created after May 16, 2026

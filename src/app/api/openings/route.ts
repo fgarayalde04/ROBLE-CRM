@@ -63,6 +63,15 @@ export async function PUT(req: Request) {
       .select()
       .single()
     if (error) throw error
+
+    // When "Comenzar" is clicked (status → recolectando_informacion), activate the client
+    if (payload.status === 'recolectando_informacion' && data?.client_id) {
+      await supabaseAdmin
+        .from('clients')
+        .update({ status: 'activo', updated_at: new Date().toISOString() })
+        .eq('id', data.client_id)
+    }
+
     return NextResponse.json(data)
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 400 })
