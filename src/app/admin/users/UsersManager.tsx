@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 
 type UserRole = 'admin' | 'asesor' | 'asistente' | 'compliance' | 'direccion' | 'ceo'
-type Permission = 'panel' | 'tasks' | 'clients' | 'openings' | 'banco_central' | 'calendar' | 'deadlines' | 'ceo_dashboard' | 'kpis' | 'pagos' | 'impuestos' | 'liquidacion' | 'recursos' | 'claves' | 'admin' | 'sincronizacion' | 'factsheet' | 'proposals' | 'suitability'
+type Permission = 'panel' | 'tasks' | 'clients' | 'openings' | 'banco_central' | 'calendar' | 'deadlines' | 'ceo_dashboard' | 'kpis' | 'pagos' | 'impuestos' | 'liquidacion' | 'recursos' | 'claves' | 'admin' | 'sincronizacion' | 'factsheet' | 'proposals'
 
 interface CrmUser {
   id: string
@@ -50,7 +50,6 @@ const PERMISSION_GROUPS: { label: string; items: { key: Permission; label: strin
     items: [
       { key: 'factsheet', label: 'Factsheet / Portafolio' },
       { key: 'proposals', label: 'Propuestas de inversión' },
-      { key: 'suitability', label: 'Suitability / Scoring' },
     ],
   },
   {
@@ -80,12 +79,12 @@ const PERMISSION_GROUPS: { label: string; items: { key: Permission; label: strin
 ]
 
 const ROLE_DEFAULT_PERMISSIONS: Record<UserRole, Permission[]> = {
-  admin:      ['panel','tasks','clients','openings','banco_central','calendar','deadlines','pagos','impuestos','ceo_dashboard','kpis','liquidacion','recursos','claves','admin','sincronizacion','factsheet','proposals','suitability'],
-  ceo:        ['panel','tasks','clients','openings','banco_central','calendar','deadlines','pagos','impuestos','ceo_dashboard','kpis','liquidacion','recursos','claves','factsheet','proposals','suitability'],
-  direccion:  ['panel','tasks','clients','openings','banco_central','calendar','deadlines','ceo_dashboard','kpis','liquidacion','recursos','claves','factsheet','proposals','suitability'],
-  asesor:     ['panel','tasks','clients','openings','calendar','deadlines','recursos','factsheet','proposals','suitability'],
+  admin:      ['panel','tasks','clients','openings','banco_central','calendar','deadlines','pagos','impuestos','ceo_dashboard','kpis','liquidacion','recursos','claves','admin','sincronizacion','factsheet','proposals'],
+  ceo:        ['panel','tasks','clients','openings','banco_central','calendar','deadlines','pagos','impuestos','ceo_dashboard','kpis','liquidacion','recursos','claves','factsheet','proposals'],
+  direccion:  ['panel','tasks','clients','openings','banco_central','calendar','deadlines','ceo_dashboard','kpis','liquidacion','recursos','claves','factsheet','proposals'],
+  asesor:     ['panel','tasks','clients','openings','calendar','deadlines','recursos','factsheet','proposals'],
   asistente:  ['panel','tasks','clients','openings','banco_central','calendar','deadlines','recursos'],
-  compliance: ['panel','banco_central','calendar','deadlines','recursos','suitability'],
+  compliance: ['panel','banco_central','calendar','deadlines','recursos'],
 }
 
 const ROLE_LABELS: Record<UserRole, string> = {

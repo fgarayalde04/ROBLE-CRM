@@ -75,12 +75,12 @@ const nav: NavSection[] = [
 ]
 
 const ROLE_PERMISSIONS: Record<string, Permission[]> = {
-  admin:      ['panel','tasks','clients','openings','banco_central','calendar','deadlines','pagos','impuestos','ceo_dashboard','kpis','liquidacion','recursos','claves','admin','sincronizacion','suitability','factsheet','proposals'],
-  ceo:        ['panel','tasks','clients','openings','banco_central','calendar','deadlines','pagos','impuestos','ceo_dashboard','kpis','liquidacion','recursos','claves','suitability','factsheet','proposals'],
-  direccion:  ['panel','tasks','clients','openings','banco_central','calendar','deadlines','ceo_dashboard','kpis','liquidacion','recursos','claves','suitability','factsheet','proposals'],
-  asesor:     ['panel','tasks','clients','openings','calendar','deadlines','recursos','suitability','factsheet','proposals'],
+  admin:      ['panel','tasks','clients','openings','banco_central','calendar','deadlines','pagos','impuestos','ceo_dashboard','kpis','liquidacion','recursos','claves','admin','sincronizacion','factsheet','proposals'],
+  ceo:        ['panel','tasks','clients','openings','banco_central','calendar','deadlines','pagos','impuestos','ceo_dashboard','kpis','liquidacion','recursos','claves','factsheet','proposals'],
+  direccion:  ['panel','tasks','clients','openings','banco_central','calendar','deadlines','ceo_dashboard','kpis','liquidacion','recursos','claves','factsheet','proposals'],
+  asesor:     ['panel','tasks','clients','openings','calendar','deadlines','recursos','factsheet','proposals'],
   asistente:  ['panel','tasks','clients','openings','banco_central','calendar','deadlines','recursos'],
-  compliance: ['panel','banco_central','calendar','deadlines','recursos','suitability'],
+  compliance: ['panel','banco_central','calendar','deadlines','recursos'],
 }
 
 function canSee(user: SessionUser, permission: Permission): boolean {
