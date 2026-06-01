@@ -168,7 +168,7 @@ export async function syncClients(): Promise<SyncResult> {
                   .maybeSingle()
 
                 if (!existingOpening) {
-                  const { data: newOpening } = await supabaseAdmin
+                  const { data: newOpening, error: openingErr } = await supabaseAdmin
                     .from('account_openings')
                     .insert({
                       client_id: newClient.id,
@@ -180,6 +180,10 @@ export async function syncClients(): Promise<SyncResult> {
                     })
                     .select('id')
                     .maybeSingle()
+
+                  if (openingErr) {
+                    result.errors.push(`Opening insert for ${folderName}: ${openingErr.message}`)
+                  }
 
                   if (newOpening?.id) {
                     const checklist = [
