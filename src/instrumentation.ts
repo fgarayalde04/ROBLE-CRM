@@ -18,9 +18,7 @@ export async function register() {
     return
   }
 
-  const { syncClients, syncBancoCentralLocal, syncBancoCentralInternacional } = await import(
-    '@/lib/microsoft/sync'
-  )
+  const { syncClients } = await import('@/lib/microsoft/sync')
   const { supabaseAdmin } = await import('@/lib/supabase/admin')
 
   const intervalMins = parseInt(process.env.SYNC_INTERVAL_MINUTES ?? '60', 10)
@@ -54,11 +52,7 @@ export async function register() {
     console.log('[auto-sync] Starting scheduled sync...')
     try {
       await maybeResetPayments()
-      await Promise.allSettled([
-        syncClients(),
-        syncBancoCentralLocal(),
-        syncBancoCentralInternacional(),
-      ])
+      await syncClients()
       console.log('[auto-sync] Sync complete.')
     } catch (e) {
       console.error('[auto-sync] Error:', e)
