@@ -296,15 +296,24 @@ export default function ChatWidget({ user }: { user: SessionUser }) {
           {/* ── LEFT: Conversation list ── */}
           <div className="w-56 border-r border-gray-100 flex flex-col shrink-0">
             {/* Header */}
-            <div className="px-3 py-3 border-b border-gray-100 flex items-center justify-between">
-              <span className="text-sm font-semibold text-[#2D3F52]">Mensajes</span>
+            <div className="px-3 py-3 border-b border-gray-100 flex items-center justify-between gap-1.5">
+              <span className="text-sm font-semibold text-[#2D3F52] flex-1">Mensajes</span>
               <button
                 onClick={openNewConv}
-                className="w-6 h-6 rounded-full bg-[#2D3F52] text-white flex items-center justify-center hover:bg-[#354A5E] transition-colors"
+                className="w-6 h-6 rounded-full bg-[#2D3F52] text-white flex items-center justify-center hover:bg-[#354A5E] transition-colors shrink-0"
                 title="Nueva conversación"
               >
                 <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                </svg>
+              </button>
+              <button
+                onClick={() => setOpen(false)}
+                className="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors shrink-0"
+                title="Cerrar chat"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>

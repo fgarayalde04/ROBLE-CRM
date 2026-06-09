@@ -97,7 +97,7 @@ export default function BottomNav({ user, onMenuToggle }: Props) {
 
           {/* Chat */}
           <button
-            onClick={() => setChatOpen(true)}
+            onClick={() => setChatOpen(!chatOpen)}
             className="flex-1 flex flex-col items-center justify-center py-2 gap-0.5 min-h-[56px] active:bg-gray-50 transition-colors"
           >
             <svg className="w-5 h-5" style={{ color: isChat ? activeColor : '#9ca3af' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
