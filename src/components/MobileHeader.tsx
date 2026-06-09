@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import type { SessionUser } from '@/lib/auth'
 import { useAdvisorModeCtx } from '@/contexts/AdvisorModeContext'
 
@@ -49,6 +49,7 @@ interface Props {
 
 export default function MobileHeader({ user, onMenuToggle, showHamburger = true }: Props) {
   const pathname = usePathname()
+  const router = useRouter()
   const [search, setSearch] = useState('')
   const { advisorMode, setAdvisorMode, initialized } = useAdvisorModeCtx()
 
@@ -91,7 +92,12 @@ export default function MobileHeader({ user, onMenuToggle, showHamburger = true 
 
       {/* Modo Asesor toggle */}
       <button
-        onClick={() => initialized && setAdvisorMode(!advisorMode)}
+        onClick={() => {
+          if (!initialized) return
+          const next = !advisorMode
+          setAdvisorMode(next)
+          if (next) router.push('/ordenes')
+        }}
         className={[
           'flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-semibold transition-all shrink-0',
           advisorMode

@@ -265,7 +265,12 @@ export default function Sidebar({ user, isOpen = false, onToggle }: Props) {
       <div className="px-3 py-3 border-t border-white/8 space-y-2">
         {/* Modo Asesor toggle — desktop */}
         <button
-          onClick={() => initialized && setAdvisorMode(!advisorMode)}
+          onClick={() => {
+            if (!initialized) return
+            const next = !advisorMode
+            setAdvisorMode(next)
+            if (next) router.push('/ordenes')
+          }}
           className={[
             'w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg transition-colors',
             advisorMode ? 'bg-green-600/15 hover:bg-green-600/20' : 'bg-white/5 hover:bg-white/8',
