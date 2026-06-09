@@ -109,9 +109,9 @@ const ROLE_LABEL: Record<string, string> = {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-interface Props { user: SessionUser }
+interface Props { user: SessionUser; isOpen?: boolean; onToggle?: () => void }
 
-export default function Sidebar({ user }: Props) {
+export default function Sidebar({ user, isOpen = false, onToggle }: Props) {
   const pathname = usePathname()
   const router = useRouter()
 
@@ -129,9 +129,16 @@ export default function Sidebar({ user }: Props) {
     .filter((section) => section.items.length > 0)
 
   return (
-    <aside className="fixed inset-y-0 left-0 w-64 flex flex-col z-30" style={{ backgroundColor: '#2D3F52' }}>
-      {/* Logo */}
-      <div className="h-20 flex items-center justify-between px-4 border-b border-white/10">
+    <aside
+      className={[
+        'fixed inset-y-0 left-0 w-64 flex flex-col z-30',
+        'transition-transform duration-300 ease-in-out',
+        isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0',
+      ].join(' ')}
+      style={{ backgroundColor: '#2D3F52' }}
+    >
+      {/* Logo + mobile close */}
+      <div className="h-14 md:h-20 flex items-center justify-between px-4 border-b border-white/10">
         <Image
           src="/download.png"
           alt="Roble Capital"
@@ -141,12 +148,14 @@ export default function Sidebar({ user }: Props) {
           style={{ filter: 'invert(1) hue-rotate(180deg) brightness(0.92)' }}
           priority
         />
+        {/* Close button — only on mobile */}
         <button
-          className="w-6 h-6 flex items-center justify-center rounded text-white/40 hover:text-white/70 hover:bg-white/8 transition-colors shrink-0"
-          aria-label="Colapsar menú"
+          onClick={onToggle}
+          className="md:hidden w-7 h-7 flex items-center justify-center rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-colors shrink-0"
+          aria-label="Cerrar menú"
         >
-          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
           </svg>
         </button>
       </div>

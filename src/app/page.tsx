@@ -363,10 +363,10 @@ export default async function PanelDelDiaPage({ searchParams }: PageProps) {
     alerts.push({ label: `${noResponsibleTasks.length} ${noResponsibleTasks.length === 1 ? 'tarea sin responsable' : 'tareas sin responsable'}`, count: noResponsibleTasks.length, href: '/tasks', color: 'amber' })
 
   return (
-    <div className="p-6 bg-[#F4F6F8] min-h-screen">
+    <div className="p-4 md:p-6 bg-[#F4F6F8] min-h-screen">
 
-      {/* ─── Header ─── */}
-      <div className="flex items-center justify-between mb-6">
+      {/* ─── Header — hidden on mobile (shown in MobileHeader) ─── */}
+      <div className="hidden md:flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-semibold text-[#2D3F52]">
             {session ? `Buen día, ${firstName(userName)}` : 'Panel del día'}
@@ -386,8 +386,21 @@ export default async function PanelDelDiaPage({ searchParams }: PageProps) {
         </div>
       </div>
 
+      {/* ─── Mobile greeting + quick actions ─── */}
+      <div className="md:hidden flex items-center justify-between mb-4">
+        <p className="text-sm text-gray-400 capitalize">{formattedDate}</p>
+        <div className="flex items-center gap-1.5">
+          <Link href="/tasks/new" className="px-2.5 py-1.5 bg-[#2D3F52] text-white text-xs rounded-lg font-medium">
+            + Tarea
+          </Link>
+          <Link href="/clients/new" className="px-2.5 py-1.5 border border-gray-200 bg-white text-gray-600 text-xs rounded-lg font-medium">
+            + Cliente
+          </Link>
+        </div>
+      </div>
+
       {/* ─── Stat bar ─── */}
-      <div className="grid grid-cols-4 gap-3 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
         {[
           { label: 'Mis tareas hoy', value: myTasksToday.length, href: '/tasks', alert: myTasksToday.length > 0, color: 'blue' },
           { label: 'Mis vencidas', value: myOverdue.length, href: '/tasks', alert: myOverdue.length > 0, color: 'red' },

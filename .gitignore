@@ -5,3 +5,4 @@ node_modules
 *.tsbuildinfo
 import-broker-data.js
 .vercel
+*.env*

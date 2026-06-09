@@ -76,15 +76,17 @@ export default async function BancoCentralPage({
   const activeRecs = legajosTab === 'local' ? localRecs : intlRecs
 
   return (
-    <div className="p-8" style={{ backgroundColor: '#F4F6F8', minHeight: '100vh' }}>
-      {/* ── Header ── */}
-      <div className="flex items-start justify-between mb-8">
+    <div className="p-4 md:p-8" style={{ backgroundColor: '#F4F6F8', minHeight: '100vh' }}>
+      {/* ── Header — desktop only ── */}
+      <div className="hidden md:flex items-start justify-between mb-8">
         <div>
           <h1 className="text-2xl font-semibold" style={{ color: '#2D3F52' }}>Banco Central</h1>
           <p className="mt-1 text-sm text-gray-500">Control documental · Monitoreo trimestral</p>
         </div>
         {section === 'legajos' && <SyncBancoCentralButton />}
       </div>
+      {/* Mobile: sync button */}
+      {section === 'legajos' && <div className="md:hidden flex justify-end mb-3"><SyncBancoCentralButton /></div>}
 
       {/* ── Top-level tabs ── */}
       <div className="flex gap-1 border-b border-gray-200 mb-6">

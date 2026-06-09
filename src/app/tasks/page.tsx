@@ -178,9 +178,9 @@ export default async function TasksPage({ searchParams }: Props) {
   const showResponsible = view === 'team' || view === 'overdue' || view === 'shared' || view === 'created'
 
   return (
-    <div className="p-8">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+    <div className="p-4 md:p-8">
+      {/* Header — hidden on mobile */}
+      <div className="hidden md:flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-semibold text-[#2D3F52]">Pendientes</h1>
           <p className="mt-0.5 text-sm text-gray-500">
@@ -192,6 +192,15 @@ export default async function TasksPage({ searchParams }: Props) {
           className="px-4 py-2 bg-[#2D3F52] text-white text-sm rounded hover:bg-[#354A5E] transition-colors"
         >
           Nueva tarea
+        </Link>
+      </div>
+      {/* Mobile: quick action */}
+      <div className="md:hidden flex items-center justify-end mb-3">
+        <Link
+          href="/tasks/new"
+          className="px-3 py-1.5 bg-[#2D3F52] text-white text-xs rounded-lg font-medium"
+        >
+          + Nueva tarea
         </Link>
       </div>
 

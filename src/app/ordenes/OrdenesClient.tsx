@@ -148,7 +148,7 @@ function AccionesForm({ block, index, onChange, onRemove }: { block: AccionesBlo
   const upd = (f: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => onChange(block.id, f, e.target.value)
   return (
     <BlockShell title="Renta Variable — Acciones" index={index} id={block.id} color="blue" onRemove={onRemove}>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field label="Operación"><select className={selectCls} value={block.operacion} onChange={upd('operacion')}><option value="compra">Compra</option><option value="venta">Venta</option></select></Field>
         <Field label="Nombre de acción"><input className={inputCls} placeholder="Ej: Apple Inc." value={block.nombre} onChange={upd('nombre')} /></Field>
         <Field label="Ticker"><input className={inputCls} placeholder="Ej: AAPL" value={block.ticker} onChange={upd('ticker')} /></Field>
@@ -179,7 +179,7 @@ function FondosForm({ block, index, onChange, onRemove }: { block: FondosBlock; 
   const upd = (f: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => onChange(block.id, f, e.target.value)
   return (
     <BlockShell title="Fondo de Inversión" index={index} id={block.id} color="emerald" onRemove={onRemove}>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field label="Operación"><select className={selectCls} value={block.operacion} onChange={upd('operacion')}><option value="compra">Compra</option><option value="venta">Venta</option></select></Field>
         <Field label="Nombre del fondo"><input className={inputCls} placeholder="Ej: Vanguard S&P 500" value={block.fondo} onChange={upd('fondo')} /></Field>
         <Field label="CUSIP / ISIN"><input className={inputCls} placeholder="Ej: US9229081090" value={block.cusipIsin} onChange={upd('cusipIsin')} /></Field>
@@ -201,7 +201,7 @@ function BonosForm({ block, index, onChange, onRemove }: { block: BonosBlock; in
   const upd = (f: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => onChange(block.id, f, e.target.value)
   return (
     <BlockShell title="Renta Fija — Bono" index={index} id={block.id} color="amber" onRemove={onRemove}>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field label="Operación"><select className={selectCls} value={block.operacion} onChange={upd('operacion')}><option value="compra">Compra</option><option value="venta">Venta</option></select></Field>
         <div className="col-span-2"><Field label="Identificación del bono"><input className={inputCls} placeholder="Ej: Uruguay 2031 4.375% — Vto. 15/10/2031" value={block.descripcion} onChange={upd('descripcion')} /></Field></div>
         <Field label="CUSIP / ISIN"><input className={inputCls} placeholder="Ej: US917288BS29" value={block.cusipIsin} onChange={upd('cusipIsin')} /></Field>
@@ -355,10 +355,10 @@ export default function OrdenesClient({ gmailConnected }: Props) {
   const hasBlocks = blocks.length > 0
 
   return (
-    <div className="p-6 bg-[#F4F6F8] min-h-screen">
+    <div className="p-4 md:p-6 bg-[#F4F6F8] min-h-screen">
 
-      {/* Header */}
-      <div className="flex items-center justify-between mb-5">
+      {/* Header — desktop only */}
+      <div className="hidden md:flex items-center justify-between mb-5">
         <div>
           <h1 className="text-xl font-semibold text-[#2D3F52]">Enviar órdenes</h1>
           <p className="text-sm text-gray-400 mt-0.5">Generá y enviá instrucciones de operación</p>
@@ -372,10 +372,19 @@ export default function OrdenesClient({ gmailConnected }: Props) {
           ))}
         </div>
       </div>
+      {/* Mobile tab switcher */}
+      <div className="md:hidden flex gap-1 bg-white border border-gray-200 rounded-lg p-0.5 mb-4">
+        {(['nueva', 'historial'] as Tab[]).map(t => (
+          <button key={t} onClick={() => setTab(t)}
+            className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${tab === t ? 'bg-[#2D3F52] text-white' : 'text-gray-500'}`}>
+            {t === 'nueva' ? 'Nueva orden' : 'Historial'}
+          </button>
+        ))}
+      </div>
 
       {/* ── NUEVA ORDEN ── */}
       {tab === 'nueva' && (
-        <div className="flex gap-5">
+        <div className="flex flex-col md:flex-row gap-4 md:gap-5">
 
           {/* Left: form */}
           <div className="flex-1 min-w-0 space-y-4">
@@ -383,7 +392,7 @@ export default function OrdenesClient({ gmailConnected }: Props) {
             {/* Client + general info */}
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
               <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-3">Información general</h3>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div className="col-span-1">
                   <label className={labelCls}>Cliente</label>
                   <ClientSearchInput
@@ -471,7 +480,7 @@ export default function OrdenesClient({ gmailConnected }: Props) {
           </div>
 
           {/* Right: send + preview */}
-          <div className="w-[380px] shrink-0 space-y-4">
+          <div className="w-full md:w-[380px] md:shrink-0 space-y-4">
 
             {/* Send panel */}
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 space-y-3">
