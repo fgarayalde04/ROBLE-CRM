@@ -43,9 +43,8 @@ const nav: NavSection[] = [
   {
     label: 'Agenda y Mail',
     items: [
-      { href: '/events',   label: 'Agenda',       subtitle: 'Google Calendar y eventos', icon: CalendarIcon, permission: 'calendar' },
-      { href: '/mail',     label: 'Mail',         subtitle: 'Gmail y comunicaciones',    icon: MailIcon,     permission: 'calendar' },
-      { href: '/calendar', label: 'Vencimientos', subtitle: 'Fechas importantes',        icon: ClockIcon,    permission: 'deadlines' },
+      { href: '/events', label: 'Agenda', subtitle: 'Google Calendar y eventos', icon: CalendarIcon, permission: 'calendar' },
+      { href: '/mail',   label: 'Mail',   subtitle: 'Gmail y comunicaciones',    icon: MailIcon,     permission: 'calendar' },
     ],
   },
   {

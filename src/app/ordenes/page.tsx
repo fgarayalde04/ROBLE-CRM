@@ -8,6 +8,8 @@ import OrdenesClient from './OrdenesClient'
 export const metadata: Metadata = { title: 'Enviar órdenes | Roble Capital' }
 export const dynamic = 'force-dynamic'
 
+const ADMIN_ROLES = ['admin', 'ceo', 'direccion']
+
 interface Props {
   searchParams: { tab?: string }
 }
@@ -19,6 +21,14 @@ export default async function OrdenesPage({ searchParams }: Props) {
 
   const gmailConnected = await hasGoogleConnection()
   const initialTab = searchParams.tab === 'historial' ? 'historial' : 'nueva'
+  const isAdmin = ADMIN_ROLES.includes(session.role)
 
-  return <OrdenesClient gmailConnected={gmailConnected} initialTab={initialTab} />
+  return (
+    <OrdenesClient
+      gmailConnected={gmailConnected}
+      initialTab={initialTab}
+      isAdmin={isAdmin}
+      userName={session.name}
+    />
+  )
 }

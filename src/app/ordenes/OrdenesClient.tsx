@@ -5,6 +5,7 @@ import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import EmailAutocomplete from '@/components/EmailAutocomplete'
 import LegajosSearchInput from '@/components/LegajosSearchInput'
+import OrderHistorial from './OrderHistorial'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -27,13 +28,6 @@ interface BonosBlock {
   moneda: string; operacion: 'compra' | 'venta'; fecha: string; observaciones: string
 }
 type OrderBlock = AccionesBlock | FondosBlock | BonosBlock
-
-interface HistoryEntry {
-  id: string; user_name: string | null; client_name: string | null
-  client_number: string | null; to_email: string | null; subject: string | null
-  body: string | null; status: 'enviado' | 'borrador' | 'copiado'
-  order_count: number; instruments: string[]; created_at: string
-}
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -239,9 +233,9 @@ const INSTRUMENT_STYLE: Record<string, string> = {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-interface Props { gmailConnected: boolean; initialTab?: Tab }
+interface Props { gmailConnected: boolean; initialTab?: Tab; isAdmin?: boolean; userName?: string }
 
-export default function OrdenesClient({ gmailConnected, initialTab = 'nueva' }: Props) {
+export default function OrdenesClient({ gmailConnected, initialTab = 'nueva', isAdmin = false, userName = '' }: Props) {
   const [tab, setTab] = useState<Tab>(initialTab)
   const [blocks, setBlocks]             = useState<OrderBlock[]>([])
   const [clientId, setClientId]         = useState('')
@@ -254,22 +248,8 @@ export default function OrdenesClient({ gmailConnected, initialTab = 'nueva' }: 
   const [sending, setSending]           = useState(false)
   const [sendStatus, setSendStatus]     = useState<{ ok: boolean; msg: string } | null>(null)
   const [copied, setCopied]             = useState(false)
-  const [history, setHistory]           = useState<HistoryEntry[]>([])
-  const [historyLoading, setHistoryLoading] = useState(false)
-  const [expandedId, setExpandedId]     = useState<string | null>(null)
 
   const asunto = `Confirmacion de orden - ${clientNumber || clientName || '—'} - ${fecha}`
-
-  // Load history when switching to that tab
-  useEffect(() => {
-    if (tab !== 'historial') return
-    setHistoryLoading(true)
-    fetch('/api/ordenes')
-      .then(r => r.json())
-      .then(data => setHistory(Array.isArray(data) ? data : []))
-      .catch(() => setHistory([]))
-      .finally(() => setHistoryLoading(false))
-  }, [tab])
 
   const addBlock = (type: OrderType) => {
     const id = uid()
@@ -290,15 +270,16 @@ export default function OrdenesClient({ gmailConnected, initialTab = 'nueva' }: 
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        client_name: clientName || null,
+        client_name:   clientName   || null,
         client_number: clientNumber || null,
-        client_id: clientId || null,
-        to_email: to || null,
-        subject: asunto,
-        body: getBody(),
+        client_id:     clientId     || null,
+        to_email:      to           || null,
+        subject:       asunto,
+        body:          getBody(),
         status,
-        order_count: blocks.length,
+        order_count:   blocks.length,
         instruments,
+        blocks,   // save individual items to order_history_items
       }),
     })
   }
@@ -569,77 +550,7 @@ export default function OrdenesClient({ gmailConnected, initialTab = 'nueva' }: 
 
       {/* ── HISTORIAL ── */}
       {tab === 'historial' && (
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-          <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
-            <span className="text-xs font-bold text-gray-500 uppercase tracking-wide">Historial de órdenes</span>
-            <span className="text-xs text-gray-400">{history.length} registros</span>
-          </div>
-          {historyLoading ? (
-            <div className="py-12 text-center text-sm text-gray-400">Cargando…</div>
-          ) : history.length === 0 ? (
-            <div className="py-12 text-center text-sm text-gray-400">No hay órdenes registradas.</div>
-          ) : (
-            <ul className="divide-y divide-gray-50">
-              {history.map(entry => (
-                <li key={entry.id} className="hover:bg-gray-50/50 transition-colors">
-                  <button
-                    type="button"
-                    onClick={() => setExpandedId(expandedId === entry.id ? null : entry.id)}
-                    className="w-full px-5 py-3 flex items-center gap-4 text-left"
-                  >
-                    {/* Date */}
-                    <div className="shrink-0 w-28">
-                      <p className="text-xs font-semibold text-gray-700">
-                        {format(new Date(entry.created_at), "d MMM yyyy", { locale: es })}
-                      </p>
-                      <p className="text-[10px] text-gray-400">
-                        {format(new Date(entry.created_at), "HH:mm", { locale: es })}
-                      </p>
-                    </div>
-                    {/* Client */}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-800 truncate">
-                        {entry.client_name || '—'}
-                        {entry.client_number ? <span className="text-gray-400 font-normal ml-1">#{entry.client_number}</span> : null}
-                      </p>
-                      <p className="text-[11px] text-gray-400 truncate">{entry.to_email || 'Sin destinatario'}</p>
-                    </div>
-                    {/* Instruments */}
-                    <div className="flex items-center gap-1 shrink-0">
-                      {(entry.instruments ?? []).map((inst: string) => (
-                        <span key={inst} className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${INSTRUMENT_STYLE[inst] ?? 'bg-gray-100 text-gray-500'}`}>
-                          {inst}
-                        </span>
-                      ))}
-                      <span className="text-[10px] text-gray-400 ml-1">{entry.order_count} {entry.order_count === 1 ? 'orden' : 'órdenes'}</span>
-                    </div>
-                    {/* Status */}
-                    <div className="shrink-0">
-                      <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full border ${STATUS_STYLE[entry.status] ?? 'bg-gray-100 text-gray-500 border-gray-200'}`}>
-                        {STATUS_LABEL[entry.status] ?? entry.status}
-                      </span>
-                    </div>
-                    {/* User */}
-                    <div className="shrink-0 text-[11px] text-gray-400 w-24 truncate text-right">
-                      {entry.user_name || '—'}
-                    </div>
-                    {/* Expand arrow */}
-                    <svg className={`w-4 h-4 text-gray-300 shrink-0 transition-transform ${expandedId === entry.id ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </button>
-                  {expandedId === entry.id && entry.body && (
-                    <div className="px-5 pb-4">
-                      <pre className="text-xs font-mono text-gray-600 bg-gray-50 border border-gray-100 rounded-lg p-4 whitespace-pre-wrap leading-relaxed max-h-80 overflow-y-auto">
-                        {entry.body}
-                      </pre>
-                    </div>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+        <OrderHistorial isAdmin={isAdmin} userName={userName} />
       )}
 
       {/* ── FAB: Nueva Orden — mobile only ── */}
