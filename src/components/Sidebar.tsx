@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import Image from 'next/image'
+import { useState, useEffect } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { clsx } from 'clsx'
 import type { SessionUser, Permission } from '@/lib/auth'
@@ -115,6 +116,8 @@ export default function Sidebar({ user, isOpen = false, onToggle }: Props) {
   const pathname = usePathname()
   const router = useRouter()
   const { advisorMode, setAdvisorMode, initialized } = useAdvisorModeCtx()
+  const [searchStr, setSearchStr] = useState('')
+  useEffect(() => { setSearchStr(window.location.search) }, [pathname])
 
   async function handleLogout() {
     await fetch('/api/auth/logout', { method: 'POST' })
@@ -141,8 +144,8 @@ export default function Sidebar({ user, isOpen = false, onToggle }: Props) {
   ]
 
   function advisorIsActive(href: string): boolean {
-    if (href === '/ordenes') return pathname === '/ordenes'
-    if (href.includes('historial')) return pathname.startsWith('/ordenes')
+    if (href === '/ordenes') return pathname === '/ordenes' && !searchStr.includes('tab=historial')
+    if (href.includes('historial')) return pathname === '/ordenes' && searchStr.includes('tab=historial')
     if (href === '/mail') return pathname.startsWith('/mail')
     if (href === '/settings') return pathname.startsWith('/settings')
     return false

@@ -44,9 +44,10 @@ function getTitle(pathname: string, search: string): string {
 interface Props {
   user: SessionUser
   onMenuToggle: () => void
+  showHamburger?: boolean
 }
 
-export default function MobileHeader({ user, onMenuToggle }: Props) {
+export default function MobileHeader({ user, onMenuToggle, showHamburger = true }: Props) {
   const pathname = usePathname()
   const [search, setSearch] = useState('')
   const { advisorMode, setAdvisorMode, initialized } = useAdvisorModeCtx()
@@ -55,23 +56,35 @@ export default function MobileHeader({ user, onMenuToggle }: Props) {
 
   const title = getTitle(pathname, search)
 
+  // In Advisor Mode: show on all screen sizes. Standard: mobile only.
+  const visibilityCls = initialized && advisorMode ? 'flex' : 'flex md:hidden'
+
   return (
     <header
-      className="md:hidden fixed top-0 left-0 right-0 z-10 flex items-center h-14 px-3 gap-2 border-b border-white/10"
+      className={`${visibilityCls} fixed top-0 left-0 right-0 z-10 items-center h-14 px-3 gap-2 border-b border-white/10`}
       style={{ backgroundColor: '#2D3F52' }}
     >
-      {/* Hamburger */}
-      <button
-        onClick={onMenuToggle}
-        className="w-9 h-9 flex items-center justify-center rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-colors shrink-0"
-        aria-label="Abrir menú"
-      >
-        <svg className="w-[22px] h-[22px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
-        </svg>
-      </button>
+      {/* Hamburger — only when sidebar exists */}
+      {showHamburger ? (
+        <button
+          onClick={onMenuToggle}
+          className="w-9 h-9 flex items-center justify-center rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-colors shrink-0"
+          aria-label="Abrir menú"
+        >
+          <svg className="w-[22px] h-[22px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+          </svg>
+        </button>
+      ) : (
+        /* Roble logo mark as spacer in Advisor Mode */
+        <div className="w-9 h-9 flex items-center justify-center shrink-0">
+          <div className="w-6 h-6 rounded-full bg-[#16A34A]/20 flex items-center justify-center">
+            <span className="text-[10px] font-black text-[#16A34A] leading-none">R</span>
+          </div>
+        </div>
+      )}
 
-      {/* Page title — centered */}
+      {/* Page title */}
       <h1 className="flex-1 text-center text-[14px] font-semibold text-white truncate">
         {title}
       </h1>
@@ -88,11 +101,9 @@ export default function MobileHeader({ user, onMenuToggle }: Props) {
         title={advisorMode ? 'Modo Asesor activo — tocar para desactivar' : 'Activar Modo Asesor'}
       >
         {/* Briefcase icon */}
-        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <svg className="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 14.15v4.25c0 1.094-.787 2.036-1.872 2.18-2.087.277-4.216.42-6.378.42s-4.291-.143-6.378-.42c-1.085-.144-1.872-1.086-1.872-2.18v-4.25m16.5 0a2.18 2.18 0 00.75-1.661V8.706c0-1.081-.768-2.015-1.837-2.175a48.114 48.114 0 00-3.413-.387m4.5 8.006c-.194.165-.42.295-.673.38A23.978 23.978 0 0112 15.75c-2.648 0-5.195-.429-7.577-1.22a2.016 2.016 0 01-.673-.38m0 0A2.18 2.18 0 013 12.489V8.706c0-1.081.768-2.015 1.837-2.175a48.111 48.111 0 013.413-.387m7.5 0V5.25A2.25 2.25 0 0013.5 3h-3a2.25 2.25 0 00-2.25 2.25v.894m7.5 0a48.667 48.667 0 00-7.5 0" />
         </svg>
-
-        <span className="hidden xs:inline">Asesor</span>
 
         {/* Mini switch */}
         <div

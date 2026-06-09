@@ -141,15 +141,15 @@ function BlockShell({ title, index, id, color, onRemove, children }: {
 function AccionesForm({ block, index, onChange, onRemove }: { block: AccionesBlock; index: number; onChange: (id: string, f: string, v: string) => void; onRemove: (id: string) => void }) {
   const upd = (f: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => onChange(block.id, f, e.target.value)
   return (
-    <BlockShell title="Renta Variable — Acciones" index={index} id={block.id} color="blue" onRemove={onRemove}>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+    <BlockShell title="Acciones" index={index} id={block.id} color="blue" onRemove={onRemove}>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <Field label="Operación"><select className={selectCls} value={block.operacion} onChange={upd('operacion')}><option value="compra">Compra</option><option value="venta">Venta</option></select></Field>
         <Field label="Nombre de acción"><input className={inputCls} placeholder="Ej: Apple Inc." value={block.nombre} onChange={upd('nombre')} /></Field>
         <Field label="Ticker"><input className={inputCls} placeholder="Ej: AAPL" value={block.ticker} onChange={upd('ticker')} /></Field>
         <Field label="Cantidad">
-          <div className="flex gap-1.5">
-            <input className={inputCls} type="number" placeholder="Ej: 100" value={block.cantidad} onChange={upd('cantidad')} />
-            <select className="text-sm px-2 py-2 rounded-lg border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-100 shrink-0" value={block.cantidadTipo} onChange={upd('cantidadTipo')}>
+          <div className="flex gap-2">
+            <input className={`${inputCls} flex-1 min-w-0`} type="number" placeholder="Ej: 100" value={block.cantidad} onChange={upd('cantidad')} />
+            <select className="text-sm px-2.5 py-2 rounded-lg border border-gray-200 bg-white focus:outline-none shrink-0 w-20" value={block.cantidadTipo} onChange={upd('cantidadTipo')}>
               <option value="acciones">acc.</option><option value="monto">$</option>
             </select>
           </div>
@@ -158,9 +158,9 @@ function AccionesForm({ block, index, onChange, onRemove }: { block: AccionesBlo
         {block.precio === 'limite' && <Field label="Precio límite"><input className={inputCls} placeholder="Ej: 185.50" value={block.precioLimite} onChange={upd('precioLimite')} /></Field>}
         <Field label="Moneda"><select className={selectCls} value={block.moneda} onChange={upd('moneda')}><option value="USD">USD</option><option value="UYU">UYU</option><option value="EUR">EUR</option><option value="ARS">ARS</option></select></Field>
         <Field label="Fecha">
-          <div className="flex gap-1.5">
-            <input className={inputCls} placeholder={todayStr()} value={block.fecha} onChange={upd('fecha')} />
-            <button type="button" onClick={() => onChange(block.id, 'fecha', todayStr())} className="px-2 py-1.5 text-xs text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 shrink-0 transition">Hoy</button>
+          <div className="flex gap-2">
+            <input className={`${inputCls} flex-1 min-w-0`} placeholder={todayStr()} value={block.fecha} onChange={upd('fecha')} />
+            <button type="button" onClick={() => onChange(block.id, 'fecha', todayStr())} className="px-3 py-2 text-xs text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 shrink-0 transition whitespace-nowrap">Hoy</button>
           </div>
         </Field>
       </div>
@@ -172,17 +172,17 @@ function AccionesForm({ block, index, onChange, onRemove }: { block: AccionesBlo
 function FondosForm({ block, index, onChange, onRemove }: { block: FondosBlock; index: number; onChange: (id: string, f: string, v: string) => void; onRemove: (id: string) => void }) {
   const upd = (f: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => onChange(block.id, f, e.target.value)
   return (
-    <BlockShell title="Fondo de Inversión" index={index} id={block.id} color="emerald" onRemove={onRemove}>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+    <BlockShell title="Fondo" index={index} id={block.id} color="emerald" onRemove={onRemove}>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <Field label="Operación"><select className={selectCls} value={block.operacion} onChange={upd('operacion')}><option value="compra">Compra</option><option value="venta">Venta</option></select></Field>
         <Field label="Nombre del fondo"><input className={inputCls} placeholder="Ej: Vanguard S&P 500" value={block.fondo} onChange={upd('fondo')} /></Field>
         <Field label="CUSIP / ISIN"><input className={inputCls} placeholder="Ej: US9229081090" value={block.cusipIsin} onChange={upd('cusipIsin')} /></Field>
         <Field label="Monto"><input className={inputCls} type="number" placeholder="Ej: 50000" value={block.monto} onChange={upd('monto')} /></Field>
         <Field label="Moneda"><select className={selectCls} value={block.moneda} onChange={upd('moneda')}><option value="USD">USD</option><option value="UYU">UYU</option><option value="EUR">EUR</option><option value="ARS">ARS</option></select></Field>
         <Field label="Fecha">
-          <div className="flex gap-1.5">
-            <input className={inputCls} placeholder={todayStr()} value={block.fecha} onChange={upd('fecha')} />
-            <button type="button" onClick={() => onChange(block.id, 'fecha', todayStr())} className="px-2 py-1.5 text-xs text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 shrink-0 transition">Hoy</button>
+          <div className="flex gap-2">
+            <input className={`${inputCls} flex-1 min-w-0`} placeholder={todayStr()} value={block.fecha} onChange={upd('fecha')} />
+            <button type="button" onClick={() => onChange(block.id, 'fecha', todayStr())} className="px-3 py-2 text-xs text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 shrink-0 transition whitespace-nowrap">Hoy</button>
           </div>
         </Field>
       </div>
@@ -194,19 +194,19 @@ function FondosForm({ block, index, onChange, onRemove }: { block: FondosBlock; 
 function BonosForm({ block, index, onChange, onRemove }: { block: BonosBlock; index: number; onChange: (id: string, f: string, v: string) => void; onRemove: (id: string) => void }) {
   const upd = (f: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => onChange(block.id, f, e.target.value)
   return (
-    <BlockShell title="Renta Fija — Bono" index={index} id={block.id} color="amber" onRemove={onRemove}>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+    <BlockShell title="Bono" index={index} id={block.id} color="amber" onRemove={onRemove}>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <Field label="Operación"><select className={selectCls} value={block.operacion} onChange={upd('operacion')}><option value="compra">Compra</option><option value="venta">Venta</option></select></Field>
-        <div className="col-span-2"><Field label="Identificación del bono"><input className={inputCls} placeholder="Ej: Uruguay 2031 4.375% — Vto. 15/10/2031" value={block.descripcion} onChange={upd('descripcion')} /></Field></div>
+        <Field label="Identificación del bono"><input className={inputCls} placeholder="Ej: Uruguay 2031 4.375%" value={block.descripcion} onChange={upd('descripcion')} /></Field>
         <Field label="CUSIP / ISIN"><input className={inputCls} placeholder="Ej: US917288BS29" value={block.cusipIsin} onChange={upd('cusipIsin')} /></Field>
         <Field label="Cantidad (Valor Nominal)"><input className={inputCls} type="number" placeholder="Ej: 100000" value={block.cantidad} onChange={upd('cantidad')} /></Field>
         <Field label="Tipo de precio"><select className={selectCls} value={block.precio} onChange={upd('precio')}><option value="mercado">A mercado</option><option value="limite">Precio límite</option></select></Field>
         {block.precio === 'limite' && <Field label="Precio límite (% par)"><input className={inputCls} placeholder="Ej: 98.50" value={block.precioLimite} onChange={upd('precioLimite')} /></Field>}
         <Field label="Moneda"><select className={selectCls} value={block.moneda} onChange={upd('moneda')}><option value="USD">USD</option><option value="UYU">UYU</option><option value="EUR">EUR</option></select></Field>
         <Field label="Fecha">
-          <div className="flex gap-1.5">
-            <input className={inputCls} placeholder={todayStr()} value={block.fecha} onChange={upd('fecha')} />
-            <button type="button" onClick={() => onChange(block.id, 'fecha', todayStr())} className="px-2 py-1.5 text-xs text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 shrink-0 transition">Hoy</button>
+          <div className="flex gap-2">
+            <input className={`${inputCls} flex-1 min-w-0`} placeholder={todayStr()} value={block.fecha} onChange={upd('fecha')} />
+            <button type="button" onClick={() => onChange(block.id, 'fecha', todayStr())} className="px-3 py-2 text-xs text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 shrink-0 transition whitespace-nowrap">Hoy</button>
           </div>
         </Field>
       </div>
@@ -374,11 +374,11 @@ export default function OrdenesClient({ gmailConnected, initialTab = 'nueva', is
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
               <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-3">Información general</h3>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                {/* Legajos search — autocompletes nombre + número */}
+                {/* Legajos search */}
                 <div className="md:col-span-1">
                   <label className={labelCls}>
-                    Cliente
-                    <span className="ml-1 text-[9px] font-normal text-gray-400 normal-case tracking-normal">Busca en Legajos</span>
+                    Buscar cliente
+                    <span className="ml-1 text-[9px] font-normal text-gray-400 normal-case tracking-normal">Legajos</span>
                   </label>
                   <LegajosSearchInput
                     value={clientId}
@@ -397,16 +397,16 @@ export default function OrdenesClient({ gmailConnected, initialTab = 'nueva', is
                     onChange={e => { setClientName(e.target.value); setPreview(null) }} />
                 </div>
                 <div>
-                  <label className={labelCls}>N° de cliente (Legajos)</label>
+                  <label className={labelCls}>N° de cliente</label>
                   <input className={inputCls} placeholder="Autocompletado desde Legajos" value={clientNumber}
                     onChange={e => { setClientNumber(e.target.value); setPreview(null) }} />
                 </div>
-                <div className="col-span-3">
+                <div>
                   <label className={labelCls}>Fecha de instrucción</label>
-                  <div className="flex gap-1.5 max-w-xs">
-                    <input className={inputCls} value={fecha} onChange={e => { setFecha(e.target.value); setPreview(null) }} />
+                  <div className="flex gap-2">
+                    <input className={`${inputCls} flex-1 min-w-0`} value={fecha} onChange={e => { setFecha(e.target.value); setPreview(null) }} />
                     <button type="button" onClick={() => { setFecha(todayStr()); setPreview(null) }}
-                      className="px-2 py-2 text-xs text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 shrink-0 transition">Hoy</button>
+                      className="px-3 py-2 text-xs text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 shrink-0 transition whitespace-nowrap">Hoy</button>
                   </div>
                 </div>
               </div>
@@ -446,20 +446,20 @@ export default function OrdenesClient({ gmailConnected, initialTab = 'nueva', is
             </div>
 
             {/* Action bar */}
-            <div className="flex items-center gap-2.5">
+            <div className="flex flex-wrap items-center gap-2">
               <button type="button" onClick={handleGenerate} disabled={!hasBlocks}
-                className="px-5 py-2.5 rounded-lg text-sm font-bold text-white disabled:opacity-40 disabled:cursor-not-allowed transition-opacity bg-[#2D3F52]">
+                className="px-5 py-2.5 rounded-lg text-sm font-bold text-white disabled:opacity-40 disabled:cursor-not-allowed transition-opacity bg-[#2D3F52] whitespace-nowrap">
                 Generar preview
               </button>
               <button type="button" onClick={handleCopy} disabled={!hasBlocks}
-                className="px-4 py-2.5 rounded-lg text-sm font-semibold border border-gray-200 text-gray-700 hover:bg-gray-50 transition disabled:opacity-40 flex items-center gap-1.5">
+                className="px-4 py-2.5 rounded-lg text-sm font-semibold border border-gray-200 text-gray-700 hover:bg-gray-50 transition disabled:opacity-40 flex items-center gap-1.5 whitespace-nowrap">
                 {copied
                   ? <><svg className="w-4 h-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>Copiado</>
                   : <><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>Copiar</>
                 }
               </button>
               <button type="button" onClick={handleClear}
-                className="px-4 py-2.5 rounded-lg text-sm font-semibold border border-gray-200 text-gray-500 hover:bg-gray-50 transition">
+                className="px-4 py-2.5 rounded-lg text-sm font-semibold border border-gray-200 text-gray-500 hover:bg-gray-50 transition whitespace-nowrap">
                 Limpiar
               </button>
             </div>

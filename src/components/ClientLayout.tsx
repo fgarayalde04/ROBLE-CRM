@@ -7,6 +7,7 @@ import MobileHeader from './MobileHeader'
 import BottomNav from './BottomNav'
 import type { SessionUser } from '@/lib/auth'
 import { AdvisorModeContext } from '@/contexts/AdvisorModeContext'
+import { ChatProvider } from '@/contexts/ChatContext'
 import { useAdvisorMode } from '@/hooks/useAdvisorMode'
 
 interface Props {
@@ -20,12 +21,15 @@ export default function ClientLayout({ user, children }: Props) {
   const router = useRouter()
   const { advisorMode, setAdvisorMode, initialized } = useAdvisorMode()
 
-  // Auto-close sidebar on navigation (mobile)
+  // Sidebar is hidden in Advisor Mode
+  const showSidebar = !initialized || !advisorMode
+
+  // Auto-close sidebar on navigation
   useEffect(() => {
     setSidebarOpen(false)
   }, [pathname])
 
-  // Redirect / → /ordenes when Modo Asesor is active (client-side fallback)
+  // Redirect / → /ordenes when Advisor Mode is active (client-side fallback)
   useEffect(() => {
     if (initialized && advisorMode && pathname === '/') {
       router.replace('/ordenes')
@@ -36,29 +40,42 @@ export default function ClientLayout({ user, children }: Props) {
     setSidebarOpen((v) => !v)
   }
 
+  // Content area classes:
+  // - Advisor mode: always pt-14 (MobileHeader) + pb-16 (BottomNav), no left offset
+  // - Standard mode: mobile = pt-14 pb-16, desktop = md:pl-64 no top/bottom
+  const contentCls = initialized && advisorMode
+    ? 'min-h-screen flex flex-col pt-14 pb-16'
+    : 'md:pl-64 min-h-screen flex flex-col pt-14 md:pt-0 pb-16 md:pb-0'
+
   return (
-    <AdvisorModeContext.Provider value={{ advisorMode, setAdvisorMode, initialized }}>
-      {/* Mobile overlay — behind sidebar, above content */}
-      {sidebarOpen && (
-        <div
-          className="fixed inset-0 bg-black/50 z-20 md:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
+    <ChatProvider>
+      <AdvisorModeContext.Provider value={{ advisorMode, setAdvisorMode, initialized }}>
 
-      {/* Sidebar */}
-      <Sidebar user={user} isOpen={sidebarOpen} onToggle={toggle} />
+        {/* Mobile overlay — only when sidebar is shown */}
+        {showSidebar && sidebarOpen && (
+          <div
+            className="fixed inset-0 bg-black/50 z-20 md:hidden"
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
 
-      {/* Mobile top header */}
-      <MobileHeader user={user} onMenuToggle={toggle} />
+        {/* Sidebar — hidden entirely in Advisor Mode */}
+        {showSidebar && (
+          <Sidebar user={user} isOpen={sidebarOpen} onToggle={toggle} />
+        )}
 
-      {/* Main content — pushed right on desktop, full width on mobile */}
-      <div className="md:pl-64 min-h-screen flex flex-col pt-14 md:pt-0 pb-16 md:pb-0">
-        <main className="flex-1">{children}</main>
-      </div>
+        {/* Top header — always visible */}
+        <MobileHeader user={user} onMenuToggle={toggle} showHamburger={showSidebar} />
 
-      {/* Bottom navigation bar — mobile only */}
-      <BottomNav user={user} onMenuToggle={toggle} />
-    </AdvisorModeContext.Provider>
+        {/* Main content */}
+        <div className={contentCls}>
+          <main className="flex-1">{children}</main>
+        </div>
+
+        {/* Bottom nav — always visible in Advisor Mode, mobile-only otherwise */}
+        <BottomNav user={user} onMenuToggle={toggle} />
+
+      </AdvisorModeContext.Provider>
+    </ChatProvider>
   )
 }

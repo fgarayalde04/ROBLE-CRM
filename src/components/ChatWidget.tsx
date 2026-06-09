@@ -4,6 +4,8 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import type { SessionUser } from '@/lib/auth'
+import { useChatContext } from '@/contexts/ChatContext'
+import { useAdvisorModeCtx } from '@/contexts/AdvisorModeContext'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -74,7 +76,19 @@ function timeLabel(iso: string): string {
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export default function ChatWidget({ user }: { user: SessionUser }) {
+  const { chatOpen, setChatOpen } = useChatContext()
+  const { advisorMode, initialized } = useAdvisorModeCtx()
   const [open, setOpen] = useState(false)
+
+  // Sync external open trigger from BottomNav
+  useEffect(() => {
+    if (chatOpen && !open) setOpen(true)
+  }, [chatOpen])
+
+  // Notify context when widget closes internally
+  useEffect(() => {
+    if (!open && chatOpen) setChatOpen(false)
+  }, [open])
   const [activeConvId, setActiveConvId] = useState<string | null>(null)
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [messages, setMessages] = useState<Message[]>([])
@@ -251,25 +265,33 @@ export default function ChatWidget({ user }: { user: SessionUser }) {
   // ─────────────────────────────────────────────────────────────────────────
   return (
     <>
-      {/* ── Floating button ── */}
-      <button
-        onClick={() => { setOpen((o) => !o); if (!open) setActiveConvId(null) }}
-        className="fixed bottom-6 right-6 z-50 w-12 h-12 rounded-full bg-[#2D3F52] shadow-lg flex items-center justify-center hover:bg-[#354A5E] transition-colors"
-        title="Mensajes"
-      >
-        <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 01.865-.501 48.172 48.172 0 003.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z" />
-        </svg>
-        {totalUnread > 0 && (
-          <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1">
-            {totalUnread > 99 ? '99+' : totalUnread}
-          </span>
-        )}
-      </button>
+      {/* ── Floating button — hidden in Advisor Mode (accessed via BottomNav instead) ── */}
+      {(!initialized || !advisorMode) && (
+        <button
+          onClick={() => { setOpen((o) => !o); if (!open) setActiveConvId(null) }}
+          className="fixed bottom-6 right-6 z-50 w-12 h-12 rounded-full bg-[#2D3F52] shadow-lg flex items-center justify-center hover:bg-[#354A5E] transition-colors"
+          title="Mensajes"
+        >
+          <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 01.865-.501 48.172 48.172 0 003.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z" />
+          </svg>
+          {totalUnread > 0 && (
+            <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1">
+              {totalUnread > 99 ? '99+' : totalUnread}
+            </span>
+          )}
+        </button>
+      )}
 
       {/* ── Chat panel ── */}
       {open && (
-        <div className="fixed bottom-20 right-6 z-50 w-[720px] h-[520px] bg-white rounded-2xl shadow-2xl border border-gray-200 flex overflow-hidden">
+        <div
+          className="fixed right-4 z-50 w-[calc(100vw-32px)] md:w-[720px] bg-white rounded-2xl shadow-2xl border border-gray-200 flex overflow-hidden"
+          style={{
+            bottom: initialized && advisorMode ? '72px' : '80px',
+            height: 'min(520px, calc(100vh - 130px))',
+          }}
+        >
 
           {/* ── LEFT: Conversation list ── */}
           <div className="w-56 border-r border-gray-100 flex flex-col shrink-0">
