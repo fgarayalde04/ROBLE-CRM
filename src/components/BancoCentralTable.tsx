@@ -7,17 +7,22 @@ import OneDriveFolderButton from '@/components/OneDriveFolderButton'
 // Persists checkbox state keyed by folder_path so that even if DB records
 // are deleted and re-synced (new IDs), we can restore the previous state.
 
-const BACKUP_KEY = 'banco_central_checkboxes_v2'
+const BACKUP_KEY = 'banco_central_checkboxes_v3'
 
 type CheckboxSnapshot = {
-  ficha: boolean
-  lista_verificacion: boolean
-  cuestionario: boolean
-  ci: boolean
-  cumplo: boolean
+  ficha:             boolean
+  perfil_inversor:   boolean
+  ci:                boolean
   documentos_legales: boolean
+  cuestionario:      boolean
+  perfil_de_riesgo:  boolean
 }
-type BackupMap = Record<string, CheckboxSnapshot> // folder_path → checkboxes
+type BackupMap = Record<string, CheckboxSnapshot> // item_id (or folder_path fallback) → checkboxes
+
+/** Stable key for backup: item_id first (SP records), then folder_path (local), then id */
+function backupKey(r: BancoCentralRecord): string {
+  return r.item_id ?? r.folder_path ?? r.id
+}
 
 function loadBackup(): BackupMap {
   if (typeof window === 'undefined') return {}
@@ -31,14 +36,13 @@ function saveBackup(records: BancoCentralRecord[]) {
   if (typeof window === 'undefined') return
   const map: BackupMap = {}
   for (const r of records) {
-    // Don't overwrite backup for closed accounts (they may have been re-opened elsewhere)
-    map[r.folder_path] = {
+    map[backupKey(r)] = {
       ficha:              r.ficha,
-      lista_verificacion: r.lista_verificacion,
-      cuestionario:       r.cuestionario,
+      perfil_inversor:    r.perfil_inversor,
       ci:                 r.ci,
-      cumplo:             r.cumplo,
       documentos_legales: r.documentos_legales,
+      cuestionario:       r.cuestionario,
+      perfil_de_riesgo:   r.perfil_de_riesgo,
     }
   }
   try { localStorage.setItem(BACKUP_KEY, JSON.stringify(map)) } catch {}
@@ -52,32 +56,38 @@ type FilterStatus = 'all' | 'incompleto' | 'completo' | 'cerrada'
 export interface BancoCentralRecord {
   id: string
   customer_number: string | null
+  nombre_cliente: string | null
   folder_name: string
-  folder_path: string
+  folder_path: string | null
   drive_id: string | null
   item_id: string | null
   web_url: string | null
   type: 'local' | 'internacional'
   fa: string | null
   ficha: boolean
-  lista_verificacion: boolean
-  cuestionario: boolean
+  perfil_inversor: boolean
   ci: boolean
-  cumplo: boolean
   documentos_legales: boolean
+  cuestionario: boolean
+  perfil_de_riesgo: boolean
+  // Legacy fields kept in DB but not shown in UI
+  lista_verificacion: boolean
+  cumplo: boolean
   comentario: string | null
   status: string
   linked_client_id: string | null
+  source: string | null
+  last_synced_at: string | null
   updated_at: string | null
 }
 
 const CHECKBOX_FIELDS = [
-  { key: 'ficha'              as const, label: 'Ficha' },
-  { key: 'lista_verificacion' as const, label: 'Lista verif.' },
-  { key: 'cuestionario'       as const, label: 'Cuestionario' },
-  { key: 'ci'                 as const, label: 'CI' },
-  { key: 'cumplo'             as const, label: 'Cumplo' },
+  { key: 'ficha'              as const, label: 'Ficha cliente' },
+  { key: 'perfil_inversor'    as const, label: 'Perfil inversor' },
+  { key: 'ci'                 as const, label: 'Cédula' },
   { key: 'documentos_legales' as const, label: 'Docs legales' },
+  { key: 'cuestionario'       as const, label: 'Cuest. asesor' },
+  { key: 'perfil_de_riesgo'   as const, label: 'Perfil riesgo' },
 ]
 
 type CheckboxKey = typeof CHECKBOX_FIELDS[number]['key']
@@ -220,7 +230,7 @@ export default function BancoCentralTable({ initialRecords }: { initialRecords: 
     if (Object.keys(backup).length === 0) return
 
     const FIELDS: (keyof CheckboxSnapshot)[] = [
-      'ficha', 'lista_verificacion', 'cuestionario', 'ci', 'cumplo', 'documentos_legales',
+      'ficha', 'perfil_inversor', 'ci', 'documentos_legales', 'cuestionario', 'perfil_de_riesgo',
     ]
 
     type RestoreItem = CheckboxSnapshot & { id: string }
@@ -228,7 +238,7 @@ export default function BancoCentralTable({ initialRecords }: { initialRecords: 
 
     for (const r of initialRecords) {
       if (r.status === 'cerrada') continue
-      const saved = backup[r.folder_path]
+      const saved = backup[backupKey(r)]
       if (!saved) continue
       const differs = FIELDS.some((f) => r[f] !== saved[f])
       if (differs) toRestore.push({ id: r.id, ...saved })

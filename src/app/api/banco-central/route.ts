@@ -3,11 +3,11 @@ import { supabaseAdmin } from '@/lib/supabase/admin'
 
 const CHECKBOX_FIELDS = [
   'ficha',
-  'lista_verificacion',
-  'cuestionario',
+  'perfil_inversor',
   'ci',
-  'cumplo',
   'documentos_legales',
+  'cuestionario',
+  'perfil_de_riesgo',
 ] as const
 
 type CheckboxField = (typeof CHECKBOX_FIELDS)[number]

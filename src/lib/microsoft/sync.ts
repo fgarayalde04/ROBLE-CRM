@@ -289,49 +289,55 @@ async function syncBancoCentral(
     for (const folder of onlyFolders) {
       try {
         const folderName = folder.name.trim()
-        // Parse customer number from "1234567 - NAME" format
-        const numMatch = folderName.match(/^(\d+)\s*[-–]\s*(.*)/)
-        const customerNumber = numMatch?.[1] ?? null
+        // Parse "1234 - Juan Pérez" → customerNumber="1234", nombreCliente="Juan Pérez"
+        const numMatch = folderName.match(/^(\d+)\s*[-–]\s*(.+)/)
+        const customerNumber  = numMatch?.[1]?.trim() ?? null
+        const nombreCliente   = numMatch?.[2]?.trim() ?? folderName
 
+        const now = new Date().toISOString()
         const spFields = {
-          drive_id: driveId,
-          item_id: folder.id,
-          web_url: folder.webUrl,
-          parent_path: folder.parentReference?.path ?? null,
-          last_synced_at: new Date().toISOString(),
+          drive_id:       driveId,
+          item_id:        folder.id,
+          web_url:        folder.webUrl ?? null,
+          parent_path:    folder.parentReference?.path ?? null,
+          source:         'sharepoint',
+          last_synced_at: now,
+          updated_at:     now,
         }
 
-        // Match by customer_number or item_id
+        // Dedup: try item_id first (most reliable), then customer_number + type
         let existing: { id: string } | null = null
-        if (customerNumber) {
-          const { data } = await supabaseAdmin
+        const { data: byItemId } = await supabaseAdmin
+          .from('banco_central_records')
+          .select('id')
+          .eq('item_id', folder.id)
+          .maybeSingle()
+        existing = byItemId
+
+        if (!existing && customerNumber) {
+          const { data: byCustomer } = await supabaseAdmin
             .from('banco_central_records')
             .select('id')
             .eq('customer_number', customerNumber)
             .eq('type', bcuType)
             .maybeSingle()
-          existing = data
-        }
-        if (!existing) {
-          const { data } = await supabaseAdmin
-            .from('banco_central_records')
-            .select('id')
-            .eq('item_id', folder.id)
-            .maybeSingle()
-          existing = data
+          existing = byCustomer
         }
 
         if (existing) {
+          // Update SharePoint metadata only — don't touch checkboxes or status
           await supabaseAdmin
             .from('banco_central_records')
-            .update(spFields)
+            .update({ ...spFields, nombre_cliente: nombreCliente })
             .eq('id', existing.id)
           result.updated++
         } else {
           await supabaseAdmin.from('banco_central_records').insert({
-            customer_number: customerNumber ?? folderName,
-            folder_name: folderName,
-            type: bcuType,
+            customer_number: customerNumber,
+            nombre_cliente:  nombreCliente,
+            folder_name:     folderName,
+            folder_path:     '',       // no local path for SharePoint records
+            type:            bcuType,
             ...spFields,
           })
           result.created++

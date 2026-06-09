@@ -11,9 +11,9 @@ import {
 
 export const maxDuration = 300 // 5 minutes — enough for full sync
 
-type SyncType = 'clientes' | 'bcu_local' | 'bcu_internacional' | 'recursos' | 'scoring' | 'all'
+type SyncType = 'clientes' | 'bcu_local' | 'bcu_internacional' | 'bcu' | 'recursos' | 'scoring' | 'all'
 
-const SYNC_FNS: Record<Exclude<SyncType, 'all'>, () => Promise<unknown>> = {
+const SYNC_FNS: Record<Exclude<SyncType, 'all' | 'bcu'>, () => Promise<unknown>> = {
   clientes: syncClients,
   bcu_local: syncBancoCentralLocal,
   bcu_internacional: syncBancoCentralInternacional,
@@ -45,8 +45,15 @@ export async function POST(req: NextRequest) {
   const { type } = body
   if (!type) return NextResponse.json({ error: 'Missing type field' }, { status: 400 })
 
-  const allTypes = (Object.keys(SYNC_FNS) as Exclude<SyncType, 'all'>[])
-  const targets: Exclude<SyncType, 'all'>[] = type === 'all' ? allTypes : [type as Exclude<SyncType, 'all'>]
+  const allTypes = (Object.keys(SYNC_FNS) as Exclude<SyncType, 'all' | 'bcu'>[])
+  let targets: Exclude<SyncType, 'all' | 'bcu'>[]
+  if (type === 'all') {
+    targets = allTypes
+  } else if (type === 'bcu') {
+    targets = ['bcu_local', 'bcu_internacional']
+  } else {
+    targets = [type as Exclude<SyncType, 'all' | 'bcu'>]
+  }
 
   if (!targets.every(t => t in SYNC_FNS)) {
     return NextResponse.json({ error: 'Invalid sync type' }, { status: 400 })
