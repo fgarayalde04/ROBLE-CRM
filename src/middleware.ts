@@ -4,6 +4,11 @@ import { jwtVerify } from 'jose'
 
 const PUBLIC_PATHS = ['/login', '/api/auth/login']
 
+// Mobile user-agent detection
+function isMobileUA(ua: string): boolean {
+  return /Mobi|Android|iPhone|iPad|iPod/i.test(ua)
+}
+
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
 
@@ -28,6 +33,17 @@ export async function middleware(req: NextRequest) {
   try {
     const secret = new TextEncoder().encode(process.env.JWT_SECRET ?? 'fallback-secret-change-me')
     await jwtVerify(token, secret)
+
+    // Modo Asesor Móvil: redirect / → /ordenes on mobile devices
+    if (pathname === '/') {
+      const ua = req.headers.get('user-agent') ?? ''
+      if (isMobileUA(ua)) {
+        const ordenes = req.nextUrl.clone()
+        ordenes.pathname = '/ordenes'
+        return NextResponse.redirect(ordenes)
+      }
+    }
+
     return NextResponse.next()
   } catch {
     const loginUrl = req.nextUrl.clone()

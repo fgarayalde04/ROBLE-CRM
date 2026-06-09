@@ -1,5 +1,6 @@
 'use client'
 
+import { useState, useEffect } from 'react'
 import { usePathname } from 'next/navigation'
 import type { SessionUser } from '@/lib/auth'
 
@@ -28,7 +29,9 @@ const PAGE_TITLES: [string, string][] = [
   ['/settings', 'Configuración'],
 ]
 
-function getTitle(pathname: string): string {
+function getTitle(pathname: string, search: string): string {
+  // Special case: /ordenes?tab=historial
+  if (pathname === '/ordenes' && search.includes('tab=historial')) return 'Historial de órdenes'
   // Exact match first
   for (const [key, val] of PAGE_TITLES) {
     if (pathname === key) return val
@@ -47,7 +50,11 @@ interface Props {
 
 export default function MobileHeader({ user, onMenuToggle }: Props) {
   const pathname = usePathname()
-  const title = getTitle(pathname)
+  // useSearchParams not needed — we can read window.location.search safely here
+  // but to avoid hydration mismatch, use a client-only trick:
+  const [search, setSearch] = useState('')
+  useEffect(() => { setSearch(window.location.search) }, [pathname])
+  const title = getTitle(pathname, search)
 
   return (
     <header

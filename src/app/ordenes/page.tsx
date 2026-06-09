@@ -8,12 +8,17 @@ import OrdenesClient from './OrdenesClient'
 export const metadata: Metadata = { title: 'Enviar órdenes | Roble Capital' }
 export const dynamic = 'force-dynamic'
 
-export default async function OrdenesPage() {
+interface Props {
+  searchParams: { tab?: string }
+}
+
+export default async function OrdenesPage({ searchParams }: Props) {
   noStore()
   const session = await getSession()
   if (!session) redirect('/login')
 
   const gmailConnected = await hasGoogleConnection()
+  const initialTab = searchParams.tab === 'historial' ? 'historial' : 'nueva'
 
-  return <OrdenesClient gmailConnected={gmailConnected} />
+  return <OrdenesClient gmailConnected={gmailConnected} initialTab={initialTab} />
 }

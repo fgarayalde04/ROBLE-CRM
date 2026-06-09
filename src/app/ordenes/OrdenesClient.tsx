@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect } from 'react'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import EmailAutocomplete from '@/components/EmailAutocomplete'
-import ClientSearchInput from '@/components/ClientSearchInput'
+import LegajosSearchInput from '@/components/LegajosSearchInput'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -239,10 +239,10 @@ const INSTRUMENT_STYLE: Record<string, string> = {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-interface Props { gmailConnected: boolean }
+interface Props { gmailConnected: boolean; initialTab?: Tab }
 
-export default function OrdenesClient({ gmailConnected }: Props) {
-  const [tab, setTab] = useState<Tab>('nueva')
+export default function OrdenesClient({ gmailConnected, initialTab = 'nueva' }: Props) {
+  const [tab, setTab] = useState<Tab>(initialTab)
   const [blocks, setBlocks]             = useState<OrderBlock[]>([])
   const [clientId, setClientId]         = useState('')
   const [clientName, setClientName]     = useState('')
@@ -393,26 +393,31 @@ export default function OrdenesClient({ gmailConnected }: Props) {
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
               <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-3">Información general</h3>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div className="col-span-1">
-                  <label className={labelCls}>Cliente</label>
-                  <ClientSearchInput
+                {/* Legajos search — autocompletes nombre + número */}
+                <div className="md:col-span-1">
+                  <label className={labelCls}>
+                    Cliente
+                    <span className="ml-1 text-[9px] font-normal text-gray-400 normal-case tracking-normal">Busca en Legajos</span>
+                  </label>
+                  <LegajosSearchInput
                     value={clientId}
-                    onChange={(id, name) => {
+                    onChange={(id, name, number, fa) => {
                       setClientId(id)
                       if (name) setClientName(name)
+                      if (number) setClientNumber(number)
                       setPreview(null)
                     }}
-                    placeholder="Buscar cliente…"
+                    placeholder="Nombre, N° o código…"
                   />
                 </div>
                 <div>
-                  <label className={labelCls}>Nombre (editable)</label>
-                  <input className={inputCls} placeholder="Ej: Juan García" value={clientName}
+                  <label className={labelCls}>Nombre del cliente</label>
+                  <input className={inputCls} placeholder="Autocompletado desde Legajos" value={clientName}
                     onChange={e => { setClientName(e.target.value); setPreview(null) }} />
                 </div>
                 <div>
-                  <label className={labelCls}>N° de cliente</label>
-                  <input className={inputCls} placeholder="Ej: 00123" value={clientNumber}
+                  <label className={labelCls}>N° de cliente (Legajos)</label>
+                  <input className={inputCls} placeholder="Autocompletado desde Legajos" value={clientNumber}
                     onChange={e => { setClientNumber(e.target.value); setPreview(null) }} />
                 </div>
                 <div className="col-span-3">
@@ -635,6 +640,20 @@ export default function OrdenesClient({ gmailConnected }: Props) {
             </ul>
           )}
         </div>
+      )}
+
+      {/* ── FAB: Nueva Orden — mobile only ── */}
+      {tab === 'historial' && (
+        <button
+          onClick={() => setTab('nueva')}
+          className="md:hidden fixed bottom-[72px] right-4 z-20 flex items-center gap-2 pl-4 pr-5 py-3.5 rounded-full shadow-xl font-semibold text-sm text-white transition-transform active:scale-95"
+          style={{ backgroundColor: '#16A34A' }}
+        >
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+          </svg>
+          Nueva orden
+        </button>
       )}
     </div>
   )
