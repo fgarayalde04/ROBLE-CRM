@@ -20,9 +20,9 @@ export default async function MailPage() {
     .limit(30)
 
   return (
-    <div className="p-6 bg-[#F4F6F8] min-h-screen">
+    <div className="p-4 md:p-6 bg-[#F4F6F8] min-h-screen">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="hidden md:flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-semibold text-[#2D3F52]">Mail</h1>
           <p className="mt-0.5 text-sm text-gray-400">

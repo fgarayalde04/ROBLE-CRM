@@ -34,10 +34,24 @@ export async function middleware(req: NextRequest) {
     const secret = new TextEncoder().encode(process.env.JWT_SECRET ?? 'fallback-secret-change-me')
     await jwtVerify(token, secret)
 
-    // Modo Asesor Móvil: redirect / → /ordenes on mobile devices
+    // Modo Asesor: redirect / → /ordenes based on preference + UA
     if (pathname === '/') {
       const ua = req.headers.get('user-agent') ?? ''
-      if (isMobileUA(ua)) {
+      const advisorCookie = req.cookies.get('advisor_mode')?.value
+
+      let shouldRedirect: boolean
+      if (advisorCookie === '0') {
+        // User explicitly turned Modo Asesor OFF — never redirect
+        shouldRedirect = false
+      } else if (advisorCookie === '1') {
+        // User explicitly turned Modo Asesor ON — redirect on all devices
+        shouldRedirect = true
+      } else {
+        // No explicit preference saved yet — default ON for mobile
+        shouldRedirect = isMobileUA(ua)
+      }
+
+      if (shouldRedirect) {
         const ordenes = req.nextUrl.clone()
         ordenes.pathname = '/ordenes'
         return NextResponse.redirect(ordenes)

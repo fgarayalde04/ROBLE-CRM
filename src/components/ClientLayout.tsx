@@ -1,11 +1,13 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import Sidebar from './Sidebar'
 import MobileHeader from './MobileHeader'
 import BottomNav from './BottomNav'
 import type { SessionUser } from '@/lib/auth'
+import { AdvisorModeContext } from '@/contexts/AdvisorModeContext'
+import { useAdvisorMode } from '@/hooks/useAdvisorMode'
 
 interface Props {
   user: SessionUser
@@ -15,18 +17,27 @@ interface Props {
 export default function ClientLayout({ user, children }: Props) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const pathname = usePathname()
+  const router = useRouter()
+  const { advisorMode, setAdvisorMode, initialized } = useAdvisorMode()
 
   // Auto-close sidebar on navigation (mobile)
   useEffect(() => {
     setSidebarOpen(false)
   }, [pathname])
 
+  // Redirect / → /ordenes when Modo Asesor is active (client-side fallback)
+  useEffect(() => {
+    if (initialized && advisorMode && pathname === '/') {
+      router.replace('/ordenes')
+    }
+  }, [initialized, advisorMode, pathname, router])
+
   function toggle() {
     setSidebarOpen((v) => !v)
   }
 
   return (
-    <>
+    <AdvisorModeContext.Provider value={{ advisorMode, setAdvisorMode, initialized }}>
       {/* Mobile overlay — behind sidebar, above content */}
       {sidebarOpen && (
         <div
@@ -48,6 +59,6 @@ export default function ClientLayout({ user, children }: Props) {
 
       {/* Bottom navigation bar — mobile only */}
       <BottomNav user={user} onMenuToggle={toggle} />
-    </>
+    </AdvisorModeContext.Provider>
   )
 }
