@@ -1,6 +1,5 @@
 'use client'
 import { useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import type { BcFicha, FichaPFData, FichaPJData, PerfilData, ListaData } from './types'
 import { calcScore, scoreToProfile, SCORES, LISTA_PF_ITEMS, LISTA_PJ_ITEMS } from './types'
 
@@ -21,9 +20,7 @@ const EMPRESA_LABEL: Record<string, string> = {
 
 export default function DocumentPreview({ ficha, activeDoc, fichaData, perfilData, listaData }: Props) {
   const printRef  = useRef<HTMLDivElement>(null)
-  const router    = useRouter()
   const [downloading, setDownloading] = useState(false)
-  const [sendingDS, setSendingDS]     = useState(false)
 
   const handlePrint = () => {
     const content = printRef.current?.innerHTML
@@ -89,38 +86,6 @@ export default function DocumentPreview({ ficha, activeDoc, fichaData, perfilDat
     }
   }
 
-  const handleEnviarDocuSign = async () => {
-    if (sendingDS) return
-    setSendingDS(true)
-    try {
-      // Construir documentos pre-seleccionados según el doc activo
-      const docsMap: Record<string, { nombre: string; tipo: string }> = {
-        ficha:  { nombre: 'Ficha de Cliente', tipo: 'ficha' },
-        perfil: { nombre: 'Cuestionario Perfil del Inversor', tipo: 'cuestionario' },
-      }
-      const docSel = docsMap[activeDoc]
-      const documentos = docSel ? [docSel] : []
-
-      const res = await fetch('/api/docusign', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          client_name:  (fichaData as any)?.personas?.[0] ? `${(fichaData as any).personas[0].nombre ?? ''} ${(fichaData as any).personas[0].primer_apellido ?? ''}`.trim() : (fichaData as any)?.razon_social ?? 'Cliente',
-          empresa:      ficha.empresa,
-          tipo_cliente: ficha.tipo_cliente,
-          documentos,
-          firmantes:    [],
-          enviar_ahora: false,
-        }),
-      })
-      if (!res.ok) { alert('Error creando borrador DocuSign'); return }
-      const env = await res.json()
-      router.push('/docusign')
-    } finally {
-      setSendingDS(false)
-    }
-  }
-
   const docLabel = activeDoc === 'ficha' ? 'Ficha de Cliente'
     : activeDoc === 'perfil' ? 'Cuestionario Perfil del Inversor'
     : 'Lista de Verificación'
@@ -147,22 +112,6 @@ export default function DocumentPreview({ ficha, activeDoc, fichaData, perfilDat
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
             )}
             Descargar Word
-          </button>
-        )}
-        {activeDoc !== 'lista' && (
-          <button
-            onClick={handleEnviarDocuSign}
-            disabled={sendingDS}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#16A34A] text-white rounded-lg text-xs font-medium hover:bg-green-700 transition-colors disabled:opacity-60"
-          >
-            {sendingDS ? (
-              <span className="w-3.5 h-3.5 border border-white border-t-transparent rounded-full animate-spin" />
-            ) : (
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
-              </svg>
-            )}
-            Enviar a firmar
           </button>
         )}
       </div>

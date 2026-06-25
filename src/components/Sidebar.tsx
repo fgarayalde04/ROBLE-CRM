@@ -33,7 +33,6 @@ const nav: NavSection[] = [
       { href: '/clients',       label: 'Clientes',      subtitle: 'Gestión de clientes',          icon: UsersIcon,   permission: 'clients' },
       { href: '/openings',      label: 'Aperturas',     subtitle: 'Nuevas cuentas',                icon: OpeningIcon, permission: 'openings' },
       { href: '/banco-central', label: 'Banco Central', subtitle: 'Legajos · Monitoreo · Scoring', icon: ShieldIcon,  permission: 'banco_central' },
-      { href: '/docusign',      label: 'DocuSign',      subtitle: 'Firma electrónica',             icon: DocuSignIcon, permission: 'docusign' },
     ],
   },
   {
@@ -83,11 +82,11 @@ const nav: NavSection[] = [
 ]
 
 const ROLE_PERMISSIONS: Record<string, Permission[]> = {
-  admin:      ['panel','tasks','clients','openings','banco_central','calendar','deadlines','pagos','impuestos','ceo_dashboard','kpis','liquidacion','recursos','claves','admin','sincronizacion','factsheet','proposals','orders','docusign'],
-  ceo:        ['panel','tasks','clients','openings','banco_central','calendar','deadlines','pagos','impuestos','ceo_dashboard','kpis','liquidacion','recursos','claves','factsheet','proposals','orders','docusign'],
-  direccion:  ['panel','tasks','clients','openings','banco_central','calendar','deadlines','ceo_dashboard','kpis','liquidacion','recursos','claves','factsheet','proposals','orders','docusign'],
-  asesor:     ['panel','tasks','clients','openings','calendar','deadlines','recursos','factsheet','proposals','orders','docusign'],
-  asistente:  ['panel','tasks','clients','openings','banco_central','calendar','deadlines','recursos','orders','docusign'],
+  admin:      ['panel','tasks','clients','openings','banco_central','calendar','deadlines','pagos','impuestos','ceo_dashboard','kpis','liquidacion','recursos','claves','admin','sincronizacion','factsheet','proposals','orders'],
+  ceo:        ['panel','tasks','clients','openings','banco_central','calendar','deadlines','pagos','impuestos','ceo_dashboard','kpis','liquidacion','recursos','claves','factsheet','proposals','orders'],
+  direccion:  ['panel','tasks','clients','openings','banco_central','calendar','deadlines','ceo_dashboard','kpis','liquidacion','recursos','claves','factsheet','proposals','orders'],
+  asesor:     ['panel','tasks','clients','openings','calendar','deadlines','recursos','factsheet','proposals','orders'],
+  asistente:  ['panel','tasks','clients','openings','banco_central','calendar','deadlines','recursos','orders'],
   compliance: ['panel','banco_central','calendar','deadlines','recursos'],
 }
 
