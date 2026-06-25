@@ -16,7 +16,15 @@ export async function POST(req: Request) {
       .eq('email', email.toLowerCase().trim())
       .single()
 
-    if (error || !user) {
+    if (error) {
+      // PGRST116 = no rows found (wrong email), anything else is a server error
+      if (error.code === 'PGRST116') {
+        return NextResponse.json({ error: 'Usuario o contraseña incorrectos' }, { status: 401 })
+      }
+      console.error('[login] DB error:', error.message)
+      return NextResponse.json({ error: 'Error del servidor. Intentá de nuevo en unos minutos.' }, { status: 500 })
+    }
+    if (!user) {
       return NextResponse.json({ error: 'Usuario o contraseña incorrectos' }, { status: 401 })
     }
     if (!user.active) {
@@ -32,11 +40,20 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Usuario o contraseña incorrectos' }, { status: 401 })
     }
 
+    // Load modo_asesor separately — column may not exist pre-migration
+    let modoAsesor = false
+    try {
+      const { data: ma } = await supabaseAdmin
+        .from('crm_users').select('modo_asesor').eq('id', user.id).maybeSingle()
+      modoAsesor = ma?.modo_asesor ?? false
+    } catch { /* pre-migration: default false */ }
+
     const token = await createSession({
       id: user.id,
       name: user.name,
       email: user.email,
       role: user.role,
+      modo_asesor: modoAsesor,
     })
 
     const res = NextResponse.json({

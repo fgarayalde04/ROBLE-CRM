@@ -58,7 +58,7 @@ export async function POST(req: Request) {
 export async function PUT(req: Request) {
   try {
     await requireAdmin()
-    const { id, password, name, email, role, active, permissions, onedrive_drive_id, onedrive_folder_id, onedrive_folder_path } = await req.json()
+    const { id, password, name, email, role, active, permissions, modo_asesor, onedrive_drive_id, onedrive_folder_id, onedrive_folder_path } = await req.json()
     if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
 
     const update: Record<string, unknown> = { updated_at: new Date().toISOString() }
@@ -67,6 +67,7 @@ export async function PUT(req: Request) {
     if (role !== undefined)        update.role = role
     if (active !== undefined)      update.active = active
     if (permissions !== undefined) update.permissions = permissions
+    if (modo_asesor !== undefined) update.modo_asesor = modo_asesor
     if (password)                  update.password_hash = await bcrypt.hash(password, 12)
     if (onedrive_drive_id   !== undefined) update.onedrive_drive_id   = onedrive_drive_id   || null
     if (onedrive_folder_id  !== undefined) update.onedrive_folder_id  = onedrive_folder_id  || null
@@ -76,7 +77,7 @@ export async function PUT(req: Request) {
       .from('crm_users')
       .update(update)
       .eq('id', id)
-      .select('id, name, email, role, active, permissions, onedrive_drive_id, onedrive_folder_id, onedrive_folder_path')
+      .select('id, name, email, role, active, permissions, modo_asesor, onedrive_drive_id, onedrive_folder_id, onedrive_folder_path')
       .single()
     if (error) throw error
     return NextResponse.json(data)

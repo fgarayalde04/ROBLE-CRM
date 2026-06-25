@@ -4,7 +4,16 @@ import { jwtVerify } from 'jose'
 
 const PUBLIC_PATHS = ['/login', '/api/auth/login']
 
-// Mobile user-agent detection
+// Paths accessible to users with modo_asesor enabled (server-controlled)
+const ASESOR_ALLOWED = [
+  '/ordenes',
+  '/mail',
+  '/inbox',
+  '/settings',
+  '/change-password',
+  '/api/',
+]
+
 function isMobileUA(ua: string): boolean {
   return /Mobi|Android|iPhone|iPad|iPod/i.test(ua)
 }
@@ -32,29 +41,39 @@ export async function middleware(req: NextRequest) {
 
   try {
     const secret = new TextEncoder().encode(process.env.JWT_SECRET ?? 'fallback-secret-change-me')
-    await jwtVerify(token, secret)
+    const { payload } = await jwtVerify(token, secret)
 
-    // Modo Asesor: redirect / → /ordenes based on preference + UA
+    // ── Modo Asesor (admin-controlled, stored in JWT) ─────────────────────────
+    // Restricts access to a narrow set of pages regardless of device
+    // Admins are never restricted — safety net in case admin's own account is toggled
+    if ((payload as any).modo_asesor === true && (payload as any).role !== 'admin') {
+      const allowed = ASESOR_ALLOWED.some((p) => pathname.startsWith(p))
+      if (!allowed) {
+        const dest = req.nextUrl.clone()
+        dest.pathname = '/ordenes'
+        return NextResponse.redirect(dest)
+      }
+      return NextResponse.next()
+    }
+
+    // ── Standard users: client-side advisor mode (redirect / → /ordenes) ─────
     if (pathname === '/') {
       const ua = req.headers.get('user-agent') ?? ''
       const advisorCookie = req.cookies.get('advisor_mode')?.value
 
       let shouldRedirect: boolean
       if (advisorCookie === '0') {
-        // User explicitly turned Modo Asesor OFF — never redirect
         shouldRedirect = false
       } else if (advisorCookie === '1') {
-        // User explicitly turned Modo Asesor ON — redirect on all devices
         shouldRedirect = true
       } else {
-        // No explicit preference saved yet — default ON for mobile
         shouldRedirect = isMobileUA(ua)
       }
 
       if (shouldRedirect) {
-        const ordenes = req.nextUrl.clone()
-        ordenes.pathname = '/ordenes'
-        return NextResponse.redirect(ordenes)
+        const dest = req.nextUrl.clone()
+        dest.pathname = '/ordenes'
+        return NextResponse.redirect(dest)
       }
     }
 

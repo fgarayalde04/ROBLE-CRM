@@ -10,7 +10,7 @@ export async function POST(req: NextRequest) {
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
 
-  const { to, cc, subject, body } = await req.json()
+  const { to, cc, subject, body, replyTo } = await req.json()
   if (!to || !subject || !body) {
     return NextResponse.json({ error: 'to, subject y body son requeridos' }, { status: 400 })
   }
@@ -24,8 +24,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'No se pudo obtener el email del remitente.' }, { status: 403 })
   }
 
+  // Display name: "Mesa de Operaciones | Roble Capital <sender@email.com>"
+  const tradingName  = process.env.TRADING_NAME  ?? 'Mesa de Operaciones | Roble Capital'
+  const tradingEmail = process.env.TRADING_EMAIL ?? 'trading@roblecapital.net'
+  const fromHeader   = `"${tradingName}" <${senderEmail}>`
+  const effectiveReplyTo = replyTo ?? tradingEmail
+
   try {
-    const message = await sendEmail(accessToken, { from: senderEmail, to, cc, subject, body })
+    const message = await sendEmail(accessToken, {
+      from: fromHeader, to, cc, subject, body, replyTo: effectiveReplyTo,
+    })
 
     const toStr = Array.isArray(to) ? to.join(', ') : to
     await supabaseAdmin.from('activity_log').insert({

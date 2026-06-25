@@ -89,16 +89,17 @@ export default async function BancoCentralPage({
       {section === 'legajos' && <div className="md:hidden flex justify-end mb-3"><SyncBancoCentralButton /></div>}
 
       {/* ── Top-level tabs ── */}
-      <div className="flex gap-1 border-b border-gray-200 mb-6">
+      <div className="flex gap-1 border-b border-gray-200 mb-6 overflow-x-auto">
         {[
-          { key: 'legajos',   label: 'Legajos clientes',     icon: '📁' },
-          { key: 'monitoreo', label: 'Monitoreo trimestral', icon: '📊' },
-          { key: 'scoring',   label: 'Scoring de cartera',   icon: '📈' },
-        ].map(({ key, label, icon }) => (
+          { key: 'legajos',   label: 'Legajos clientes',     icon: '📁', href: '/banco-central?section=legajos' },
+          { key: 'monitoreo', label: 'Monitoreo trimestral', icon: '📊', href: '/banco-central?section=monitoreo' },
+          { key: 'scoring',   label: 'Scoring de cartera',   icon: '📈', href: '/banco-central?section=scoring' },
+          { key: 'ficha',     label: 'Ficha BCU',            icon: '📝', href: '/banco-central/ficha' },
+        ].map(({ key, label, icon, href }) => (
           <Link
             key={key}
-            href={`/banco-central?section=${key}`}
-            className={`flex items-center gap-2 px-6 py-3 text-sm font-medium transition-colors border-b-2 -mb-px ${
+            href={href}
+            className={`flex items-center gap-2 px-5 py-3 text-sm font-medium transition-colors border-b-2 -mb-px whitespace-nowrap ${
               section === key
                 ? 'border-[#16A34A] text-[#2D3F52]'
                 : 'border-transparent text-gray-500 hover:text-gray-700'

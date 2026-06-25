@@ -8,15 +8,25 @@ function writeCookie(value: boolean) {
   document.cookie = `${COOKIE_NAME}=${value ? '1' : '0'}; path=/; max-age=${maxAge}; SameSite=Lax`
 }
 
-export function useAdvisorMode() {
-  const [advisorMode, setAdvisorModeState] = useState(false)
+/**
+ * @param forcedByAdmin  When true, Modo Asesor is locked ON by the admin — user can't override it.
+ */
+export function useAdvisorMode(forcedByAdmin = false) {
+  const [advisorMode, setAdvisorModeState] = useState(forcedByAdmin)
   const [initialized, setInitialized] = useState(false)
 
   useEffect(() => {
+    if (forcedByAdmin) {
+      // Locked by admin: always ON, no local preference respected
+      setAdvisorModeState(true)
+      writeCookie(true)
+      setInitialized(true)
+      return
+    }
+
     const stored = localStorage.getItem(STORAGE_KEY)
     let value: boolean
     if (stored !== null) {
-      // Respect explicit user preference
       value = stored === '1'
     } else {
       // Default: ON for mobile viewport, OFF for desktop
@@ -25,13 +35,14 @@ export function useAdvisorMode() {
     setAdvisorModeState(value)
     writeCookie(value)
     setInitialized(true)
-  }, [])
+  }, [forcedByAdmin])
 
   const setAdvisorMode = useCallback((value: boolean) => {
+    if (forcedByAdmin) return // Can't override admin setting
     localStorage.setItem(STORAGE_KEY, value ? '1' : '0')
     writeCookie(value)
     setAdvisorModeState(value)
-  }, [])
+  }, [forcedByAdmin])
 
-  return { advisorMode, setAdvisorMode, initialized }
+  return { advisorMode, setAdvisorMode, initialized, forcedByAdmin }
 }

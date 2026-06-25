@@ -13,6 +13,7 @@ interface CrmUser {
   role: UserRole
   active: boolean
   permissions: Permission[] | null
+  modo_asesor?: boolean
   onedrive_drive_id: string | null
   onedrive_folder_id: string | null
   onedrive_folder_path: string | null
@@ -159,6 +160,7 @@ export default function UsersManager({ initialUsers, pendingUsers: initialPendin
   // Permissions state for edit modal
   const [editTab, setEditTab] = useState<EditTab>('info')
   const [customPerms, setCustomPerms] = useState<Permission[] | null>(null)
+  const [modoAsesor, setModoAsesor] = useState(false)
   // Folder permissions state
   const [seeAllFolders, setSeeAllFolders] = useState(false)
   const [allowedFolders, setAllowedFolders] = useState<string[]>([])
@@ -197,6 +199,7 @@ export default function UsersManager({ initialUsers, pendingUsers: initialPendin
     setSelectedUser(user)
     setForm({ name: user.name, email: user.email ?? '', password: '', role: user.role })
     setCustomPerms(user.permissions ?? null)
+    setModoAsesor(user.modo_asesor ?? false)
     setEditTab('info')
     setError('')
     setOnedriveDriveId(user.onedrive_drive_id ?? '')
@@ -353,6 +356,7 @@ export default function UsersManager({ initialUsers, pendingUsers: initialPendin
         email: form.email,
         role: form.role,
         permissions: customPerms,
+        modo_asesor: modoAsesor,
         onedrive_drive_id:    onedriveDriveId.trim()    || null,
         onedrive_folder_id:   onedriveFolderId.trim()   || null,
         onedrive_folder_path: onedriveFolderPath.trim() || null,
@@ -571,7 +575,12 @@ export default function UsersManager({ initialUsers, pendingUsers: initialPendin
                       <span className="text-xs font-bold text-[#2D3F52]">{user.name.charAt(0).toUpperCase()}</span>
                     </div>
                     <div>
-                      <p className="font-medium text-gray-900">{user.name}</p>
+                      <div className="flex items-center gap-1.5">
+                        <p className="font-medium text-gray-900">{user.name}</p>
+                        {user.modo_asesor && (
+                          <span className="text-[9px] font-bold text-green-600 bg-green-50 border border-green-200 px-1.5 py-0.5 rounded">Modo Asesor</span>
+                        )}
+                      </div>
                       {user.id === currentUserId && (
                         <p className="text-[10px] text-[#16A34A] font-medium">Tú</p>
                       )}
@@ -850,6 +859,29 @@ export default function UsersManager({ initialUsers, pendingUsers: initialPendin
             {/* Permisos tab — only in edit mode */}
             {modal === 'edit' && editTab === 'permisos' && (
               <div className="space-y-4">
+
+                {/* Modo Asesor toggle */}
+                <div className={`flex items-center justify-between p-3 rounded-lg border ${modoAsesor ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-100'}`}>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <p className="text-xs font-bold text-gray-800">Modo Asesor</p>
+                      {modoAsesor && <span className="text-[9px] font-bold text-green-600 bg-green-100 border border-green-200 px-1.5 py-0.5 rounded">ACTIVO</span>}
+                    </div>
+                    <p className="text-[10px] text-gray-400 mt-0.5">
+                      {modoAsesor
+                        ? 'Solo puede acceder a Órdenes, Mail y Configuración'
+                        : 'Acceso completo según permisos de rol'}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setModoAsesor(v => !v)}
+                    className={`relative w-10 h-5 rounded-full transition-colors shrink-0 ${modoAsesor ? 'bg-green-500' : 'bg-gray-200'}`}
+                  >
+                    <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${modoAsesor ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                  </button>
+                </div>
+
                 {/* Toggle: custom vs role defaults */}
                 <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                   <div>

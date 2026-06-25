@@ -9,7 +9,7 @@ export async function POST(req: NextRequest) {
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
 
-  const { to, cc, subject, body } = await req.json()
+  const { to, cc, subject, body, replyTo } = await req.json()
   if (!subject || !body) {
     return NextResponse.json({ error: 'subject y body son requeridos' }, { status: 400 })
   }
@@ -23,8 +23,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'No se pudo obtener el email del remitente.' }, { status: 403 })
   }
 
+  const tradingName  = process.env.TRADING_NAME  ?? 'Mesa de Operaciones | Roble Capital'
+  const tradingEmail = process.env.TRADING_EMAIL ?? 'trading@roblecapital.net'
+  const fromHeader   = `"${tradingName}" <${senderEmail}>`
+  const effectiveReplyTo = replyTo ?? tradingEmail
+
   try {
-    const draft = await createDraft(accessToken, { from: senderEmail, to: to || '', cc, subject, body })
+    const draft = await createDraft(accessToken, {
+      from: fromHeader, to: to || '', cc, subject, body, replyTo: effectiveReplyTo,
+    })
     return NextResponse.json({ ok: true, draft_id: draft.id })
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 400 })

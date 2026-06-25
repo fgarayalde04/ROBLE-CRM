@@ -10,11 +10,12 @@ interface LegajoResult {
   type: 'local' | 'internacional'
   fa: string | null
   status: string
+  authorized_email: string | null
 }
 
 interface Props {
   value: string
-  onChange: (id: string, displayName: string, customerNumber: string, fa?: string) => void
+  onChange: (id: string, displayName: string, customerNumber: string, fa?: string, email?: string | null) => void
   placeholder?: string
   className?: string
 }
@@ -68,14 +69,14 @@ export default function LegajosSearchInput({ value, onChange, placeholder, class
     setSelectedName(r.display_name)
     setQuery('')
     setOpen(false)
-    onChange(r.id, r.display_name, r.customer_number ?? '', r.fa ?? undefined)
+    onChange(r.id, r.display_name, r.customer_number ?? '', r.fa ?? undefined, r.authorized_email ?? null)
   }
 
   function handleClear() {
     setSelectedName('')
     setQuery('')
     setOpen(false)
-    onChange('', '', '')
+    onChange('', '', '', undefined, null)
   }
 
   return (
@@ -147,6 +148,12 @@ export default function LegajosSearchInput({ value, onChange, placeholder, class
                   </span>
                   {r.fa && (
                     <span className="text-[11px] text-gray-400">FA: {r.fa}</span>
+                  )}
+                  {r.authorized_email && (
+                    <span className="text-[11px] text-emerald-600">✓ {r.authorized_email}</span>
+                  )}
+                  {!r.authorized_email && (
+                    <span className="text-[10px] text-amber-500 bg-amber-50 px-1.5 py-0.5 rounded">Sin email</span>
                   )}
                   {r.status === 'cerrada' && (
                     <span className="text-[10px] text-red-500 bg-red-50 px-1.5 py-0.5 rounded">Cerrada</span>

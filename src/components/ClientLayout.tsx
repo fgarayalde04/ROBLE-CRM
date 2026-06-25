@@ -19,7 +19,7 @@ export default function ClientLayout({ user, children }: Props) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const pathname = usePathname()
   const router = useRouter()
-  const { advisorMode, setAdvisorMode, initialized } = useAdvisorMode()
+  const { advisorMode, setAdvisorMode, initialized, forcedByAdmin } = useAdvisorMode(user.modo_asesor === true)
 
   // Sidebar is hidden in Advisor Mode
   const showSidebar = !initialized || !advisorMode
@@ -49,7 +49,7 @@ export default function ClientLayout({ user, children }: Props) {
 
   return (
     <ChatProvider>
-      <AdvisorModeContext.Provider value={{ advisorMode, setAdvisorMode, initialized }}>
+      <AdvisorModeContext.Provider value={{ advisorMode, setAdvisorMode, initialized, forcedByAdmin }}>
 
         {/* Mobile overlay — only when sidebar is shown */}
         {showSidebar && sidebarOpen && (
