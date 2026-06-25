@@ -131,9 +131,24 @@ export default function FichaEditor({ empresa, tipo, clientId, clientName, ficha
           <span className="font-semibold text-sm text-[#2D3F52]">{clientName || 'Sin nombre'}</span>
         </div>
         <div className="ml-auto flex items-center gap-3">
-          {saving && <span className="text-xs text-gray-400 flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />Guardando…</span>}
-          {!saving && savedAt && <span className="text-xs text-gray-400">Guardado {savedAt.toLocaleTimeString('es-UY', { hour: '2-digit', minute: '2-digit' })}</span>}
-          <button onClick={save} className="px-3 py-1.5 bg-[#16A34A] text-white rounded-lg text-xs font-semibold hover:bg-green-700 transition-colors">Guardar</button>
+          {saving && (
+            <span className="text-xs text-gray-400 flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />Guardando…
+            </span>
+          )}
+          {!saving && savedAt && (
+            <span className="text-xs text-gray-400 flex items-center gap-1" title="Los datos se guardan en el sistema. Podés recuperar esta ficha desde el Historial de Fichas BCU.">
+              <svg className="w-3.5 h-3.5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+              Guardado en el sistema · {savedAt.toLocaleTimeString('es-UY', { hour: '2-digit', minute: '2-digit' })}
+            </span>
+          )}
+          <button
+            onClick={save}
+            title="Guarda los datos en el sistema. Podés recuperar esta ficha desde el Historial de Fichas BCU."
+            className="px-3 py-1.5 bg-[#16A34A] text-white rounded-lg text-xs font-semibold hover:bg-green-700 transition-colors"
+          >
+            Guardar
+          </button>
           <button
             onClick={() => setPreviewOpen(p => !p)}
             className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs font-medium text-gray-600 hover:border-gray-300 transition-colors"
@@ -143,11 +158,34 @@ export default function FichaEditor({ empresa, tipo, clientId, clientName, ficha
         </div>
       </div>
 
-      {/* Main layout */}
+      {/* Main layout: [Form+DocTabs] | [Preview] */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Left panel — form */}
-        <div className={`${previewOpen ? 'w-80 shrink-0' : 'flex-1'} bg-white border-r border-gray-100 flex flex-col overflow-hidden transition-all`}>
-          <div className="flex-1 overflow-y-auto p-4">
+
+        {/* Left panel — doc tabs + form */}
+        <div className={`${previewOpen ? 'w-[45%] min-w-[420px]' : 'flex-1'} bg-white border-r border-gray-100 flex flex-col overflow-hidden`}>
+
+          {/* Document tabs */}
+          <div className="shrink-0 border-b border-gray-100 px-4 pt-3 pb-0 flex items-end gap-1">
+            {docs.map(({ key, label, complete, pending }) => (
+              <button
+                key={key}
+                onClick={() => setActiveDoc(key)}
+                className={`relative px-3 py-2 text-xs font-semibold rounded-t-lg transition-all whitespace-nowrap ${
+                  activeDoc === key
+                    ? 'bg-white text-[#2D3F52] border border-b-0 border-gray-200 -mb-px z-10'
+                    : 'text-gray-400 hover:text-gray-600'
+                }`}
+              >
+                {label}
+                <span className={`ml-1.5 inline-block w-1.5 h-1.5 rounded-full align-middle ${
+                  complete ? 'bg-green-500' : pending ? 'bg-amber-400' : 'bg-gray-300'
+                }`} />
+              </button>
+            ))}
+          </div>
+
+          {/* Form content */}
+          <div className="flex-1 overflow-y-auto p-5">
             {activeDoc === 'ficha' && tipo === 'pf' && (
               <FichaPFForm data={fichaData as FichaPFData} onChange={setFichaData} />
             )}
@@ -161,51 +199,12 @@ export default function FichaEditor({ empresa, tipo, clientId, clientName, ficha
               <ListaVerificacionForm data={listaData} tipo={tipo} onChange={setListaData} />
             )}
           </div>
-        </div>
 
-        {/* Center panel — document navigation */}
-        <div className="w-56 shrink-0 bg-[#F4F6F8] border-r border-gray-200 flex flex-col overflow-hidden">
-          <div className="px-3 pt-4 pb-2">
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Documentos</p>
-          </div>
-          <div className="flex-1 overflow-y-auto px-2 space-y-1 pb-4">
-            {docs.map(({ key, label, icon, complete, pending }) => (
-              <button
-                key={key}
-                onClick={() => setActiveDoc(key)}
-                className={`w-full text-left px-3 py-3 rounded-xl transition-all ${
-                  activeDoc === key
-                    ? 'bg-white shadow-sm border border-gray-200'
-                    : 'hover:bg-white/60'
-                }`}
-              >
-                <div className="flex items-start gap-2">
-                  <span className="text-base">{icon}</span>
-                  <div className="flex-1 min-w-0">
-                    <p className={`text-xs font-semibold leading-snug ${activeDoc === key ? 'text-[#2D3F52]' : 'text-gray-600'}`}>
-                      {label}
-                    </p>
-                    <div className="mt-1.5 flex items-center gap-1">
-                      <span className={`inline-flex items-center gap-1 text-[9px] font-semibold px-1.5 py-0.5 rounded-full ${
-                        complete ? 'bg-green-100 text-green-700' : pending ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-400'
-                      }`}>
-                        {complete ? '🟢 Completo' : pending ? '🟡 Pendiente' : '🔴 Faltan datos'}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </button>
-            ))}
-          </div>
-
-          {/* Overall progress */}
-          <div className="px-3 pb-4 pt-2 border-t border-gray-100">
-            <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-2">Progreso</p>
-            <div className="space-y-1.5">
-              <ProgressBar label="Ficha" done={fichaComplete} />
-              <ProgressBar label={`Perfil (${Object.keys(perfilData.answers).length}/13)`} done={perfilComplete} partial={perfilPending} />
-              <ProgressBar label={`Lista (${listaCompletos}/${items.length})`} done={listaComplete} partial={listaPending} />
-            </div>
+          {/* Progress footer */}
+          <div className="shrink-0 border-t border-gray-100 px-4 py-2.5 flex items-center gap-4 bg-gray-50/60">
+            <ProgressBar label="Ficha" done={fichaComplete} />
+            <ProgressBar label={`Perfil ${Object.keys(perfilData.answers).length}/13`} done={perfilComplete} partial={perfilPending} />
+            <ProgressBar label={`Lista ${listaCompletos}/${items.length}`} done={listaComplete} partial={listaPending} />
           </div>
         </div>
 
