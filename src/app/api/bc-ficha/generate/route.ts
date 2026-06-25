@@ -179,9 +179,32 @@ function buildCuestionarioVars(data: PerfilData) {
     : perfil === 'agresivo' ? 'Agresivo (44-62)'
     : ''
 
+  const a = data.answers
+  const chk = (q: keyof typeof a, opt: string) => a[q] === opt ? '☒' : '☐'
+
   return {
     puntaje:          totalAnswered === 13 ? String(score) : '',
     resultado_perfil: perfilLabel,
     fecha_firma:      data.firma_fecha || '',
+    // Q1 – Edad
+    q1a: chk('q1','A'), q1b: chk('q1','B'), q1c: chk('q1','C'), q1d: chk('q1','D'),
+    // Q2 – % patrimonio
+    q2a: chk('q2','A'), q2b: chk('q2','B'), q2c: chk('q2','C'),
+    // Q3 – Expectativa ingresos
+    q3a: chk('q3','A'), q3b: chk('q3','B'), q3c: chk('q3','C'),
+    // Q4 – Fondo de reservas
+    q4a: chk('q4','A'), q4b: chk('q4','B'),
+    // Q5 – Horizonte de inversión
+    q5a: chk('q5','A'), q5b: chk('q5','B'), q5c: chk('q5','C'), q5d: chk('q5','D'),
+    // Q6 – Retiro en 3 meses
+    q6a: chk('q6','A'), q6b: chk('q6','B'), q6c: chk('q6','C'), q6d: chk('q6','D'),
+    // Q7 – Objetivo e nivel de tolerancia
+    q7a: chk('q7','A'), q7b: chk('q7','B'), q7c: chk('q7','C'), q7d: chk('q7','D'),
+    // Q8 – Experiencia general
+    q8a: chk('q8','A'), q8b: chk('q8','B'), q8c: chk('q8','C'),
+    // Q10 – Asumir riesgo adicional
+    q10a: chk('q10','A'), q10b: chk('q10','B'), q10c: chk('q10','C'),
+    // Q11 – Escenario ganancia
+    q11a: chk('q11','A'), q11b: chk('q11','B'), q11c: chk('q11','C'), q11d: chk('q11','D'),
   }
 }
