@@ -84,22 +84,37 @@ export default function FichaPFForm({ data, onChange }: Props) {
       </Section>
 
       {/* Personas */}
-      {data.personas.map((p, idx) => (
-        <Section
-          key={idx}
-          title={`A. Identificación del Cliente${data.personas.length > 1 ? ` — Persona ${idx + 1}` : ''}`}
-          action={idx > 0 ? <button onClick={() => removePersona(idx)} className="text-xs text-red-400 hover:text-red-600">Eliminar</button> : null}
-        >
-          <PersonaForm persona={p} onChange={patch => setPersona(idx, patch)} />
-        </Section>
-      ))}
+      {data.personas.map((p, idx) => {
+        const isLast = idx === data.personas.length - 1
+        const sectionTitle = idx === 0
+          ? 'A. Identificación del Cliente — Titular'
+          : `A. Identificación del Cliente — Beneficiario / Apoderado ${idx + 1}`
+        return (
+          <Section
+            key={idx}
+            title={sectionTitle}
+            action={idx > 0 ? (
+              <button onClick={() => removePersona(idx)} className="text-xs text-red-400 hover:text-red-600">
+                Eliminar
+              </button>
+            ) : null}
+          >
+            <PersonaForm persona={p} onChange={patch => setPersona(idx, patch)} />
 
-      <button
-        onClick={addPersona}
-        className="w-full py-2.5 border-2 border-dashed border-gray-200 rounded-xl text-sm text-gray-400 hover:border-green-400 hover:text-green-600 transition-colors"
-      >
-        + Agregar persona adicional (Apoderado / Beneficiario Final)
-      </button>
+            {isLast && (
+              <button
+                onClick={addPersona}
+                className="mt-5 w-full flex items-center justify-center gap-2 py-2.5 border-2 border-dashed border-gray-200 rounded-xl text-sm text-gray-400 hover:border-[#2D3F52] hover:text-[#2D3F52] transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                Agregar beneficiario o apoderado
+              </button>
+            )}
+          </Section>
+        )
+      })}
     </div>
   )
 }
