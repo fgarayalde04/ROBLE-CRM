@@ -2,7 +2,7 @@
 const nextConfig = {
   experimental: {
     instrumentationHook: true,
-    serverComponentsExternalPackages: ['pdfjs-dist'],
+    serverComponentsExternalPackages: ['pdfjs-dist', 'docusign-esign'],
   },
   // Allow uploading files up to 100 MB
   api: {
