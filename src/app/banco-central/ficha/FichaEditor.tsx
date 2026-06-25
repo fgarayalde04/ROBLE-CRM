@@ -108,10 +108,43 @@ export default function FichaEditor({ empresa, tipo, clientId, clientName, ficha
   // Trigger auto-save when data changes
   useEffect(() => { scheduleSave() }, [fichaData, perfilData, listaData])
 
-  const docs: { key: Doc; label: string; icon: string; complete: boolean; pending: boolean }[] = [
-    { key: 'ficha', label: tipo === 'pf' ? 'Ficha Persona Física' : 'Ficha Persona Jurídica', icon: '📄', complete: fichaComplete, pending: !fichaComplete },
-    { key: 'perfil', label: 'Cuestionario Perfil del Inversor', icon: '📊', complete: perfilComplete, pending: perfilPending },
-    { key: 'lista', label: `Lista de Verificación ${tipo === 'pf' ? 'PF' : 'PJ'}`, icon: '✅', complete: listaComplete, pending: listaPending },
+  const docs = [
+    {
+      key: 'ficha' as Doc,
+      short: tipo === 'pf' ? 'Ficha PF' : 'Ficha PJ',
+      desc:  tipo === 'pf' ? 'Persona Física' : 'Persona Jurídica',
+      complete: fichaComplete,
+      pending:  !fichaComplete,
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        </svg>
+      ),
+    },
+    {
+      key: 'perfil' as Doc,
+      short: 'Cuestionario',
+      desc:  `Perfil inversor · ${Object.keys(perfilData.answers).length}/13`,
+      complete: perfilComplete,
+      pending:  perfilPending,
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+        </svg>
+      ),
+    },
+    {
+      key: 'lista' as Doc,
+      short: 'Lista',
+      desc:  `Verificación · ${listaCompletos}/${items.length}`,
+      complete: listaComplete,
+      pending:  listaPending,
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2M5 12h14M5 16h6" />
+        </svg>
+      ),
+    },
   ]
 
   const mockFicha = { empresa, tipo_cliente: tipo } as BcFicha
@@ -137,14 +170,14 @@ export default function FichaEditor({ empresa, tipo, clientId, clientName, ficha
             </span>
           )}
           {!saving && savedAt && (
-            <span className="text-xs text-gray-400 flex items-center gap-1" title="Los datos se guardan en el sistema. Podés recuperar esta ficha desde el Historial de Fichas BCU.">
+            <span className="text-xs text-gray-400 flex items-center gap-1" title="Los datos quedan guardados en el sistema. Podés recuperarlos desde el Historial de Fichas BCU.">
               <svg className="w-3.5 h-3.5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-              Guardado en el sistema · {savedAt.toLocaleTimeString('es-UY', { hour: '2-digit', minute: '2-digit' })}
+              Guardado · {savedAt.toLocaleTimeString('es-UY', { hour: '2-digit', minute: '2-digit' })}
             </span>
           )}
           <button
             onClick={save}
-            title="Guarda los datos en el sistema. Podés recuperar esta ficha desde el Historial de Fichas BCU."
+            title="Guarda los datos en el sistema. Podés recuperarlos desde el Historial de Fichas BCU."
             className="px-3 py-1.5 bg-[#16A34A] text-white rounded-lg text-xs font-semibold hover:bg-green-700 transition-colors"
           >
             Guardar
@@ -158,30 +191,49 @@ export default function FichaEditor({ empresa, tipo, clientId, clientName, ficha
         </div>
       </div>
 
-      {/* Main layout: [Form+DocTabs] | [Preview] */}
+      {/* Main layout */}
       <div className="flex-1 flex overflow-hidden">
 
-        {/* Left panel — doc tabs + form */}
-        <div className={`${previewOpen ? 'w-[45%] min-w-[420px]' : 'flex-1'} bg-white border-r border-gray-100 flex flex-col overflow-hidden`}>
+        {/* Left panel */}
+        <div className={`${previewOpen ? 'w-[45%] min-w-[440px]' : 'flex-1'} bg-white border-r border-gray-100 flex flex-col overflow-hidden`}>
 
-          {/* Document tabs */}
-          <div className="shrink-0 border-b border-gray-100 px-4 pt-3 pb-0 flex items-end gap-1">
-            {docs.map(({ key, label, complete, pending }) => (
-              <button
-                key={key}
-                onClick={() => setActiveDoc(key)}
-                className={`relative px-3 py-2 text-xs font-semibold rounded-t-lg transition-all whitespace-nowrap ${
-                  activeDoc === key
-                    ? 'bg-white text-[#2D3F52] border border-b-0 border-gray-200 -mb-px z-10'
-                    : 'text-gray-400 hover:text-gray-600'
-                }`}
-              >
-                {label}
-                <span className={`ml-1.5 inline-block w-1.5 h-1.5 rounded-full align-middle ${
-                  complete ? 'bg-green-500' : pending ? 'bg-amber-400' : 'bg-gray-300'
-                }`} />
-              </button>
-            ))}
+          {/* Document selector — 3 cards */}
+          <div className="shrink-0 bg-[#F4F6F8] border-b border-gray-200 p-3 grid grid-cols-3 gap-2">
+            {docs.map(({ key, short, desc, icon, complete, pending }) => {
+              const isActive = activeDoc === key
+              return (
+                <button
+                  key={key}
+                  onClick={() => setActiveDoc(key)}
+                  className={`flex flex-col gap-2 px-3 py-3 rounded-xl text-left transition-all border ${
+                    isActive
+                      ? 'bg-[#2D3F52] border-[#2D3F52] shadow-sm'
+                      : 'bg-white border-gray-200 hover:border-[#2D3F52]/30 hover:shadow-sm'
+                  }`}
+                >
+                  <div className={`${isActive ? 'text-white' : 'text-[#2D3F52]'}`}>
+                    {icon}
+                  </div>
+                  <div>
+                    <p className={`text-xs font-bold leading-tight ${isActive ? 'text-white' : 'text-[#2D3F52]'}`}>
+                      {short}
+                    </p>
+                    <p className={`text-[10px] mt-0.5 leading-tight ${isActive ? 'text-white/60' : 'text-gray-400'}`}>
+                      {desc}
+                    </p>
+                  </div>
+                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full self-start ${
+                    complete
+                      ? isActive ? 'bg-green-400/25 text-green-300' : 'bg-green-100 text-green-700'
+                      : pending
+                      ? isActive ? 'bg-amber-400/25 text-amber-300' : 'bg-amber-100 text-amber-700'
+                      : isActive ? 'bg-white/10 text-white/50' : 'bg-gray-100 text-gray-400'
+                  }`}>
+                    {complete ? '✓ Completo' : pending ? '● En progreso' : '○ Sin datos'}
+                  </span>
+                </button>
+              )
+            })}
           </div>
 
           {/* Form content */}
@@ -199,13 +251,6 @@ export default function FichaEditor({ empresa, tipo, clientId, clientName, ficha
               <ListaVerificacionForm data={listaData} tipo={tipo} onChange={setListaData} />
             )}
           </div>
-
-          {/* Progress footer */}
-          <div className="shrink-0 border-t border-gray-100 px-4 py-2.5 flex items-center gap-4 bg-gray-50/60">
-            <ProgressBar label="Ficha" done={fichaComplete} />
-            <ProgressBar label={`Perfil ${Object.keys(perfilData.answers).length}/13`} done={perfilComplete} partial={perfilPending} />
-            <ProgressBar label={`Lista ${listaCompletos}/${items.length}`} done={listaComplete} partial={listaPending} />
-          </div>
         </div>
 
         {/* Right panel — preview */}
@@ -221,15 +266,6 @@ export default function FichaEditor({ empresa, tipo, clientId, clientName, ficha
           </div>
         )}
       </div>
-    </div>
-  )
-}
-
-function ProgressBar({ label, done, partial }: { label: string; done: boolean; partial?: boolean }) {
-  return (
-    <div className="flex items-center gap-2">
-      <div className={`w-2 h-2 rounded-full shrink-0 ${done ? 'bg-green-500' : partial ? 'bg-amber-400' : 'bg-gray-200'}`} />
-      <span className={`text-[10px] font-medium ${done ? 'text-green-700' : partial ? 'text-amber-700' : 'text-gray-400'}`}>{label}</span>
     </div>
   )
 }
