@@ -11,6 +11,7 @@ export interface SessionUser {
   role: UserRole
   permissions?: Permission[]       // custom per-user permissions; when set, overrides role
   allowed_folders?: string[] | null // null = ver todo; string[] = solo esas carpetas de asesor
+  modo_asesor?: boolean             // admin-controlled: restricts navigation to orders only
 }
 
 const COOKIE = 'crm_session'
@@ -56,6 +57,17 @@ export async function getSession(): Promise<SessionUser | null> {
       .eq('id', user.id)
       .maybeSingle()
 
+    // Load modo_asesor separately — column may not exist yet (pre-migration)
+    let modoAsesorValue = false
+    try {
+      const { data: maData } = await supabaseAdmin
+        .from('crm_users')
+        .select('modo_asesor')
+        .eq('id', user.id)
+        .maybeSingle()
+      modoAsesorValue = maData?.modo_asesor ?? false
+    } catch { /* column not migrated yet — default false */ }
+
     const extra: Partial<SessionUser> = {}
 
     // Always sync permissions from DB — if DB is null, clear any JWT-cached value
@@ -63,6 +75,9 @@ export async function getSession(): Promise<SessionUser | null> {
     extra.permissions = userData?.permissions?.length
       ? (userData.permissions as Permission[])
       : undefined
+
+    // Sync modo_asesor from DB (always authoritative)
+    extra.modo_asesor = modoAsesorValue
 
     // Admin always sees all — no folder restriction
     if (user.role === 'admin') {
@@ -100,13 +115,14 @@ export type Permission =
   | 'calendar' | 'deadlines' | 'ceo_dashboard' | 'kpis'
   | 'pagos' | 'impuestos' | 'liquidacion' | 'recursos' | 'claves'
   | 'admin' | 'sincronizacion' | 'factsheet' | 'proposals' | 'orders'
+  | 'docusign'
 
 const ROLE_PERMISSIONS: Record<UserRole, Permission[] | ['*']> = {
   admin:      ['*'],
-  ceo:        ['panel','clients','openings','tasks','banco_central','calendar','deadlines','ceo_dashboard','kpis','pagos','impuestos','liquidacion','recursos','factsheet','proposals','orders'],
-  direccion:  ['panel','clients','openings','tasks','banco_central','calendar','deadlines','ceo_dashboard','kpis','liquidacion','recursos','factsheet','proposals','orders'],
-  asesor:     ['panel','clients','openings','tasks','calendar','deadlines','recursos','factsheet','proposals','orders'],
-  asistente:  ['panel','clients','openings','tasks','banco_central','calendar','deadlines','recursos'],
+  ceo:        ['panel','clients','openings','tasks','banco_central','calendar','deadlines','ceo_dashboard','kpis','pagos','impuestos','liquidacion','recursos','factsheet','proposals','orders','docusign'],
+  direccion:  ['panel','clients','openings','tasks','banco_central','calendar','deadlines','ceo_dashboard','kpis','liquidacion','recursos','factsheet','proposals','orders','docusign'],
+  asesor:     ['panel','clients','openings','tasks','calendar','deadlines','recursos','factsheet','proposals','orders','docusign'],
+  asistente:  ['panel','clients','openings','tasks','banco_central','calendar','deadlines','recursos','docusign'],
   compliance: ['panel','banco_central','calendar','deadlines','recursos'],
 }
 
@@ -124,7 +140,7 @@ export function hasPermission(role: UserRole, permission: Permission, userPermis
 export function getPermissions(role: UserRole): Permission[] {
   const perms = ROLE_PERMISSIONS[role]
   if (perms[0] === '*') {
-    return ['panel','clients','openings','tasks','banco_central','calendar','deadlines','ceo_dashboard','kpis','pagos','impuestos','liquidacion','recursos','admin','claves','sincronizacion','factsheet','proposals','orders']
+    return ['panel','clients','openings','tasks','banco_central','calendar','deadlines','ceo_dashboard','kpis','pagos','impuestos','liquidacion','recursos','admin','claves','sincronizacion','factsheet','proposals','orders','docusign']
   }
   return perms as Permission[]
 }

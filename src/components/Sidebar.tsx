@@ -33,6 +33,7 @@ const nav: NavSection[] = [
       { href: '/clients',       label: 'Clientes',      subtitle: 'Gestión de clientes',          icon: UsersIcon,   permission: 'clients' },
       { href: '/openings',      label: 'Aperturas',     subtitle: 'Nuevas cuentas',                icon: OpeningIcon, permission: 'openings' },
       { href: '/banco-central', label: 'Banco Central', subtitle: 'Legajos · Monitoreo · Scoring', icon: ShieldIcon,  permission: 'banco_central' },
+      { href: '/docusign',      label: 'DocuSign',      subtitle: 'Firma electrónica',             icon: DocuSignIcon, permission: 'docusign' },
     ],
   },
   {
@@ -82,11 +83,11 @@ const nav: NavSection[] = [
 ]
 
 const ROLE_PERMISSIONS: Record<string, Permission[]> = {
-  admin:      ['panel','tasks','clients','openings','banco_central','calendar','deadlines','pagos','impuestos','ceo_dashboard','kpis','liquidacion','recursos','claves','admin','sincronizacion','factsheet','proposals','orders'],
-  ceo:        ['panel','tasks','clients','openings','banco_central','calendar','deadlines','pagos','impuestos','ceo_dashboard','kpis','liquidacion','recursos','claves','factsheet','proposals','orders'],
-  direccion:  ['panel','tasks','clients','openings','banco_central','calendar','deadlines','ceo_dashboard','kpis','liquidacion','recursos','claves','factsheet','proposals','orders'],
-  asesor:     ['panel','tasks','clients','openings','calendar','deadlines','recursos','factsheet','proposals','orders'],
-  asistente:  ['panel','tasks','clients','openings','banco_central','calendar','deadlines','recursos','orders'],
+  admin:      ['panel','tasks','clients','openings','banco_central','calendar','deadlines','pagos','impuestos','ceo_dashboard','kpis','liquidacion','recursos','claves','admin','sincronizacion','factsheet','proposals','orders','docusign'],
+  ceo:        ['panel','tasks','clients','openings','banco_central','calendar','deadlines','pagos','impuestos','ceo_dashboard','kpis','liquidacion','recursos','claves','factsheet','proposals','orders','docusign'],
+  direccion:  ['panel','tasks','clients','openings','banco_central','calendar','deadlines','ceo_dashboard','kpis','liquidacion','recursos','claves','factsheet','proposals','orders','docusign'],
+  asesor:     ['panel','tasks','clients','openings','calendar','deadlines','recursos','factsheet','proposals','orders','docusign'],
+  asistente:  ['panel','tasks','clients','openings','banco_central','calendar','deadlines','recursos','orders','docusign'],
   compliance: ['panel','banco_central','calendar','deadlines','recursos'],
 }
 
@@ -115,7 +116,7 @@ interface Props { user: SessionUser; isOpen?: boolean; onToggle?: () => void }
 export default function Sidebar({ user, isOpen = false, onToggle }: Props) {
   const pathname = usePathname()
   const router = useRouter()
-  const { advisorMode, setAdvisorMode, initialized } = useAdvisorModeCtx()
+  const { advisorMode, setAdvisorMode, initialized, forcedByAdmin } = useAdvisorModeCtx()
   const [searchStr, setSearchStr] = useState('')
   useEffect(() => { setSearchStr(window.location.search) }, [pathname])
 
@@ -263,35 +264,46 @@ export default function Sidebar({ user, isOpen = false, onToggle }: Props) {
 
       {/* User footer */}
       <div className="px-3 py-3 border-t border-white/8 space-y-2">
-        {/* Modo Asesor toggle — desktop */}
-        <button
-          onClick={() => {
-            if (!initialized) return
-            const next = !advisorMode
-            setAdvisorMode(next)
-            if (next) router.push('/ordenes')
-          }}
-          className={[
-            'w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg transition-colors',
-            advisorMode ? 'bg-green-600/15 hover:bg-green-600/20' : 'bg-white/5 hover:bg-white/8',
-          ].join(' ')}
-        >
-          <div className="flex items-center gap-2 min-w-0">
-            <svg
-              className={`w-3.5 h-3.5 shrink-0 ${advisorMode ? 'text-green-400' : 'text-white/40'}`}
-              fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
-            >
+        {/* Modo Asesor indicator / toggle */}
+        {forcedByAdmin ? (
+          /* Admin-locked: show badge, no toggle */
+          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-green-600/15">
+            <svg className="w-3.5 h-3.5 shrink-0 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 14.15v4.25c0 1.094-.787 2.036-1.872 2.18-2.087.277-4.216.42-6.378.42s-4.291-.143-6.378-.42c-1.085-.144-1.872-1.086-1.872-2.18v-4.25m16.5 0a2.18 2.18 0 00.75-1.661V8.706c0-1.081-.768-2.015-1.837-2.175a48.114 48.114 0 00-3.413-.387m4.5 8.006c-.194.165-.42.295-.673.38A23.978 23.978 0 0112 15.75c-2.648 0-5.195-.429-7.577-1.22a2.016 2.016 0 01-.673-.38m0 0A2.18 2.18 0 013 12.489V8.706c0-1.081.768-2.015 1.837-2.175a48.111 48.111 0 013.413-.387m7.5 0V5.25A2.25 2.25 0 0013.5 3h-3a2.25 2.25 0 00-2.25 2.25v.894m7.5 0a48.667 48.667 0 00-7.5 0" />
             </svg>
-            <span className={`text-[11px] font-semibold ${advisorMode ? 'text-green-300' : 'text-white/50'}`}>
-              Modo Asesor
-            </span>
+            <span className="text-[11px] font-semibold text-green-300">Modo Asesor</span>
+            <span className="ml-auto text-[9px] font-bold text-green-400/60 bg-green-400/10 px-1.5 py-0.5 rounded">activo</span>
           </div>
-          {/* Toggle switch */}
-          <div className={`relative w-8 h-4 rounded-full transition-colors duration-200 shrink-0 ${advisorMode ? 'bg-green-500' : 'bg-white/20'}`}>
-            <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full shadow transition-transform duration-200 ${advisorMode ? 'translate-x-4' : 'translate-x-0.5'}`} />
-          </div>
-        </button>
+        ) : (
+          /* User-controlled toggle */
+          <button
+            onClick={() => {
+              if (!initialized) return
+              const next = !advisorMode
+              setAdvisorMode(next)
+              if (next) router.push('/ordenes')
+            }}
+            className={[
+              'w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg transition-colors',
+              advisorMode ? 'bg-green-600/15 hover:bg-green-600/20' : 'bg-white/5 hover:bg-white/8',
+            ].join(' ')}
+          >
+            <div className="flex items-center gap-2 min-w-0">
+              <svg
+                className={`w-3.5 h-3.5 shrink-0 ${advisorMode ? 'text-green-400' : 'text-white/40'}`}
+                fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 14.15v4.25c0 1.094-.787 2.036-1.872 2.18-2.087.277-4.216.42-6.378.42s-4.291-.143-6.378-.42c-1.085-.144-1.872-1.086-1.872-2.18v-4.25m16.5 0a2.18 2.18 0 00.75-1.661V8.706c0-1.081-.768-2.015-1.837-2.175a48.114 48.114 0 00-3.413-.387m4.5 8.006c-.194.165-.42.295-.673.38A23.978 23.978 0 0112 15.75c-2.648 0-5.195-.429-7.577-1.22a2.016 2.016 0 01-.673-.38m0 0A2.18 2.18 0 013 12.489V8.706c0-1.081.768-2.015 1.837-2.175a48.111 48.111 0 013.413-.387m7.5 0V5.25A2.25 2.25 0 0013.5 3h-3a2.25 2.25 0 00-2.25 2.25v.894m7.5 0a48.667 48.667 0 00-7.5 0" />
+              </svg>
+              <span className={`text-[11px] font-semibold ${advisorMode ? 'text-green-300' : 'text-white/50'}`}>
+                Modo Asesor
+              </span>
+            </div>
+            <div className={`relative w-8 h-4 rounded-full transition-colors duration-200 shrink-0 ${advisorMode ? 'bg-green-500' : 'bg-white/20'}`}>
+              <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full shadow transition-transform duration-200 ${advisorMode ? 'translate-x-4' : 'translate-x-0.5'}`} />
+            </div>
+          </button>
+        )}
 
         {/* User info */}
         <div className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg bg-white/5">
@@ -426,6 +438,15 @@ function ProposalIcon({ className }: { className?: string }) {
     </svg>
   )
 }
+function DocuSignIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
+    </svg>
+  )
+}
+
 function SettingsIconFn({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>

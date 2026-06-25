@@ -3,29 +3,35 @@
 import { useState, useCallback, useEffect } from 'react'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
-import EmailAutocomplete from '@/components/EmailAutocomplete'
 import LegajosSearchInput from '@/components/LegajosSearchInput'
-import OrderHistorial from './OrderHistorial'
+import InstrumentSearch from '@/components/InstrumentSearch'
+import TradingEmailSearch from '@/components/TradingEmailSearch'
+import InstrumentsManager from './InstrumentsManager'
+import BlotterTable from './BlotterTable'
+import type { Instrument } from '@/app/api/instruments/route'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type OrderType = 'acciones' | 'fondos' | 'bonos'
-type Tab = 'nueva' | 'historial'
+type Tab = 'nueva' | 'blotter' | 'mesa' | 'mis-ordenes' | 'instrumentos'
 
 interface AccionesBlock {
   type: 'acciones'; id: string; nombre: string; ticker: string
   cantidad: string; cantidadTipo: 'acciones' | 'monto'
   precio: 'mercado' | 'limite'; precioLimite: string
   moneda: string; operacion: 'compra' | 'venta'; fecha: string; observaciones: string
+  vigencia: 'DIA' | 'GTC'; comision: string
 }
 interface FondosBlock {
   type: 'fondos'; id: string; fondo: string; cusipIsin: string
   fecha: string; operacion: 'compra' | 'venta'; monto: string; moneda: string; observaciones: string
+  vigencia: 'DIA' | 'GTC'; comision: string; clase: 'Acumulativa' | 'Distributiva'
 }
 interface BonosBlock {
   type: 'bonos'; id: string; descripcion: string; cusipIsin: string
   cantidad: string; precio: 'mercado' | 'limite'; precioLimite: string
   moneda: string; operacion: 'compra' | 'venta'; fecha: string; observaciones: string
+  vigencia: 'DIA' | 'GTC'; comision: string
 }
 type OrderBlock = AccionesBlock | FondosBlock | BonosBlock
 
@@ -37,21 +43,26 @@ function todayStr() {
 function uid() { return Math.random().toString(36).slice(2, 9) }
 
 function newAcciones(id: string): AccionesBlock {
-  return { type: 'acciones', id, nombre: '', ticker: '', cantidad: '', cantidadTipo: 'acciones', precio: 'mercado', precioLimite: '', moneda: 'USD', operacion: 'compra', fecha: todayStr(), observaciones: '' }
+  return { type: 'acciones', id, nombre: '', ticker: '', cantidad: '', cantidadTipo: 'acciones', precio: 'mercado', precioLimite: '', moneda: 'USD', operacion: 'compra', fecha: todayStr(), observaciones: '', vigencia: 'DIA', comision: '' }
 }
 function newFondos(id: string): FondosBlock {
-  return { type: 'fondos', id, fondo: '', cusipIsin: '', fecha: todayStr(), operacion: 'compra', monto: '', moneda: 'USD', observaciones: '' }
+  return { type: 'fondos', id, fondo: '', cusipIsin: '', fecha: todayStr(), operacion: 'compra', monto: '', moneda: 'USD', observaciones: '', vigencia: 'DIA', comision: '', clase: 'Acumulativa' }
 }
 function newBonos(id: string): BonosBlock {
-  return { type: 'bonos', id, descripcion: '', cusipIsin: '', cantidad: '', precio: 'mercado', precioLimite: '', moneda: 'USD', operacion: 'compra', fecha: todayStr(), observaciones: '' }
+  return { type: 'bonos', id, descripcion: '', cusipIsin: '', cantidad: '', precio: 'mercado', precioLimite: '', moneda: 'USD', operacion: 'compra', fecha: todayStr(), observaciones: '', vigencia: 'DIA', comision: '' }
 }
+
+
+const TRADING_EMAIL = 'trading@roblecapital.net'
 
 function generateEmailText(blocks: OrderBlock[], clientName: string, clientNumber: string, fecha: string): string {
   if (!blocks.length) return ''
   const lines: string[] = []
   lines.push(`Estimado,`)
   lines.push(``)
-  lines.push(`A continuación se detallan las instrucciones de operación correspondientes al cliente ${clientName || '[Nombre del cliente]'}${clientNumber ? ` (N° ${clientNumber})` : ''}.`)
+  lines.push(`De acuerdo a lo conversado, le pido que nos confirme la siguiente operación.`)
+  lines.push(``)
+  lines.push(`Muchas gracias,`)
   lines.push(``)
   lines.push(`─────────────────────────────────────────`)
   lines.push(``)
@@ -67,24 +78,24 @@ function generateEmailText(blocks: OrderBlock[], clientName: string, clientNumbe
       lines.push(`  Precio:      ${block.precio === 'mercado' ? 'A mercado' : `Límite ${block.precioLimite} ${block.moneda}`}`)
       lines.push(`  Moneda:      ${block.moneda}`)
       lines.push(`  Fecha:       ${block.fecha || '—'}`)
-      if (block.observaciones.trim()) lines.push(`  Obs.:        ${block.observaciones.trim()}`)
+      lines.push(`  Vigencia:    ${block.vigencia}`)
     } else if (block.type === 'fondos') {
       lines.push(`  Operación:   ${block.operacion === 'compra' ? 'Compra' : 'Venta'}`)
       lines.push(`  Fondo:       ${block.fondo || '—'}`)
-      if (block.cusipIsin) lines.push(`  CUSIP/ISIN:  ${block.cusipIsin}`)
+      if (block.cusipIsin) lines.push(`  ISIN:        ${block.cusipIsin}`)
       lines.push(`  Monto:       ${block.monto || '—'} ${block.moneda}`)
       lines.push(`  Moneda:      ${block.moneda}`)
       lines.push(`  Fecha:       ${block.fecha || '—'}`)
-      if (block.observaciones.trim()) lines.push(`  Obs.:        ${block.observaciones.trim()}`)
+      lines.push(`  Vigencia:    ${block.vigencia}`)
     } else {
       lines.push(`  Operación:   ${block.operacion === 'compra' ? 'Compra' : 'Venta'}`)
       lines.push(`  Bono:        ${block.descripcion || '—'}`)
-      if (block.cusipIsin) lines.push(`  CUSIP/ISIN:  ${block.cusipIsin}`)
+      if (block.cusipIsin) lines.push(`  CUSIP:       ${block.cusipIsin}`)
       lines.push(`  Cantidad (VN): ${block.cantidad || '—'} ${block.moneda}`)
       lines.push(`  Precio:      ${block.precio === 'mercado' ? 'A mercado' : `Límite ${block.precioLimite}`}`)
       lines.push(`  Moneda:      ${block.moneda}`)
       lines.push(`  Fecha:       ${block.fecha || '—'}`)
-      if (block.observaciones.trim()) lines.push(`  Obs.:        ${block.observaciones.trim()}`)
+      lines.push(`  Vigencia:    ${block.vigencia}`)
     }
     lines.push(``)
     if (idx < blocks.length - 1) { lines.push(`─────────────────────────────────────────`); lines.push(``) }
@@ -94,7 +105,10 @@ function generateEmailText(blocks: OrderBlock[], clientName: string, clientNumbe
   lines.push(`Fecha de instrucción: ${fecha}`)
   lines.push(``)
   lines.push(`Saludos,`)
+  lines.push(`Mesa de Operaciones`)
   lines.push(`Roble Capital`)
+  lines.push(``)
+  lines.push(`─────────────────────────────────────────`)
   return lines.join('\n')
 }
 
@@ -106,6 +120,19 @@ const labelCls = 'block text-xs font-semibold text-gray-500 mb-1 uppercase track
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return <div><label className={labelCls}>{label}</label>{children}</div>
+}
+
+function InternalSection({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="mt-3 rounded-lg border border-dashed border-gray-200 bg-gray-50/60 px-3 pt-2.5 pb-3 space-y-3">
+      <div className="flex items-center gap-2 mb-0.5">
+        <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Uso interno</span>
+        <div className="flex-1 h-px bg-gray-200" />
+        <span className="text-[9px] text-gray-400 font-medium bg-gray-100 border border-gray-200 px-1.5 py-0.5 rounded">No se envía al cliente</span>
+      </div>
+      {children}
+    </div>
+  )
 }
 
 // ─── Block shells ─────────────────────────────────────────────────────────────
@@ -163,20 +190,49 @@ function AccionesForm({ block, index, onChange, onRemove }: { block: AccionesBlo
             <button type="button" onClick={() => onChange(block.id, 'fecha', todayStr())} className="px-3 py-2 text-xs text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 shrink-0 transition whitespace-nowrap">Hoy</button>
           </div>
         </Field>
+        <Field label="Vigencia">
+          <select className={selectCls} value={block.vigencia} onChange={upd('vigencia')}>
+            <option value="DIA">DIA</option>
+            <option value="GTC">GTC</option>
+          </select>
+        </Field>
       </div>
-      <div className="mt-3"><Field label="Observaciones"><textarea className={inputCls + ' resize-none'} rows={2} placeholder="Instrucciones adicionales…" value={block.observaciones} onChange={upd('observaciones')} /></Field></div>
+      <InternalSection>
+        <Field label="Comisión">
+          <input className={inputCls} placeholder="Ej: 1% / USD 250" value={block.comision} onChange={upd('comision')} />
+        </Field>
+        <Field label="Observaciones internas">
+          <textarea className={inputCls + ' resize-none'} rows={2} placeholder="Notas internas, instrucciones adicionales…" value={block.observaciones} onChange={upd('observaciones')} />
+        </Field>
+      </InternalSection>
     </BlockShell>
   )
 }
 
 function FondosForm({ block, index, onChange, onRemove }: { block: FondosBlock; index: number; onChange: (id: string, f: string, v: string) => void; onRemove: (id: string) => void }) {
   const upd = (f: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => onChange(block.id, f, e.target.value)
+  function handleSelectInstrument(inst: Instrument) {
+    onChange(block.id, 'fondo', inst.nombre)
+    onChange(block.id, 'cusipIsin', inst.isin ?? inst.cusip ?? '')
+    if (inst.moneda) onChange(block.id, 'moneda', inst.moneda)
+  }
   return (
     <BlockShell title="Fondo" index={index} id={block.id} color="emerald" onRemove={onRemove}>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <Field label="Operación"><select className={selectCls} value={block.operacion} onChange={upd('operacion')}><option value="compra">Compra</option><option value="venta">Venta</option></select></Field>
-        <Field label="Nombre del fondo"><input className={inputCls} placeholder="Ej: Vanguard S&P 500" value={block.fondo} onChange={upd('fondo')} /></Field>
-        <Field label="CUSIP / ISIN"><input className={inputCls} placeholder="Ej: US9229081090" value={block.cusipIsin} onChange={upd('cusipIsin')} /></Field>
+        <Field label="Nombre del fondo">
+          <InstrumentSearch
+            tipo="fondo"
+            value={block.fondo}
+            onSelect={handleSelectInstrument}
+            onChange={(v) => onChange(block.id, 'fondo', v)}
+            placeholder="Buscar fondo o escribir nombre…"
+            className={inputCls}
+          />
+        </Field>
+        <Field label="ISIN">
+          <input className={inputCls} placeholder="Autocompletado al seleccionar fondo" value={block.cusipIsin} onChange={upd('cusipIsin')} />
+        </Field>
         <Field label="Monto"><input className={inputCls} type="number" placeholder="Ej: 50000" value={block.monto} onChange={upd('monto')} /></Field>
         <Field label="Moneda"><select className={selectCls} value={block.moneda} onChange={upd('moneda')}><option value="USD">USD</option><option value="UYU">UYU</option><option value="EUR">EUR</option><option value="ARS">ARS</option></select></Field>
         <Field label="Fecha">
@@ -185,20 +241,57 @@ function FondosForm({ block, index, onChange, onRemove }: { block: FondosBlock; 
             <button type="button" onClick={() => onChange(block.id, 'fecha', todayStr())} className="px-3 py-2 text-xs text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 shrink-0 transition whitespace-nowrap">Hoy</button>
           </div>
         </Field>
+        <Field label="Vigencia">
+          <select className={selectCls} value={block.vigencia} onChange={upd('vigencia')}>
+            <option value="DIA">DIA</option>
+            <option value="GTC">GTC</option>
+          </select>
+        </Field>
       </div>
-      <div className="mt-3"><Field label="Observaciones"><textarea className={inputCls + ' resize-none'} rows={2} placeholder="Instrucciones adicionales…" value={block.observaciones} onChange={upd('observaciones')} /></Field></div>
+      <InternalSection>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <Field label="Clase">
+            <select className={selectCls} value={block.clase} onChange={upd('clase')}>
+              <option value="Acumulativa">Acumulativa</option>
+              <option value="Distributiva">Distributiva</option>
+            </select>
+          </Field>
+          <Field label="Comisión">
+            <input className={inputCls} placeholder="Ej: 1% / USD 250" value={block.comision} onChange={upd('comision')} />
+          </Field>
+        </div>
+        <Field label="Observaciones internas">
+          <textarea className={inputCls + ' resize-none'} rows={2} placeholder="Notas internas, instrucciones adicionales…" value={block.observaciones} onChange={upd('observaciones')} />
+        </Field>
+      </InternalSection>
     </BlockShell>
   )
 }
 
 function BonosForm({ block, index, onChange, onRemove }: { block: BonosBlock; index: number; onChange: (id: string, f: string, v: string) => void; onRemove: (id: string) => void }) {
   const upd = (f: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => onChange(block.id, f, e.target.value)
+  function handleSelectInstrument(inst: Instrument) {
+    onChange(block.id, 'descripcion', inst.nombre)
+    onChange(block.id, 'cusipIsin', inst.isin ?? inst.cusip ?? '')
+    if (inst.moneda) onChange(block.id, 'moneda', inst.moneda)
+  }
   return (
     <BlockShell title="Bono" index={index} id={block.id} color="amber" onRemove={onRemove}>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <Field label="Operación"><select className={selectCls} value={block.operacion} onChange={upd('operacion')}><option value="compra">Compra</option><option value="venta">Venta</option></select></Field>
-        <Field label="Identificación del bono"><input className={inputCls} placeholder="Ej: Uruguay 2031 4.375%" value={block.descripcion} onChange={upd('descripcion')} /></Field>
-        <Field label="CUSIP / ISIN"><input className={inputCls} placeholder="Ej: US917288BS29" value={block.cusipIsin} onChange={upd('cusipIsin')} /></Field>
+        <Field label="Identificación del bono">
+          <InstrumentSearch
+            tipo="bono"
+            value={block.descripcion}
+            onSelect={handleSelectInstrument}
+            onChange={(v) => onChange(block.id, 'descripcion', v)}
+            placeholder="Buscar bono o escribir descripción…"
+            className={inputCls}
+          />
+        </Field>
+        <Field label="CUSIP / ISIN">
+          <input className={inputCls} placeholder="Autocompletado al seleccionar bono" value={block.cusipIsin} onChange={upd('cusipIsin')} />
+        </Field>
         <Field label="Cantidad (Valor Nominal)"><input className={inputCls} type="number" placeholder="Ej: 100000" value={block.cantidad} onChange={upd('cantidad')} /></Field>
         <Field label="Tipo de precio"><select className={selectCls} value={block.precio} onChange={upd('precio')}><option value="mercado">A mercado</option><option value="limite">Precio límite</option></select></Field>
         {block.precio === 'limite' && <Field label="Precio límite (% par)"><input className={inputCls} placeholder="Ej: 98.50" value={block.precioLimite} onChange={upd('precioLimite')} /></Field>}
@@ -209,8 +302,21 @@ function BonosForm({ block, index, onChange, onRemove }: { block: BonosBlock; in
             <button type="button" onClick={() => onChange(block.id, 'fecha', todayStr())} className="px-3 py-2 text-xs text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 shrink-0 transition whitespace-nowrap">Hoy</button>
           </div>
         </Field>
+        <Field label="Vigencia">
+          <select className={selectCls} value={block.vigencia} onChange={upd('vigencia')}>
+            <option value="DIA">DIA</option>
+            <option value="GTC">GTC</option>
+          </select>
+        </Field>
       </div>
-      <div className="mt-3"><Field label="Observaciones"><textarea className={inputCls + ' resize-none'} rows={2} placeholder="Instrucciones adicionales…" value={block.observaciones} onChange={upd('observaciones')} /></Field></div>
+      <InternalSection>
+        <Field label="Comisión">
+          <input className={inputCls} placeholder="Ej: 1% / USD 250" value={block.comision} onChange={upd('comision')} />
+        </Field>
+        <Field label="Observaciones internas">
+          <textarea className={inputCls + ' resize-none'} rows={2} placeholder="Notas internas, instrucciones adicionales…" value={block.observaciones} onChange={upd('observaciones')} />
+        </Field>
+      </InternalSection>
     </BlockShell>
   )
 }
@@ -233,17 +339,22 @@ const INSTRUMENT_STYLE: Record<string, string> = {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-interface Props { gmailConnected: boolean; initialTab?: Tab; isAdmin?: boolean; userName?: string }
+interface Props { gmailConnected: boolean; initialTab?: Tab; isAdmin?: boolean; userName?: string; userEmail?: string }
 
-export default function OrdenesClient({ gmailConnected, initialTab = 'nueva', isAdmin = false, userName = '' }: Props) {
-  const [tab, setTab] = useState<Tab>(initialTab)
+export default function OrdenesClient({ gmailConnected, initialTab, isAdmin = false, userName = '', userEmail = '' }: Props) {
+  const defaultTab: Tab = isAdmin ? 'blotter' : 'mis-ordenes'
+  const [tab, setTab] = useState<Tab>(initialTab ?? defaultTab)
   const [blocks, setBlocks]             = useState<OrderBlock[]>([])
   const [clientId, setClientId]         = useState('')
   const [clientName, setClientName]     = useState('')
   const [clientNumber, setClientNumber] = useState('')
   const [fecha, setFecha]               = useState(todayStr())
   const [to, setTo]                     = useState('')
-  const cc = 'trading@roblecapital.net'
+
+  // CC: trading (always) + asesor (if different email)
+  const ccList: string[] = [TRADING_EMAIL]
+  if (userEmail && userEmail !== TRADING_EMAIL) ccList.push(userEmail)
+  const cc = ccList.join(', ')
   const [preview, setPreview]           = useState<string | null>(null)
   const [sending, setSending]           = useState(false)
   const [sendStatus, setSendStatus]     = useState<{ ok: boolean; msg: string } | null>(null)
@@ -264,24 +375,31 @@ export default function OrdenesClient({ gmailConnected, initialTab = 'nueva', is
 
   const getBody = () => preview ?? generateEmailText(blocks, clientName, clientNumber, fecha)
 
-  async function saveHistory(status: 'enviado' | 'borrador' | 'copiado') {
+  async function saveHistory(status: 'enviado' | 'borrador' | 'copiado'): Promise<string> {
     const instruments = Array.from(new Set(blocks.map(b => b.type)))
-    await fetch('/api/ordenes', {
+    const res = await fetch('/api/ordenes', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         client_name:   clientName   || null,
         client_number: clientNumber || null,
-        client_id:     clientId     || null,
+        client_id:     null,   // legajo ID ≠ clients.id — omit to avoid FK violation
         to_email:      to           || null,
         subject:       asunto,
         body:          getBody(),
         status,
         order_count:   blocks.length,
         instruments,
-        blocks,   // save individual items to order_history_items
+        blocks,
       }),
     })
+    const data = await res.json()
+    if (!res.ok) {
+      console.error('[ORDER_HISTORY_ERROR]', data?.error)
+      throw new Error(data?.error ?? 'Error al guardar en historial')
+    }
+    console.log('[ORDER_HISTORY_CREATED]', data.order_id, '| status:', status)
+    return data.order_id
   }
 
   const handleGenerate = () => { setPreview(generateEmailText(blocks, clientName, clientNumber, fecha)); setSendStatus(null) }
@@ -302,15 +420,25 @@ export default function OrdenesClient({ gmailConnected, initialTab = 'nueva', is
     if (!to.trim()) { setSendStatus({ ok: false, msg: 'Ingresá al menos un destinatario.' }); return }
     setSending(true); setSendStatus(null)
     try {
+      // 1. Guardar en historial PRIMERO
+      await saveHistory('enviado')
+      // 2. Enviar email
       const res = await fetch('/api/gmail/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ to, cc, subject: asunto, body: getBody() }),
+        body: JSON.stringify({ to, cc, subject: asunto, body: getBody(), replyTo: TRADING_EMAIL }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Error al enviar')
+      console.log('[ORDER_EMAIL_SENT]', data.message_id)
       setSendStatus({ ok: true, msg: 'Email enviado correctamente.' })
-      await saveHistory('enviado')
+      // Bump usage stats for this authorized email
+      if (to && clientNumber) {
+        fetch('/api/authorized-emails/use', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: to, numero_cliente: clientNumber }),
+        }).catch(() => {})
+      }
     } catch (err: any) {
       setSendStatus({ ok: false, msg: err.message })
     } finally { setSending(false) }
@@ -319,15 +447,18 @@ export default function OrdenesClient({ gmailConnected, initialTab = 'nueva', is
   const handleDraft = async () => {
     setSending(true); setSendStatus(null)
     try {
+      // 1. Guardar en historial PRIMERO
+      await saveHistory('borrador')
+      // 2. Crear borrador en Gmail
       const res = await fetch('/api/gmail/draft', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ to, cc, subject: asunto, body: getBody() }),
+        body: JSON.stringify({ to, cc, subject: asunto, body: getBody(), replyTo: TRADING_EMAIL }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Error al crear borrador')
+      console.log('[ORDER_EMAIL_SENT]', 'draft:', data.draft_id)
       setSendStatus({ ok: true, msg: 'Borrador guardado en Gmail.' })
-      await saveHistory('borrador')
     } catch (err: any) {
       setSendStatus({ ok: false, msg: err.message })
     } finally { setSending(false) }
@@ -338,27 +469,54 @@ export default function OrdenesClient({ gmailConnected, initialTab = 'nueva', is
   return (
     <div className="p-4 md:p-6 bg-[#F4F6F8] min-h-screen">
 
-      {/* Header — desktop only */}
+      {/* Header */}
       <div className="hidden md:flex items-center justify-between mb-5">
         <div>
-          <h1 className="text-xl font-semibold text-[#2D3F52]">Enviar órdenes</h1>
-          <p className="text-sm text-gray-400 mt-0.5">Generá y enviá instrucciones de operación</p>
+          <h1 className="text-xl font-semibold text-[#2D3F52]">Mesa de Operaciones</h1>
+          <p className="text-sm text-gray-400 mt-0.5">Blotter · trazabilidad completa de órdenes</p>
         </div>
-        <div className="flex gap-1 bg-white border border-gray-200 rounded-lg p-0.5">
-          {(['nueva', 'historial'] as Tab[]).map(t => (
+        <div className="flex gap-1 bg-white border border-gray-200 rounded-lg p-0.5 shadow-sm">
+          {(isAdmin
+            ? [
+                { t: 'blotter'    as Tab, label: 'Blotter' },
+                { t: 'mesa'       as Tab, label: 'Mesa de hoy' },
+                { t: 'nueva'      as Tab, label: 'Nueva orden' },
+                { t: 'instrumentos' as Tab, label: 'Instrumentos' },
+              ]
+            : [
+                { t: 'mis-ordenes' as Tab, label: 'Mis órdenes' },
+                { t: 'nueva'       as Tab, label: 'Nueva orden' },
+              ]
+          ).map(({ t, label }) => (
             <button key={t} onClick={() => setTab(t)}
-              className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${tab === t ? 'bg-[#2D3F52] text-white' : 'text-gray-500 hover:text-[#2D3F52]'}`}>
-              {t === 'nueva' ? 'Nueva orden' : 'Historial'}
+              className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                tab === t ? 'bg-[#2D3F52] text-white shadow-sm' : 'text-gray-500 hover:text-[#2D3F52]'
+              }`}>
+              {label}
             </button>
           ))}
         </div>
       </div>
-      {/* Mobile tab switcher */}
-      <div className="md:hidden flex gap-1 bg-white border border-gray-200 rounded-lg p-0.5 mb-4">
-        {(['nueva', 'historial'] as Tab[]).map(t => (
+
+      {/* Mobile tabs */}
+      <div className="md:hidden flex gap-1 bg-white border border-gray-200 rounded-lg p-0.5 mb-4 overflow-x-auto">
+        {(isAdmin
+          ? [
+              { t: 'blotter'    as Tab, label: 'Blotter' },
+              { t: 'mesa'       as Tab, label: 'Mesa' },
+              { t: 'nueva'      as Tab, label: 'Nueva' },
+              { t: 'instrumentos' as Tab, label: 'Instr.' },
+            ]
+          : [
+              { t: 'mis-ordenes' as Tab, label: 'Mis órdenes' },
+              { t: 'nueva'       as Tab, label: 'Nueva' },
+            ]
+        ).map(({ t, label }) => (
           <button key={t} onClick={() => setTab(t)}
-            className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${tab === t ? 'bg-[#2D3F52] text-white' : 'text-gray-500'}`}>
-            {t === 'nueva' ? 'Nueva orden' : 'Historial'}
+            className={`flex-1 py-2 text-xs font-medium rounded-md transition-colors whitespace-nowrap px-2 ${
+              tab === t ? 'bg-[#2D3F52] text-white' : 'text-gray-500'
+            }`}>
+            {label}
           </button>
         ))}
       </div>
@@ -382,10 +540,11 @@ export default function OrdenesClient({ gmailConnected, initialTab = 'nueva', is
                   </label>
                   <LegajosSearchInput
                     value={clientId}
-                    onChange={(id, name, number, fa) => {
+                    onChange={(id, name, number) => {
                       setClientId(id)
                       if (name) setClientName(name)
                       if (number) setClientNumber(number)
+                      if (!id) { setClientName(''); setClientNumber(''); setTo('') }
                       setPreview(null)
                     }}
                     placeholder="Nombre, N° o código…"
@@ -477,13 +636,42 @@ export default function OrdenesClient({ gmailConnected, initialTab = 'nueva', is
                   : <span className="text-[11px] text-amber-600 font-medium bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">Gmail no conectado</span>
                 }
               </div>
-              <Field label="Para (To)">
-                <EmailAutocomplete value={to} onChange={setTo} placeholder="destinatario@ejemplo.com" className={inputCls} />
-              </Field>
+
+              {/* De — fixed Trading */}
               <div>
-                <label className={labelCls}>CC</label>
-                <p className="text-sm px-3 py-2 rounded-lg border border-gray-100 bg-gray-50 text-gray-600">{cc}</p>
+                <label className={labelCls}>De</label>
+                <p className="text-sm px-3 py-2 rounded-lg border border-gray-100 bg-gray-50 text-gray-600">
+                  Mesa de Operaciones | Roble Capital
+                </p>
               </div>
+
+              <div>
+                <label className={labelCls}>Destinatario</label>
+                <TradingEmailSearch
+                  value={to}
+                  onChange={(v) => setTo(v)}
+                  className={inputCls}
+                />
+              </div>
+
+              {/* CC: trading + asesor */}
+              <div>
+                <label className={labelCls}>CC <span className="text-[10px] text-gray-400 normal-case tracking-normal font-normal">(automático)</span></label>
+                <div className="flex flex-wrap gap-1.5 px-3 py-2 rounded-lg border border-gray-100 bg-gray-50">
+                  {ccList.map(email => (
+                    <span key={email} className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${email === TRADING_EMAIL ? 'bg-[#2D3F52]/10 text-[#2D3F52]' : 'bg-green-50 text-green-700 border border-green-200'}`}>
+                      {email === TRADING_EMAIL ? '📊 ' : '👤 '}{email}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {/* Reply-To */}
+              <div>
+                <label className={labelCls}>Respuestas a</label>
+                <p className="text-sm px-3 py-2 rounded-lg border border-gray-100 bg-gray-50 text-gray-600">{TRADING_EMAIL}</p>
+              </div>
+
               <div>
                 <label className={labelCls}>Asunto</label>
                 <p className="text-sm px-3 py-2 rounded-lg border border-gray-100 bg-gray-50 text-gray-600 truncate">{asunto}</p>
@@ -524,7 +712,7 @@ export default function OrdenesClient({ gmailConnected, initialTab = 'nueva', is
             {/* Preview */}
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
               <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-100 bg-gray-50">
-                <span className="text-xs font-bold text-gray-500 uppercase tracking-wide">Vista previa</span>
+                <span className="text-xs font-bold text-gray-500 uppercase tracking-wide">Vista previa del email</span>
                 {preview && (
                   <button type="button" onClick={handleCopy} className="text-xs text-gray-400 hover:text-gray-600 transition flex items-center gap-1">
                     <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
@@ -533,7 +721,25 @@ export default function OrdenesClient({ gmailConnected, initialTab = 'nueva', is
                 )}
               </div>
               {preview ? (
-                <pre className="p-4 text-xs text-gray-700 font-mono whitespace-pre-wrap leading-relaxed overflow-y-auto max-h-[500px]">{preview}</pre>
+                <div className="overflow-y-auto max-h-[580px]">
+                  {/* Email headers */}
+                  <div className="px-4 py-3 border-b border-gray-100 bg-gray-50/60 space-y-1.5">
+                    {[
+                      { label: 'De',            value: 'Mesa de Operaciones | Roble Capital' },
+                      { label: 'Para',          value: to || '—' },
+                      { label: 'CC',            value: cc },
+                      { label: 'Respuestas a',  value: TRADING_EMAIL },
+                      { label: 'Asunto',        value: asunto },
+                    ].map(({ label, value }) => (
+                      <div key={label} className="flex gap-2 text-xs">
+                        <span className="w-24 shrink-0 font-semibold text-gray-400 text-right">{label}:</span>
+                        <span className="text-gray-700 break-all">{value}</span>
+                      </div>
+                    ))}
+                  </div>
+                  {/* Body */}
+                  <pre className="p-4 text-xs text-gray-700 font-mono whitespace-pre-wrap leading-relaxed">{preview}</pre>
+                </div>
               ) : (
                 <div className="flex flex-col items-center justify-center py-12 px-5 text-center">
                   <svg className="w-9 h-9 text-gray-200 mb-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
@@ -548,13 +754,27 @@ export default function OrdenesClient({ gmailConnected, initialTab = 'nueva', is
         </div>
       )}
 
-      {/* ── HISTORIAL ── */}
-      {tab === 'historial' && (
-        <OrderHistorial isAdmin={isAdmin} userName={userName} />
+      {/* ── BLOTTER GENERAL ── */}
+      {tab === 'blotter' && isAdmin && (
+        <BlotterTable isAdmin={isAdmin} userName={userName} />
+      )}
+
+      {/* ── MESA DE HOY ── */}
+      {tab === 'mesa' && isAdmin && (
+        <BlotterTable isAdmin={isAdmin} userName={userName} soloHoy />
+      )}
+
+      {/* ── MIS ÓRDENES ── */}
+      {tab === 'mis-ordenes' && (
+        <BlotterTable isAdmin={false} userName={userName} />
+      )}
+
+      {tab === 'instrumentos' && (
+        <InstrumentsManager />
       )}
 
       {/* ── FAB: Nueva Orden — mobile only ── */}
-      {tab === 'historial' && (
+      {(tab === 'blotter' || tab === 'mesa' || tab === 'mis-ordenes') && (
         <button
           onClick={() => setTab('nueva')}
           className="md:hidden fixed bottom-[72px] right-4 z-20 flex items-center gap-2 pl-4 pr-5 py-3.5 rounded-full shadow-xl font-semibold text-sm text-white transition-transform active:scale-95"

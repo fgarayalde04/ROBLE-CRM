@@ -20,8 +20,14 @@ export default async function OrdenesPage({ searchParams }: Props) {
   if (!session) redirect('/login')
 
   const gmailConnected = await hasGoogleConnection()
-  const initialTab = searchParams.tab === 'historial' ? 'historial' : 'nueva'
   const isAdmin = ADMIN_ROLES.includes(session.role)
+
+  const VALID_TABS = ['blotter', 'mesa', 'mis-ordenes', 'nueva', 'instrumentos'] as const
+  type ValidTab = typeof VALID_TABS[number]
+  const rawTab = searchParams.tab as string | undefined
+  const initialTab: ValidTab | undefined = VALID_TABS.includes(rawTab as ValidTab)
+    ? (rawTab as ValidTab)
+    : undefined
 
   return (
     <OrdenesClient
@@ -29,6 +35,7 @@ export default async function OrdenesPage({ searchParams }: Props) {
       initialTab={initialTab}
       isAdmin={isAdmin}
       userName={session.name}
+      userEmail={session.email ?? ''}
     />
   )
 }
