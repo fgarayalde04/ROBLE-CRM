@@ -86,10 +86,14 @@ export async function POST(req: NextRequest) {
 
 // ── Variable builders ──────────────────────────────────
 
+const CHK = (val: boolean) => val ? '☒' : '☐'
+
 function buildFichaPFVars(data: FichaPFData, empresa: Empresa) {
   const p = (i: number) => data.personas?.[i]
   const v: Record<string, string> = {
-    codigo_cliente: data.codigo_cliente || '',
+    codigo_cliente:          data.codigo_cliente || '',
+    actua_por_propia_check:  CHK(data.actua_por === 'propia'),
+    actua_por_tercero_check: CHK(data.actua_por === 'tercero'),
   }
 
   // Up to 5 personas
@@ -97,33 +101,45 @@ function buildFichaPFVars(data: FichaPFData, empresa: Empresa) {
     const persona = p(i)
     const suffix = `_${i + 1}`
     if (persona) {
-      v[`nombre_completo${suffix}`] = `${persona.nombres} ${persona.apellidos}`.trim()
-      v[`cod_bfinal${suffix}`]      = persona.codigo_beneficiario || ''
-      v[`apellidos${suffix}`]       = persona.apellidos || ''
-      v[`nombres${suffix}`]         = persona.nombres || ''
-      v[`fecha_nacimiento${suffix}`]= persona.fecha_nacimiento || ''
-      v[`lugar_nacimiento${suffix}`]= persona.lugar_nacimiento || ''
-      v[`tipo_doc${suffix}`]        = persona.tipo_documento || ''
-      v[`num_documento${suffix}`]   = persona.numero_documento || ''
-      v[`pais_emision${suffix}`]    = persona.pais_emision || ''
-      v[`estado_civil${suffix}`]    = persona.estado_civil || ''
-      v[`domicilio${suffix}`]       = persona.domicilio || ''
-      v[`cp_ciudad${suffix}`]       = persona.ciudad_cp || ''
-      v[`pais_domicilio${suffix}`]  = persona.pais || ''
-      v[`telefono${suffix}`]        = persona.telefono || ''
-      v[`celular${suffix}`]         = persona.celular || ''
-      v[`email${suffix}`]           = persona.email || ''
-      v[`ocupacion${suffix}`]       = persona.profesion || ''
-      v[`empleador${suffix}`]       = persona.institucion || ''
-      v[`ingresos${suffix}`]        = persona.ingresos_anuales_usd || ''
-      v[`pais_res_fiscal${suffix}`] = persona.pais_residencia_fiscal || ''
-      v[`nif${suffix}`]             = persona.numero_fiscal || ''
+      v[`nombre_completo${suffix}`]    = `${persona.nombres} ${persona.apellidos}`.trim()
+      v[`cod_bfinal${suffix}`]         = persona.codigo_beneficiario || ''
+      v[`apellidos${suffix}`]          = persona.apellidos || ''
+      v[`nombres${suffix}`]            = persona.nombres || ''
+      v[`fecha_nacimiento${suffix}`]   = persona.fecha_nacimiento || ''
+      v[`lugar_nacimiento${suffix}`]   = persona.lugar_nacimiento || ''
+      v[`tipo_doc${suffix}`]           = persona.tipo_documento || ''
+      v[`num_documento${suffix}`]      = persona.numero_documento || ''
+      v[`pais_emision${suffix}`]       = persona.pais_emision || ''
+      v[`estado_civil${suffix}`]       = persona.estado_civil || ''
+      v[`conyuge_nombre${suffix}`]     = persona.conyuge_nombre || ''
+      v[`conyuge_tipo_doc${suffix}`]   = persona.conyuge_tipo_doc || ''
+      v[`conyuge_num_doc${suffix}`]    = persona.conyuge_numero_doc || ''
+      v[`domicilio${suffix}`]          = persona.domicilio || ''
+      v[`cp_ciudad${suffix}`]          = persona.ciudad_cp || ''
+      v[`pais_domicilio${suffix}`]     = persona.pais || ''
+      v[`telefono${suffix}`]           = persona.telefono || ''
+      v[`celular${suffix}`]            = persona.celular || ''
+      v[`email${suffix}`]              = persona.email || ''
+      v[`mensajeria${suffix}`]         = persona.mensajeria || ''
+      v[`usuario_web${suffix}`]        = persona.usuario_web || ''
+      v[`ocupacion${suffix}`]          = persona.profesion || ''
+      v[`empleador${suffix}`]          = persona.institucion || ''
+      v[`ingresos${suffix}`]           = persona.ingresos_anuales_usd || ''
+      v[`pais_res_fiscal${suffix}`]    = persona.pais_residencia_fiscal || ''
+      v[`nif${suffix}`]                = persona.numero_fiscal || ''
+      v[`tipo_titular_check${suffix}`] = persona.tipo_titular || ''
+      v[`pep_si_check${suffix}`]       = CHK(!!persona.es_pep)
+      v[`pep_no_check${suffix}`]       = CHK(!persona.es_pep)
+      v[`cargo_publico${suffix}`]      = persona.cargo_publico || ''
     } else {
-      // Empty placeholders for unused persona slots
-      const fields = ['nombre_completo','cod_bfinal','apellidos','nombres','fecha_nacimiento',
+      const fields = [
+        'nombre_completo','cod_bfinal','apellidos','nombres','fecha_nacimiento',
         'lugar_nacimiento','tipo_doc','num_documento','pais_emision','estado_civil',
+        'conyuge_nombre','conyuge_tipo_doc','conyuge_num_doc',
         'domicilio','cp_ciudad','pais_domicilio','telefono','celular','email',
-        'ocupacion','empleador','ingresos','pais_res_fiscal','nif']
+        'mensajeria','usuario_web','ocupacion','empleador','ingresos',
+        'pais_res_fiscal','nif','tipo_titular_check','pep_si_check','pep_no_check','cargo_publico',
+      ]
       for (const f of fields) v[`${f}${suffix}`] = ''
     }
   }
@@ -132,22 +148,25 @@ function buildFichaPFVars(data: FichaPFData, empresa: Empresa) {
 }
 
 function buildFichaPJVars(data: FichaPJData, empresa: Empresa) {
+  const entidadPasiva = data.tipo_entidad_pasiva
   return {
-    codigo_cliente:    data.codigo_cliente || '',
-    razon_social:      data.razon_tipo_social || '',
-    nombre_comercial:  data.nombre_comercial || '',
-    fecha_constitucion:data.fecha_constitucion || '',
-    lugar_constitucion:data.lugar_constitucion || '',
-    pais_emision:      data.pais_emision || '',
-    nit:               data.numero_tributario || '',
-    sede_social:       data.sede_social || '',
-    localidad:         data.localidad || '',
-    telefono:          data.telefono || '',
-    email:             data.email || '',
-    actividad:         data.actividad_principal || '',
-    ingresos:          data.ingresos_anuales_usd || '',
-    pais_res_fiscal:   data.pais_residencia_fiscal || '',
-    nif:               data.numero_fiscal || '',
+    codigo_cliente:           data.codigo_cliente || '',
+    tipo_entidad_si_check:    CHK(entidadPasiva === true),
+    tipo_entidad_no_check:    CHK(entidadPasiva === false),
+    razon_social:             data.razon_tipo_social || '',
+    nombre_comercial:         data.nombre_comercial || '',
+    fecha_constitucion:       data.fecha_constitucion || '',
+    lugar_constitucion:       data.lugar_constitucion || '',
+    pais_emision:             data.pais_emision || '',
+    nit:                      data.numero_tributario || '',
+    sede_social:              data.sede_social || '',
+    localidad:                data.localidad || '',
+    telefono:                 data.telefono || '',
+    email:                    data.email || '',
+    actividad:                data.actividad_principal || '',
+    ingresos:                 data.ingresos_anuales_usd || '',
+    pais_res_fiscal:          data.pais_residencia_fiscal || '',
+    nif:                      data.numero_fiscal || '',
   }
 }
 
