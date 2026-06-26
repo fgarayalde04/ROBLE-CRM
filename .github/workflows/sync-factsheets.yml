@@ -1,0 +1,44 @@
+name: Sync Factsheets
+
+on:
+  schedule:
+    - cron: '0 8 * * 1'   # every Monday 8am UTC
+  workflow_dispatch:        # manual trigger from GitHub UI
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    env:
+      SUPABASE_URL:            ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_KEY:    ${{ secrets.SUPABASE_SERVICE_KEY }}
+      AZURE_TENANT_ID:         ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_CLIENT_ID:         ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_CLIENT_SECRET:     ${{ secrets.AZURE_CLIENT_SECRET }}
+      CLIENTES_DRIVE_ID:       ${{ secrets.CLIENTES_DRIVE_ID }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --prefix scripts
+
+      - name: Install Playwright browsers
+        run: npx --prefix scripts playwright install chromium --with-deps
+
+      - name: Run factsheet sync
+        run: node scripts/sync-factsheets.mjs
+
+      - name: Upload results artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sync-results-${{ github.run_id }}
+          path: scripts/results.json
+          retention-days: 30
