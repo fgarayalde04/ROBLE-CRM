@@ -107,15 +107,13 @@ async function scrapeFundinfo(page, isin) {
         // MR column is typically the first document icon link
         // Filter out navigation links (fund name link, etc.) — we want document icons
         const docLinks = links.filter(a => {
-          const href = (a as HTMLAnchorElement).href
-          // Document links on fundinfo go to /document/ or trigger downloads
-          // They usually don't contain the fund name or ISIN in the href
+          const href = a.href
           return href && !href.includes('/search') && !href.includes('/LandingPage') && !href.includes('fundinfo.com/en/')
         })
 
         // Click the first document icon (MR = Monthly Report = factsheet)
         if (docLinks.length > 0) {
-          (docLinks[0] as HTMLElement).click()
+          docLinks[0].click()
           return true
         }
 
@@ -124,7 +122,7 @@ async function scrapeFundinfo(page, isin) {
           const text = (link.textContent ?? '').trim()
           const hasIcon = link.querySelector('img, svg, [class*="icon"], [class*="doc"]')
           if (hasIcon && text.length < 5) {
-            (link as HTMLElement).click()
+            link.click()
             return true
           }
         }
