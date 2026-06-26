@@ -4,19 +4,55 @@ import Link from 'next/link'
 import type { ManagerWithStats } from './page'
 
 const LOGOS: Record<string, string> = {
-  blackrock:          'https://logo.clearbit.com/blackrock.com',
-  'jp-morgan-am':     'https://logo.clearbit.com/jpmorgan.com',
-  pimco:              'https://logo.clearbit.com/pimco.com',
-  'franklin-templeton':'https://logo.clearbit.com/franklintempleton.com',
-  fidelity:           'https://logo.clearbit.com/fidelity.com',
-  schroders:          'https://logo.clearbit.com/schroders.com',
-  'capital-group':    'https://logo.clearbit.com/capitalgroup.com',
-  vanguard:           'https://logo.clearbit.com/vanguard.com',
-  mg:                 'https://logo.clearbit.com/mandg.com',
-  invesco:            'https://logo.clearbit.com/invesco.com',
-  'morgan-stanley':   'https://logo.clearbit.com/morganstanley.com',
-  wellington:         'https://logo.clearbit.com/wellington.com',
-  'janus-henderson':  'https://logo.clearbit.com/janushenderson.com',
+  'ab-bernstein':       'https://logo.clearbit.com/alliancebernstein.com',
+  aberdeen:             'https://logo.clearbit.com/abrdn.com',
+  aegon:                'https://logo.clearbit.com/aegonam.com',
+  amundi:               'https://logo.clearbit.com/amundi.com',
+  barings:              'https://logo.clearbit.com/barings.com',
+  blackrock:            'https://logo.clearbit.com/blackrock.com',
+  compass:              'https://logo.clearbit.com/cgcompass.com',
+  credicorp:            'https://logo.clearbit.com/credicorpcapital.com',
+  dnca:                 'https://logo.clearbit.com/dnca-investments.com',
+  dominion:             'https://logo.clearbit.com/dominion-cs.com',
+  doubleline:           'https://logo.clearbit.com/doubleline.com',
+  'eaton-vance':        'https://logo.clearbit.com/eatonvance.com',
+  'edmond-rothschild':  'https://logo.clearbit.com/edmond-de-rothschild.com',
+  federated:            'https://logo.clearbit.com/federatedhermes.com',
+  fidelity:             'https://logo.clearbit.com/fidelity.com',
+  'franklin-templeton': 'https://logo.clearbit.com/franklintempleton.com',
+  gam:                  'https://logo.clearbit.com/gam.com',
+  h2o:                  'https://logo.clearbit.com/h2o-am.com',
+  invesco:              'https://logo.clearbit.com/invesco.com',
+  'janus-henderson':    'https://logo.clearbit.com/janushenderson.com',
+  'jp-morgan-am':       'https://logo.clearbit.com/jpmorgan.com',
+  jupiter:              'https://logo.clearbit.com/jupiteram.com',
+  lazard:               'https://logo.clearbit.com/lazardassetmanagement.com',
+  'lord-abbett':        'https://logo.clearbit.com/lordabbett.com',
+  'man-group':          'https://logo.clearbit.com/man.com',
+  mg:                   'https://logo.clearbit.com/mandg.com',
+  mfs:                  'https://logo.clearbit.com/mfs.com',
+  moneda:               'https://logo.clearbit.com/moneda.com',
+  'morgan-stanley':     'https://logo.clearbit.com/morganstanley.com',
+  muzinich:             'https://logo.clearbit.com/muzinich.com',
+  'neuberger-berman':   'https://logo.clearbit.com/nb.com',
+  'new-capital':        'https://logo.clearbit.com/newcapitalfunds.com',
+  'ninety-one':         'https://logo.clearbit.com/ninetyone.com',
+  nomura:               'https://logo.clearbit.com/nomura-am.com',
+  nuveen:               'https://logo.clearbit.com/nuveen.com',
+  'pacific-am':         'https://logo.clearbit.com/pacific-am.com',
+  pictet:               'https://logo.clearbit.com/pictet.com',
+  pimco:                'https://logo.clearbit.com/pimco.com',
+  pinebridge:           'https://logo.clearbit.com/pinebridge.com',
+  putnam:               'https://logo.clearbit.com/putnam.com',
+  robeco:               'https://logo.clearbit.com/robeco.com',
+  schroders:            'https://logo.clearbit.com/schroders.com',
+  thornburg:            'https://logo.clearbit.com/thornburg.com',
+  vanguard:             'https://logo.clearbit.com/vanguard.com',
+  'vinci-compass':      'https://logo.clearbit.com/vincicompass.com',
+  virtus:               'https://logo.clearbit.com/virtus.com',
+  vontobel:             'https://logo.clearbit.com/vontobel.com',
+  wcm:                  'https://logo.clearbit.com/wcminvest.com',
+  wellington:           'https://logo.clearbit.com/wellington.com',
 }
 
 function timeAgo(iso: string | null) {
@@ -34,8 +70,7 @@ interface Props { managers: ManagerWithStats[] }
 
 export default function FondosClient({ managers }: Props) {
   const [q, setQ] = useState('')
-  const [syncingGmail, setSyncingGmail] = useState(false)
-  const [syncingWeb,   setSyncingWeb]   = useState(false)
+  const [syncing, setSyncing] = useState(false)
   const [syncMsg, setSyncMsg] = useState<{ text: string; ok: boolean } | null>(null)
 
   const filtered = useMemo(() => {
@@ -47,35 +82,33 @@ export default function FondosClient({ managers }: Props) {
     )
   }, [q, managers])
 
-  const total     = managers.reduce((s, m) => s + m.fund_count, 0)
-  const withFunds = managers.filter(m => m.fund_count > 0).length
+  const total        = managers.reduce((s, m) => s + m.fund_count, 0)
+  const withFactsheet = managers.filter(m => m.latest_factsheet).length
+  const totalManagers = managers.filter(m => m.fund_count > 0).length
 
-  async function handleSync(source: 'gmail' | 'web') {
-    const setter = source === 'gmail' ? setSyncingGmail : setSyncingWeb
-    setter(true)
+  async function handleSync() {
+    setSyncing(true)
     setSyncMsg(null)
     try {
-      const endpoint = source === 'gmail' ? '/api/fondos/sync' : '/api/fondos/sync-web'
-      const res  = await fetch(endpoint, { method: 'POST' })
+      const res  = await fetch('/api/fondos/sync-web', { method: 'POST' })
       const json = await res.json()
       if (res.ok) {
-        if (source === 'web' && json.results) {
-          const detail = (json.results as any[])
-            .filter((r: any) => r.found > 0)
-            .map((r: any) => `${r.manager}: ${r.found} encontrados, ${r.imported} nuevos`)
-            .join(' · ')
-          setSyncMsg({ text: detail || `Sync web completo — ${json.imported} nuevos`, ok: true })
-        } else {
-          setSyncMsg({ text: `Sync Gmail completo — ${json.imported} nuevos factsheets importados`, ok: true })
-        }
+        const results = (json.results ?? []) as { manager: string; found: number; imported: number; error?: string }[]
+        const found    = results.reduce((s: number, r: any) => s + r.found, 0)
+        const imported = results.reduce((s: number, r: any) => s + r.imported, 0)
+        const withErrors = results.filter((r: any) => r.error).length
+        let text = `${imported} factsheets nuevos importados`
+        if (found > 0 && imported === 0) text = 'Sin cambios — todos los factsheets están al día'
+        if (withErrors) text += ` · ${withErrors} gestoras no respondieron`
+        setSyncMsg({ text, ok: true })
       } else {
         setSyncMsg({ text: json.error ?? 'Error en la sincronización', ok: false })
       }
     } catch {
       setSyncMsg({ text: 'Error de red', ok: false })
     } finally {
-      setter(false)
-      setTimeout(() => setSyncMsg(null), 10000)
+      setSyncing(false)
+      setTimeout(() => setSyncMsg(null), 12000)
     }
   }
 
@@ -88,35 +121,22 @@ export default function FondosClient({ managers }: Props) {
             <div>
               <h1 className="text-2xl font-bold text-gray-900">Fondos</h1>
               <p className="text-sm text-gray-500 mt-0.5">
-                {total} fondos · {withFunds} gestoras con factsheets
+                {total} fondos · {totalManagers} gestoras · {withFactsheet} con factsheets
               </p>
             </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => handleSync('gmail')}
-                disabled={syncingGmail || syncingWeb}
-                className="flex items-center gap-2 px-4 py-2 border border-gray-200 bg-white text-gray-700 rounded-xl text-sm font-medium hover:border-[#2D3F52] transition-all disabled:opacity-50"
-              >
-                {syncingGmail
-                  ? <span className="w-3.5 h-3.5 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
-                  : <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor"><path d="M24 5.457v13.909c0 .904-.732 1.636-1.636 1.636h-3.819V11.73L12 16.64l-6.545-4.91v9.273H1.636A1.636 1.636 0 010 19.366V5.457c0-2.023 2.309-3.178 3.927-1.964L5.455 4.64 12 9.548l6.545-4.91 1.528-1.145C21.69 2.28 24 3.434 24 5.457z"/></svg>
-                }
-                {syncingGmail ? 'Buscando…' : 'Gmail'}
-              </button>
-              <button
-                onClick={() => handleSync('web')}
-                disabled={syncingGmail || syncingWeb}
-                className="flex items-center gap-2 px-4 py-2 bg-[#2D3F52] text-white rounded-xl text-sm font-medium hover:bg-opacity-90 transition-all disabled:opacity-50"
-              >
-                {syncingWeb
-                  ? <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  : <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
-                    </svg>
-                }
-                {syncingWeb ? 'Buscando…' : 'Webs'}
-              </button>
-            </div>
+            <button
+              onClick={handleSync}
+              disabled={syncing}
+              className="flex items-center gap-2 px-4 py-2 bg-[#2D3F52] text-white rounded-xl text-sm font-medium hover:bg-opacity-90 transition-all disabled:opacity-50"
+            >
+              {syncing
+                ? <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                : <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+              }
+              {syncing ? 'Buscando factsheets…' : 'Buscar factsheets'}
+            </button>
           </div>
 
           {syncMsg && (
@@ -135,7 +155,7 @@ export default function FondosClient({ managers }: Props) {
             <input
               value={q}
               onChange={e => setQ(e.target.value)}
-              placeholder="Buscar fondo, ISIN, ticker o casa de inversión..."
+              placeholder="Buscar gestora…"
               className="w-full pl-12 pr-4 py-3.5 border border-gray-200 rounded-2xl text-sm bg-white outline-none focus:border-[#2D3F52] focus:ring-4 focus:ring-[#2D3F52]/5 transition-all placeholder:text-gray-400"
             />
             {q && (
@@ -153,13 +173,10 @@ export default function FondosClient({ managers }: Props) {
       <div className="max-w-6xl mx-auto px-8 py-8">
         {filtered.length === 0 ? (
           <div className="text-center py-16 text-gray-400">
-            <svg className="w-12 h-12 mx-auto mb-3 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
             <p className="text-sm">No se encontró ninguna gestora</p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
             {filtered.map(m => (
               <ManagerCard key={m.id} manager={m} />
             ))}
@@ -172,46 +189,43 @@ export default function FondosClient({ managers }: Props) {
 
 function ManagerCard({ manager: m }: { manager: ManagerWithStats }) {
   const logoUrl = m.logo_url ?? LOGOS[m.slug]
+  const hasFactsheet = !!m.latest_factsheet
 
   return (
     <Link href={`/fondos/${m.slug}`}
       className="group bg-white border border-gray-100 rounded-2xl p-5 hover:border-[#2D3F52]/30 hover:shadow-md transition-all flex flex-col gap-3"
     >
       {/* Logo area */}
-      <div className="h-12 flex items-center">
+      <div className="h-10 flex items-center">
         {logoUrl ? (
           <img
             src={logoUrl}
             alt={m.name}
-            className="h-8 max-w-[100px] object-contain"
+            className="h-7 max-w-[90px] object-contain grayscale group-hover:grayscale-0 transition-all"
             onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
           />
         ) : (
-          <div className="w-10 h-10 bg-[#2D3F52] rounded-xl flex items-center justify-center text-white font-bold text-sm">
+          <div className="w-9 h-9 bg-[#2D3F52] rounded-xl flex items-center justify-center text-white font-bold text-xs">
             {m.name.slice(0, 2).toUpperCase()}
           </div>
         )}
       </div>
 
       {/* Name */}
-      <p className="text-sm font-semibold text-gray-800 leading-tight group-hover:text-[#2D3F52] transition-colors">
+      <p className="text-xs font-semibold text-gray-800 leading-tight group-hover:text-[#2D3F52] transition-colors">
         {m.name}
       </p>
 
       {/* Stats */}
-      <div className="mt-auto pt-2 border-t border-gray-50 space-y-1">
-        <div className="flex items-center justify-between">
-          <span className="text-xs text-gray-400">Fondos</span>
-          <span className={`text-xs font-semibold ${m.fund_count > 0 ? 'text-[#2D3F52]' : 'text-gray-300'}`}>
-            {m.fund_count > 0 ? m.fund_count : '—'}
-          </span>
-        </div>
-        <div className="flex items-center justify-between">
-          <span className="text-xs text-gray-400">Actualizado</span>
-          <span className={`text-xs ${m.latest_factsheet ? 'text-gray-500' : 'text-gray-300'}`}>
-            {timeAgo(m.latest_factsheet) ?? '—'}
-          </span>
-        </div>
+      <div className="mt-auto pt-2 border-t border-gray-50 flex items-center justify-between gap-2">
+        <span className={`text-xs font-medium px-1.5 py-0.5 rounded-md ${
+          m.fund_count > 0 ? 'bg-[#2D3F52]/8 text-[#2D3F52]' : 'text-gray-300'
+        }`}>
+          {m.fund_count > 0 ? `${m.fund_count} fondos` : '—'}
+        </span>
+        <span className={`text-[10px] ${hasFactsheet ? 'text-green-600' : 'text-gray-300'}`}>
+          {hasFactsheet ? timeAgo(m.latest_factsheet) ?? '—' : 'sin factsheet'}
+        </span>
       </div>
     </Link>
   )

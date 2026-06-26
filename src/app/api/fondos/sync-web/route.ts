@@ -6,175 +6,297 @@ import { supabaseAdmin } from '@/lib/supabase/admin'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
-const FONDOS_DRIVE_ID = process.env.CLIENTES_DRIVE_ID ?? ''
+const DRIVE_ID = process.env.CLIENTES_DRIVE_ID ?? ''
 
-// ── Known factsheet pages per gestora ────────────────────────────────────────
-// These are public PDF listing or download pages for each asset manager.
-// We fetch the page HTML and extract direct PDF download links.
+// ── Gestora-specific factsheet fetchers ───────────────────────────────────────
+// Each returns an array of { isin, pdfUrl, filename } for discovered factsheets.
+// Returns [] when the site doesn't respond or no PDFs found.
+// All are best-effort — errors are caught and skipped.
 
-const WEB_SOURCES: Record<string, { name: string; urls: string[]; pdfPattern?: RegExp }> = {
-  'pimco': {
-    name: 'PIMCO',
-    urls: [
-      'https://www.pimco.com/en-us/resources/fact-sheets',
-      'https://www.pimco.com/en-eu/resources/fact-sheets',
-    ],
-    pdfPattern: /href="([^"]*(?:fact.?sheet|gis)[^"]*\.pdf[^"]*)"/gi,
-  },
-  'schroders': {
-    name: 'Schroders',
-    urls: [
-      'https://www.schroders.com/en/global/institutional/literature/',
-      'https://www.schroders.com/en/uk/intermediary/literature/',
-    ],
-    pdfPattern: /href="([^"]*(?:factsheet|fact.sheet)[^"]*\.pdf[^"]*)"/gi,
-  },
-  'mg': {
-    name: 'M&G',
-    urls: [
-      'https://www.mandg.com/investments/professional-investor/en-gb/literature',
-    ],
-    pdfPattern: /href="([^"]*(?:factsheet|fact.sheet)[^"]*\.pdf[^"]*)"/gi,
-  },
-  'janus-henderson': {
-    name: 'Janus Henderson',
-    urls: [
-      'https://janushenderson.com/en-us/investor/literature/',
-    ],
-    pdfPattern: /href="([^"]*(?:factsheet|fact.sheet)[^"]*\.pdf[^"]*)"/gi,
-  },
-  'franklin-templeton': {
-    name: 'Franklin Templeton',
-    urls: [
-      'https://www.franklintempleton.com/literature?type=factsheet',
-      'https://www.franklintempleton.es/literature?type=factsheet',
-    ],
-    pdfPattern: /href="([^"]*(?:factsheet|fact.sheet|fs)[^"]*\.pdf[^"]*)"/gi,
-  },
-  'invesco': {
-    name: 'Invesco',
-    urls: [
-      'https://www.invesco.com/us/financial-products/etfs/product-detail?audienceType=Investor&productId=ETF-QQQ',
-    ],
-    pdfPattern: /href="([^"]*(?:factsheet|fact.sheet)[^"]*\.pdf[^"]*)"/gi,
-  },
-}
+type FactsheetHit = { isin: string; pdfUrl: string; filename: string }
 
-// Catch-all PDF link pattern for any page
-const GENERIC_PDF_PATTERN = /href="([^"]*\.pdf[^"]*)"/gi
-
-// ── Helpers ────────────────────────────────────────────────────────────────────
-
-async function fetchPage(url: string): Promise<string | null> {
-  try {
-    const res = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'es,en;q=0.9',
-      },
-      signal: AbortSignal.timeout(10000),
-    })
-    if (!res.ok) return null
-    return res.text()
-  } catch {
-    return null
-  }
-}
-
-function extractPDFLinks(html: string, baseUrl: string, pattern?: RegExp): string[] {
-  const pat = pattern ?? GENERIC_PDF_PATTERN
-  const links = new Set<string>()
-  let m: RegExpExecArray | null
-  const regex = new RegExp(pat.source, pat.flags)
-
-  while ((m = regex.exec(html)) !== null) {
-    const href = m[1]
-    if (!href) continue
-    // Make absolute
+// Robeco: their document portal has ISIN-searchable pages
+async function fetchRobeco(isins: string[]): Promise<FactsheetHit[]> {
+  const hits: FactsheetHit[] = []
+  for (const isin of isins) {
     try {
-      const abs = href.startsWith('http') ? href : new URL(href, baseUrl).toString()
-      // Only keep if it looks like a factsheet
-      const lower = abs.toLowerCase()
-      if (lower.includes('factsheet') || lower.includes('fact-sheet') ||
-          lower.includes('fund-detail') || lower.includes('fs-')) {
-        links.add(abs)
+      const res = await fetch(
+        `https://www.robeco.com/en-us/api/search?type=fund&q=${isin}&format=json`,
+        { headers: { 'Accept': 'application/json', 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(8000) }
+      )
+      if (!res.ok) continue
+      const data = await res.json()
+      const results = data.results ?? data.items ?? []
+      for (const item of results) {
+        const pdfUrl: string | undefined = item.factsheetUrl ?? item.pdf_url ?? item.document_url
+        if (pdfUrl && pdfUrl.endsWith('.pdf')) {
+          hits.push({ isin, pdfUrl, filename: `Robeco_${isin}_factsheet.pdf` })
+          break
+        }
       }
-    } catch { /* invalid URL */ }
+    } catch { /* skip */ }
   }
-  return Array.from(links)
+  return hits
 }
 
-function isAlreadyKnown(url: string, existing: Set<string>): boolean {
-  return existing.has(url)
-}
-
-function slugFromUrl(url: string): string {
-  try {
-    const u = new URL(url)
-    return u.pathname.split('/').filter(Boolean).pop() ?? 'factsheet'
-  } catch {
-    return 'factsheet'
+// MFS: ISIN-based fund lookup via their public API
+async function fetchMFS(isins: string[]): Promise<FactsheetHit[]> {
+  const hits: FactsheetHit[] = []
+  for (const isin of isins) {
+    try {
+      const res = await fetch(
+        `https://www.mfs.com/en-us/financial-professional/funds-by-isin/${isin}.html`,
+        { headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'text/html' }, signal: AbortSignal.timeout(8000) }
+      )
+      if (!res.ok) continue
+      const html = await res.text()
+      const match = html.match(/href="([^"]*factsheet[^"]*\.pdf[^"]*)"/i)
+      if (match) {
+        const pdfUrl = match[1].startsWith('http') ? match[1] : `https://www.mfs.com${match[1]}`
+        hits.push({ isin, pdfUrl, filename: `MFS_${isin}_factsheet.pdf` })
+      }
+    } catch { /* skip */ }
   }
+  return hits
 }
 
-function extractISIN(text: string): string | null {
-  const m = text.match(/\b([A-Z]{2}[A-Z0-9]{9}[0-9])\b/)
-  return m?.[1] ?? null
+// PIMCO: Their GIS factsheet API for UCITS funds
+async function fetchPIMCO(isins: string[]): Promise<FactsheetHit[]> {
+  const hits: FactsheetHit[] = []
+  for (const isin of isins) {
+    if (!isin.startsWith('IE')) continue  // PIMCO UCITS are IE-domiciled
+    try {
+      const res = await fetch(
+        `https://www.pimco.com/en-eu/api/products/${isin}/literature?type=factsheet`,
+        { headers: { 'Accept': 'application/json', 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(8000) }
+      )
+      if (!res.ok) continue
+      const data = await res.json()
+      const docs = data.documents ?? data.items ?? []
+      const fs = docs.find((d: any) => (d.documentType ?? '').toLowerCase().includes('fact'))
+      if (fs?.url) {
+        hits.push({ isin, pdfUrl: fs.url, filename: `PIMCO_${isin}_factsheet.pdf` })
+      }
+    } catch { /* skip */ }
+  }
+  return hits
 }
+
+// Schroders: ISIN-based fund pages
+async function fetchSchroders(isins: string[]): Promise<FactsheetHit[]> {
+  const hits: FactsheetHit[] = []
+  for (const isin of isins) {
+    try {
+      const res = await fetch(
+        `https://www.schroders.com/en/global/individual/funds/fund-centre/funds/${isin}/`,
+        { headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'text/html' }, signal: AbortSignal.timeout(8000) }
+      )
+      if (!res.ok) continue
+      const html = await res.text()
+      const match = html.match(/href="([^"]*(?:factsheet|fund-factsheet)[^"]*\.pdf[^"]*)"/i)
+      if (match) {
+        const pdfUrl = match[1].startsWith('http') ? match[1] : `https://www.schroders.com${match[1]}`
+        hits.push({ isin, pdfUrl, filename: `Schroders_${isin}_factsheet.pdf` })
+      }
+    } catch { /* skip */ }
+  }
+  return hits
+}
+
+// Janus Henderson: ISIN-based document search
+async function fetchJanusHenderson(isins: string[]): Promise<FactsheetHit[]> {
+  const hits: FactsheetHit[] = []
+  for (const isin of isins) {
+    try {
+      const res = await fetch(
+        `https://api.janushenderson.com/api/search/funds?isin=${isin}&locale=en-gb`,
+        { headers: { 'Accept': 'application/json', 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(8000) }
+      )
+      if (!res.ok) continue
+      const data = await res.json()
+      const fund = (data.funds ?? data.results ?? [])[0]
+      if (!fund) continue
+      const fundId = fund.id ?? fund.fundId
+      if (!fundId) continue
+      // Try to get factsheet from fund detail
+      const detailRes = await fetch(
+        `https://api.janushenderson.com/api/funds/${fundId}/documents?type=factsheet`,
+        { headers: { 'Accept': 'application/json', 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(8000) }
+      )
+      if (!detailRes.ok) continue
+      const detail = await detailRes.json()
+      const doc = (detail.documents ?? detail)[0]
+      if (doc?.url) {
+        hits.push({ isin, pdfUrl: doc.url, filename: `JanusHenderson_${isin}_factsheet.pdf` })
+      }
+    } catch { /* skip */ }
+  }
+  return hits
+}
+
+// Franklin Templeton: ISIN-based literature search
+async function fetchFranklin(isins: string[]): Promise<FactsheetHit[]> {
+  const hits: FactsheetHit[] = []
+  for (const isin of isins.filter(i => i.startsWith('LU') || i.startsWith('IE'))) {
+    try {
+      const res = await fetch(
+        `https://www.franklintempleton.com/api/products/literature?isin=${isin}&type=factsheet`,
+        { headers: { 'Accept': 'application/json', 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(8000) }
+      )
+      if (!res.ok) continue
+      const data = await res.json()
+      const doc = (data.documents ?? data)[0]
+      if (doc?.url) {
+        hits.push({ isin, pdfUrl: doc.url, filename: `Franklin_${isin}_factsheet.pdf` })
+      }
+    } catch { /* skip */ }
+  }
+  return hits
+}
+
+// Ninety One: document search by ISIN
+async function fetchNinetyOne(isins: string[]): Promise<FactsheetHit[]> {
+  const hits: FactsheetHit[] = []
+  for (const isin of isins.filter(i => i.startsWith('LU'))) {
+    try {
+      const res = await fetch(
+        `https://www.ninetyone.com/en/international/funds/funds-listing?isin=${isin}`,
+        { headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'text/html' }, signal: AbortSignal.timeout(8000) }
+      )
+      if (!res.ok) continue
+      const html = await res.text()
+      const match = html.match(/href="([^"]*(?:factsheet|fund-sheet)[^"]*\.pdf[^"]*)"/i)
+      if (match) {
+        const pdfUrl = match[1].startsWith('http') ? match[1] : `https://www.ninetyone.com${match[1]}`
+        hits.push({ isin, pdfUrl, filename: `NinetyOne_${isin}_factsheet.pdf` })
+      }
+    } catch { /* skip */ }
+  }
+  return hits
+}
+
+// Neuberger Berman: their document center
+async function fetchNeuberger(isins: string[]): Promise<FactsheetHit[]> {
+  const hits: FactsheetHit[] = []
+  for (const isin of isins.filter(i => i.startsWith('IE'))) {
+    try {
+      const res = await fetch(
+        `https://www.nb.com/api/funds/documents?isin=${isin}&documentType=factsheet`,
+        { headers: { 'Accept': 'application/json', 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(8000) }
+      )
+      if (!res.ok) continue
+      const data = await res.json()
+      const doc = (data.documents ?? data)[0]
+      if (doc?.url) {
+        hits.push({ isin, pdfUrl: doc.url, filename: `NB_${isin}_factsheet.pdf` })
+      }
+    } catch { /* skip */ }
+  }
+  return hits
+}
+
+// M&G: ISIN-based document search
+async function fetchMG(isins: string[]): Promise<FactsheetHit[]> {
+  const hits: FactsheetHit[] = []
+  for (const isin of isins.filter(i => i.startsWith('LU'))) {
+    try {
+      const res = await fetch(
+        `https://www.mandg.com/dam/investments/literature/factsheets/${isin}_fs.pdf`,
+        { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(8000), method: 'HEAD' }
+      )
+      if (res.ok && res.headers.get('content-type')?.includes('pdf')) {
+        const pdfUrl = `https://www.mandg.com/dam/investments/literature/factsheets/${isin}_fs.pdf`
+        hits.push({ isin, pdfUrl, filename: `MG_${isin}_factsheet.pdf` })
+      }
+    } catch { /* skip */ }
+  }
+  return hits
+}
+
+// JPMorgan: their literature API
+async function fetchJPMorgan(isins: string[]): Promise<FactsheetHit[]> {
+  const hits: FactsheetHit[] = []
+  for (const isin of isins.filter(i => i.startsWith('LU'))) {
+    try {
+      const res = await fetch(
+        `https://am.jpmorgan.com/us/en/asset-management/gim/adv/api/literature?isin=${isin}&type=factsheet`,
+        { headers: { 'Accept': 'application/json', 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(8000) }
+      )
+      if (!res.ok) continue
+      const data = await res.json()
+      const doc = (data.documents ?? data)[0]
+      if (doc?.url) {
+        hits.push({ isin, pdfUrl: doc.url, filename: `JPMorgan_${isin}_factsheet.pdf` })
+      }
+    } catch { /* skip */ }
+  }
+  return hits
+}
+
+// ── Map gestora slug → fetcher + its fund ISINs ──────────────────────────────
+
+const FETCHERS: Record<string, (isins: string[]) => Promise<FactsheetHit[]>> = {
+  robeco:           fetchRobeco,
+  mfs:              fetchMFS,
+  pimco:            fetchPIMCO,
+  schroders:        fetchSchroders,
+  'janus-henderson': fetchJanusHenderson,
+  'franklin-templeton': fetchFranklin,
+  'ninety-one':     fetchNinetyOne,
+  'neuberger-berman': fetchNeuberger,
+  mg:               fetchMG,
+  'jp-morgan-am':   fetchJPMorgan,
+}
+
+// ── OneDrive helpers ──────────────────────────────────────────────────────────
 
 async function downloadPDF(url: string): Promise<Buffer | null> {
   try {
     const res = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)',
-        'Accept': 'application/pdf,*/*',
-      },
-      signal: AbortSignal.timeout(20000),
+      headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'application/pdf,*/*' },
+      signal: AbortSignal.timeout(25000),
     })
-    if (!res.ok || !res.headers.get('content-type')?.includes('pdf')) return null
+    if (!res.ok) return null
+    const ct = res.headers.get('content-type') ?? ''
+    if (!ct.includes('pdf') && !ct.includes('octet-stream')) return null
     return Buffer.from(await res.arrayBuffer())
-  } catch {
-    return null
-  }
+  } catch { return null }
 }
 
 const folderCache: Record<string, string> = {}
 
-async function getOrCreateOneDriveFolder(token: string, parentId: string, name: string): Promise<string> {
+async function getOrCreateFolder(token: string, parentId: string, name: string): Promise<string> {
   const key = `${parentId}/${name}`
   if (folderCache[key]) return folderCache[key]
   try {
-    const listRes = await fetch(
-      `https://graph.microsoft.com/v1.0/drives/${FONDOS_DRIVE_ID}/items/${parentId}/children?$filter=name eq '${encodeURIComponent(name)}'&$select=id,name,folder`,
+    const res = await fetch(
+      `https://graph.microsoft.com/v1.0/drives/${DRIVE_ID}/items/${parentId}/children?$filter=name eq '${encodeURIComponent(name)}'&$select=id,name,folder`,
       { headers: { Authorization: `Bearer ${token}` } }
     )
-    if (listRes.ok) {
-      const d = await listRes.json()
+    if (res.ok) {
+      const d = await res.json()
       const found = (d.value ?? []).find((i: any) => i.folder && i.name === name)
       if (found) { folderCache[key] = found.id; return found.id }
     }
-  } catch { /* fallthrough to create */ }
-  const folder = await createFolder(FONDOS_DRIVE_ID, parentId, name, token)
-  folderCache[key] = folder.id
-  return folder.id
+  } catch { /* fallthrough */ }
+  const f = await createFolder(DRIVE_ID, parentId, name, token)
+  folderCache[key] = f.id
+  return f.id
 }
 
-async function getFondosRootId(token: string): Promise<string> {
+async function getFondosRoot(token: string): Promise<string> {
   try {
     const res = await fetch(
-      `https://graph.microsoft.com/v1.0/drives/${FONDOS_DRIVE_ID}/root:/Fondos`,
+      `https://graph.microsoft.com/v1.0/drives/${DRIVE_ID}/root:/Fondos`,
       { headers: { Authorization: `Bearer ${token}` } }
     )
     if (res.ok) return (await res.json()).id
   } catch { /* fallthrough */ }
-  const rootRes = await fetch(
-    `https://graph.microsoft.com/v1.0/drives/${FONDOS_DRIVE_ID}/root`,
+  const root = await (await fetch(
+    `https://graph.microsoft.com/v1.0/drives/${DRIVE_ID}/root`,
     { headers: { Authorization: `Bearer ${token}` } }
-  )
-  const root = await rootRes.json()
-  const folder = await createFolder(FONDOS_DRIVE_ID, root.id, 'Fondos', token)
-  return folder.id
+  )).json()
+  return (await createFolder(DRIVE_ID, root.id, 'Fondos', token)).id
 }
 
 // ── Main handler ──────────────────────────────────────────────────────────────
@@ -183,112 +305,127 @@ export async function POST() {
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
-  let msToken: string | null = null
-  try { msToken = await getGraphToken() } catch { /* OneDrive not connected */ }
-
-  // Load existing factsheet URLs to avoid duplicates
-  const { data: existingRows } = await supabaseAdmin
-    .from('factsheets')
-    .select('pdf_url')
-    .not('pdf_url', 'is', null)
-
-  const existingUrls = new Set((existingRows ?? []).map(r => r.pdf_url as string))
-
-  // Load managers for slug → id + name lookup
+  // Load all managers and their funds that lack a current factsheet
   const { data: managers } = await supabaseAdmin
     .from('asset_managers')
     .select('id, slug, name')
 
-  const managerMap = Object.fromEntries((managers ?? []).map(m => [m.slug, m]))
-
-  let rootFolderId: string | null = null
-  if (msToken && FONDOS_DRIVE_ID) {
-    try { rootFolderId = await getFondosRootId(msToken) } catch { /* no OneDrive */ }
+  if (!managers?.length) {
+    return NextResponse.json({ error: 'No hay gestoras. Ejecutá fondos_carga.sql en Supabase primero.' }, { status: 500 })
   }
 
-  const results: { manager: string; found: number; imported: number; error?: string }[] = []
+  // Load all fondos without an is_latest factsheet, keyed by asset_manager_id
+  const { data: allFondos } = await supabaseAdmin
+    .from('fondos')
+    .select('id, isin, name, asset_manager_id')
+    .not('isin', 'is', null)
+
+  // Load ISINs that already have a latest factsheet (to skip)
+  const { data: covered } = await supabaseAdmin
+    .from('factsheets')
+    .select('fondo_id')
+    .eq('is_latest', true)
+
+  const coveredIds = new Set((covered ?? []).map(r => r.fondo_id))
+
+  // Build map: slug → [{fondoId, isin, name}]
+  const managerMap = Object.fromEntries(managers.map(m => [m.slug, m]))
+  const fundsBySlug: Record<string, { id: string; isin: string; name: string }[]> = {}
+
+  for (const f of allFondos ?? []) {
+    if (coveredIds.has(f.id)) continue  // already has factsheet
+    const mgr = managers.find(m => m.id === f.asset_manager_id)
+    if (!mgr) continue
+    if (!fundsBySlug[mgr.slug]) fundsBySlug[mgr.slug] = []
+    fundsBySlug[mgr.slug].push({ id: f.id, isin: f.isin!, name: f.name })
+  }
+
+  // OneDrive setup
+  let msToken: string | null = null
+  let rootId:  string | null = null
+  try {
+    msToken = await getGraphToken()
+    rootId  = await getFondosRoot(msToken)
+  } catch { /* no OneDrive — store URLs as-is */ }
+
+  const results: { manager: string; slug: string; tried: number; imported: number; error?: string }[] = []
   let totalImported = 0
 
-  for (const [slug, source] of Object.entries(WEB_SOURCES)) {
-    const manager = managerMap[slug]
-    if (!manager) continue
+  for (const [slug, fetcher] of Object.entries(FETCHERS)) {
+    const mgr   = managerMap[slug]
+    const funds = fundsBySlug[slug] ?? []
 
-    let found = 0
-    let imported = 0
+    if (!mgr || funds.length === 0) {
+      results.push({ manager: mgr?.name ?? slug, slug, tried: 0, imported: 0 })
+      continue
+    }
+
+    const isins = funds.map(f => f.isin)
+    let imported  = 0
     let lastError: string | undefined
 
-    for (const pageUrl of source.urls) {
-      const html = await fetchPage(pageUrl)
-      if (!html) continue
+    try {
+      const hits = await fetcher(isins)
 
-      const pdfLinks = extractPDFLinks(html, pageUrl, source.pdfPattern)
-      found += pdfLinks.length
-
-      for (const pdfUrl of pdfLinks) {
-        if (isAlreadyKnown(pdfUrl, existingUrls)) continue
+      for (const hit of hits) {
+        const fondo = funds.find(f => f.isin === hit.isin)
+        if (!fondo) continue
 
         try {
-          const pdfBytes = await downloadPDF(pdfUrl)
+          const pdfBytes = await downloadPDF(hit.pdfUrl)
           if (!pdfBytes) continue
 
-          const filename = decodeURIComponent(slugFromUrl(pdfUrl))
-            .replace(/[^a-zA-Z0-9._\-() ]/g, '_') + '.pdf'
-
-          // Upload to OneDrive
-          let storedUrl: string | null = pdfUrl  // fallback: keep original URL
-          if (msToken && rootFolderId) {
+          let storedUrl: string | null = hit.pdfUrl
+          if (msToken && rootId) {
             try {
-              const folderId = await getOrCreateOneDriveFolder(msToken, rootFolderId, manager.name)
-              const item = await uploadFile(
-                FONDOS_DRIVE_ID, folderId, filename,
-                pdfBytes.buffer as ArrayBuffer, 'application/pdf', msToken
-              )
-              storedUrl = item.webUrl ?? pdfUrl
+              const folderId = await getOrCreateFolder(msToken, rootId, mgr.name)
+              const safe     = hit.filename.replace(/[^a-zA-Z0-9._\-() ]/g, '_')
+              const item     = await uploadFile(DRIVE_ID, folderId, safe, pdfBytes.buffer as ArrayBuffer, 'application/pdf', msToken)
+              storedUrl = item.webUrl ?? hit.pdfUrl
             } catch { /* keep original URL */ }
           }
 
-          // Try to find/create fondo
-          const isin = extractISIN(filename) ?? extractISIN(pdfUrl)
-          let fondoId: string | null = null
-          if (isin) {
-            const { data: f } = await supabaseAdmin
-              .from('fondos').select('id')
-              .eq('asset_manager_id', manager.id).eq('isin', isin).single()
-            if (f) {
-              fondoId = f.id
-              await supabaseAdmin.from('factsheets')
-                .update({ is_latest: false })
-                .eq('fondo_id', fondoId).eq('is_latest', true)
-            } else {
-              const fundName = filename.replace(/\.pdf$/i, '').replace(/[-_]/g, ' ').trim()
-              const { data: nf } = await supabaseAdmin
-                .from('fondos')
-                .insert({ asset_manager_id: manager.id, name: fundName, isin })
-                .select('id').single()
-              fondoId = nf?.id ?? null
-            }
-          }
+          // Mark previous latest as stale
+          await supabaseAdmin
+            .from('factsheets')
+            .update({ is_latest: false })
+            .eq('fondo_id', fondo.id)
+            .eq('is_latest', true)
 
           await supabaseAdmin.from('factsheets').insert({
-            fondo_id:         fondoId,
-            asset_manager_id: manager.id,
-            file_name:        filename,
+            fondo_id:         fondo.id,
+            asset_manager_id: mgr.id,
+            file_name:        hit.filename,
             pdf_url:          storedUrl,
             is_latest:        true,
             imported_by:      'web-sync',
           })
 
-          existingUrls.add(pdfUrl)
           imported++
           totalImported++
         } catch (e: any) {
           lastError = e.message
         }
       }
+    } catch (e: any) {
+      lastError = e.message
     }
 
-    results.push({ manager: source.name, found, imported, error: lastError })
+    results.push({ manager: mgr.name, slug, tried: funds.length, imported, error: lastError })
   }
 
-  return NextResponse.json({ imported: totalImported, results })
+  // Also report gestoras we have funds for but no fetcher
+  const allSlugsWithFunds = Object.keys(fundsBySlug)
+  const knownSlugs = new Set(Object.keys(FETCHERS))
+  for (const slug of allSlugsWithFunds) {
+    if (knownSlugs.has(slug)) continue
+    const mgr = managerMap[slug]
+    results.push({ manager: mgr?.name ?? slug, slug, tried: fundsBySlug[slug].length, imported: 0, error: 'sin integración web — subir manualmente' })
+  }
+
+  return NextResponse.json({
+    imported: totalImported,
+    results,
+    pending: Object.values(fundsBySlug).flat().length - totalImported,
+  })
 }
