@@ -2,7 +2,7 @@
 const nextConfig = {
   experimental: {
     instrumentationHook: true,
-    serverComponentsExternalPackages: ['pdfjs-dist', 'docusign-esign'],
+    serverComponentsExternalPackages: ['pdfjs-dist', 'docusign-esign', '@sparticuz/chromium-min', 'playwright-core'],
     // Tell Vercel file tracer to include the DOCX templates in the serverless bundle
     outputFileTracingIncludes: {
       '/api/bc-ficha/generate': ['./public/bc-templates/**'],
