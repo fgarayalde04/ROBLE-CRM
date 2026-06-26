@@ -71,58 +71,73 @@ async function uploadToOneDrive(token, folderId, filename, buffer) {
 
 async function scrapeFundinfo(page, isin) {
   try {
-    // 1. Go to fundinfo search by ISIN
-    await page.goto(`https://fundinfo.com/en/search?query=${isin}&types=documents`, {
+    // Navigate directly to the fund's document page on fundinfo by ISIN
+    await page.goto(`https://fundinfo.com/en/fund/${isin}/documents`, {
       waitUntil: 'domcontentloaded',
       timeout: 30000,
     })
     await page.waitForTimeout(3000)
 
-    // 2. Accept cookies if banner appears
-    const cookieBtn = page.locator('button:has-text("Accept"), button:has-text("Accepter"), button:has-text("Aceptar"), [id*="accept"], [class*="accept-all"]').first()
+    // Accept cookies if banner appears
+    const cookieBtn = page.locator('button:has-text("Accept"), button:has-text("Agree"), [id*="accept-all"], [class*="accept-all"]').first()
     if (await cookieBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
       await cookieBtn.click().catch(() => {})
-      await page.waitForTimeout(1000)
+      await page.waitForTimeout(1500)
     }
 
-    // 3. Look for factsheet PDF links in results
+    // Look for download links specifically labeled "Factsheet" or "Fact Sheet"
+    // Only accept PDFs from external domains (not fundinfo.com itself)
     const pdfUrl = await page.evaluate(() => {
       const links = Array.from(document.querySelectorAll('a[href]'))
-      const factsheet = links.find(a => {
-        const href = a.href.toLowerCase()
-        const text = (a.textContent || '').toLowerCase()
-        return (href.includes('.pdf') || text.includes('factsheet') || text.includes('fact sheet')) &&
-               (href.includes('factsheet') || href.includes('fact-sheet') || href.includes('fundinfo') || text.includes('factsheet'))
+
+      // First pass: look for links with text "factsheet" pointing to external PDF
+      const byText = links.find(a => {
+        const text = (a.textContent ?? '').trim().toLowerCase()
+        const href = (a.href ?? '').toLowerCase()
+        const isExternal = !href.includes('fundinfo.com') || href.includes('/download/')
+        return isExternal && (
+          text === 'factsheet' ||
+          text === 'fact sheet' ||
+          text.startsWith('factsheet') ||
+          text.startsWith('fact sheet')
+        )
       })
-      return factsheet?.href ?? null
+      if (byText) return byText.href
+
+      // Second pass: look for links where the href itself contains "factsheet" and ends in .pdf
+      const byHref = links.find(a => {
+        const href = (a.href ?? '').toLowerCase()
+        return href.includes('.pdf') &&
+               (href.includes('factsheet') || href.includes('fact-sheet') || href.includes('fact_sheet')) &&
+               !href.includes('fundinfo.com/en/legal') &&
+               !href.includes('fundinfo.com/en/about') &&
+               !href.includes('user-guide') &&
+               !href.includes('userguide')
+      })
+      if (byHref) return byHref.href
+
+      return null
     })
 
-    if (pdfUrl) {
-      return await downloadBuffer(pdfUrl)
+    if (pdfUrl) return await downloadBuffer(pdfUrl)
+
+    // If no direct link found, try intercepting the download via a click on "Factsheet" button
+    const factsheetBtn = page.locator('text=/^factsheet$/i, text=/^fact sheet$/i, [aria-label*="factsheet" i], [title*="factsheet" i]').first()
+    if (await factsheetBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+      const [download] = await Promise.all([
+        page.waitForEvent('download', { timeout: 10000 }).catch(() => null),
+        factsheetBtn.click(),
+      ])
+      if (download) {
+        const stream = await download.createReadStream()
+        const chunks = []
+        for await (const chunk of stream) chunks.push(Buffer.from(chunk))
+        const buf = Buffer.concat(chunks)
+        return buf.length > 5000 ? buf : null
+      }
     }
-
-    // 4. Try clicking the first result to get to fund page
-    const firstResult = page.locator('[class*="result"] a, [class*="search-item"] a, article a').first()
-    if (await firstResult.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await firstResult.click()
-      await page.waitForTimeout(3000)
-
-      // Look for factsheet on fund page
-      const factsheetLink = await page.evaluate(() => {
-        const links = Array.from(document.querySelectorAll('a[href]'))
-        const fs = links.find(a => {
-          const text = (a.textContent || '').toLowerCase()
-          const href = a.href.toLowerCase()
-          return text.includes('factsheet') || text.includes('fact sheet') ||
-                 (href.includes('factsheet') && href.includes('.pdf'))
-        })
-        return fs?.href ?? null
-      })
-
-      if (factsheetLink) return await downloadBuffer(factsheetLink)
-    }
-  } catch (e) {
-    // silent - try fallback
+  } catch {
+    // silent
   }
   return null
 }
