@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { getValidGoogleToken, getGoogleEmail } from '@/lib/google/tokens'
+import { getGraphToken, uploadFile, createFolder } from '@/lib/microsoft/graph'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 
 export const dynamic = 'force-dynamic'
@@ -79,23 +80,72 @@ function extractISIN(text: string): string | null {
   return match?.[1] ?? null
 }
 
-// ── Supabase Storage upload ───────────────────────────────────────────────────
+// ── OneDrive upload ───────────────────────────────────────────────────────────
+// Folder structure: Fondos / {ManagerName} / {filename}
 
-async function uploadPDF(managerId: string, filename: string, data: Buffer): Promise<string | null> {
-  const safeFilename = filename.replace(/[^a-zA-Z0-9._-]/g, '_')
-  const path = `${managerId}/${Date.now()}_${safeFilename}`
+const FONDOS_DRIVE_ID = process.env.CLIENTES_DRIVE_ID ?? ''  // reuse existing SharePoint drive
+const FONDOS_ROOT_PATH = 'Fondos'  // top-level folder name in the drive
 
-  const { error } = await supabaseAdmin.storage
-    .from('factsheets')
-    .upload(path, data, { contentType: 'application/pdf', upsert: false })
+// Cache of folder IDs to avoid re-creating them on each file
+const folderCache: Record<string, string> = {}
 
-  if (error) {
-    console.error('[fondos/sync] storage upload error:', error.message)
-    return null
+async function getOrCreateFolder(token: string, parentId: string, name: string): Promise<string> {
+  const key = `${parentId}/${name}`
+  if (folderCache[key]) return folderCache[key]
+
+  // Try to find existing folder
+  const listUrl = `https://graph.microsoft.com/v1.0/drives/${FONDOS_DRIVE_ID}/items/${parentId}/children?$filter=name eq '${encodeURIComponent(name)}'&$select=id,name,folder`
+  const res = await fetch(listUrl, { headers: { Authorization: `Bearer ${token}` } })
+  if (res.ok) {
+    const data = await res.json()
+    const existing = (data.value ?? []).find((i: any) => i.folder && i.name === name)
+    if (existing) {
+      folderCache[key] = existing.id
+      return existing.id
+    }
   }
 
-  const { data: urlData } = supabaseAdmin.storage.from('factsheets').getPublicUrl(path)
-  return urlData.publicUrl
+  // Create it
+  const folder = await createFolder(FONDOS_DRIVE_ID, parentId, name, token)
+  folderCache[key] = folder.id
+  return folder.id
+}
+
+async function getRootFolderId(token: string): Promise<string> {
+  // Get or create the "Fondos" root folder at the drive root
+  const url = `https://graph.microsoft.com/v1.0/drives/${FONDOS_DRIVE_ID}/root:/${FONDOS_ROOT_PATH}`
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+  if (res.ok) {
+    const data = await res.json()
+    return data.id
+  }
+  // Create at root
+  const rootRes = await fetch(`https://graph.microsoft.com/v1.0/drives/${FONDOS_DRIVE_ID}/root`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  const root = await rootRes.json()
+  const folder = await createFolder(FONDOS_DRIVE_ID, root.id, FONDOS_ROOT_PATH, token)
+  return folder.id
+}
+
+async function uploadToOneDrive(
+  managerName: string,
+  filename: string,
+  data: Buffer,
+  token: string,
+): Promise<string | null> {
+  try {
+    if (!FONDOS_DRIVE_ID) throw new Error('CLIENTES_DRIVE_ID no configurado')
+
+    const rootId    = await getRootFolderId(token)
+    const folderId  = await getOrCreateFolder(token, rootId, managerName)
+    const safeFile  = filename.replace(/[^a-zA-Z0-9._\-() ]/g, '_')
+    const item      = await uploadFile(FONDOS_DRIVE_ID, folderId, safeFile, data.buffer as ArrayBuffer, 'application/pdf', token)
+    return item.webUrl ?? null
+  } catch (e: any) {
+    console.error('[fondos/sync] OneDrive upload error:', e.message)
+    return null
+  }
 }
 
 // ── Fondo upsert ─────────────────────────────────────────────────────────────
@@ -135,6 +185,9 @@ export async function POST() {
       { status: 403 }
     )
   }
+
+  let msToken: string | null = null
+  try { msToken = await getGraphToken() } catch { /* OneDrive not connected */ }
 
   const userEmail = await getGoogleEmail()
 
@@ -209,8 +262,10 @@ export async function POST() {
 
         const pdfBytes = await getAttachmentBytes(token, msg.id, attachmentId)
 
-        // Upload to Supabase Storage
-        const pdfUrl = await uploadPDF(manager.id, filename, pdfBytes)
+        // Upload to OneDrive: Fondos / {ManagerName} / {filename}
+        const pdfUrl = msToken
+          ? await uploadToOneDrive(manager.name, filename, pdfBytes, msToken)
+          : null
 
         // Extract ISIN from filename/subject
         const isin = extractISIN(filename) ?? extractISIN(subject)
