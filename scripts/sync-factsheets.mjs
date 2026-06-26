@@ -71,71 +71,80 @@ async function uploadToOneDrive(token, folderId, filename, buffer) {
 
 async function scrapeFundinfo(page, isin) {
   try {
-    // Navigate directly to the fund's document page on fundinfo by ISIN
-    await page.goto(`https://fundinfo.com/en/fund/${isin}/documents`, {
+    await page.goto(`https://fundinfo.com/en/search?query=${isin}&types=documents`, {
       waitUntil: 'domcontentloaded',
       timeout: 30000,
     })
     await page.waitForTimeout(3000)
 
-    // Accept cookies if banner appears
+    // Accept cookies
     const cookieBtn = page.locator('button:has-text("Accept"), button:has-text("Agree"), [id*="accept-all"], [class*="accept-all"]').first()
     if (await cookieBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
       await cookieBtn.click().catch(() => {})
       await page.waitForTimeout(1500)
     }
 
-    // Look for download links specifically labeled "Factsheet" or "Fact Sheet"
-    // Only accept PDFs from external domains (not fundinfo.com itself)
-    const pdfUrl = await page.evaluate(() => {
-      const links = Array.from(document.querySelectorAll('a[href]'))
+    // Intercept PDF downloads triggered by clicking factsheet links
+    const downloadPromise = page.waitForEvent('download', { timeout: 12000 }).catch(() => null)
 
-      // First pass: look for links with text "factsheet" pointing to external PDF
-      const byText = links.find(a => {
-        const text = (a.textContent ?? '').trim().toLowerCase()
-        const href = (a.href ?? '').toLowerCase()
-        const isExternal = !href.includes('fundinfo.com') || href.includes('/download/')
-        return isExternal && (
-          text === 'factsheet' ||
-          text === 'fact sheet' ||
-          text.startsWith('factsheet') ||
-          text.startsWith('fact sheet')
-        )
+    // Click the first download button that is inside a search result row
+    // and associated with a "Factsheet" document type
+    const clicked = await page.evaluate(() => {
+      // Find result rows/cards that mention "factsheet" in their visible text
+      const allEls = Array.from(document.querySelectorAll('*'))
+      const factsheetContainers = allEls.filter(el => {
+        const text = el.textContent?.toLowerCase() ?? ''
+        // Must contain "factsheet" but not be a huge container (limit to small elements)
+        return text.includes('factsheet') && el.children.length < 20 && el.tagName !== 'BODY' && el.tagName !== 'HTML'
       })
-      if (byText) return byText.href
 
-      // Second pass: look for links where the href itself contains "factsheet" and ends in .pdf
-      const byHref = links.find(a => {
-        const href = (a.href ?? '').toLowerCase()
-        return href.includes('.pdf') &&
-               (href.includes('factsheet') || href.includes('fact-sheet') || href.includes('fact_sheet')) &&
-               !href.includes('fundinfo.com/en/legal') &&
-               !href.includes('fundinfo.com/en/about') &&
-               !href.includes('user-guide') &&
-               !href.includes('userguide')
-      })
-      if (byHref) return byHref.href
-
-      return null
+      // Within those containers, find the nearest download/PDF link
+      for (const container of factsheetContainers) {
+        const links = Array.from(container.querySelectorAll('a[href], button'))
+        for (const link of links) {
+          const href = (link instanceof HTMLAnchorElement ? link.href : '').toLowerCase()
+          const text = (link.textContent ?? '').toLowerCase().trim()
+          // Skip fundinfo's own navigation links and user guides
+          if (href.includes('user-guide') || href.includes('userguide') || href.includes('/about') || href.includes('/legal')) continue
+          if (text === 'download' || text === 'pdf' || href.includes('.pdf') || text.includes('download')) {
+            ;(link as HTMLElement).click()
+            return true
+          }
+        }
+      }
+      return false
     })
 
-    if (pdfUrl) return await downloadBuffer(pdfUrl)
-
-    // If no direct link found, try intercepting the download via a click on "Factsheet" button
-    const factsheetBtn = page.locator('text=/^factsheet$/i, text=/^fact sheet$/i, [aria-label*="factsheet" i], [title*="factsheet" i]').first()
-    if (await factsheetBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
-      const [download] = await Promise.all([
-        page.waitForEvent('download', { timeout: 10000 }).catch(() => null),
-        factsheetBtn.click(),
-      ])
+    if (clicked) {
+      const download = await downloadPromise
       if (download) {
         const stream = await download.createReadStream()
         const chunks = []
         for await (const chunk of stream) chunks.push(Buffer.from(chunk))
         const buf = Buffer.concat(chunks)
-        return buf.length > 5000 ? buf : null
+        if (buf.length > 5000) return buf
       }
     }
+
+    // Fallback: look for external PDF URLs in result area only
+    const pdfUrl = await page.evaluate(() => {
+      // Only look inside main content area, not header/footer
+      const main = document.querySelector('main, [role="main"], #content, .content, #results, .results, .search-results') ?? document.body
+      const links = Array.from(main.querySelectorAll('a[href]'))
+      const hit = links.find(a => {
+        const href = (a.href ?? '').toLowerCase()
+        const text = (a.textContent ?? '').toLowerCase().trim()
+        // Must be an external PDF (not fundinfo.com itself) or a fundinfo download endpoint
+        const isExternal = !href.includes('fundinfo.com')
+        const isFundinfoDownload = href.includes('fundinfo.com') && (href.includes('/download') || href.includes('/document'))
+        if (!isExternal && !isFundinfoDownload) return false
+        return href.endsWith('.pdf') || text === 'pdf' || text === 'download'
+      })
+      return hit?.href ?? null
+    })
+
+    if (pdfUrl) return await downloadBuffer(pdfUrl)
+
   } catch {
     // silent
   }
