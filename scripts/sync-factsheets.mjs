@@ -75,13 +75,32 @@ async function scrapeFundinfo(page, isin) {
       waitUntil: 'domcontentloaded',
       timeout: 30000,
     })
-    await page.waitForTimeout(3000)
+    await page.waitForTimeout(2000)
+
+    // Handle "Select Fund Market (Disclaimer)" modal if it appears
+    const confirmBtn = page.locator('button:has-text("Confirm Selected"), button:has-text("Confirm")')
+    if (await confirmBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+      // Select "Professional Investor"
+      const profInvestor = page.locator('input[type="radio"]').filter({ hasText: /professional/i }).first()
+      if (await profInvestor.isVisible({ timeout: 1000 }).catch(() => false)) {
+        await profInvestor.click().catch(() => {})
+      } else {
+        // Try clicking the label
+        await page.locator('label:has-text("Professional")').first().click().catch(() => {})
+      }
+      // Check the terms checkbox
+      await page.locator('input[type="checkbox"]').first().check().catch(() => {})
+      await page.waitForTimeout(500)
+      // Confirm
+      await confirmBtn.click()
+      await page.waitForTimeout(3000)
+    }
 
     // Accept cookies
     const cookieBtn = page.locator('button:has-text("Accept"), button:has-text("Agree"), [id*="accept-all"], [class*="accept-all"]').first()
     if (await cookieBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
       await cookieBtn.click().catch(() => {})
-      await page.waitForTimeout(1500)
+      await page.waitForTimeout(1000)
     }
 
     // Intercept PDF downloads triggered by clicking factsheet links
