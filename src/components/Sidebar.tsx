@@ -38,6 +38,7 @@ const nav: NavSection[] = [
   {
     label: 'Inversiones',
     items: [
+      { href: '/fondos',     label: 'Fondos',     subtitle: 'Biblioteca de factsheets',icon: FondosIcon,    permission: 'fondos' },
       { href: '/factsheet',  label: 'Factsheet',  subtitle: 'Informe de portafolio',   icon: FactsheetIcon, permission: 'factsheet' },
       { href: '/propuestas', label: 'Propuestas', subtitle: 'Propuestas de inversión', icon: ProposalIcon,  permission: 'proposals' },
     ],
@@ -82,11 +83,11 @@ const nav: NavSection[] = [
 ]
 
 const ROLE_PERMISSIONS: Record<string, Permission[]> = {
-  admin:      ['panel','tasks','clients','openings','banco_central','calendar','deadlines','pagos','impuestos','ceo_dashboard','kpis','liquidacion','recursos','claves','admin','sincronizacion','factsheet','proposals','orders'],
-  ceo:        ['panel','tasks','clients','openings','banco_central','calendar','deadlines','pagos','impuestos','ceo_dashboard','kpis','liquidacion','recursos','claves','factsheet','proposals','orders'],
-  direccion:  ['panel','tasks','clients','openings','banco_central','calendar','deadlines','ceo_dashboard','kpis','liquidacion','recursos','claves','factsheet','proposals','orders'],
-  asesor:     ['panel','tasks','clients','openings','calendar','deadlines','recursos','factsheet','proposals','orders'],
-  asistente:  ['panel','tasks','clients','openings','banco_central','calendar','deadlines','recursos','orders'],
+  admin:      ['panel','tasks','clients','openings','banco_central','calendar','deadlines','pagos','impuestos','ceo_dashboard','kpis','liquidacion','recursos','claves','admin','sincronizacion','factsheet','proposals','orders','fondos'],
+  ceo:        ['panel','tasks','clients','openings','banco_central','calendar','deadlines','pagos','impuestos','ceo_dashboard','kpis','liquidacion','recursos','claves','factsheet','proposals','orders','fondos'],
+  direccion:  ['panel','tasks','clients','openings','banco_central','calendar','deadlines','ceo_dashboard','kpis','liquidacion','recursos','claves','factsheet','proposals','orders','fondos'],
+  asesor:     ['panel','tasks','clients','openings','calendar','deadlines','recursos','factsheet','proposals','orders','fondos'],
+  asistente:  ['panel','tasks','clients','openings','banco_central','calendar','deadlines','recursos','orders','fondos'],
   compliance: ['panel','banco_central','calendar','deadlines','recursos'],
 }
 
@@ -422,6 +423,14 @@ function FolderPersonalIcon({ className }: { className?: string }) {
     </svg>
   )
 }
+function FondosIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z" />
+    </svg>
+  )
+}
+
 function FactsheetIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>

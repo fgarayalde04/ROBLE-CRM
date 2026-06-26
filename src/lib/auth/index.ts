@@ -114,14 +114,14 @@ export type Permission =
   | 'panel' | 'tasks' | 'clients' | 'openings' | 'banco_central'
   | 'calendar' | 'deadlines' | 'ceo_dashboard' | 'kpis'
   | 'pagos' | 'impuestos' | 'liquidacion' | 'recursos' | 'claves'
-  | 'admin' | 'sincronizacion' | 'factsheet' | 'proposals' | 'orders'
+  | 'admin' | 'sincronizacion' | 'factsheet' | 'proposals' | 'orders' | 'fondos'
 
 const ROLE_PERMISSIONS: Record<UserRole, Permission[] | ['*']> = {
   admin:      ['*'],
-  ceo:        ['panel','clients','openings','tasks','banco_central','calendar','deadlines','ceo_dashboard','kpis','pagos','impuestos','liquidacion','recursos','factsheet','proposals','orders',],
-  direccion:  ['panel','clients','openings','tasks','banco_central','calendar','deadlines','ceo_dashboard','kpis','liquidacion','recursos','factsheet','proposals','orders',],
-  asesor:     ['panel','clients','openings','tasks','calendar','deadlines','recursos','factsheet','proposals','orders',],
-  asistente:  ['panel','clients','openings','tasks','banco_central','calendar','deadlines','recursos',],
+  ceo:        ['panel','clients','openings','tasks','banco_central','calendar','deadlines','ceo_dashboard','kpis','pagos','impuestos','liquidacion','recursos','factsheet','proposals','orders','fondos',],
+  direccion:  ['panel','clients','openings','tasks','banco_central','calendar','deadlines','ceo_dashboard','kpis','liquidacion','recursos','factsheet','proposals','orders','fondos',],
+  asesor:     ['panel','clients','openings','tasks','calendar','deadlines','recursos','factsheet','proposals','orders','fondos',],
+  asistente:  ['panel','clients','openings','tasks','banco_central','calendar','deadlines','recursos','fondos',],
   compliance: ['panel','banco_central','calendar','deadlines','recursos'],
 }
 

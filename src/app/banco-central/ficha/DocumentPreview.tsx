@@ -234,7 +234,7 @@ export default function DocumentPreview({ ficha, activeDoc, fichaData, perfilDat
             style={{ width: '210mm', minHeight: '297mm', padding: '20mm 18mm', fontFamily: 'Calibri, Arial, sans-serif', fontSize: '9pt', lineHeight: '1.3', color: '#000' }}
           >
             <div ref={listaRef}>
-              <ListaPreview data={listaData} tipo={ficha.tipo_cliente} empresa={ficha.empresa} />
+              <ListaPreview data={listaData} tipo={ficha.tipo_cliente} />
             </div>
           </div>
         )}
@@ -245,92 +245,149 @@ export default function DocumentPreview({ ficha, activeDoc, fichaData, perfilDat
 
 // ── Lista de Verificación ─────────────────────────────────────────────────────
 
-function ListaPreview({ data, tipo, empresa }: { data: ListaData; tipo: string; empresa: string }) {
-  const items    = tipo === 'pf' ? LISTA_PF_ITEMS : LISTA_PJ_ITEMS
-  const getItem  = (id: string) => data.items[id] ?? { status: 'pendiente', comentario: '', responsable: '', fecha: '' }
-  const MARK: Record<string, string> = { completo: '☒', pendiente: '☐', no_aplica: 'N/A' }
-  const empLabel = EMPRESA_LABEL[empresa] ?? empresa.toUpperCase()
+function ListaPreview({ data, tipo }: { data: ListaData; tipo: string }) {
+  const isPF     = tipo === 'pf'
+  const items    = isPF ? LISTA_PF_ITEMS : LISTA_PJ_ITEMS
+  const verifId  = isPF ? '10' : '14'
+  const riesgoId = isPF ? '11' : '15'
+  const aprNum   = isPF ? 12  : 16
+  const altNum   = isPF ? 13  : 17
+
+  const chk    = (id: string) => data.items[id]?.status === 'completo' ? '☒' : '☐'
+  const subChk = (parentId: string, idx: number) => chk(`${parentId}_${idx}`)
+
+  const simpleItems = items.filter(i => parseInt(i.id) < parseInt(verifId))
+  const verifItem   = items.find(i => i.id === verifId)!
+
+  const box: React.CSSProperties = {
+    display: 'inline-block', border: '1px solid #000',
+    width: '14px', height: '14px',
+    textAlign: 'center', fontSize: '10pt', lineHeight: '14px',
+    verticalAlign: 'middle', flexShrink: 0,
+  }
+  const numCell: React.CSSProperties = { width: '24px', fontWeight: 'bold', verticalAlign: 'top', padding: '2px 4px 2px 6px', whiteSpace: 'nowrap' }
+  const textCell: React.CSSProperties = { padding: '2px 4px', verticalAlign: 'top', fontSize: '8.5pt' }
+  const chkCell: React.CSSProperties = { width: '24px', padding: '2px 6px 2px 0', verticalAlign: 'top', textAlign: 'right' }
+
+  const fmtFecha = (f: string) => {
+    if (!f) return ''
+    const d = new Date(f + 'T12:00:00')
+    return d.toLocaleDateString('es-UY', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  }
 
   return (
-    <div>
-      <div style={{ borderBottom: '2px solid #000', paddingBottom: '6px', marginBottom: '10px' }}>
-        <p style={{ fontSize: '7pt', textAlign: 'right' }}>{empLabel}</p>
-        <h1 style={{ fontSize: '13pt', textAlign: 'center', fontWeight: 'bold', margin: 0 }}>
-          Lista de Verificación – {tipo === 'pf' ? 'Persona Física' : 'Persona Jurídica'}
-        </h1>
+    <div style={{ fontFamily: 'Calibri, Arial, sans-serif', fontSize: '9pt', color: '#000', border: '1px solid #000', lineHeight: '1.4' }}>
+
+      {/* Title */}
+      <div style={{ backgroundColor: '#000', color: '#fff', textAlign: 'center', fontWeight: 'bold', padding: '5px', fontSize: '10pt' }}>
+        Lista de Verificación - {isPF ? 'Persona Física' : 'Persona Jurídica'}
       </div>
 
-      <LRow label="Fecha"              value={data.fecha} />
-      <LRow label="Nombre del Cliente" value={data.nombre_cliente} />
-      <LRow label="Código del Cliente" value={data.codigo_cliente} />
+      {/* Fecha top-right */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '4px 8px 0' }}>
+        <span style={{ border: '1px solid #000', padding: '2px 10px', fontSize: '8.5pt' }}>
+          Fecha: {fmtFecha(data.fecha)}
+        </span>
+      </div>
 
-      <table style={{ borderCollapse: 'collapse', width: '100%', marginTop: '10px', fontSize: '8.5pt' }}>
-        <thead>
-          <tr style={{ backgroundColor: '#f0f0f0' }}>
-            <th style={{ border: '1px solid #000', padding: '3px 5px', width: '8%',  textAlign: 'center' }}>Item</th>
-            <th style={{ border: '1px solid #000', padding: '3px 5px', width: '68%', textAlign: 'left' }}>Descripción</th>
-            <th style={{ border: '1px solid #000', padding: '3px 5px', width: '10%', textAlign: 'center' }}>Estado</th>
-            <th style={{ border: '1px solid #000', padding: '3px 5px', width: '14%', textAlign: 'left' }}>Comentario</th>
-          </tr>
-        </thead>
+      {/* Client box */}
+      <div style={{ border: '1px solid #000', margin: '4px 8px 6px', padding: '5px 8px', fontSize: '8.5pt' }}>
+        <p style={{ margin: '2px 0' }}><strong>Nombre del Cliente:</strong>{'  '}{data.nombre_cliente}</p>
+        <p style={{ margin: '2px 0' }}><strong>Código del Cliente:</strong>{'  '}{data.codigo_cliente}</p>
+      </div>
+
+      {/* Items 1–N (simple rows) */}
+      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
         <tbody>
-          {items.map(item => {
-            const cur = getItem(item.id)
-            return (
-              <tr key={item.id}>
-                <td style={{ border: '1px solid #000', padding: '4px', textAlign: 'center', fontWeight: 'bold' }}>{item.id}</td>
-                <td style={{ border: '1px solid #000', padding: '4px' }}>
-                  {item.label}
-                  {item.sub && (
-                    <ul style={{ margin: '2px 0 0 12px', padding: 0 }}>
-                      {item.sub.map(s => <li key={s} style={{ fontSize: '7.5pt' }}>{s}</li>)}
-                    </ul>
-                  )}
-                </td>
-                <td style={{ border: '1px solid #000', padding: '4px', textAlign: 'center', fontSize: '11pt' }}>
-                  {MARK[cur.status]}
-                </td>
-                <td style={{ border: '1px solid #000', padding: '4px', fontSize: '7.5pt' }}>
-                  {cur.comentario}
-                </td>
-              </tr>
-            )
-          })}
+          {simpleItems.map(item => (
+            <tr key={item.id}>
+              <td style={numCell}>{item.id}</td>
+              <td style={textCell}>{item.label}</td>
+              <td style={chkCell}><span style={box}>{chk(item.id)}</span></td>
+            </tr>
+          ))}
+
+          {/* Verificación de antecedentes */}
+          <tr>
+            <td style={numCell}>{verifId}</td>
+            <td colSpan={2} style={{ ...textCell, paddingBottom: '4px' }}>
+              <strong>Verificación de antecedentes (ONU, OFAC, otras).</strong>
+              <div style={{ marginLeft: '16px', marginTop: '3px' }}>
+                {verifItem.sub?.map((s, idx) => (
+                  <div key={s} style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
+                    <span style={{ fontSize: '8.5pt' }}>{s}</span>
+                    <span style={box}>{subChk(verifId, idx)}</span>
+                  </div>
+                ))}
+              </div>
+            </td>
+          </tr>
+
+          {/* Evaluación de Riesgo */}
+          <tr>
+            <td style={numCell}>{riesgoId}</td>
+            <td style={textCell}><strong>Evaluación de Riesgo (ALTO, MEDIO, BAJO)</strong></td>
+            <td style={{ ...chkCell, paddingRight: '8px' }}>
+              <span style={{ display: 'inline-block', border: '1px solid #000', padding: '1px 8px', minWidth: '60px', fontWeight: 'bold', textAlign: 'center', fontSize: '8.5pt' }}>
+                {data.riesgo}
+              </span>
+            </td>
+          </tr>
         </tbody>
       </table>
 
-      <div style={{ marginTop: '16px', fontSize: '8.5pt' }}>
-        <p style={{ fontWeight: 'bold' }}>Aprobación de la relación comercial</p>
-        <div style={{ display: 'flex', gap: '40px', marginTop: '20px' }}>
-          <div style={{ flex: 1 }}>
-            <p style={{ borderTop: '1px solid #000', paddingTop: '4px' }}>Aprobada por: {data.aprobado_por}</p>
-          </div>
-          <div style={{ flex: 1 }}>
-            <p style={{ borderTop: '1px solid #000', paddingTop: '4px' }}>Fecha:</p>
-          </div>
-        </div>
-        <div style={{ marginTop: '20px' }}>
-          <p style={{ fontWeight: 'bold' }}>Constancia de las verificaciones efectuadas por Oficial de Cumplimiento</p>
-          <p style={{ borderTop: '1px solid #000', marginTop: '16px', paddingTop: '4px' }}>
-            Firma: {data.oficial_cumplimiento}
-          </p>
-        </div>
-        {data.riesgo === 'ALTO' && (
-          <div style={{ marginTop: '20px' }}>
-            <p style={{ fontWeight: 'bold' }}>Solamente para Clientes de Riesgo Alto — Visto Bueno Oficial de Cumplimiento:</p>
-            <p style={{ borderTop: '1px solid #000', marginTop: '16px', paddingTop: '4px' }}>{data.visto_bueno}</p>
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
+      {/* Section aprNum: 2-column approval box */}
+      <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '6px', border: '1px solid #000' }}>
+        <tbody>
+          <tr>
+            <td style={{ width: '24px', fontWeight: 'bold', padding: '2px 4px 2px 6px', verticalAlign: 'middle', fontSize: '8.5pt' }}>{aprNum}</td>
+            <td style={{ backgroundColor: '#000', color: '#fff', fontWeight: 'bold', textAlign: 'center', padding: '4px 6px', fontSize: '8.5pt', borderRight: '1px solid #fff', width: '48%' }}>
+              Aprobación de la relación comercial
+            </td>
+            <td style={{ backgroundColor: '#000', color: '#fff', fontWeight: 'bold', textAlign: 'center', padding: '4px 6px', fontSize: '8.5pt' }}>
+              Constancia de las verificaciones efectuadas por Oficial de Cumplimiento
+            </td>
+          </tr>
+          <tr>
+            <td />
+            <td style={{ padding: '8px', verticalAlign: 'top', borderRight: '1px solid #000', fontSize: '8.5pt' }}>
+              <p style={{ margin: '0 0 16px' }}>
+                Aprobada por:{' '}
+                <span style={{ display: 'inline-block', borderBottom: '1px solid #000', minWidth: '110px' }}>{data.aprobado_por}</span>
+              </p>
+              <p style={{ margin: 0 }}>
+                FIRMA:{' '}
+                <span style={{ display: 'inline-block', borderBottom: '1px solid #000', minWidth: '120px' }} />
+              </p>
+            </td>
+            <td style={{ padding: '8px', verticalAlign: 'top', fontSize: '8.5pt' }}>
+              <p style={{ margin: '16px 0 0' }}>
+                FIRMA:{' '}
+                <span style={{ display: 'inline-block', borderBottom: '1px solid #000', minWidth: '120px' }} />
+              </p>
+            </td>
+          </tr>
+        </tbody>
+      </table>
 
-function LRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div style={{ display: 'flex', gap: '6px', marginBottom: '2px', fontSize: '8.5pt', alignItems: 'baseline' }}>
-      <span style={{ fontWeight: 'bold', whiteSpace: 'nowrap', minWidth: '140px' }}>{label}:</span>
-      <span style={{ flex: 1, borderBottom: '1px solid #000', paddingBottom: '1px' }}>{value}</span>
+      {/* Section altNum: Solamente para Riesgo Alto */}
+      <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '4px', border: '1px solid #000' }}>
+        <tbody>
+          <tr>
+            <td style={{ width: '24px', fontWeight: 'bold', padding: '2px 4px 2px 6px', verticalAlign: 'middle', fontSize: '8.5pt' }}>{altNum}</td>
+            <td style={{ backgroundColor: '#000', color: '#fff', fontWeight: 'bold', textAlign: 'center', padding: '4px 6px', fontSize: '8.5pt' }}>
+              Solamente para Clientes de Riesgo Alto
+            </td>
+          </tr>
+          <tr>
+            <td />
+            <td style={{ padding: '8px', fontSize: '8.5pt' }}>
+              Visto Bueno Oficial de Cumplimiento:{' '}
+              <span style={{ display: 'inline-block', borderBottom: '1px solid #000', minWidth: '200px' }}>{data.visto_bueno}</span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
     </div>
   )
 }
