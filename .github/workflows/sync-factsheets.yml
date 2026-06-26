@@ -27,7 +27,7 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci --prefix scripts
+        run: npm install --prefix scripts
 
       - name: Install Playwright browsers
         run: npx --prefix scripts playwright install chromium --with-deps
