@@ -34,8 +34,9 @@ interface Props { managers: ManagerWithStats[] }
 
 export default function FondosClient({ managers }: Props) {
   const [q, setQ] = useState('')
-  const [syncing, setSyncing] = useState(false)
-  const [syncMsg, setSyncMsg] = useState<string | null>(null)
+  const [syncingGmail, setSyncingGmail] = useState(false)
+  const [syncingWeb,   setSyncingWeb]   = useState(false)
+  const [syncMsg, setSyncMsg] = useState<{ text: string; ok: boolean } | null>(null)
 
   const filtered = useMemo(() => {
     const lq = q.toLowerCase().trim()
@@ -46,25 +47,35 @@ export default function FondosClient({ managers }: Props) {
     )
   }, [q, managers])
 
-  const total = managers.reduce((s, m) => s + m.fund_count, 0)
+  const total     = managers.reduce((s, m) => s + m.fund_count, 0)
   const withFunds = managers.filter(m => m.fund_count > 0).length
 
-  async function handleSync() {
-    setSyncing(true)
+  async function handleSync(source: 'gmail' | 'web') {
+    const setter = source === 'gmail' ? setSyncingGmail : setSyncingWeb
+    setter(true)
     setSyncMsg(null)
     try {
-      const res = await fetch('/api/fondos/sync', { method: 'POST' })
+      const endpoint = source === 'gmail' ? '/api/fondos/sync' : '/api/fondos/sync-web'
+      const res  = await fetch(endpoint, { method: 'POST' })
       const json = await res.json()
       if (res.ok) {
-        setSyncMsg(`Sincronización completa — ${json.imported} nuevos factsheets importados`)
+        if (source === 'web' && json.results) {
+          const detail = (json.results as any[])
+            .filter((r: any) => r.found > 0)
+            .map((r: any) => `${r.manager}: ${r.found} encontrados, ${r.imported} nuevos`)
+            .join(' · ')
+          setSyncMsg({ text: detail || `Sync web completo — ${json.imported} nuevos`, ok: true })
+        } else {
+          setSyncMsg({ text: `Sync Gmail completo — ${json.imported} nuevos factsheets importados`, ok: true })
+        }
       } else {
-        setSyncMsg(json.error ?? 'Error en la sincronización')
+        setSyncMsg({ text: json.error ?? 'Error en la sincronización', ok: false })
       }
     } catch {
-      setSyncMsg('Error de red')
+      setSyncMsg({ text: 'Error de red', ok: false })
     } finally {
-      setSyncing(false)
-      setTimeout(() => setSyncMsg(null), 6000)
+      setter(false)
+      setTimeout(() => setSyncMsg(null), 10000)
     }
   }
 
@@ -80,28 +91,39 @@ export default function FondosClient({ managers }: Props) {
                 {total} fondos · {withFunds} gestoras con factsheets
               </p>
             </div>
-            <button
-              onClick={handleSync}
-              disabled={syncing}
-              className="flex items-center gap-2 px-4 py-2 bg-[#2D3F52] text-white rounded-xl text-sm font-medium hover:bg-opacity-90 transition-all disabled:opacity-60"
-            >
-              {syncing ? (
-                <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              ) : (
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-              )}
-              {syncing ? 'Sincronizando…' : 'Sincronizar Gmail'}
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={() => handleSync('gmail')}
+                disabled={syncingGmail || syncingWeb}
+                className="flex items-center gap-2 px-4 py-2 border border-gray-200 bg-white text-gray-700 rounded-xl text-sm font-medium hover:border-[#2D3F52] transition-all disabled:opacity-50"
+              >
+                {syncingGmail
+                  ? <span className="w-3.5 h-3.5 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+                  : <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor"><path d="M24 5.457v13.909c0 .904-.732 1.636-1.636 1.636h-3.819V11.73L12 16.64l-6.545-4.91v9.273H1.636A1.636 1.636 0 010 19.366V5.457c0-2.023 2.309-3.178 3.927-1.964L5.455 4.64 12 9.548l6.545-4.91 1.528-1.145C21.69 2.28 24 3.434 24 5.457z"/></svg>
+                }
+                {syncingGmail ? 'Buscando…' : 'Gmail'}
+              </button>
+              <button
+                onClick={() => handleSync('web')}
+                disabled={syncingGmail || syncingWeb}
+                className="flex items-center gap-2 px-4 py-2 bg-[#2D3F52] text-white rounded-xl text-sm font-medium hover:bg-opacity-90 transition-all disabled:opacity-50"
+              >
+                {syncingWeb
+                  ? <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  : <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+                    </svg>
+                }
+                {syncingWeb ? 'Buscando…' : 'Webs'}
+              </button>
+            </div>
           </div>
 
           {syncMsg && (
             <div className={`mb-4 px-4 py-2.5 rounded-xl text-sm ${
-              syncMsg.includes('Error') ? 'bg-red-50 text-red-700 border border-red-100' : 'bg-green-50 text-green-700 border border-green-100'
+              syncMsg.ok ? 'bg-green-50 text-green-700 border border-green-100' : 'bg-red-50 text-red-700 border border-red-100'
             }`}>
-              {syncMsg}
+              {syncMsg.text}
             </div>
           )}
 

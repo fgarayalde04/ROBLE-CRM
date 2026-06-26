@@ -200,8 +200,15 @@ export async function POST() {
     return NextResponse.json({ error: 'No hay gestoras configuradas. Ejecutá la migración SQL primero.' }, { status: 500 })
   }
 
-  // Search Gmail for messages with PDF attachments
-  const query = 'has:attachment filename:pdf (factsheet OR "fact sheet" OR fondo OR fund)'
+  // Search Gmail for messages with PDF attachments from gestoras or with factsheet keywords
+  const senderDomains = managers
+    .flatMap(m => (m as any).domain_hints ?? [])
+    .map((d: string) => `from:${d}`)
+    .join(' OR ')
+
+  const keywordQuery = 'has:attachment filename:pdf (factsheet OR "fact sheet" OR "fund factsheet" OR "monthly report" OR "fund update" OR ISIN)'
+  const senderQuery  = senderDomains ? `has:attachment filename:pdf (${senderDomains})` : ''
+  const query = senderQuery ? `(${keywordQuery}) OR (${senderQuery})` : keywordQuery
   let messages: { id: string }[] = []
   try {
     messages = await searchMessages(token, query, 100)
