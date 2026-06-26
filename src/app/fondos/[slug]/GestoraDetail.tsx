@@ -143,9 +143,9 @@ function FondosTable({ rows, noSearch, total }: { rows: FondoWithFactsheet[]; no
                 {f.latest_factsheet ? fmtDate(f.latest_factsheet.created_at) : '—'}
               </td>
               <td className="px-4 py-3.5">
-                {f.latest_factsheet?.pdf_url ? (
+                {f.isin && f.latest_factsheet ? (
                   <a
-                    href={f.latest_factsheet.pdf_url}
+                    href={`/api/fondos/factsheet/${f.isin}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex items-center gap-1.5 px-3 py-1.5 bg-[#2D3F52] text-white rounded-lg text-xs font-medium hover:bg-opacity-90 transition-all whitespace-nowrap"
