@@ -71,68 +71,66 @@ async function uploadToOneDrive(token, folderId, filename, buffer) {
 
 async function scrapeFundinfo(page, isin) {
   try {
-    await page.goto(`https://fundinfo.com/en/search?query=${isin}&types=documents`, {
+    await page.goto(`https://fundinfo.com/en/search?query=${isin}`, {
       waitUntil: 'domcontentloaded',
       timeout: 30000,
     })
     await page.waitForTimeout(2000)
 
-    // Handle "Select Fund Market (Disclaimer)" modal if it appears
-    const confirmBtn = page.locator('button:has-text("Confirm Selected"), button:has-text("Confirm")')
+    // Handle disclaimer modal if present
+    const confirmBtn = page.locator('button:has-text("Confirm Selected")')
     if (await confirmBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
-      // Select "Professional Investor"
-      const profInvestor = page.locator('input[type="radio"]').filter({ hasText: /professional/i }).first()
-      if (await profInvestor.isVisible({ timeout: 1000 }).catch(() => false)) {
-        await profInvestor.click().catch(() => {})
-      } else {
-        // Try clicking the label
-        await page.locator('label:has-text("Professional")').first().click().catch(() => {})
-      }
-      // Check the terms checkbox
       await page.locator('input[type="checkbox"]').first().check().catch(() => {})
-      await page.waitForTimeout(500)
-      // Confirm
+      await page.waitForTimeout(300)
       await confirmBtn.click()
       await page.waitForTimeout(3000)
     }
 
-    // Accept cookies
-    const cookieBtn = page.locator('button:has-text("Accept"), button:has-text("Agree"), [id*="accept-all"], [class*="accept-all"]').first()
-    if (await cookieBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await cookieBtn.click().catch(() => {})
-      await page.waitForTimeout(1000)
-    }
+    // Wait for search results to load
+    await page.waitForSelector('table tbody tr, [class*="fund-row"], [class*="result-row"]', {
+      timeout: 10000,
+    }).catch(() => {})
+    await page.waitForTimeout(2000)
 
-    // Intercept PDF downloads triggered by clicking factsheet links
-    const downloadPromise = page.waitForEvent('download', { timeout: 12000 }).catch(() => null)
+    // Find the row containing our ISIN and click the MR (Monthly Report/factsheet) icon
+    const downloadPromise = page.waitForEvent('download', { timeout: 15000 }).catch(() => null)
 
-    // Click the first download button that is inside a search result row
-    // and associated with a "Factsheet" document type
-    const clicked = await page.evaluate(() => {
-      // Find result rows/cards that mention "factsheet" in their visible text
-      const allEls = Array.from(document.querySelectorAll('*'))
-      const factsheetContainers = allEls.filter(el => {
-        const text = el.textContent?.toLowerCase() ?? ''
-        // Must contain "factsheet" but not be a huge container (limit to small elements)
-        return text.includes('factsheet') && el.children.length < 20 && el.tagName !== 'BODY' && el.tagName !== 'HTML'
-      })
+    const clicked = await page.evaluate((searchIsin) => {
+      // Find the table row that contains this ISIN
+      const rows = Array.from(document.querySelectorAll('tr, [class*="row"]'))
+      for (const row of rows) {
+        if (!row.textContent?.includes(searchIsin)) continue
 
-      // Within those containers, find the nearest download/PDF link
-      for (const container of factsheetContainers) {
-        const links = Array.from(container.querySelectorAll('a[href], button'))
+        // Found the row — get all anchor links inside it
+        const links = Array.from(row.querySelectorAll('a[href]'))
+
+        // MR column is typically the first document icon link
+        // Filter out navigation links (fund name link, etc.) — we want document icons
+        const docLinks = links.filter(a => {
+          const href = (a as HTMLAnchorElement).href
+          // Document links on fundinfo go to /document/ or trigger downloads
+          // They usually don't contain the fund name or ISIN in the href
+          return href && !href.includes('/search') && !href.includes('/LandingPage') && !href.includes('fundinfo.com/en/')
+        })
+
+        // Click the first document icon (MR = Monthly Report = factsheet)
+        if (docLinks.length > 0) {
+          (docLinks[0] as HTMLElement).click()
+          return true
+        }
+
+        // Fallback: click any link that looks like a document icon (has img/svg child, small text)
         for (const link of links) {
-          const href = (link instanceof HTMLAnchorElement ? link.href : '').toLowerCase()
-          const text = (link.textContent ?? '').toLowerCase().trim()
-          // Skip fundinfo's own navigation links and user guides
-          if (href.includes('user-guide') || href.includes('userguide') || href.includes('/about') || href.includes('/legal')) continue
-          if (text === 'download' || text === 'pdf' || href.includes('.pdf') || text.includes('download')) {
-            ;(link as HTMLElement).click()
+          const text = (link.textContent ?? '').trim()
+          const hasIcon = link.querySelector('img, svg, [class*="icon"], [class*="doc"]')
+          if (hasIcon && text.length < 5) {
+            (link as HTMLElement).click()
             return true
           }
         }
       }
       return false
-    })
+    }, isin)
 
     if (clicked) {
       const download = await downloadPromise
@@ -144,26 +142,6 @@ async function scrapeFundinfo(page, isin) {
         if (buf.length > 5000) return buf
       }
     }
-
-    // Fallback: look for external PDF URLs in result area only
-    const pdfUrl = await page.evaluate(() => {
-      // Only look inside main content area, not header/footer
-      const main = document.querySelector('main, [role="main"], #content, .content, #results, .results, .search-results') ?? document.body
-      const links = Array.from(main.querySelectorAll('a[href]'))
-      const hit = links.find(a => {
-        const href = (a.href ?? '').toLowerCase()
-        const text = (a.textContent ?? '').toLowerCase().trim()
-        // Must be an external PDF (not fundinfo.com itself) or a fundinfo download endpoint
-        const isExternal = !href.includes('fundinfo.com')
-        const isFundinfoDownload = href.includes('fundinfo.com') && (href.includes('/download') || href.includes('/document'))
-        if (!isExternal && !isFundinfoDownload) return false
-        return href.endsWith('.pdf') || text === 'pdf' || text === 'download'
-      })
-      return hit?.href ?? null
-    })
-
-    if (pdfUrl) return await downloadBuffer(pdfUrl)
-
   } catch {
     // silent
   }
