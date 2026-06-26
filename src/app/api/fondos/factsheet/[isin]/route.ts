@@ -31,7 +31,7 @@ export async function GET(req: NextRequest, { params }: { params: { isin: string
 
   if (!factsheet) return new NextResponse('Factsheet no encontrado', { status: 404 })
 
-  const manager = fondo.asset_managers as { name: string; slug: string } | null
+  const manager = (Array.isArray(fondo.asset_managers) ? fondo.asset_managers[0] : fondo.asset_managers) as { name: string; slug: string } | null
   if (!manager) return new NextResponse('Gestora no encontrada', { status: 404 })
 
   try {
