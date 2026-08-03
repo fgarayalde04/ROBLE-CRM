@@ -824,7 +824,7 @@ function CreateMonitoreoModal({ user, entity, onClose, onCreated }: {
       setHeaders(hdrs)
       setPreviewRows(raw.slice(1, 6) as (string | number | null)[][])
       setAllRows(dataRows)
-      setMapping({})   // reset — user will pick the 3 columns in step 3
+      setMapping(autoDetectMapping(hdrs))
       setStep(3)
     } catch {
       setError('No se pudo leer el archivo. Asegurate de que sea un Excel válido (.xlsx).')
