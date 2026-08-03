@@ -102,6 +102,8 @@ function generateEmailText(blocks: OrderBlock[], clientName: string, clientNumbe
   })
   lines.push(`─────────────────────────────────────────`)
   lines.push(``)
+  if (clientName)   lines.push(`Cliente:          ${clientName}`)
+  if (clientNumber) lines.push(`N° de cliente:    ${clientNumber}`)
   lines.push(`Fecha de instrucción: ${fecha}`)
   lines.push(``)
   lines.push(`Saludos,`)
@@ -355,6 +357,7 @@ export default function OrdenesClient({ gmailConnected, initialTab, isAdmin = fa
   const ccList: string[] = [TRADING_EMAIL]
   if (userEmail && userEmail !== TRADING_EMAIL) ccList.push(userEmail)
   const cc = ccList.join(', ')
+  const [emailMissing, setEmailMissing]  = useState(false)
   const [preview, setPreview]           = useState<string | null>(null)
   const [sending, setSending]           = useState(false)
   const [sendStatus, setSendStatus]     = useState<{ ok: boolean; msg: string } | null>(null)
@@ -540,11 +543,17 @@ export default function OrdenesClient({ gmailConnected, initialTab, isAdmin = fa
                   </label>
                   <LegajosSearchInput
                     value={clientId}
-                    onChange={(id, name, number) => {
+                    onChange={(id, name, number, _fa, email) => {
                       setClientId(id)
                       if (name) setClientName(name)
                       if (number) setClientNumber(number)
-                      if (!id) { setClientName(''); setClientNumber(''); setTo('') }
+                      if (!id) {
+                        setClientName(''); setClientNumber(''); setTo(''); setEmailMissing(false)
+                      } else if (email) {
+                        setTo(email); setEmailMissing(false)
+                      } else {
+                        setEmailMissing(true)
+                      }
                       setPreview(null)
                     }}
                     placeholder="Nombre, N° o código…"
@@ -649,9 +658,14 @@ export default function OrdenesClient({ gmailConnected, initialTab, isAdmin = fa
                 <label className={labelCls}>Destinatario</label>
                 <TradingEmailSearch
                   value={to}
-                  onChange={(v) => setTo(v)}
+                  onChange={(v) => { setTo(v); setEmailMissing(false) }}
                   className={inputCls}
                 />
+                {emailMissing && (
+                  <p className="mt-1.5 text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5">
+                    Este cliente no tiene correo registrado en su ficha. Ingresá el email manualmente.
+                  </p>
+                )}
               </div>
 
               {/* CC: trading + asesor */}
