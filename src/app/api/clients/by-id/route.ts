@@ -7,14 +7,18 @@ export async function GET(req: Request) {
     const id = searchParams.get('id')
     if (!id) return NextResponse.json(null)
 
-    const { data, error } = await supabaseAdmin
-      .from('clients')
-      .select('id, first_name, last_name, client_number')
-      .eq('id', id)
-      .single()
+    const [clientRes, bcRes, fichaRes] = await Promise.all([
+      supabaseAdmin.from('clients').select('*').eq('id', id).single(),
+      supabaseAdmin.from('banco_central_records').select('id, type, customer_number, authorized_email').eq('client_id', id),
+      supabaseAdmin.from('bc_fichas').select('ficha_data, tipo_cliente').eq('client_id', id).order('updated_at', { ascending: false }).limit(1).maybeSingle(),
+    ])
 
-    if (error) return NextResponse.json(null)
-    return NextResponse.json(data)
+    if (clientRes.error || !clientRes.data) return NextResponse.json(null)
+    return NextResponse.json({
+      ...clientRes.data,
+      banco_central: bcRes.data ?? [],
+      bc_ficha: fichaRes.data ?? null,
+    })
   } catch {
     return NextResponse.json(null)
   }

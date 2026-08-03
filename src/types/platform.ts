@@ -2,6 +2,7 @@ export type ClientStatus =
   | 'prospecto'
   | 'activo'
   | 'en_apertura'
+  | 'pendiente'
   | 'cerrado'
   | 'inactivo'
   | 'descartado'

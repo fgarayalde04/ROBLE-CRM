@@ -198,16 +198,45 @@ export async function syncClients(): Promise<SyncResult> {
                 knownClientIds.add(itemId)
               }
             } else {
-              // New folder (≥ Jun 2) → goes to Apertura de Cuenta
+              // New folder (≥ Jun 2) → Apertura de Cuenta + stub client with status='pendiente'
+              const now = new Date().toISOString()
+
+              // 1. Create pendiente client so it shows in the clients list
+              const { data: newClient, error: clientErr } = await supabaseAdmin
+                .from('clients')
+                .insert({
+                  first_name: '',
+                  last_name: displayName,
+                  client_number: clientNumber,
+                  status: 'pendiente',
+                  source: 'sharepoint',
+                  drive_id: driveId,
+                  item_id: itemId,
+                  web_url: clientFolder.webUrl,
+                  onedrive_folder_url: clientFolder.webUrl,
+                  parent_path: advisorName,
+                  advisor: advisorName,
+                  last_synced_at: now,
+                })
+                .select('id')
+                .single()
+
+              if (clientErr) {
+                result.errors.push(`Insert pending client ${folderName}: ${clientErr.message}`)
+              } else {
+                knownClientIds.add(itemId)
+              }
+
+              // 2. Create apertura linked to the client
               const { data: opening, error: openingErr } = await supabaseAdmin
                 .from('account_openings')
                 .insert({
-                  client_id: null,
+                  client_id: newClient?.id ?? null,
                   folder_name: folderName,
                   advisor: advisorName,
                   status: 'carpeta_creada',
                   priority: 'normal',
-                  start_date: new Date().toISOString().split('T')[0],
+                  start_date: now.split('T')[0],
                   item_id: itemId,
                   drive_id: driveId,
                   web_url: clientFolder.webUrl,
@@ -286,66 +315,95 @@ async function syncBancoCentral(
     const onlyFolders = folders.filter(f => f.folder)
     result.found = onlyFolders.length
 
+    if (onlyFolders.length === 0) {
+      await logSync(logType, 'success', result, startedAt)
+      return result
+    }
+
+    // Bulk-load existing records in 2 queries instead of N×3 individual ones
+    const allItemIds = onlyFolders.map(f => f.id)
+    const [{ data: byItemIdRows }, { data: byCustomerRows }] = await Promise.all([
+      supabaseAdmin
+        .from('banco_central_records')
+        .select('id, item_id, customer_number')
+        .in('item_id', allItemIds),
+      supabaseAdmin
+        .from('banco_central_records')
+        .select('id, item_id, customer_number')
+        .eq('type', bcuType)
+        .not('customer_number', 'is', null),
+    ])
+
+    // Build lookup maps
+    const byItemId = new Map<string, string>()        // item_id → record id
+    const byCustomer = new Map<string, string>()      // customer_number → record id
+    for (const r of byItemIdRows ?? []) {
+      if (r.item_id) byItemId.set(r.item_id, r.id)
+    }
+    for (const r of byCustomerRows ?? []) {
+      if (r.customer_number) byCustomer.set(r.customer_number, r.id)
+    }
+
+    const now = new Date().toISOString()
+    const toInsert: Record<string, unknown>[] = []
+    const toUpdate: { id: string; fields: Record<string, unknown> }[] = []
+
     for (const folder of onlyFolders) {
-      try {
-        const folderName = folder.name.trim()
-        // Parse "1234 - Juan Pérez" → customerNumber="1234", nombreCliente="Juan Pérez"
-        const numMatch = folderName.match(/^(\d+)\s*[-–]\s*(.+)/)
-        const customerNumber  = numMatch?.[1]?.trim() ?? null
-        const nombreCliente   = numMatch?.[2]?.trim() ?? folderName
+      const folderName = folder.name.trim()
+      const numMatch = folderName.match(/^(\d+)\s*[-–]\s*(.+)/)
+      const customerNumber = numMatch?.[1]?.trim() ?? null
+      const nombreCliente  = numMatch?.[2]?.trim() ?? folderName
 
-        const now = new Date().toISOString()
-        const spFields = {
-          drive_id:       driveId,
-          item_id:        folder.id,
-          web_url:        folder.webUrl ?? null,
-          parent_path:    folder.parentReference?.path ?? null,
-          source:         'sharepoint',
-          last_synced_at: now,
-          updated_at:     now,
-        }
-
-        // Dedup: try item_id first (most reliable), then customer_number + type
-        let existing: { id: string } | null = null
-        const { data: byItemId } = await supabaseAdmin
-          .from('banco_central_records')
-          .select('id')
-          .eq('item_id', folder.id)
-          .maybeSingle()
-        existing = byItemId
-
-        if (!existing && customerNumber) {
-          const { data: byCustomer } = await supabaseAdmin
-            .from('banco_central_records')
-            .select('id')
-            .eq('customer_number', customerNumber)
-            .eq('type', bcuType)
-            .maybeSingle()
-          existing = byCustomer
-        }
-
-        if (existing) {
-          // Update SharePoint metadata only — don't touch checkboxes or status
-          await supabaseAdmin
-            .from('banco_central_records')
-            .update({ ...spFields, nombre_cliente: nombreCliente })
-            .eq('id', existing.id)
-          result.updated++
-        } else {
-          await supabaseAdmin.from('banco_central_records').insert({
-            customer_number: customerNumber,
-            nombre_cliente:  nombreCliente,
-            folder_name:     folderName,
-            folder_path:     '',       // no local path for SharePoint records
-            type:            bcuType,
-            ...spFields,
-          })
-          result.created++
-        }
-      } catch (e: unknown) {
-        const msg = e instanceof Error ? e.message : String(e)
-        result.errors.push(`Folder ${folder.name}: ${msg}`)
+      const spFields = {
+        drive_id:       driveId,
+        item_id:        folder.id,
+        web_url:        folder.webUrl ?? null,
+        parent_path:    folder.parentReference?.path ?? null,
+        source:         'sharepoint',
+        last_synced_at: now,
+        updated_at:     now,
+        nombre_cliente: nombreCliente,
       }
+
+      const existingId =
+        byItemId.get(folder.id) ??
+        (customerNumber ? byCustomer.get(customerNumber) : undefined)
+
+      if (existingId) {
+        toUpdate.push({ id: existingId, fields: spFields })
+      } else {
+        toInsert.push({
+          customer_number: customerNumber,
+          folder_name:     folderName,
+          folder_path:     null,
+          type:            bcuType,
+          ...spFields,
+        })
+      }
+    }
+
+    // Batch insert new records
+    const CHUNK = 200
+    for (let i = 0; i < toInsert.length; i += CHUNK) {
+      const { error } = await supabaseAdmin
+        .from('banco_central_records')
+        .insert(toInsert.slice(i, i + CHUNK))
+      if (error) result.errors.push(`Insert batch: ${error.message}`)
+      else result.created += toInsert.slice(i, i + CHUNK).length
+    }
+
+    // Update existing records in parallel batches
+    const UPDATE_CONCURRENCY = 10
+    for (let i = 0; i < toUpdate.length; i += UPDATE_CONCURRENCY) {
+      await Promise.all(
+        toUpdate.slice(i, i + UPDATE_CONCURRENCY).map(({ id, fields }) =>
+          supabaseAdmin
+            .from('banco_central_records')
+            .update(fields)
+            .eq('id', id)
+        )
+      )
+      result.updated += toUpdate.slice(i, i + UPDATE_CONCURRENCY).length
     }
 
     const status = result.errors.length === 0 ? 'success' : 'partial'
