@@ -4,18 +4,22 @@ import { supabaseAdmin } from '@/lib/supabase/admin'
 
 const ADMIN_ROLES = ['admin', 'ceo', 'direccion']
 
-// Generate YYYYMMDD.XXX orden_id (resets each day)
-async function generateOrdenId(): Promise<string> {
-  const now   = new Date()
-  const dateStr = now.toISOString().split('T')[0]               // "2026-06-09"
-  const prefix  = dateStr.replace(/-/g, '')                     // "20260609"
+// Generate {client_number}{YYYYMMDD}.001 orden_id (sequential per client per day)
+async function generateOrdenId(clientNumber: string | null): Promise<string> {
+  const now     = new Date()
+  const dateStr = now.toISOString().split('T')[0]       // "2026-06-09"
+  const datePfx = dateStr.replace(/-/g, '')             // "20260609"
+  const prefix  = clientNumber ? `${clientNumber}${datePfx}` : datePfx
 
-  const { count } = await supabaseAdmin
+  let query = supabaseAdmin
     .from('order_history')
     .select('*', { count: 'exact', head: true })
     .gte('created_at', dateStr + 'T00:00:00.000Z')
     .lte('created_at', dateStr + 'T23:59:59.999Z')
 
+  if (clientNumber) query = query.eq('client_number', clientNumber)
+
+  const { count } = await query
   const seq = String((count ?? 0) + 1).padStart(3, '0')
   return `${prefix}.${seq}`
 }
@@ -77,7 +81,7 @@ export async function POST(req: NextRequest) {
   const body   = await req.json()
   const blocks = body.blocks as any[] | undefined
 
-  const ordenId    = await generateOrdenId()
+  const ordenId    = await generateOrdenId(body.client_number ?? null)
   const summaryTxt = Array.isArray(blocks) && blocks.length > 0 ? buildSummary(blocks) : null
 
   // ── 1. Save main order record ───────────────────────────────────────────────
@@ -129,6 +133,8 @@ export async function POST(req: NextRequest) {
       notes:        block.observaciones?.trim() || null,
       vigencia:     block.vigencia || 'DIA',
       comision:     block.comision?.trim() || null,
+      maturity:     block.type === 'bonos' ? (block.maturity?.trim() || null) : null,
+      cupon:        block.type === 'bonos' ? (block.cupon?.trim()    || null) : null,
     }))
 
     const { error: itemsError } = await supabaseAdmin

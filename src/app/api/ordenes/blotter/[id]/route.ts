@@ -194,6 +194,30 @@ export async function PATCH(
     return NextResponse.json({ ok: true, row: data })
   }
 
+  if (accion === 'descancelar') {
+    if (!isAdmin) return NextResponse.json({ error: 'Sin permiso' }, { status: 403 })
+    if (!item.cancelado_at) return NextResponse.json({ error: 'La orden no está cancelada' }, { status: 400 })
+
+    const nuevoEstado = computeEstado({ ...item, cancelado_at: null })
+
+    const { data, error } = await supabaseAdmin
+      .from('order_history_items')
+      .update({ cancelado_at: null, cancelado_by: null, cancelado_motivo: null, estado: nuevoEstado })
+      .eq('id', params.id)
+      .select()
+      .single()
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+    await supabaseAdmin.from('order_eventos').insert({
+      item_id: params.id, order_id: item.order_id,
+      tipo: 'descancelada', descripcion: `Orden descancelada por ${session.name}`,
+      usuario: session.name, usuario_id: session.id,
+    })
+
+    return NextResponse.json({ ok: true, row: data })
+  }
+
   if (accion === 'editar_precios') {
     if (!isAdmin) return NextResponse.json({ error: 'Sin permiso' }, { status: 403 })
 

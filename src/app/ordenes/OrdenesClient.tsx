@@ -31,7 +31,7 @@ interface BonosBlock {
   type: 'bonos'; id: string; descripcion: string; cusipIsin: string
   cantidad: string; precio: 'mercado' | 'limite'; precioLimite: string
   moneda: string; operacion: 'compra' | 'venta'; fecha: string; observaciones: string
-  vigencia: 'DIA' | 'GTC'; comision: string
+  vigencia: 'DIA' | 'GTC'; comision: string; maturity: string; cupon: string
 }
 type OrderBlock = AccionesBlock | FondosBlock | BonosBlock
 
@@ -49,7 +49,7 @@ function newFondos(id: string): FondosBlock {
   return { type: 'fondos', id, fondo: '', cusipIsin: '', fecha: todayStr(), operacion: 'compra', monto: '', moneda: 'USD', observaciones: '', vigencia: 'DIA', comision: '', clase: 'Acumulativa' }
 }
 function newBonos(id: string): BonosBlock {
-  return { type: 'bonos', id, descripcion: '', cusipIsin: '', cantidad: '', precio: 'mercado', precioLimite: '', moneda: 'USD', operacion: 'compra', fecha: todayStr(), observaciones: '', vigencia: 'DIA', comision: '' }
+  return { type: 'bonos', id, descripcion: '', cusipIsin: '', cantidad: '', precio: 'mercado', precioLimite: '', moneda: 'USD', operacion: 'compra', fecha: todayStr(), observaciones: '', vigencia: 'DIA', comision: '', maturity: '', cupon: '' }
 }
 
 
@@ -294,6 +294,8 @@ function BonosForm({ block, index, onChange, onRemove }: { block: BonosBlock; in
         <Field label="CUSIP / ISIN">
           <input className={inputCls} placeholder="Autocompletado al seleccionar bono" value={block.cusipIsin} onChange={upd('cusipIsin')} />
         </Field>
+        <Field label="Vencimiento (Maturity)"><input className={inputCls} placeholder="Ej: 15/03/2030" value={block.maturity} onChange={upd('maturity')} /></Field>
+        <Field label="Cupón (%)"><input className={inputCls} type="number" placeholder="Ej: 6.50" value={block.cupon} onChange={upd('cupon')} /></Field>
         <Field label="Cantidad (Valor Nominal)"><input className={inputCls} type="number" placeholder="Ej: 100000" value={block.cantidad} onChange={upd('cantidad')} /></Field>
         <Field label="Tipo de precio"><select className={selectCls} value={block.precio} onChange={upd('precio')}><option value="mercado">A mercado</option><option value="limite">Precio límite</option></select></Field>
         {block.precio === 'limite' && <Field label="Precio límite (% par)"><input className={inputCls} placeholder="Ej: 98.50" value={block.precioLimite} onChange={upd('precioLimite')} /></Field>}

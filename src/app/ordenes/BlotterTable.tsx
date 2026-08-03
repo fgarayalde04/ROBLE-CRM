@@ -286,6 +286,40 @@ export default function BlotterTable({ isAdmin, userName, soloHoy = false }: Pro
     if (ok) setCancelarModal(null)
   }
 
+  const descancelar = async (row: BlotterRow) => {
+    await patch(row.id, { accion: 'descancelar' })
+  }
+
+  const exportExcel = async () => {
+    const XLSX = await import('xlsx')
+    const exportData = rows.map(r => ({
+      'N° Interno':    r.orden_id,
+      'Fecha':         r.order_created_at ? new Date(r.order_created_at).toLocaleDateString('es-UY') : '',
+      'Hora':          r.order_created_at ? new Date(r.order_created_at).toLocaleTimeString('es-UY') : '',
+      'Asesor':        r.user_name,
+      'Cliente':       r.client_name,
+      'N° Cliente':    r.client_number,
+      'Fecha Orden':   r.order_date,
+      'Operación':     r.operation_type,
+      'Tipo':          r.order_type,
+      'Instrumento':   r.instrument_name,
+      'Ticker/CUSIP':  r.symbol ?? r.cusip,
+      'Cantidad':      r.quantity,
+      'Precio':        r.price,
+      'Moneda':        r.moneda,
+      'Vigencia':      r.vigencia,
+      'Precio Ejec.':  r.precio_ejecutado,
+      'Valor Efectivo':r.valor_efectivo,
+      'Estado':        r.estado,
+      'Observaciones': r.notes,
+    }))
+    const ws = XLSX.utils.json_to_sheet(exportData)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Blotter')
+    const date = new Date().toISOString().split('T')[0]
+    XLSX.writeFile(wb, `blotter_${date}.xlsx`)
+  }
+
   const verHistorial = async (row: BlotterRow) => {
     const res = await fetch(`/api/ordenes/blotter/${row.id}`)
     const data = await res.json()
@@ -381,11 +415,18 @@ export default function BlotterTable({ isAdmin, userName, soloHoy = false }: Pro
             </button>
           )}
 
-          <button onClick={fetchData}
-            className="ml-auto flex items-center gap-1.5 px-3 py-1.5 text-xs bg-[#2D3F52] text-white rounded-lg hover:bg-opacity-90 transition-colors">
-            <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-            Actualizar
-          </button>
+          <div className="ml-auto flex items-center gap-2">
+            <button onClick={exportExcel} disabled={rows.length === 0}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-40">
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+              Excel
+            </button>
+            <button onClick={fetchData}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-[#2D3F52] text-white rounded-lg hover:bg-opacity-90 transition-colors">
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+              Actualizar
+            </button>
+          </div>
         </div>
       </div>
 
@@ -601,6 +642,16 @@ export default function BlotterTable({ isAdmin, userName, soloHoy = false }: Pro
                             className="w-6 h-6 flex items-center justify-center rounded hover:bg-red-100 text-gray-400 hover:text-red-600 transition-colors">
                             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                            </svg>
+                          </button>
+                        )}
+                        {/* Descancelar */}
+                        {isAdmin && isCancelada && (
+                          <button onClick={() => descancelar(row)}
+                            title="Descancelar orden"
+                            className="w-6 h-6 flex items-center justify-center rounded hover:bg-emerald-100 text-gray-400 hover:text-emerald-600 transition-colors">
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3"/>
                             </svg>
                           </button>
                         )}
