@@ -819,8 +819,16 @@ function CreateMonitoreoModal({ user, entity, onClose, onCreated }: {
       const raw = XLSX.utils.sheet_to_json<(string | number | null)[]>(ws, { header: 1, defval: null })
       if (raw.length < 2) { setError('El archivo parece estar vacío.'); return }
 
-      const hdrs = (raw[0] as (string | number | null)[]).map((h) => String(h ?? ''))
-      const dataRows = raw.slice(1) as (string | number | null)[][]
+      // Find the header row: first row with at least 3 non-empty cells
+      let headerRowIdx = 0
+      for (let i = 0; i < Math.min(raw.length - 1, 15); i++) {
+        const row = raw[i] as (string | number | null)[]
+        const nonEmpty = row.filter((c) => c !== null && String(c).trim() !== '').length
+        if (nonEmpty >= 3) { headerRowIdx = i; break }
+      }
+
+      const hdrs = (raw[headerRowIdx] as (string | number | null)[]).map((h) => String(h ?? '').trim())
+      const dataRows = raw.slice(headerRowIdx + 1) as (string | number | null)[][]
       setHeaders(hdrs)
       setPreviewRows(raw.slice(1, 6) as (string | number | null)[][])
       setAllRows(dataRows)
