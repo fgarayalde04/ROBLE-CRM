@@ -93,7 +93,6 @@ export default async function BancoCentralPage({
         {[
           { key: 'legajos',   label: 'Legajos clientes',     icon: '📁', href: '/banco-central?section=legajos' },
           { key: 'monitoreo', label: 'Monitoreo trimestral', icon: '📊', href: '/banco-central?section=monitoreo' },
-          { key: 'scoring',   label: 'Scoring de cartera',   icon: '📈', href: '/banco-central?section=scoring' },
           { key: 'ficha',     label: 'Ficha BCU',            icon: '📝', href: '/banco-central/ficha' },
         ].map(({ key, label, icon, href }) => (
           <Link
