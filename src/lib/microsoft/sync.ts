@@ -102,20 +102,19 @@ export async function syncClients(): Promise<SyncResult> {
     return result
   }
 
-  // Load all item_ids already tracked — primary key is item_id (onedrive folder id)
-  const knownClientIds = new Set<string>()
-  const knownOpeningIds = new Set<string>()
+  // Load all tracked item_ids and client_numbers to avoid duplicates
+  const knownClientIds = new Set<string>()        // item_id → already a client
+  const knownOpeningIds = new Set<string>()       // item_id → already an opening
+  const clientByNumber = new Map<string, string>() // client_number → client.id
   try {
-    const { data: existingClients } = await supabaseAdmin
-      .from('clients')
-      .select('item_id')
-      .not('item_id', 'is', null)
-    for (const c of existingClients ?? []) if (c.item_id) knownClientIds.add(c.item_id)
-
-    const { data: existingOpenings } = await supabaseAdmin
-      .from('account_openings')
-      .select('item_id')
-      .not('item_id', 'is', null)
+    const [{ data: existingClients }, { data: existingOpenings }] = await Promise.all([
+      supabaseAdmin.from('clients').select('id, item_id, client_number'),
+      supabaseAdmin.from('account_openings').select('item_id').not('item_id', 'is', null),
+    ])
+    for (const c of existingClients ?? []) {
+      if (c.item_id) knownClientIds.add(c.item_id)
+      if (c.client_number) clientByNumber.set(c.client_number, c.id)
+    }
     for (const o of existingOpenings ?? []) if (o.item_id) knownOpeningIds.add(o.item_id)
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e)
@@ -148,7 +147,7 @@ export async function syncClients(): Promise<SyncResult> {
               ? new Date(clientFolder.createdDateTime)
               : null
 
-            // ── 1. Already a client → update SharePoint fields only ──
+            // ── 1. Already a client by item_id → update SharePoint fields only ──
             if (knownClientIds.has(itemId)) {
               await supabaseAdmin
                 .from('clients')
@@ -170,35 +169,28 @@ export async function syncClients(): Promise<SyncResult> {
               continue
             }
 
-            // ── 3. Brand new folder — decide by creation date ──
-            const isHistorical = !createdAt || createdAt < HISTORICAL_CUTOFF
-
-            if (isHistorical) {
-              // Historical folder → goes directly to Clients
-              const { error: insertErr } = await supabaseAdmin
+            // ── 3. Existing client matched by client_number → link item_id ──
+            if (clientNumber && clientByNumber.has(clientNumber)) {
+              const existingClientId = clientByNumber.get(clientNumber)!
+              await supabaseAdmin
                 .from('clients')
-                .insert({
-                  first_name: '',
-                  last_name: displayName,
-                  client_number: clientNumber,
-                  status: 'activo',
-                  source: 'sharepoint',
-                  drive_id: driveId,
+                .update({
                   item_id: itemId,
+                  drive_id: driveId,
                   web_url: clientFolder.webUrl,
                   onedrive_folder_url: clientFolder.webUrl,
                   parent_path: advisorName,
                   advisor: advisorName,
                   last_synced_at: new Date().toISOString(),
                 })
-              if (insertErr) {
-                result.errors.push(`Insert client ${folderName}: ${insertErr.message}`)
-              } else {
-                result.created++
-                knownClientIds.add(itemId)
-              }
-            } else {
-              // New folder (≥ Jun 2) → Apertura de Cuenta + stub client with status='pendiente'
+                .eq('id', existingClientId)
+              knownClientIds.add(itemId)
+              result.updated++
+              continue
+            }
+
+            // ── 4. Truly new folder → Apertura de Cuenta + stub client with status='pendiente' ──
+            {
               const now = new Date().toISOString()
 
               // 1. Create pendiente client so it shows in the clients list
