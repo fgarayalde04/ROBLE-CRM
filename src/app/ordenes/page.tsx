@@ -9,6 +9,7 @@ export const metadata: Metadata = { title: 'Enviar órdenes | Roble Capital' }
 export const dynamic = 'force-dynamic'
 
 const ADMIN_ROLES = ['admin', 'ceo', 'direccion']
+const MESA_ROLES  = ['admin', 'ceo', 'direccion', 'mesa']
 
 interface Props {
   searchParams: { tab?: string }
@@ -21,8 +22,9 @@ export default async function OrdenesPage({ searchParams }: Props) {
 
   const gmailConnected = await hasGoogleConnection()
   const isAdmin = ADMIN_ROLES.includes(session.role)
+  const isMesa  = MESA_ROLES.includes(session.role)
 
-  const VALID_TABS = ['blotter', 'mesa', 'mis-ordenes', 'nueva', 'instrumentos'] as const
+  const VALID_TABS = ['blotter', 'mesa', 'mis-ordenes', 'nueva', 'instrumentos', 'enviar', 'mis-solicitudes'] as const
   type ValidTab = typeof VALID_TABS[number]
   const rawTab = searchParams.tab as string | undefined
   const initialTab: ValidTab | undefined = VALID_TABS.includes(rawTab as ValidTab)
@@ -34,6 +36,7 @@ export default async function OrdenesPage({ searchParams }: Props) {
       gmailConnected={gmailConnected}
       initialTab={initialTab}
       isAdmin={isAdmin}
+      isMesa={isMesa}
       userName={session.name}
       userEmail={session.email ?? ''}
     />

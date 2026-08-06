@@ -8,12 +8,15 @@ import InstrumentSearch from '@/components/InstrumentSearch'
 import TradingEmailSearch from '@/components/TradingEmailSearch'
 import InstrumentsManager from './InstrumentsManager'
 import BlotterTable from './BlotterTable'
+import BlotterSolicitudes from '../solicitudes/BlotterSolicitudes'
+import NuevaSolicitudForm from '../solicitudes/NuevaSolicitudForm'
+import MesaHoy from '../solicitudes/MesaHoy'
 import type { Instrument } from '@/app/api/instruments/route'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type OrderType = 'acciones' | 'fondos' | 'bonos'
-type Tab = 'nueva' | 'blotter' | 'mesa' | 'mis-ordenes' | 'instrumentos'
+type Tab = 'nueva' | 'blotter' | 'mesa' | 'mis-ordenes' | 'instrumentos' | 'mis-solicitudes' | 'enviar'
 
 interface AccionesBlock {
   type: 'acciones'; id: string; nombre: string; ticker: string
@@ -343,10 +346,10 @@ const INSTRUMENT_STYLE: Record<string, string> = {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-interface Props { gmailConnected: boolean; initialTab?: Tab; isAdmin?: boolean; userName?: string; userEmail?: string }
+interface Props { gmailConnected: boolean; initialTab?: Tab; isAdmin?: boolean; isMesa?: boolean; userName?: string; userEmail?: string }
 
-export default function OrdenesClient({ gmailConnected, initialTab, isAdmin = false, userName = '', userEmail = '' }: Props) {
-  const defaultTab: Tab = isAdmin ? 'blotter' : 'mis-ordenes'
+export default function OrdenesClient({ gmailConnected, initialTab, isAdmin = false, isMesa = false, userName = '', userEmail = '' }: Props) {
+  const defaultTab: Tab = isAdmin ? 'mesa' : 'enviar'
   const [tab, setTab] = useState<Tab>(initialTab ?? defaultTab)
   const [blocks, setBlocks]             = useState<OrderBlock[]>([])
   const [clientId, setClientId]         = useState('')
@@ -483,14 +486,14 @@ export default function OrdenesClient({ gmailConnected, initialTab, isAdmin = fa
         <div className="flex gap-1 bg-white border border-gray-200 rounded-lg p-0.5 shadow-sm">
           {(isAdmin
             ? [
-                { t: 'blotter'    as Tab, label: 'Blotter' },
-                { t: 'mesa'       as Tab, label: 'Mesa de hoy' },
-                { t: 'nueva'      as Tab, label: 'Nueva orden' },
+                { t: 'mesa'         as Tab, label: 'Mesa de hoy' },
+                { t: 'blotter'      as Tab, label: 'Blotter' },
                 { t: 'instrumentos' as Tab, label: 'Instrumentos' },
               ]
             : [
-                { t: 'mis-ordenes' as Tab, label: 'Mis órdenes' },
-                { t: 'nueva'       as Tab, label: 'Nueva orden' },
+                { t: 'enviar'          as Tab, label: 'Enviar orden' },
+                { t: 'mis-solicitudes' as Tab, label: 'Mis solicitudes' },
+                { t: 'mis-ordenes'     as Tab, label: 'Historial' },
               ]
           ).map(({ t, label }) => (
             <button key={t} onClick={() => setTab(t)}
@@ -507,14 +510,14 @@ export default function OrdenesClient({ gmailConnected, initialTab, isAdmin = fa
       <div className="md:hidden flex gap-1 bg-white border border-gray-200 rounded-lg p-0.5 mb-4 overflow-x-auto">
         {(isAdmin
           ? [
-              { t: 'blotter'    as Tab, label: 'Blotter' },
-              { t: 'mesa'       as Tab, label: 'Mesa' },
-              { t: 'nueva'      as Tab, label: 'Nueva' },
+              { t: 'mesa'         as Tab, label: 'Mesa' },
+              { t: 'blotter'      as Tab, label: 'Blotter' },
               { t: 'instrumentos' as Tab, label: 'Instr.' },
             ]
           : [
-              { t: 'mis-ordenes' as Tab, label: 'Mis órdenes' },
-              { t: 'nueva'       as Tab, label: 'Nueva' },
+              { t: 'enviar'          as Tab, label: 'Enviar' },
+              { t: 'mis-solicitudes' as Tab, label: 'Solicitudes' },
+              { t: 'mis-ordenes'     as Tab, label: 'Historial' },
             ]
         ).map(({ t, label }) => (
           <button key={t} onClick={() => setTab(t)}
@@ -526,8 +529,8 @@ export default function OrdenesClient({ gmailConnected, initialTab, isAdmin = fa
         ))}
       </div>
 
-      {/* ── NUEVA ORDEN ── */}
-      {tab === 'nueva' && (
+      {/* ── NUEVA ORDEN (removed) ── */}
+      {false && (
         <div className="flex flex-col md:flex-row gap-4 md:gap-5">
 
           {/* Left: form */}
@@ -701,8 +704,8 @@ export default function OrdenesClient({ gmailConnected, initialTab, isAdmin = fa
               )}
 
               {sendStatus && (
-                <div className={`px-3 py-2 rounded-lg text-xs font-medium ${sendStatus.ok ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
-                  {sendStatus.msg}
+                <div className={`px-3 py-2 rounded-lg text-xs font-medium ${sendStatus?.ok ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+                  {sendStatus?.msg}
                 </div>
               )}
 
@@ -780,6 +783,26 @@ export default function OrdenesClient({ gmailConnected, initialTab, isAdmin = fa
         <BlotterTable isAdmin={isAdmin} userName={userName} soloHoy />
       )}
 
+      {/* ── ENVIAR ORDEN (asesor) ── */}
+      {tab === 'enviar' && !isAdmin && (
+        <div className="space-y-4">
+          <NuevaSolicitudForm gmailConnected={gmailConnected} userEmail={userEmail} />
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+            <div className="px-5 py-3 border-b border-gray-100">
+              <h2 className="text-sm font-semibold text-gray-700">Mesa de hoy</h2>
+            </div>
+            <div className="px-5 pb-5 pt-3">
+              <MesaHoy isMesa={isMesa} userName={userName} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MIS SOLICITUDES (asesor) ── */}
+      {tab === 'mis-solicitudes' && (
+        <BlotterSolicitudes isMesa={false} userName={userName} />
+      )}
+
       {/* ── MIS ÓRDENES ── */}
       {tab === 'mis-ordenes' && (
         <BlotterTable isAdmin={false} userName={userName} />
@@ -789,19 +812,6 @@ export default function OrdenesClient({ gmailConnected, initialTab, isAdmin = fa
         <InstrumentsManager />
       )}
 
-      {/* ── FAB: Nueva Orden — mobile only ── */}
-      {(tab === 'blotter' || tab === 'mesa' || tab === 'mis-ordenes') && (
-        <button
-          onClick={() => setTab('nueva')}
-          className="md:hidden fixed bottom-[72px] right-4 z-20 flex items-center gap-2 pl-4 pr-5 py-3.5 rounded-full shadow-xl font-semibold text-sm text-white transition-transform active:scale-95"
-          style={{ backgroundColor: '#16A34A' }}
-        >
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-          </svg>
-          Nueva orden
-        </button>
-      )}
     </div>
   )
 }
