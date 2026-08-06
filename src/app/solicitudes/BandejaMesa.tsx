@@ -431,10 +431,26 @@ export default function BandejaMesa({ isMesa, userName }: { isMesa: boolean; use
 
                 {/* Send email: for old flow (mesa_operaciones + operador) or new flow (en_revision) */}
                 {selected.operador && (selected.estado === 'mesa_operaciones' || selected.estado === 'en_revision') && (
-                  <button onClick={() => setShowEmail(true)}
-                    className="w-full py-2 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-                    Enviar email al cliente
-                  </button>
+                  <div className="flex gap-1.5">
+                    <button onClick={async () => {
+                      setSendingEmail(true)
+                      const res = await fetch('/api/gmail/send', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ to: selected.client_email, subject: emailAsunto, body: emailCuerpo,
+                          client_name: selected.client_name, client_number: selected.client_number }),
+                      })
+                      if (res.ok) { await patch('mail_enviado', { asunto: emailAsunto, cuerpo: emailCuerpo }) }
+                      else { const j = await res.json(); alert(j.error ?? 'Error al enviar') }
+                      setSendingEmail(false)
+                    }} disabled={actionLoading || sendingEmail}
+                      className="flex-1 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50">
+                      {sendingEmail ? 'Enviando…' : 'Enviar directo'}
+                    </button>
+                    <button onClick={() => setShowEmail(true)} disabled={actionLoading || sendingEmail}
+                      className="flex-1 py-2 text-sm font-medium border border-blue-300 text-blue-700 rounded-lg hover:bg-blue-50 disabled:opacity-50">
+                      Editar y enviar
+                    </button>
+                  </div>
                 )}
 
                 {/* Devolver: only for new flow */}

@@ -227,10 +227,27 @@ function DetailPanel({
             </button>
           )}
           {sol.operador && (sol.estado === 'mesa_operaciones' || sol.estado === 'en_revision') && (
-            <button onClick={() => setShowEmail(true)}
-              className="w-full py-2 text-xs font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-              Enviar email al cliente
-            </button>
+            <div className="flex gap-1.5">
+              <button onClick={async () => {
+                setSendingMail(true)
+                await onAction('generar_email', { asunto: emailAsunto, cuerpo: emailCuerpo })
+                const res = await fetch('/api/gmail/send', {
+                  method: 'POST', headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ to: sol.client_email, subject: emailAsunto, body: emailCuerpo,
+                    client_name: sol.client_name, client_number: sol.client_number }),
+                })
+                if (res.ok) { await onAction('mail_enviado', { asunto: emailAsunto, cuerpo: emailCuerpo }) }
+                else { const j = await res.json(); alert(j.error ?? 'Error al enviar') }
+                setSendingMail(false)
+              }} disabled={sendingMail}
+                className="flex-1 py-2 text-xs font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50">
+                {sendingMail ? 'Enviando…' : 'Enviar directo'}
+              </button>
+              <button onClick={() => setShowEmail(true)} disabled={sendingMail}
+                className="flex-1 py-2 text-xs font-semibold border border-blue-300 text-blue-700 rounded-lg hover:bg-blue-50 disabled:opacity-50">
+                Editar y enviar
+              </button>
+            </div>
           )}
           {sol.estado === 'en_revision' && (
             <button onClick={async () => {
