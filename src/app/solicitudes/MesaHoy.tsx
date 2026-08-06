@@ -389,17 +389,24 @@ export default function MesaHoy({ isMesa, userName }: { isMesa: boolean; userNam
   const [loading, setLoading]   = useState(true)
   const [selected, setSelected] = useState<Solicitud | null>(null)
   const [eventos, setEventos]   = useState<Evento[]>([])
+  const [verSolo, setVerSolo]   = useState<'hoy' | 'semana' | 'todo'>('hoy')
 
   const today = new Date().toISOString().split('T')[0]
 
   const fetchRows = useCallback(async () => {
     setLoading(true)
-    const p = new URLSearchParams({ dateFrom: today, dateTo: today })
+    const p = new URLSearchParams()
+    if (verSolo === 'hoy') {
+      p.set('dateFrom', today); p.set('dateTo', today)
+    } else if (verSolo === 'semana') {
+      const from = new Date(); from.setDate(from.getDate() - 7)
+      p.set('dateFrom', from.toISOString().split('T')[0])
+    }
     const res = await fetch('/api/solicitudes?' + p)
     const json = await res.json()
     setRows(json.solicitudes ?? [])
     setLoading(false)
-  }, [today])
+  }, [today, verSolo])
 
   useEffect(() => { fetchRows() }, [fetchRows])
 
@@ -445,16 +452,28 @@ export default function MesaHoy({ isMesa, userName }: { isMesa: boolean; userNam
       <div className="flex gap-4">
         {/* Tabla */}
         <div className="flex-1 bg-white rounded-lg border border-gray-200 overflow-hidden">
-          <div className="px-4 py-2.5 border-b border-gray-100 flex items-center justify-between">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-              {today} — {rows.length} solicitud{rows.length !== 1 ? 'es' : ''}
+          <div className="px-4 py-2.5 border-b border-gray-100 flex items-center justify-between gap-3">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider shrink-0">
+              {rows.length} solicitud{rows.length !== 1 ? 'es' : ''}
             </p>
-            <button onClick={fetchRows} className="text-xs text-blue-500 hover:underline">↻ Actualizar</button>
+            <div className="flex items-center gap-1">
+              {(['hoy','semana','todo'] as const).map(v => (
+                <button key={v} onClick={() => setVerSolo(v)}
+                  className={`px-2.5 py-1 text-[11px] font-medium rounded-md transition ${
+                    verSolo === v ? 'bg-[#2D3F52] text-white' : 'text-gray-500 hover:bg-gray-100'
+                  }`}>
+                  {v === 'hoy' ? 'Hoy' : v === 'semana' ? '7 días' : 'Todo'}
+                </button>
+              ))}
+              <button onClick={fetchRows} className="ml-1 text-xs text-blue-500 hover:underline">↻</button>
+            </div>
           </div>
           {loading ? (
             <div className="p-6 text-center text-sm text-gray-400">Cargando…</div>
           ) : rows.length === 0 ? (
-            <div className="p-6 text-center text-sm text-gray-400">No hay solicitudes para hoy.</div>
+            <div className="p-6 text-center text-sm text-gray-400">
+              No hay solicitudes {verSolo === 'hoy' ? 'para hoy' : verSolo === 'semana' ? 'en los últimos 7 días' : ''}.
+            </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
