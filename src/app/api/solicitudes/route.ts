@@ -31,11 +31,13 @@ export async function GET(req: NextRequest) {
   const isAdmin = ADMIN_ROLES.includes(session.role)
   const { searchParams } = req.nextUrl
 
-  const estado   = searchParams.get('estado')    // filter by estado
+  const estado   = searchParams.get('estado')
   const q        = searchParams.get('q')?.trim()
   const dateFrom = searchParams.get('dateFrom')
   const dateTo   = searchParams.get('dateTo')
   const asesor   = isAdmin ? searchParams.get('asesor') : null
+  const limit    = Math.min(parseInt(searchParams.get('limit') ?? '100', 10), 500)
+  const page     = Math.max(parseInt(searchParams.get('page')  ?? '0',   10), 0)
 
   let query = supabaseAdmin
     .from('solicitudes')
@@ -45,9 +47,9 @@ export async function GET(req: NextRequest) {
       fecha_operacion, client_name, client_number, client_email,
       operador, tomado_at, mail_enviado_at, ejecutado_at,
       created_at, updated_at, cc_emails
-    `)
+    `, { count: 'exact' })
     .order('created_at', { ascending: false })
-    .limit(200)
+    .range(page * limit, (page + 1) * limit - 1)
 
   if (!isMesa) query = query.eq('asesor', session.name)
   if (asesor)  query = query.eq('asesor', asesor)
@@ -58,10 +60,10 @@ export async function GET(req: NextRequest) {
     `client_name.ilike.%${q}%,client_number.ilike.%${q}%,instrumento_nombre.ilike.%${q}%,solicitud_id.ilike.%${q}%`
   )
 
-  const { data, error } = await query
+  const { data, error, count } = await query
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  return NextResponse.json({ solicitudes: data ?? [], isMesa })
+  return NextResponse.json({ solicitudes: data ?? [], isMesa, total: count ?? 0, page, limit })
 }
 
 // POST /api/solicitudes — crear solicitud

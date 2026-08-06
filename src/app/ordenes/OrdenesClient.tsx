@@ -783,17 +783,7 @@ export default function OrdenesClient({ gmailConnected, initialTab, isAdmin = fa
 
       {/* ── ENVIAR ORDEN (asesor) ── */}
       {tab === 'enviar' && !isAdmin && (
-        <div className="space-y-4">
-          <NuevaSolicitudForm gmailConnected={gmailConnected} userEmail={userEmail} />
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-            <div className="px-5 py-3 border-b border-gray-100">
-              <h2 className="text-sm font-semibold text-gray-700">Mesa de hoy</h2>
-            </div>
-            <div className="px-5 pb-5 pt-3">
-              <MesaHoy isMesa={isMesa} userName={userName} />
-            </div>
-          </div>
-        </div>
+        <NuevaSolicitudForm gmailConnected={gmailConnected} userEmail={userEmail} />
       )}
 
       {/* ── HISTORIAL (asesor) — sus solicitudes como blotter ── */}

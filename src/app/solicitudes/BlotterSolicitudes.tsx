@@ -47,10 +47,15 @@ function exportCSV(rows: Solicitud[]) {
   const a = document.createElement('a'); a.href = url; a.download = `blotter_${new Date().toISOString().split('T')[0]}.csv`; a.click()
 }
 
+const PAGE_SIZE = 100
+
 export default function BlotterSolicitudes({ isMesa, userName }: { isMesa: boolean; userName?: string }) {
-  const [rows, setRows]       = useState<Solicitud[]>([])
-  const [loading, setLoading] = useState(false)
+  const [rows, setRows]         = useState<Solicitud[]>([])
+  const [loading, setLoading]   = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [selected, setSelected] = useState<string | null>(null)
+  const [page, setPage]         = useState(0)
+  const [total, setTotal]       = useState(0)
 
   // Filtros
   const [q, setQ]             = useState('')
@@ -62,25 +67,34 @@ export default function BlotterSolicitudes({ isMesa, userName }: { isMesa: boole
   const [tipoOp, setTipoOp]     = useState('')
   const [tipoInst, setTipoInst] = useState('')
 
-  const fetchRows = useCallback(async () => {
-    setLoading(true)
+  async function doFetch(pageNum: number, append: boolean) {
+    if (append) setLoadingMore(true); else setLoading(true)
     const p = new URLSearchParams()
     if (q)        p.set('q', q)
     if (estado)   p.set('estado', estado)
     if (dateFrom) p.set('dateFrom', dateFrom)
     if (dateTo)   p.set('dateTo', dateTo)
     if (asesor)   p.set('asesor', asesor)
-    const res = await fetch('/api/solicitudes?' + p)
+    p.set('limit', String(PAGE_SIZE))
+    p.set('page',  String(pageNum))
+    const res  = await fetch('/api/solicitudes?' + p)
     const json = await res.json()
     let data: Solicitud[] = json.solicitudes ?? []
     if (operador) data = data.filter(r => r.operador?.toLowerCase().includes(operador.toLowerCase()))
     if (tipoOp)   data = data.filter(r => r.tipo_operacion === tipoOp)
     if (tipoInst) data = data.filter(r => r.instrumento_tipo === tipoInst)
-    setRows(data)
-    setLoading(false)
-  }, [q, estado, dateFrom, dateTo, asesor, operador, tipoOp, tipoInst])
+    setRows(prev => append ? [...prev, ...data] : data)
+    setTotal(json.total ?? 0)
+    setPage(pageNum)
+    if (append) setLoadingMore(false); else setLoading(false)
+  }
+
+  const fetchRows = useCallback(() => { doFetch(0, false) },
+    [q, estado, dateFrom, dateTo, asesor, operador, tipoOp, tipoInst]) // eslint-disable-line
 
   useEffect(() => { fetchRows() }, [fetchRows])
+
+  function loadMore() { doFetch(page + 1, true) }
 
   function clearFilters() {
     setQ(''); setEstado(''); setDateFrom(''); setDateTo('')
@@ -88,6 +102,7 @@ export default function BlotterSolicitudes({ isMesa, userName }: { isMesa: boole
   }
 
   const activeFilters = [q,estado,dateFrom,dateTo,asesor,operador,tipoOp,tipoInst].filter(Boolean).length
+  const hasMore = rows.length < total
 
   return (
     <div className="space-y-3">
@@ -157,7 +172,9 @@ export default function BlotterSolicitudes({ isMesa, userName }: { isMesa: boole
       {/* Tabla */}
       <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
         <div className="px-4 py-2.5 border-b border-gray-100 flex items-center justify-between">
-          <p className="text-xs text-gray-500">{loading ? 'Cargando…' : `${rows.length} resultado${rows.length !== 1 ? 's' : ''}`}</p>
+          <p className="text-xs text-gray-500">
+            {loading ? 'Cargando…' : `${rows.length}${total > rows.length ? ` de ${total}` : ''} resultado${rows.length !== 1 ? 's' : ''}`}
+          </p>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -213,6 +230,16 @@ export default function BlotterSolicitudes({ isMesa, userName }: { isMesa: boole
           </table>
         </div>
       </div>
+
+      {/* Cargar más */}
+      {hasMore && (
+        <div className="flex justify-center pt-1">
+          <button onClick={loadMore} disabled={loadingMore}
+            className="px-5 py-2 text-xs font-medium border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 text-gray-600 transition">
+            {loadingMore ? 'Cargando…' : `Cargar más (${total - rows.length} restantes)`}
+          </button>
+        </div>
+      )}
     </div>
   )
 }
