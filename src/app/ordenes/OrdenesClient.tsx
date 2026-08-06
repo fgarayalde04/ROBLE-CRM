@@ -773,12 +773,12 @@ export default function OrdenesClient({ gmailConnected, initialTab, isAdmin = fa
 
       {/* ── BLOTTER GENERAL ── */}
       {tab === 'blotter' && isAdmin && (
-        <BlotterTable isAdmin={isAdmin} userName={userName} />
+        <BlotterSolicitudes isMesa={true} userName={userName} />
       )}
 
       {/* ── MESA DE HOY ── */}
       {tab === 'mesa' && isAdmin && (
-        <BlotterTable isAdmin={isAdmin} userName={userName} soloHoy />
+        <MesaHoy isMesa={true} userName={userName} />
       )}
 
       {/* ── ENVIAR ORDEN (asesor) ── */}

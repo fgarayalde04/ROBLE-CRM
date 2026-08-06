@@ -380,9 +380,7 @@ export default function FormularioDirecto({ onBack }: Props) {
     setSending(true); setSubmitError(null); setValidationErrors([])
     try {
       const firstOp = blocks[0]
-      const tipoOp = firstOp.type === 'fondos'
-        ? (firstOp.operacion === 'compra' ? 'suscripcion' : 'rescate')
-        : firstOp.operacion as 'compra' | 'venta'
+      const tipoOp = firstOp.operacion as 'compra' | 'venta'
       const firstNombre = firstOp.type === 'acciones' ? firstOp.nombre
         : firstOp.type === 'fondos' ? firstOp.fondo
         : firstOp.descripcion

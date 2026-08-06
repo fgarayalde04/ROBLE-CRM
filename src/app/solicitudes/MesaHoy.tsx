@@ -440,17 +440,15 @@ export default function MesaHoy({ isMesa, userName }: { isMesa: boolean; userNam
   }
 
   const kpis = [
-    { label: 'Pendiente',    val: rows.filter(r => ['mesa_operaciones','pendiente_revision','devuelta'].includes(r.estado)).length, color:'text-amber-700',  bg:'bg-amber-50' },
-    { label: 'En revisión',  val: rows.filter(r => r.estado === 'en_revision').length,     color:'text-blue-700',   bg:'bg-blue-50' },
-    { label: 'Mail enviado', val: rows.filter(r => r.estado === 'mail_enviado').length,    color:'text-indigo-700', bg:'bg-indigo-50' },
-    { label: 'En ejecución', val: rows.filter(r => r.estado === 'en_ejecucion').length,    color:'text-purple-700', bg:'bg-purple-50' },
+    { label: 'Pendiente',    val: rows.filter(r => ['mesa_operaciones','pendiente_revision','en_revision','devuelta'].includes(r.estado)).length, color:'text-amber-700',  bg:'bg-amber-50' },
+    { label: 'Mail enviado', val: rows.filter(r => ['mail_enviado','en_ejecucion'].includes(r.estado)).length,    color:'text-indigo-700', bg:'bg-indigo-50' },
     { label: 'Ejecutadas',   val: rows.filter(r => r.estado === 'ejecutada').length,       color:'text-emerald-700',bg:'bg-emerald-50' },
   ]
 
   return (
     <div className="space-y-3">
       {/* KPIs */}
-      <div className="grid grid-cols-5 gap-2">
+      <div className="grid grid-cols-3 gap-2">
         {kpis.map(k => (
           <div key={k.label} className={`${k.bg} rounded-lg px-3 py-2.5`}>
             <p className="text-[10px] text-gray-500">{k.label}</p>
