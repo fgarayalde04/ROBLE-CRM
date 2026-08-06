@@ -10,11 +10,11 @@ function Section({
   title, subtitle, accent = 'gray', defaultOpen = false, children,
 }: {
   title: string; subtitle?: string
-  accent?: 'blue' | 'amber'
+  accent?: 'blue' | 'amber' | 'gray'
   defaultOpen?: boolean; children: React.ReactNode
 }) {
   const [open, setOpen] = useState(defaultOpen)
-  const dotCls = { blue: 'bg-blue-500', amber: 'bg-amber-500' }[accent]
+  const dotCls = { blue: 'bg-blue-500', amber: 'bg-amber-500', gray: 'bg-gray-400' }[accent ?? 'gray']
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
