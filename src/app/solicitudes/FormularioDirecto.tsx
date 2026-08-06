@@ -379,6 +379,18 @@ export default function FormularioDirecto({ onBack }: Props) {
       }
       setSolicitudId(data.solicitud_id)
       setSent(true)
+      // Si el email fue ingresado manualmente, guardarlo para futuras órdenes
+      if (emailMissing && clientEmail) {
+        fetch('/api/authorized-emails', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            numero_cliente: clientNumber || null,
+            nombre_cliente: clientName  || null,
+            email:          clientEmail,
+          }),
+        }).catch(() => {})
+      }
     } catch (err: any) {
       setSubmitError(err.message ?? 'Error de conexión')
     } finally { setSending(false) }
