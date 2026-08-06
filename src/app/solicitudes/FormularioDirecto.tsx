@@ -1,9 +1,11 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import LegajosSearchInput from '@/components/LegajosSearchInput'
 import InstrumentSearch from '@/components/InstrumentSearch'
 import type { Instrument } from '@/app/api/instruments/route'
+
+interface TeamMember { name: string; email: string }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -299,12 +301,42 @@ export default function FormularioDirecto({ onBack }: Props) {
   const [clientEmail, setClientEmail]   = useState('')
   const [emailMissing, setEmailMissing] = useState(false)
   const [fecha, setFecha]               = useState(todayStr())
+  const [ccEmails, setCcEmails]         = useState<string[]>([])
+  const [ccInput, setCcInput]           = useState('')
+  const [teamMembers, setTeamMembers]   = useState<TeamMember[]>([])
+  const [showCcSugg, setShowCcSugg]     = useState(false)
+  const ccRef                           = useRef<HTMLDivElement>(null)
   const [preview, setPreview]           = useState<string | null>(null)
   const [validationErrors, setValidationErrors] = useState<string[]>([])
   const [sending, setSending]           = useState(false)
   const [sent, setSent]                 = useState(false)
   const [solicitudId, setSolicitudId]   = useState<string | null>(null)
   const [submitError, setSubmitError]   = useState<string | null>(null)
+
+  useEffect(() => {
+    fetch('/api/team-emails').then(r => r.json()).then(d => setTeamMembers(Array.isArray(d) ? d : [])).catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ccRef.current && !ccRef.current.contains(e.target as Node)) setShowCcSugg(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
+  const ccSuggestions = teamMembers.filter(m =>
+    m.email && !ccEmails.includes(m.email) &&
+    (ccInput === '' || m.name.toLowerCase().includes(ccInput.toLowerCase()) || m.email.toLowerCase().includes(ccInput.toLowerCase()))
+  )
+
+  function addCc(email: string) {
+    const trimmed = email.trim()
+    if (trimmed && !ccEmails.includes(trimmed)) setCcEmails(prev => [...prev, trimmed])
+    setCcInput(''); setShowCcSugg(false)
+  }
+
+  function removeCc(email: string) { setCcEmails(prev => prev.filter(e => e !== email)) }
 
   const addBlock = (type: OrderType) => {
     const id = uid()
@@ -370,6 +402,7 @@ export default function FormularioDirecto({ onBack }: Props) {
           assets_json:        blocks,
           mail_preview:       emailBody,
           mail_asunto:        asunto,
+          cc_emails:          ccEmails.length > 0 ? ccEmails : null,
         }),
       })
       const data = await res.json()
@@ -399,6 +432,7 @@ export default function FormularioDirecto({ onBack }: Props) {
   function handleNuevaOrden() {
     setBlocks([]); setClientId(''); setClientName(''); setClientNumber('')
     setClientEmail(''); setEmailMissing(false); setFecha(todayStr())
+    setCcEmails([]); setCcInput('')
     setPreview(null); setValidationErrors([]); setSent(false); setSolicitudId(null); setSubmitError(null)
   }
 
@@ -527,6 +561,56 @@ export default function FormularioDirecto({ onBack }: Props) {
                     className="px-3 py-2 text-xs text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 shrink-0 transition whitespace-nowrap">Hoy</button>
                 </div>
               </div>
+
+              {/* CC interno */}
+              <div className="md:col-span-3">
+                <label className={labelCls}>CC (copia interna)</label>
+                <div ref={ccRef} className="relative">
+                  {/* Pills de emails ya agregados */}
+                  <div className={`${inputCls} min-h-[38px] flex flex-wrap gap-1.5 items-center cursor-text`}
+                    onClick={() => { setShowCcSugg(true) }}>
+                    {ccEmails.map(email => (
+                      <span key={email} className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 border border-blue-200 text-[11px] font-medium px-2 py-0.5 rounded-full">
+                        {email}
+                        <button type="button" onClick={e => { e.stopPropagation(); removeCc(email) }} className="hover:text-red-500 transition">×</button>
+                      </span>
+                    ))}
+                    <input
+                      className="flex-1 min-w-[140px] outline-none text-sm bg-transparent placeholder-gray-300"
+                      placeholder={ccEmails.length === 0 ? 'Buscar o escribir email…' : ''}
+                      value={ccInput}
+                      onChange={e => { setCcInput(e.target.value); setShowCcSugg(true) }}
+                      onFocus={() => setShowCcSugg(true)}
+                      onKeyDown={e => {
+                        if ((e.key === 'Enter' || e.key === ',') && ccInput.trim()) {
+                          e.preventDefault(); addCc(ccInput)
+                        }
+                        if (e.key === 'Backspace' && !ccInput && ccEmails.length > 0) {
+                          removeCc(ccEmails[ccEmails.length - 1])
+                        }
+                      }}
+                    />
+                  </div>
+                  {showCcSugg && ccSuggestions.length > 0 && (
+                    <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden max-h-48 overflow-y-auto">
+                      {ccSuggestions.map(m => (
+                        <button key={m.email} type="button"
+                          onMouseDown={e => { e.preventDefault(); addCc(m.email) }}
+                          className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-blue-50 text-left transition">
+                          <div className="w-6 h-6 rounded-full bg-[#2D3F52] text-white text-[10px] font-bold flex items-center justify-center shrink-0">
+                            {m.name.charAt(0).toUpperCase()}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-xs font-semibold text-gray-800 truncate">{m.name}</p>
+                            <p className="text-[10px] text-gray-400 truncate">{m.email}</p>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <p className="text-[10px] text-gray-400 mt-1">Presioná Enter o coma para agregar. El equipo de Roble aparece como sugerencia.</p>
+              </div>
             </div>
           </div>
 
@@ -587,7 +671,7 @@ export default function FormularioDirecto({ onBack }: Props) {
               className="px-5 py-2.5 rounded-lg text-sm font-bold text-white disabled:opacity-40 disabled:cursor-not-allowed transition bg-[#2D3F52] whitespace-nowrap">
               Generar preview del email
             </button>
-            <button type="button" onClick={() => { setBlocks([]); setClientId(''); setClientName(''); setClientNumber(''); setClientEmail(''); setFecha(todayStr()); setPreview(null); setValidationErrors([]) }}
+            <button type="button" onClick={() => { setBlocks([]); setClientId(''); setClientName(''); setClientNumber(''); setClientEmail(''); setFecha(todayStr()); setCcEmails([]); setCcInput(''); setPreview(null); setValidationErrors([]) }}
               className="px-4 py-2.5 rounded-lg text-sm font-semibold border border-gray-200 text-gray-500 hover:bg-gray-50 transition whitespace-nowrap">
               Limpiar
             </button>
@@ -629,6 +713,12 @@ export default function FormularioDirecto({ onBack }: Props) {
                     <span className="w-16 shrink-0 font-semibold text-gray-400 text-right">Para:</span>
                     <span className="text-gray-700">{clientEmail || clientName || '—'}</span>
                   </div>
+                  {ccEmails.length > 0 && (
+                    <div className="flex gap-2 text-xs">
+                      <span className="w-16 shrink-0 font-semibold text-gray-400 text-right">CC:</span>
+                      <span className="text-gray-700 break-all">{ccEmails.join(', ')}</span>
+                    </div>
+                  )}
                   <div className="flex gap-2 text-xs">
                     <span className="w-16 shrink-0 font-semibold text-gray-400 text-right">Asunto:</span>
                     <span className="text-gray-700 break-all">{asunto}</span>

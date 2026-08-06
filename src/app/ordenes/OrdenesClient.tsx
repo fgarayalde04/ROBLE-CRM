@@ -491,9 +491,8 @@ export default function OrdenesClient({ gmailConnected, initialTab, isAdmin = fa
                 { t: 'instrumentos' as Tab, label: 'Instrumentos' },
               ]
             : [
-                { t: 'enviar'          as Tab, label: 'Enviar orden' },
-                { t: 'mis-solicitudes' as Tab, label: 'Mis solicitudes' },
-                { t: 'mis-ordenes'     as Tab, label: 'Historial' },
+                { t: 'enviar'          as Tab, label: 'Órdenes' },
+                { t: 'mis-solicitudes' as Tab, label: 'Historial' },
               ]
           ).map(({ t, label }) => (
             <button key={t} onClick={() => setTab(t)}
@@ -515,9 +514,8 @@ export default function OrdenesClient({ gmailConnected, initialTab, isAdmin = fa
               { t: 'instrumentos' as Tab, label: 'Instr.' },
             ]
           : [
-              { t: 'enviar'          as Tab, label: 'Enviar' },
-              { t: 'mis-solicitudes' as Tab, label: 'Solicitudes' },
-              { t: 'mis-ordenes'     as Tab, label: 'Historial' },
+              { t: 'enviar'          as Tab, label: 'Órdenes' },
+              { t: 'mis-solicitudes' as Tab, label: 'Historial' },
             ]
         ).map(({ t, label }) => (
           <button key={t} onClick={() => setTab(t)}
@@ -798,14 +796,9 @@ export default function OrdenesClient({ gmailConnected, initialTab, isAdmin = fa
         </div>
       )}
 
-      {/* ── MIS SOLICITUDES (asesor) ── */}
-      {tab === 'mis-solicitudes' && (
+      {/* ── HISTORIAL (asesor) — sus solicitudes como blotter ── */}
+      {tab === 'mis-solicitudes' && !isAdmin && (
         <BlotterSolicitudes isMesa={false} userName={userName} />
-      )}
-
-      {/* ── MIS ÓRDENES ── */}
-      {tab === 'mis-ordenes' && (
-        <BlotterTable isAdmin={false} userName={userName} />
       )}
 
       {tab === 'instrumentos' && (

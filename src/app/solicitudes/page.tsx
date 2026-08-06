@@ -6,7 +6,7 @@ import SolicitudesClient from './SolicitudesClient'
 export const dynamic = 'force-dynamic'
 export const metadata = { title: 'Solicitudes | Roble Capital' }
 
-const MESA_ROLES = ['admin', 'ceo', 'direccion', 'mesa']
+const MESA_ROLES = ['admin', 'ceo', 'direccion', 'mesa', 'asistente']
 
 export default async function SolicitudesPage() {
   const session = await getSession()

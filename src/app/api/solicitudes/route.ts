@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 
-const MESA_ROLES  = ['admin', 'ceo', 'direccion', 'mesa']
+const MESA_ROLES  = ['admin', 'ceo', 'direccion', 'mesa', 'asistente']
 const ADMIN_ROLES = ['admin', 'ceo', 'direccion']
 
 async function generateSolicitudId(clientNumber: string | null): Promise<string> {
@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
       instrumento_tipo, instrumento_nombre, clase, moneda, monto, cantidad,
       fecha_operacion, client_name, client_number, client_email,
       operador, tomado_at, mail_enviado_at, ejecutado_at,
-      created_at, updated_at
+      created_at, updated_at, cc_emails
     `)
     .order('created_at', { ascending: false })
     .limit(200)
@@ -116,6 +116,7 @@ export async function POST(req: NextRequest) {
       assets_json:        hasAssets ? body.assets_json : null,
       mail_preview:       body.mail_preview        ?? null,
       mail_asunto:        body.mail_asunto         ?? null,
+      cc_emails:          Array.isArray(body.cc_emails) && body.cc_emails.length > 0 ? body.cc_emails : null,
       canal,
       estado,
       ...(isDirecto ? {

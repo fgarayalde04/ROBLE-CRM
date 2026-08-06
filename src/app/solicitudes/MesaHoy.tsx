@@ -41,6 +41,7 @@ interface Solicitud {
   vigencia?: string | null
   symbol?: string | null
   canal?: string | null
+  cc_emails?: string[] | null
 }
 
 interface Evento {
@@ -88,6 +89,7 @@ function DetailPanel({
 }) {
   const [emailAsunto, setEmailAsunto] = useState(sol.mail_asunto ?? '')
   const [emailCuerpo, setEmailCuerpo] = useState(sol.mail_cuerpo ?? '')
+  const [emailCc, setEmailCc]         = useState((sol.cc_emails ?? []).join(', '))
   const [showEmail, setShowEmail]     = useState(false)
   const [showEjecutar, setShowEjecutar] = useState(false)
   const [showCancelar, setShowCancelar] = useState(false)
@@ -141,9 +143,10 @@ function DetailPanel({
   async function handleEnviarEmail() {
     setSendingMail(true)
     await onAction('generar_email', { asunto: emailAsunto, cuerpo: emailCuerpo })
+    const cc = emailCc.trim() || undefined
     const res = await fetch('/api/gmail/send', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ to: sol.client_email, subject: emailAsunto, body: emailCuerpo,
+      body: JSON.stringify({ to: sol.client_email, cc, subject: emailAsunto, body: emailCuerpo,
         client_name: sol.client_name, client_number: sol.client_number }),
     })
     if (res.ok) {
@@ -231,9 +234,10 @@ function DetailPanel({
               <button onClick={async () => {
                 setSendingMail(true)
                 await onAction('generar_email', { asunto: emailAsunto, cuerpo: emailCuerpo })
+                const cc = sol.cc_emails?.filter(Boolean).join(', ') || undefined
                 const res = await fetch('/api/gmail/send', {
                   method: 'POST', headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ to: sol.client_email, subject: emailAsunto, body: emailCuerpo,
+                  body: JSON.stringify({ to: sol.client_email, cc, subject: emailAsunto, body: emailCuerpo,
                     client_name: sol.client_name, client_number: sol.client_number }),
                 })
                 if (res.ok) { await onAction('mail_enviado', { asunto: emailAsunto, cuerpo: emailCuerpo }) }
@@ -307,6 +311,12 @@ function DetailPanel({
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">Para</label>
                 <p className="text-sm text-gray-700 bg-gray-50 rounded px-3 py-2">{sol.client_email || sol.client_name}</p>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">CC</label>
+                <input className="w-full border border-gray-200 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+                  placeholder="email1@roble.com, email2@roble.com"
+                  value={emailCc} onChange={e => setEmailCc(e.target.value)} />
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">Asunto</label>
