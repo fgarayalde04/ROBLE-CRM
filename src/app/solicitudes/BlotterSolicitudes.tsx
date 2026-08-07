@@ -56,16 +56,28 @@ const OP_LABEL: Record<string,string> = { compra:'Compra',venta:'Venta',suscripc
 
 const inputCls = 'border border-gray-200 rounded-md px-2.5 py-1.5 text-xs text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#2D3F52]/20 bg-white'
 
+const TIPO_CFG: Record<string, { label: string; cls: string }> = {
+  acciones: { label: 'Acciones', cls: 'bg-blue-50 text-blue-700' },
+  fondos:   { label: 'Fondos',   cls: 'bg-emerald-50 text-emerald-700' },
+  bonos:    { label: 'Bonos',    cls: 'bg-amber-50 text-amber-700' },
+  fondo:    { label: 'Fondo',    cls: 'bg-emerald-50 text-emerald-700' },
+  bono:     { label: 'Bono',     cls: 'bg-amber-50 text-amber-700' },
+  accion:   { label: 'Acción',   cls: 'bg-blue-50 text-blue-700' },
+}
+
 function exportCSV(rows: Solicitud[]) {
-  const headers = ['N° Interno','Fecha','Hora','Cliente','N°','Asesor','Operación','Tipo','Instrumento','Clase','Moneda','Monto','Cantidad','Estado','Operador','Fecha ejecución']
+  const headers = ['N° Interno','Fecha','Hora','Cliente','N°','Asesor','Operación','Tipo','Instrumento','Moneda','Monto ($)','Cantidad','Estado','Operador','Fecha ejecución']
   const lines = rows.map(r => [
     r.solicitud_id,
     r.fecha_operacion,
     format(new Date(r.created_at), 'HH:mm'),
     r.client_name, r.client_number, r.asesor,
     OP_LABEL[r.tipo_operacion] ?? r.tipo_operacion,
-    r.instrumento_tipo, r.instrumento_nombre, r.clase ?? '',
-    r.moneda, r.monto ?? '', r.cantidad ?? '',
+    r.instrumento_tipo,
+    r.instrumento_nombre,
+    r.moneda,
+    r.monto ?? '',
+    r.cantidad ?? '',
     ESTADO_CFG[r.estado]?.label ?? r.estado,
     r.operador ?? '',
     r.ejecutado_at ? format(new Date(r.ejecutado_at), 'dd/MM/yyyy HH:mm') : '',
@@ -248,16 +260,17 @@ export default function BlotterSolicitudes({ isMesa, userName }: { isMesa: boole
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-100">
               <tr>
-                {['N° Interno','Fecha','Hora','Cliente','Asesor','Operación','Instrumento','Clase','Moneda','Monto','Estado','Operador','Ejecutada'].map(h => (
+                {['N° Interno','Fecha','Hora','Cliente','Asesor','Operación','Tipo','Instrumento','Moneda','Monto ($)','Cantidad','Estado','Operador','Ejecutada'].map(h => (
                   <th key={h} className="px-3 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
               {rows.length === 0 && !loading ? (
-                <tr><td colSpan={13} className="px-4 py-8 text-center text-sm text-gray-400">Sin resultados.</td></tr>
+                <tr><td colSpan={14} className="px-4 py-8 text-center text-sm text-gray-400">Sin resultados.</td></tr>
               ) : rows.map(row => {
                 const cfg = ESTADO_CFG[row.estado] ?? ESTADO_CFG.mesa_operaciones
+                const tipoCfg = TIPO_CFG[row.instrumento_tipo?.toLowerCase() ?? '']
                 return (
                   <tr key={row.id}
                     onClick={() => setSelected(selected === row.id ? null : row.id)}
@@ -274,13 +287,21 @@ export default function BlotterSolicitudes({ isMesa, userName }: { isMesa: boole
                     </td>
                     <td className="px-3 py-2 text-xs text-gray-600 whitespace-nowrap">{row.asesor}</td>
                     <td className="px-3 py-2 text-xs font-medium text-gray-700 whitespace-nowrap">{OP_LABEL[row.tipo_operacion] ?? row.tipo_operacion}</td>
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      {tipoCfg
+                        ? <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${tipoCfg.cls}`}>{tipoCfg.label}</span>
+                        : <span className="text-xs text-gray-400">{row.instrumento_tipo ?? '—'}</span>
+                      }
+                    </td>
                     <td className="px-3 py-2 text-xs text-gray-800 max-w-[160px]">
                       <p className="truncate">{row.instrumento_nombre}</p>
                     </td>
-                    <td className="px-3 py-2 text-xs text-gray-500 whitespace-nowrap">{row.clase ?? '—'}</td>
                     <td className="px-3 py-2 text-xs text-gray-600 whitespace-nowrap">{row.moneda}</td>
-                    <td className="px-3 py-2 text-xs text-gray-700 whitespace-nowrap">
-                      {row.monto ? Number(row.monto).toLocaleString('es-UY') : row.cantidad ? `${row.cantidad} uds` : '—'}
+                    <td className="px-3 py-2 text-xs text-gray-700 whitespace-nowrap font-mono tabular-nums text-right">
+                      {row.monto ? Number(row.monto).toLocaleString('es-UY') : '—'}
+                    </td>
+                    <td className="px-3 py-2 text-xs text-gray-700 whitespace-nowrap font-mono tabular-nums text-right">
+                      {row.cantidad ? Number(row.cantidad).toLocaleString('es-UY') : '—'}
                     </td>
                     <td className="px-3 py-2 whitespace-nowrap">
                       <div className="flex items-center gap-1.5">
