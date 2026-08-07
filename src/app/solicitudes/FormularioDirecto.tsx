@@ -355,7 +355,6 @@ export default function FormularioDirecto({ onBack }: Props) {
   function handleGenerate() {
     const globalErrors: string[] = []
     if (!clientName.trim()) globalErrors.push('Seleccioná un cliente')
-    if (!clientEmail.trim()) globalErrors.push('El cliente no tiene email registrado. Verificá su ficha.')
     if (blocks.length === 0) globalErrors.push('Agregá al menos un activo a la orden')
     const blockErrors = validateBlocks(blocks)
     const allErrors = [...globalErrors, ...blockErrors]
@@ -367,7 +366,6 @@ export default function FormularioDirecto({ onBack }: Props) {
   async function handleEnviarRevision() {
     const globalErrors: string[] = []
     if (!clientName.trim()) globalErrors.push('Seleccioná un cliente')
-    if (!clientEmail.trim()) globalErrors.push('El cliente no tiene email registrado. Ingresalo manualmente.')
     if (blocks.length === 0) globalErrors.push('Agregá al menos un activo')
     const blockErrors = validateBlocks(blocks)
     const allErrors = [...globalErrors, ...blockErrors]
@@ -410,8 +408,9 @@ export default function FormularioDirecto({ onBack }: Props) {
       }
       setSolicitudId(data.solicitud_id)
       setSent(true)
-      // Si el email fue ingresado manualmente, guardarlo para futuras órdenes
+      // Si el email fue ingresado manualmente, asociarlo al legajo del cliente
       if (emailMissing && clientEmail) {
+        // Guardar en tabla de emails autorizados para búsqueda futura
         fetch('/api/authorized-emails', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -421,6 +420,14 @@ export default function FormularioDirecto({ onBack }: Props) {
             email:          clientEmail,
           }),
         }).catch(() => {})
+        // También actualizar el authorized_email en el legajo (banco_central_records)
+        if (clientId) {
+          fetch('/api/legajos/update-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ legajo_id: clientId, email: clientEmail }),
+          }).catch(() => {})
+        }
       }
     } catch (err: any) {
       setSubmitError(err.message ?? 'Error de conexión')

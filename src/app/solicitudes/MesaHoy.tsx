@@ -401,7 +401,8 @@ export default function MesaHoy({ isMesa, userName }: { isMesa: boolean; userNam
   const [eventos, setEventos]   = useState<Evento[]>([])
   const [verSolo, setVerSolo]   = useState<'hoy' | 'semana' | 'todo'>('todo')
 
-  const today = new Date().toISOString().split('T')[0]
+  // Fecha en hora Uruguay (UTC-3)
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Montevideo' })
 
   const fetchRows = useCallback(async () => {
     setLoading(true)
@@ -409,8 +410,9 @@ export default function MesaHoy({ isMesa, userName }: { isMesa: boolean; userNam
     if (verSolo === 'hoy') {
       p.set('dateFrom', today); p.set('dateTo', today)
     } else if (verSolo === 'semana') {
-      const from = new Date(); from.setDate(from.getDate() - 7)
-      p.set('dateFrom', from.toISOString().split('T')[0])
+      const from = new Date()
+      from.setDate(from.getDate() - 7)
+      p.set('dateFrom', from.toLocaleDateString('en-CA', { timeZone: 'America/Montevideo' }))
     }
     const res = await fetch('/api/solicitudes?' + p)
     const json = await res.json()

@@ -6,15 +6,15 @@ const MESA_ROLES  = ['admin', 'ceo', 'direccion', 'mesa', 'asistente']
 const ADMIN_ROLES = ['admin', 'ceo', 'direccion']
 
 async function generateSolicitudId(clientNumber: string | null): Promise<string> {
-  const dateStr = new Date().toISOString().split('T')[0].replace(/-/g, '')
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Montevideo' })
+  const dateStr = today.replace(/-/g, '')
   const prefix  = clientNumber ? `${clientNumber}${dateStr}` : dateStr
 
-  const today = new Date().toISOString().split('T')[0]
   let query = supabaseAdmin
     .from('solicitudes')
     .select('*', { count: 'exact', head: true })
-    .gte('created_at', today + 'T00:00:00.000Z')
-    .lte('created_at', today + 'T23:59:59.999Z')
+    .gte('created_at', today + 'T00:00:00.000-03:00')
+    .lte('created_at', today + 'T23:59:59.999-03:00')
 
   if (clientNumber) query = query.eq('client_number', clientNumber)
 
@@ -54,8 +54,9 @@ export async function GET(req: NextRequest) {
   if (!isMesa) query = query.eq('asesor', session.name)
   if (asesor)  query = query.eq('asesor', asesor)
   if (estado)  query = query.eq('estado', estado)
-  if (dateFrom) query = query.gte('created_at', dateFrom + 'T00:00:00.000Z')
-  if (dateTo)   query = query.lte('created_at', dateTo + 'T23:59:59.999Z')
+  // Uruguay es UTC-3: ajustar rango de fechas a hora local
+  if (dateFrom) query = query.gte('created_at', dateFrom + 'T00:00:00.000-03:00')
+  if (dateTo)   query = query.lte('created_at', dateTo   + 'T23:59:59.999-03:00')
   if (q) query = query.or(
     `client_name.ilike.%${q}%,client_number.ilike.%${q}%,instrumento_nombre.ilike.%${q}%,solicitud_id.ilike.%${q}%`
   )
