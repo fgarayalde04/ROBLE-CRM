@@ -11,6 +11,35 @@ interface Solicitud {
   fecha_operacion: string; client_name: string; client_number: string
   operador: string | null; tomado_at: string | null
   mail_enviado_at: string | null; ejecutado_at: string | null; created_at: string
+  _legacy?: boolean
+}
+
+// Normaliza un registro de order_history_items al formato Solicitud
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function normalizeLegacy(r: any): Solicitud {
+  const estado = r.cancelado_at ? 'cancelada' : r.done ? 'ejecutada' : r.mail_respondido ? 'mail_enviado' : 'pendiente_revision'
+  return {
+    id:                r.id,
+    solicitud_id:      `ORD-${(r.orden_id ?? r.order_id ?? '').slice(0,8)}`,
+    asesor:            r.user_name ?? '—',
+    estado,
+    tipo_operacion:    r.operation_type ?? 'compra',
+    instrumento_tipo:  r.order_type ?? '—',
+    instrumento_nombre:r.instrument_name ?? '—',
+    clase:             null,
+    moneda:            r.moneda ?? 'USD',
+    monto:             r.valor_efectivo ?? null,
+    cantidad:          r.quantity ?? null,
+    fecha_operacion:   r.order_date ?? r.order_created_at?.split('T')[0] ?? '',
+    client_name:       r.client_name ?? '—',
+    client_number:     r.client_number ?? '—',
+    operador:          r.ejecutado_by ?? null,
+    tomado_at:         null,
+    mail_enviado_at:   r.mail_respondido_at ?? null,
+    ejecutado_at:      r.ejecutado_at ?? null,
+    created_at:        r.order_created_at ?? r.item_created_at ?? new Date().toISOString(),
+    _legacy:           true,
+  }
 }
 
 const ESTADO_CFG: Record<string, { label: string; color: string; dot: string }> = {
@@ -77,12 +106,51 @@ export default function BlotterSolicitudes({ isMesa, userName }: { isMesa: boole
     if (asesor)   p.set('asesor', asesor)
     p.set('limit', String(PAGE_SIZE))
     p.set('page',  String(pageNum))
-    const res  = await fetch('/api/solicitudes?' + p)
+
+    const [res, legacyRes] = await Promise.all([
+      fetch('/api/solicitudes?' + p),
+      isMesa && pageNum === 0 ? fetch('/api/ordenes/blotter') : Promise.resolve(null),
+    ])
     const json = await res.json()
     let data: Solicitud[] = json.solicitudes ?? []
-    if (operador) data = data.filter(r => r.operador?.toLowerCase().includes(operador.toLowerCase()))
-    if (tipoOp)   data = data.filter(r => r.tipo_operacion === tipoOp)
-    if (tipoInst) data = data.filter(r => r.instrumento_tipo === tipoInst)
+
+    // Mezclar registros del sistema anterior solo en la primera carga
+    if (legacyRes) {
+      try {
+        const legacyJson = await legacyRes.json()
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const legacy: Solicitud[] = (legacyJson.rows ?? []).map((r: any) => normalizeLegacy(r))
+        // Filtrar legacy con los mismos filtros del cliente
+        let filteredLegacy = legacy
+        if (q) {
+          const lq = q.toLowerCase()
+          filteredLegacy = filteredLegacy.filter(r =>
+            r.client_name.toLowerCase().includes(lq) ||
+            r.instrumento_nombre.toLowerCase().includes(lq) ||
+            r.solicitud_id.toLowerCase().includes(lq) ||
+            r.asesor.toLowerCase().includes(lq)
+          )
+        }
+        if (estado)   filteredLegacy = filteredLegacy.filter(r => r.estado === estado)
+        if (asesor)   filteredLegacy = filteredLegacy.filter(r => r.asesor.toLowerCase().includes(asesor.toLowerCase()))
+        if (tipoInst) filteredLegacy = filteredLegacy.filter(r => r.instrumento_tipo === tipoInst)
+        if (tipoOp)   filteredLegacy = filteredLegacy.filter(r => r.tipo_operacion === tipoOp)
+        if (dateFrom) filteredLegacy = filteredLegacy.filter(r => (r.fecha_operacion ?? '') >= dateFrom)
+        if (dateTo)   filteredLegacy = filteredLegacy.filter(r => (r.fecha_operacion ?? '') <= dateTo)
+        data = [...data, ...filteredLegacy]
+          .sort((a, b) => new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime())
+      } catch {
+        // Si falla el legacy, continuar solo con solicitudes
+      }
+    }
+
+    if (!legacyRes) {
+      // Paginación sin legacy — filtros de cliente
+      if (operador) data = data.filter(r => r.operador?.toLowerCase().includes(operador.toLowerCase()))
+      if (tipoOp)   data = data.filter(r => r.tipo_operacion === tipoOp)
+      if (tipoInst) data = data.filter(r => r.instrumento_tipo === tipoInst)
+    }
+
     setRows(prev => append ? [...prev, ...data] : data)
     setTotal(json.total ?? 0)
     setPage(pageNum)
@@ -165,7 +233,7 @@ export default function BlotterSolicitudes({ isMesa, userName }: { isMesa: boole
       {isMesa && (
         <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg">
           <div className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-          <p className="text-xs text-amber-700 font-medium">Vista completa — solicitudes de todos los asesores</p>
+          <p className="text-xs text-amber-700 font-medium">Historial completo — solicitudes de todos los asesores + órdenes históricas</p>
         </div>
       )}
 
@@ -196,6 +264,7 @@ export default function BlotterSolicitudes({ isMesa, userName }: { isMesa: boole
                     className={`cursor-pointer hover:bg-gray-50 transition-colors ${selected === row.id ? 'bg-blue-50' : ''}`}>
                     <td className="px-3 py-2 whitespace-nowrap">
                       <span className="text-[10px] font-mono text-gray-500">{row.solicitud_id}</span>
+                      {row._legacy && <span className="ml-1 text-[9px] font-semibold text-gray-400 bg-gray-100 px-1 rounded">hist</span>}
                     </td>
                     <td className="px-3 py-2 text-xs text-gray-600 whitespace-nowrap">{row.fecha_operacion}</td>
                     <td className="px-3 py-2 text-xs text-gray-400 whitespace-nowrap">{format(new Date(row.created_at),'HH:mm')}</td>
