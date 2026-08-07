@@ -79,6 +79,28 @@ export async function POST(req: NextRequest) {
   const now = new Date().toISOString()
 
   const hasAssets = Array.isArray(body.assets_json) && body.assets_json.length > 0
+
+  // Extraer monto/cantidad del primer bloque si no vienen como campos top-level
+  let resolvedMonto: number | null = body.monto ?? null
+  let resolvedCantidad: number | null = body.cantidad ?? null
+  if (hasAssets && resolvedMonto == null && resolvedCantidad == null) {
+    const firstBlock = body.assets_json[0]
+    if (firstBlock?.type === 'fondos') {
+      resolvedMonto = firstBlock.monto ? parseFloat(firstBlock.monto) : null
+    } else if (firstBlock?.type === 'acciones') {
+      if (firstBlock.cantidadTipo === 'monto') {
+        resolvedMonto = firstBlock.cantidad ? parseFloat(firstBlock.cantidad) : null
+      } else {
+        resolvedCantidad = firstBlock.cantidad ? parseFloat(firstBlock.cantidad) : null
+      }
+    } else if (firstBlock?.type === 'bonos') {
+      resolvedCantidad = firstBlock.cantidad ? parseFloat(firstBlock.cantidad) : null
+      if (firstBlock.precio === 'limite' && firstBlock.precioLimite && resolvedCantidad) {
+        resolvedMonto = (parseFloat(firstBlock.precioLimite) / 100) * resolvedCantidad
+      }
+    }
+  }
+
   const canal = isDirecto
     ? (isMesa ? 'directo_mesa' : 'directo_asesor')
     : hasAssets ? 'orden_completa' : 'via_mesa'
@@ -88,54 +110,68 @@ export async function POST(req: NextRequest) {
     : hasAssets ? 'pendiente_revision'
     : 'mesa_operaciones'
 
-  const { data, error } = await supabaseAdmin
-    .from('solicitudes')
-    .insert({
-      solicitud_id:       solicitudId,
-      asesor:             session.name,
-      asesor_id:          session.id,
-      client_id:          body.client_id          ?? null,
-      client_name:        body.client_name         ?? null,
-      client_number:      body.client_number       ?? null,
-      client_email:       body.client_email        ?? null,
-      tipo_operacion:     body.tipo_operacion,
-      instrumento_tipo:   body.instrumento_tipo,
-      instrumento_nombre: body.instrumento_nombre,
-      clase:              body.clase               ?? null,
-      moneda:             body.moneda,
-      monto:              body.monto               ?? null,
-      cantidad:           body.cantidad            ?? null,
-      fecha_operacion:    body.fecha_operacion,
-      observaciones:      body.observaciones       ?? null,
-      symbol:             body.symbol              ?? null,
-      cusip_isin:         body.cusip_isin          ?? null,
-      precio_tipo:        body.precio_tipo         ?? null,
-      precio_limite:      body.precio_limite       ?? null,
-      vigencia:           body.vigencia            ?? 'DIA',
-      maturity:           body.maturity            ?? null,
-      cupon:              body.cupon               ?? null,
-      comision:           body.comision            ?? null,
-      assets_json:        hasAssets ? body.assets_json : null,
-      mail_preview:       body.mail_preview        ?? null,
-      mail_asunto:        body.mail_asunto         ?? null,
-      cc_emails:          Array.isArray(body.cc_emails) && body.cc_emails.length > 0 ? body.cc_emails : null,
-      canal,
-      estado,
-      ...(isDirecto ? {
-        mail_cuerpo:       body.mail_cuerpo ?? null,
-        mail_enviado_at:   now,
-        mail_enviado_by:   session.name,
-        notif_mail_enviada: true,
-        ...(isMesa ? {
-          operador:    session.name,
-          operador_id: session.id,
-          tomado_at:   now,
-          notif_tomada_enviada: true,
-        } : {}),
+  const baseInsert = {
+    solicitud_id:       solicitudId,
+    asesor:             session.name,
+    asesor_id:          session.id,
+    client_id:          body.client_id          ?? null,
+    client_name:        body.client_name         ?? null,
+    client_number:      body.client_number       ?? null,
+    client_email:       body.client_email        ?? null,
+    tipo_operacion:     body.tipo_operacion,
+    instrumento_tipo:   body.instrumento_tipo,
+    instrumento_nombre: body.instrumento_nombre,
+    clase:              body.clase               ?? null,
+    moneda:             body.moneda,
+    monto:              resolvedMonto,
+    cantidad:           resolvedCantidad,
+    fecha_operacion:    body.fecha_operacion,
+    observaciones:      body.observaciones       ?? null,
+    symbol:             body.symbol              ?? null,
+    cusip_isin:         body.cusip_isin          ?? null,
+    precio_tipo:        body.precio_tipo         ?? null,
+    precio_limite:      body.precio_limite       ?? null,
+    vigencia:           body.vigencia            ?? 'DIA',
+    maturity:           body.maturity            ?? null,
+    cupon:              body.cupon               ?? null,
+    comision:           body.comision            ?? null,
+    assets_json:        hasAssets ? body.assets_json : null,
+    mail_preview:       body.mail_preview        ?? null,
+    mail_asunto:        body.mail_asunto         ?? null,
+    canal,
+    estado,
+    ...(isDirecto ? {
+      mail_cuerpo:       body.mail_cuerpo ?? null,
+      mail_enviado_at:   now,
+      mail_enviado_by:   session.name,
+      notif_mail_enviada: true,
+      ...(isMesa ? {
+        operador:    session.name,
+        operador_id: session.id,
+        tomado_at:   now,
+        notif_tomada_enviada: true,
       } : {}),
-    })
+    } : {}),
+  }
+
+  const ccEmails = Array.isArray(body.cc_emails) && body.cc_emails.length > 0 ? body.cc_emails : null
+
+  let { data, error } = await supabaseAdmin
+    .from('solicitudes')
+    .insert({ ...baseInsert, cc_emails: ccEmails })
     .select()
     .single()
+
+  // Fallback: if cc_emails column doesn't exist yet (migration pending), retry without it
+  if (error?.message?.includes('cc_emails')) {
+    const retry = await supabaseAdmin
+      .from('solicitudes')
+      .insert(baseInsert)
+      .select()
+      .single()
+    data  = retry.data
+    error = retry.error
+  }
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
 

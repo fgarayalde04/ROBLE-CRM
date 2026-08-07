@@ -52,7 +52,7 @@ const ESTADO_CFG: Record<string, { label: string; color: string; dot: string }> 
   ejecutada:          { label: 'Ejecutada',          color: 'text-emerald-700', dot: 'bg-emerald-500' },
   cancelada:          { label: 'Cancelada',          color: 'text-gray-400',    dot: 'bg-gray-300' },
 }
-const OP_LABEL: Record<string,string> = { compra:'Compra',venta:'Venta',suscripcion:'Suscripción',rescate:'Rescate' }
+const OP_LABEL: Record<string,string> = { compra:'Compra',venta:'Venta',suscripcion:'Compra',rescate:'Venta' }
 
 const inputCls = 'border border-gray-200 rounded-md px-2.5 py-1.5 text-xs text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#2D3F52]/20 bg-white'
 

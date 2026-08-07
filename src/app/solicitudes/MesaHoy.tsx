@@ -61,7 +61,7 @@ const ESTADO_CFG: Record<string, { label: string; color: string; bg: string; dot
   ejecutada:          { label:'Ejecutada',           color:'text-emerald-700', bg:'bg-emerald-50', dot:'bg-emerald-500' },
   cancelada:          { label:'Cancelada',           color:'text-gray-400',    bg:'bg-gray-50',    dot:'bg-gray-300' },
 }
-const OP_LABEL: Record<string,string> = { compra:'Compra',venta:'Venta',suscripcion:'Suscripción',rescate:'Rescate' }
+const OP_LABEL: Record<string,string> = { compra:'Compra',venta:'Venta',suscripcion:'Compra',rescate:'Venta' }
 
 function ProgressBar({ estado }: { estado: string }) {
   if (estado === 'cancelada') return <span className="text-xs text-gray-400 italic">Cancelada</span>
@@ -399,7 +399,7 @@ export default function MesaHoy({ isMesa, userName }: { isMesa: boolean; userNam
   const [loading, setLoading]   = useState(true)
   const [selected, setSelected] = useState<Solicitud | null>(null)
   const [eventos, setEventos]   = useState<Evento[]>([])
-  const [verSolo, setVerSolo]   = useState<'hoy' | 'semana' | 'todo'>('hoy')
+  const [verSolo, setVerSolo]   = useState<'hoy' | 'semana' | 'todo'>('todo')
 
   const today = new Date().toISOString().split('T')[0]
 
@@ -511,10 +511,21 @@ export default function MesaHoy({ isMesa, userName }: { isMesa: boolean; userNam
                         </td>
                         <td className="px-3 py-2">
                           <p className="text-xs text-gray-800 truncate max-w-[140px]">{row.instrumento_nombre}</p>
-                          {row.clase && <p className="text-[10px] text-gray-400">{row.clase}</p>}
+                          <div className="flex items-center gap-1 mt-0.5">
+                            {row.instrumento_tipo && (
+                              <span className="text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-[#2D3F52]/10 text-[#2D3F52]">
+                                {row.instrumento_tipo}
+                              </span>
+                            )}
+                            {row.clase && <span className="text-[10px] text-gray-400">{row.clase}</span>}
+                          </div>
                         </td>
                         <td className="px-3 py-2 text-xs text-gray-700 whitespace-nowrap">
-                          {row.monto ? `${row.moneda} ${Number(row.monto).toLocaleString('es-UY')}` : row.cantidad ? `${row.cantidad} uds` : '—'}
+                          {row.monto
+                            ? <span className="font-medium">{row.moneda} {Number(row.monto).toLocaleString('es-UY')}</span>
+                            : row.cantidad
+                            ? <span>{row.cantidad} uds</span>
+                            : <span className="text-gray-300">—</span>}
                         </td>
                         <td className="px-3 py-2 whitespace-nowrap">
                           <div className="flex items-center gap-1.5">
