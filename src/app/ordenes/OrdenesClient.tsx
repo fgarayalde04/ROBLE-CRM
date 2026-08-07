@@ -16,7 +16,7 @@ import type { Instrument } from '@/app/api/instruments/route'
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type OrderType = 'acciones' | 'fondos' | 'bonos'
-type Tab = 'nueva' | 'blotter' | 'mesa' | 'mis-ordenes' | 'instrumentos' | 'mis-solicitudes' | 'enviar'
+type Tab = 'nueva' | 'blotter' | 'mesa' | 'mis-ordenes' | 'instrumentos' | 'mis-solicitudes' | 'enviar' | 'blotter-asesor'
 
 interface AccionesBlock {
   type: 'acciones'; id: string; nombre: string; ticker: string
@@ -491,8 +491,9 @@ export default function OrdenesClient({ gmailConnected, initialTab, isAdmin = fa
                 { t: 'instrumentos' as Tab, label: 'Instrumentos' },
               ]
             : [
-                { t: 'enviar'          as Tab, label: 'Órdenes' },
-                { t: 'mis-solicitudes' as Tab, label: 'Historial' },
+                { t: 'enviar'          as Tab, label: 'Enviar solicitud' },
+                { t: 'mis-solicitudes' as Tab, label: 'Mis solicitudes' },
+                { t: 'blotter-asesor'  as Tab, label: 'Blotter' },
               ]
           ).map(({ t, label }) => (
             <button key={t} onClick={() => setTab(t)}
@@ -514,8 +515,9 @@ export default function OrdenesClient({ gmailConnected, initialTab, isAdmin = fa
               { t: 'instrumentos' as Tab, label: 'Instr.' },
             ]
           : [
-              { t: 'enviar'          as Tab, label: 'Órdenes' },
-              { t: 'mis-solicitudes' as Tab, label: 'Historial' },
+              { t: 'enviar'          as Tab, label: 'Enviar' },
+              { t: 'mis-solicitudes' as Tab, label: 'Mis solicitudes' },
+              { t: 'blotter-asesor'  as Tab, label: 'Blotter' },
             ]
         ).map(({ t, label }) => (
           <button key={t} onClick={() => setTab(t)}
@@ -776,19 +778,24 @@ export default function OrdenesClient({ gmailConnected, initialTab, isAdmin = fa
         <BlotterSolicitudes isMesa={true} userName={userName} />
       )}
 
-      {/* ── MESA DE HOY ── */}
-      {tab === 'mesa' && isAdmin && (
-        <MesaHoy isMesa={true} userName={userName} />
+      {/* ── MESA DE HOY / MIS ÓRDENES ── */}
+      {tab === 'mesa' && (
+        <MesaHoy isMesa={isMesa} userName={userName} />
       )}
 
-      {/* ── ENVIAR ORDEN (asesor) ── */}
-      {tab === 'enviar' && !isAdmin && (
+      {/* ── ENVIAR ORDEN ── */}
+      {tab === 'enviar' && (
         <NuevaSolicitudForm gmailConnected={gmailConnected} userEmail={userEmail} />
       )}
 
-      {/* ── HISTORIAL (asesor) — sus solicitudes como blotter ── */}
-      {tab === 'mis-solicitudes' && !isAdmin && (
+      {/* ── MIS SOLICITUDES (asesor - solo las propias) ── */}
+      {tab === 'mis-solicitudes' && (
         <BlotterSolicitudes isMesa={false} userName={userName} />
+      )}
+
+      {/* ── BLOTTER COMPLETO (asesor - historial total) ── */}
+      {tab === 'blotter-asesor' && (
+        <BlotterSolicitudes isMesa={true} userName={userName} />
       )}
 
       {tab === 'instrumentos' && (
