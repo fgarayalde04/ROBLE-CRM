@@ -64,7 +64,7 @@ export default function BottomNav({ user, onMenuToggle }: Props) {
       style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
     >
       {showAdvisorNav ? (
-        /* ── Modo Asesor: 5 items ── */
+        /* ── Modo Asesor: 4 items ── */
         <>
           {/* Órdenes */}
           <Link
@@ -76,18 +76,6 @@ export default function BottomNav({ user, onMenuToggle }: Props) {
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
             </svg>
             <span className="text-[10px] font-medium" style={{ color: isOrdenes ? GREEN : GRAY_LABEL }}>Órdenes</span>
-          </Link>
-
-          {/* Historial */}
-          <Link
-            href="/ordenes?tab=historial"
-            className={itemCls}
-            onClick={() => setPending('/ordenes?tab=historial')}
-          >
-            <svg className="w-5 h-5" style={{ color: isHistorial ? GREEN : GRAY }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <span className="text-[10px] font-medium" style={{ color: isHistorial ? GREEN : GRAY_LABEL }}>Historial</span>
           </Link>
 
           {/* Mail */}

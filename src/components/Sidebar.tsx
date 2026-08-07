@@ -17,7 +17,8 @@ const nav: NavSection[] = [
   {
     label: 'Acceso rápido',
     items: [
-      { href: '/ordenes', label: 'Enviar órdenes', subtitle: 'Órdenes de inversión', icon: OrdersIcon, permission: 'orders' },
+      { href: '/solicitudes', label: 'Solicitudes', subtitle: 'Enviar a Mesa de Operaciones', icon: OrdersIcon, permission: 'orders' },
+      { href: '/ordenes', label: 'Blotter', subtitle: 'Historial de órdenes', icon: OrdersIcon, permission: 'orders' },
     ],
   },
   {
@@ -30,15 +31,15 @@ const nav: NavSection[] = [
   {
     label: 'Operación',
     items: [
-      { href: '/clients',       label: 'Clientes',      subtitle: 'Gestión de clientes',          icon: UsersIcon,   permission: 'clients' },
-      { href: '/openings',      label: 'Aperturas',     subtitle: 'Nuevas cuentas',                icon: OpeningIcon, permission: 'openings' },
-      { href: '/banco-central', label: 'Banco Central', subtitle: 'Legajos · Monitoreo · Scoring', icon: ShieldIcon,  permission: 'banco_central' },
+      { href: '/clients',       label: 'Clientes',      subtitle: 'Gestión de clientes',          icon: UsersIcon,  permission: 'clients' },
+      { href: '/banco-central', label: 'Banco Central', subtitle: 'Legajos · Monitoreo · Scoring', icon: ShieldIcon, permission: 'banco_central' },
     ],
   },
   {
     label: 'Inversiones',
     items: [
-      { href: '/fondos',     label: 'Fondos',     subtitle: 'Biblioteca de factsheets',icon: FondosIcon,    permission: 'fondos' },
+      // HIDDEN: Fondos temporalmente oculto
+      // { href: '/fondos',     label: 'Fondos',     subtitle: 'Biblioteca de factsheets',icon: FondosIcon,    permission: 'fondos' },
       { href: '/factsheet',  label: 'Factsheet',  subtitle: 'Informe de portafolio',   icon: FactsheetIcon, permission: 'factsheet' },
       { href: '/propuestas', label: 'Propuestas', subtitle: 'Propuestas de inversión', icon: ProposalIcon,  permission: 'proposals' },
     ],
@@ -50,13 +51,14 @@ const nav: NavSection[] = [
       { href: '/mail',   label: 'Mail',   subtitle: 'Gmail y comunicaciones',    icon: MailIcon,     permission: 'calendar' },
     ],
   },
-  {
-    label: 'Finanzas',
-    items: [
-      { href: '/pagos-mensuales', label: 'Pagos mensuales', subtitle: 'Control de pagos',    icon: CoinIcon, permission: 'pagos' },
-      { href: '/impuestos',       label: 'Impuestos',       subtitle: 'Gestión tributaria',  icon: TaxIcon,  permission: 'impuestos' },
-    ],
-  },
+  // HIDDEN: Sección Finanzas temporalmente oculta
+  // {
+  //   label: 'Finanzas',
+  //   items: [
+  //     { href: '/pagos-mensuales', label: 'Pagos mensuales', subtitle: 'Control de pagos',    icon: CoinIcon, permission: 'pagos' },
+  //     { href: '/impuestos',       label: 'Impuestos',       subtitle: 'Gestión tributaria',  icon: TaxIcon,  permission: 'impuestos' },
+  //   ],
+  // },
   {
     label: 'Recursos',
     items: [
@@ -138,15 +140,15 @@ export default function Sidebar({ user, isOpen = false, onToggle }: Props) {
 
   // Simplified mobile nav items
   const advisorItems = [
-    { href: '/ordenes',               label: 'Enviar órdenes', subtitle: 'Crear y enviar instrucciones', icon: OrdersIcon },
-    { href: '/ordenes?tab=historial', label: 'Historial',       subtitle: 'Órdenes enviadas',             icon: ClockIcon },
-    { href: '/mail',                  label: 'Mail',            subtitle: 'Bandeja de entrada Gmail',     icon: MailIcon },
-    { href: '/settings',              label: 'Configuración',   subtitle: 'Cuenta y Gmail',               icon: SettingsIconFn },
+    { href: '/solicitudes',            label: 'Enviar órdenes', subtitle: 'Crear y enviar instrucciones', icon: OrdersIcon },
+    { href: '/ordenes',                label: 'Historial',       subtitle: 'Órdenes enviadas',             icon: ClockIcon },
+    { href: '/mail',                   label: 'Mail',            subtitle: 'Bandeja de entrada Gmail',     icon: MailIcon },
+    { href: '/settings',               label: 'Configuración',   subtitle: 'Cuenta y Gmail',               icon: SettingsIconFn },
   ]
 
   function advisorIsActive(href: string): boolean {
-    if (href === '/ordenes') return pathname === '/ordenes' && !searchStr.includes('tab=historial')
-    if (href.includes('historial')) return pathname === '/ordenes' && searchStr.includes('tab=historial')
+    if (href === '/solicitudes') return pathname.startsWith('/solicitudes')
+    if (href === '/ordenes') return pathname === '/ordenes'
     if (href === '/mail') return pathname.startsWith('/mail')
     if (href === '/settings') return pathname.startsWith('/settings')
     return false
