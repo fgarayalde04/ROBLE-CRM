@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import NuevaSolicitudForm from './NuevaSolicitudForm'
 import MesaHoy from './MesaHoy'
+import { useAdvisorModeCtx } from '@/contexts/AdvisorModeContext'
 
 interface Props { isMesa: boolean; userName: string; userEmail: string; gmailConnected: boolean }
 
@@ -40,6 +41,10 @@ function Section({
 }
 
 export default function SolicitudesClient({ isMesa, userName, userEmail, gmailConnected }: Props) {
+  const { advisorMode } = useAdvisorModeCtx()
+  // En modo asesor (toggle activo) siempre mostrar el formulario abierto
+  const showEnviar = !isMesa || advisorMode
+
   return (
     <div className="p-4 md:p-6 bg-[#F4F6F8] min-h-screen">
       <div className="mb-6">
@@ -53,19 +58,21 @@ export default function SolicitudesClient({ isMesa, userName, userEmail, gmailCo
           title="Enviar órdenes"
           subtitle="Crear una solicitud para Mesa de Operaciones"
           accent="blue"
-          defaultOpen={!isMesa}
+          defaultOpen={showEnviar}
         >
           <NuevaSolicitudForm gmailConnected={gmailConnected} userEmail={userEmail} />
         </Section>
 
-        <Section
-          title="Mesa de hoy"
-          subtitle="Solicitudes del día — estados y acciones"
-          accent="amber"
-          defaultOpen={isMesa}
-        >
-          <MesaHoy isMesa={isMesa} userName={userName} />
-        </Section>
+        {!advisorMode && (
+          <Section
+            title="Mesa de hoy"
+            subtitle="Solicitudes del día — estados y acciones"
+            accent="amber"
+            defaultOpen={isMesa}
+          >
+            <MesaHoy isMesa={isMesa} userName={userName} />
+          </Section>
+        )}
 
       </div>
     </div>

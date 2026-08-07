@@ -487,7 +487,7 @@ export default function MesaHoy({ isMesa, userName }: { isMesa: boolean; userNam
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 border-b border-gray-100">
                   <tr>
-                    {['Hora','Cliente','Asesor','Operación','Instrumento','Monto','Estado','Operador'].map(h => (
+                    {['Hora','Cliente','Asesor','Operación','Instrumento','Monto ($)','Cantidad','Estado','Operador'].map(h => (
                       <th key={h} className="px-3 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
@@ -520,12 +520,11 @@ export default function MesaHoy({ isMesa, userName }: { isMesa: boolean; userNam
                             {row.clase && <span className="text-[10px] text-gray-400">{row.clase}</span>}
                           </div>
                         </td>
-                        <td className="px-3 py-2 text-xs text-gray-700 whitespace-nowrap">
-                          {row.monto
-                            ? <span className="font-medium">{row.moneda} {Number(row.monto).toLocaleString('es-UY')}</span>
-                            : row.cantidad
-                            ? <span>{row.cantidad} uds</span>
-                            : <span className="text-gray-300">—</span>}
+                        <td className="px-3 py-2 text-xs text-gray-700 whitespace-nowrap font-mono tabular-nums text-right">
+                          {row.monto ? `${row.moneda} ${Number(row.monto).toLocaleString('es-UY')}` : <span className="text-gray-300">—</span>}
+                        </td>
+                        <td className="px-3 py-2 text-xs text-gray-700 whitespace-nowrap font-mono tabular-nums text-right">
+                          {row.cantidad ? Number(row.cantidad).toLocaleString('es-UY') : <span className="text-gray-300">—</span>}
                         </td>
                         <td className="px-3 py-2 whitespace-nowrap">
                           <div className="flex items-center gap-1.5">

@@ -12,6 +12,7 @@ import BlotterSolicitudes from '../solicitudes/BlotterSolicitudes'
 import NuevaSolicitudForm from '../solicitudes/NuevaSolicitudForm'
 import MesaHoy from '../solicitudes/MesaHoy'
 import type { Instrument } from '@/app/api/instruments/route'
+import { useAdvisorModeCtx } from '@/contexts/AdvisorModeContext'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -349,7 +350,10 @@ const INSTRUMENT_STYLE: Record<string, string> = {
 interface Props { gmailConnected: boolean; initialTab?: Tab; isAdmin?: boolean; isMesa?: boolean; userName?: string; userEmail?: string }
 
 export default function OrdenesClient({ gmailConnected, initialTab, isAdmin = false, isMesa = false, userName = '', userEmail = '' }: Props) {
-  const defaultTab: Tab = isAdmin ? 'mesa' : 'enviar'
+  const { advisorMode } = useAdvisorModeCtx()
+  // En modo asesor, un admin ve tabs de asesor
+  const effectiveAdmin = isAdmin && !advisorMode
+  const defaultTab: Tab = effectiveAdmin ? 'mesa' : 'enviar'
   const [tab, setTab] = useState<Tab>(initialTab ?? defaultTab)
   const [blocks, setBlocks]             = useState<OrderBlock[]>([])
   const [clientId, setClientId]         = useState('')
@@ -484,7 +488,7 @@ export default function OrdenesClient({ gmailConnected, initialTab, isAdmin = fa
           <p className="text-sm text-gray-400 mt-0.5">Blotter · trazabilidad completa de órdenes</p>
         </div>
         <div className="flex gap-1 bg-white border border-gray-200 rounded-lg p-0.5 shadow-sm">
-          {(isAdmin
+          {(effectiveAdmin
             ? [
                 { t: 'mesa'         as Tab, label: 'Mesa de hoy' },
                 { t: 'blotter'      as Tab, label: 'Blotter' },
@@ -508,7 +512,7 @@ export default function OrdenesClient({ gmailConnected, initialTab, isAdmin = fa
 
       {/* Mobile tabs */}
       <div className="md:hidden flex gap-1 bg-white border border-gray-200 rounded-lg p-0.5 mb-4 overflow-x-auto">
-        {(isAdmin
+        {(effectiveAdmin
           ? [
               { t: 'mesa'         as Tab, label: 'Mesa' },
               { t: 'blotter'      as Tab, label: 'Blotter' },
@@ -774,7 +778,7 @@ export default function OrdenesClient({ gmailConnected, initialTab, isAdmin = fa
       )}
 
       {/* ── BLOTTER GENERAL ── */}
-      {tab === 'blotter' && isAdmin && (
+      {tab === 'blotter' && effectiveAdmin && (
         <BlotterSolicitudes isMesa={true} userName={userName} />
       )}
 
