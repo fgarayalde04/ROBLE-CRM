@@ -1,10 +1,15 @@
 import { Suspense } from 'react'
 import Image from 'next/image'
+import { redirect } from 'next/navigation'
+import { getSession } from '@/lib/auth'
 import LoginForm from './LoginForm'
 
 export const metadata = { title: 'Iniciar Sesión | Roble Capital' }
 
-export default function LoginPage() {
+export default async function LoginPage() {
+  const session = await getSession()
+  if (session) redirect('/')
+
   return (
     <div className="min-h-screen flex flex-col" style={{ backgroundColor: '#F0F2F5' }}>
       {/* Card */}
