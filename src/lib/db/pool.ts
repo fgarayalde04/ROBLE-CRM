@@ -12,9 +12,11 @@ types.setTypeParser(1184, (val) => new Date(val).toISOString()) // timestamptz -
 const globalForDb = globalThis as unknown as { pgPool?: Pool }
 
 function createPool() {
-  const connectionString = process.env.DATABASE_URL
-  if (!connectionString) throw new Error('DATABASE_URL not set in .env.local')
-  return new Pool({ connectionString })
+  // Don't throw if DATABASE_URL is missing here — this module is imported (and this
+  // function called) during `next build`'s page-data-collection step, which briefly
+  // evaluates every route module without real runtime env vars available. Let `pg`
+  // fail lazily on first actual query instead of crashing the build.
+  return new Pool({ connectionString: process.env.DATABASE_URL })
 }
 
 export const pool = globalForDb.pgPool ?? createPool()
