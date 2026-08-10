@@ -197,7 +197,7 @@ export async function syncClients(): Promise<SyncResult> {
                   first_name: '',
                   last_name: displayName,
                   client_number: clientNumber,
-                  status: 'pendiente',
+                  status: 'prospecto',
                   source: 'sharepoint',
                   drive_id: driveId,
                   item_id: itemId,
