@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { readdir, stat } from 'fs/promises'
 import { join } from 'path'
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import { getExistingBancoCentralFolderPaths, bulkInsertBancoCentralRecords } from '@/lib/db/sync'
 
 export async function GET() {
   return NextResponse.json({
@@ -61,15 +61,7 @@ export async function POST() {
 
     // 1. Qué paths ya existen
     const allPaths = dirs.map((d) => d.path)
-    const existingPaths = new Set<string>()
-    const CHUNK = 500
-    for (let i = 0; i < allPaths.length; i += CHUNK) {
-      const { data } = await supabaseAdmin
-        .from('banco_central_records')
-        .select('folder_path')
-        .in('folder_path', allPaths.slice(i, i + CHUNK))
-      for (const r of data ?? []) existingPaths.add(r.folder_path as string)
-    }
+    const existingPaths = new Set(await getExistingBancoCentralFolderPaths(allPaths))
 
     // 2. Solo los nuevos
     const newDirs = dirs.filter((d) => !existingPaths.has(d.path))
@@ -91,14 +83,16 @@ export async function POST() {
     }))
 
     // 3. Batch insert
+    const CHUNK = 500
     let created = 0, errors = 0
     for (let i = 0; i < rows.length; i += CHUNK) {
-      const { data, error } = await supabaseAdmin
-        .from('banco_central_records')
-        .insert(rows.slice(i, i + CHUNK))
-        .select('id')
-      if (error) errors += rows.slice(i, i + CHUNK).length
-      else created += (data ?? []).length
+      const batch = rows.slice(i, i + CHUNK)
+      try {
+        await bulkInsertBancoCentralRecords(batch)
+        created += batch.length
+      } catch {
+        errors += batch.length
+      }
     }
 
     results[key] = { found: dirs.length, created, skipped, errors }

@@ -1,113 +1,12 @@
 import { unstable_noStore } from 'next/cache'
 import Link from 'next/link'
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import { pool } from '@/lib/db/pool'
+import { getOrCreateBrokerTable, fetchBrokerRows } from '@/lib/db/liquidacionBrokers'
 import BrokerSettlementTable from '@/components/BrokerSettlementTable'
 import BrokerSettlementMetrics from '@/components/BrokerSettlementMetrics'
 import AddYearButton from '@/components/AddYearButton'
 
 export const dynamic = 'force-dynamic'
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-interface BrokerTable {
-  id: string
-  advisor_name: string
-  company: string
-  year: number
-}
-
-interface BrokerRow {
-  id: string
-  concept: string
-  sort_order: number
-  is_formula: boolean
-  formula_type: string | null
-  values: Record<string, { id?: string; value: number | null; raw_value: string | null }>
-}
-
-// ─── Month sorting ────────────────────────────────────────────────────────────
-
-const MONTH_ORDER: Record<string, number> = {
-  ene: 1, feb: 2, mar: 3, abr: 4, may: 5, jun: 6,
-  jul: 7, ago: 8, set: 9, sep: 9, oct: 10, nov: 11, dic: 12,
-}
-
-function sortMonths(months: string[]): string[] {
-  return [...months].sort((a, b) => {
-    const [ma, ya] = a.split('-')
-    const [mb, yb] = b.split('-')
-    const yearA = parseInt(ya ?? '0'), yearB = parseInt(yb ?? '0')
-    if (yearA !== yearB) return yearA - yearB
-    return (MONTH_ORDER[ma] ?? 0) - (MONTH_ORDER[mb] ?? 0)
-  })
-}
-
-// ─── Data fetching ────────────────────────────────────────────────────────────
-
-async function getOrCreateTable(advisor: string, company: string, year: number): Promise<BrokerTable> {
-  const { data: existing } = await supabaseAdmin
-    .from('broker_settlement_tables')
-    .select('*')
-    .eq('advisor_name', advisor)
-    .eq('company', company)
-    .eq('year', year)
-    .single()
-
-  if (existing) return existing as BrokerTable
-
-  const { data: created } = await supabaseAdmin
-    .from('broker_settlement_tables')
-    .insert({ advisor_name: advisor, company, year })
-    .select('*')
-    .single()
-
-  return (created ?? { id: '', advisor_name: advisor, company, year }) as BrokerTable
-}
-
-async function fetchRows(tableId: string): Promise<{ rows: BrokerRow[]; months: string[] }> {
-  if (!tableId) return { rows: [], months: [] }
-
-  const { data: rawRows } = await supabaseAdmin
-    .from('broker_settlement_rows')
-    .select('*')
-    .eq('table_id', tableId)
-    .order('sort_order', { ascending: true })
-
-  if (!rawRows || rawRows.length === 0) return { rows: [], months: [] }
-
-  const rowIds = rawRows.map((r: { id: string }) => r.id)
-
-  const { data: rawValues } = await supabaseAdmin
-    .from('broker_settlement_values')
-    .select('*')
-    .in('row_id', rowIds)
-
-  const allMonths = new Set<string>()
-  const valuesByRow: Record<string, Record<string, { id?: string; value: number | null; raw_value: string | null }>> = {}
-
-  for (const v of (rawValues ?? [])) {
-    if (!valuesByRow[v.row_id]) valuesByRow[v.row_id] = {}
-    valuesByRow[v.row_id][v.month] = { id: v.id, value: v.value, raw_value: v.raw_value }
-    allMonths.add(v.month)
-  }
-
-  const rows: BrokerRow[] = rawRows.map((r: {
-    id: string
-    concept: string
-    sort_order: number
-    is_formula: boolean
-    formula_type: string | null
-  }) => ({
-    id: r.id,
-    concept: r.concept,
-    sort_order: r.sort_order,
-    is_formula: r.is_formula,
-    formula_type: r.formula_type,
-    values: valuesByRow[r.id] ?? {},
-  }))
-
-  return { rows, months: sortMonths(Array.from(allMonths)) }
-}
 
 // ─── Advisors config ──────────────────────────────────────────────────────────
 
@@ -140,14 +39,12 @@ export default async function LiquidacionBrokersPage({ searchParams }: PageProps
     : advisorConfig.companies[0]
 
   // Fetch all existing years for this advisor+company
-  const { data: existingTables } = await supabaseAdmin
-    .from('broker_settlement_tables')
-    .select('id, year')
-    .eq('advisor_name', advisor)
-    .eq('company', company)
-    .order('year', { ascending: false })
+  const { rows: existingTables } = await pool.query(
+    `select id, year from broker_settlement_tables where advisor_name = $1 and company = $2 order by year desc`,
+    [advisor, company]
+  )
 
-  const availableYears: number[] = (existingTables ?? []).map((t: { id: string; year: number }) => t.year)
+  const availableYears: number[] = existingTables.map((t) => t.year)
   const mostRecentYear = availableYears.length > 0 ? availableYears[0] : null
 
   // Smart default: use searchParams.year if it exists in DB, else fall back to most recent, else current calendar year
@@ -159,8 +56,8 @@ export default async function LiquidacionBrokersPage({ searchParams }: PageProps
 
   // Only call getOrCreateTable for years that actually exist
   const tableExists = availableYears.includes(year)
-  const table            = tableExists ? await getOrCreateTable(advisor, company, year) : { id: '', advisor_name: advisor, company, year }
-  const { rows, months } = tableExists ? await fetchRows(table.id) : { rows: [], months: [] }
+  const table            = tableExists ? await getOrCreateBrokerTable(advisor, company, year) : { id: '', advisor_name: advisor, company, year }
+  const { rows, months } = tableExists ? await fetchBrokerRows(table.id) : { rows: [], months: [] }
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#F4F6F8' }}>

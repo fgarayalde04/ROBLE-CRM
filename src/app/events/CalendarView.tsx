@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
-import { supabase } from '@/lib/supabase/client'
 import {
   format, startOfMonth, endOfMonth,
   startOfWeek, endOfWeek, eachDayOfInterval,
@@ -98,29 +97,19 @@ export default function CalendarView({ isGoogleConnected }: { isGoogleConnected:
       return grouped[d]
     }
 
-    // Local events (Supabase)
-    const { data: local } = await supabase
-      .from('events')
-      .select('id, title, event_date, start_time, type')
-      .gte('event_date', from)
-      .lte('event_date', to)
-      .order('start_time', { ascending: true, nullsFirst: false })
-
-    for (const ev of local ?? []) get(ev.event_date).local.push(ev)
-
-    // Google Calendar (if connected)
-    if (isGoogleConnected) {
-      try {
-        const res = await fetch(`/api/events?from=${from}&to=${to}`)
-        if (res.ok) {
-          const data = await res.json()
+    try {
+      const res = await fetch(`/api/events?from=${from}&to=${to}`)
+      if (res.ok) {
+        const data = await res.json()
+        for (const ev of data.local ?? []) get(ev.event_date).local.push(ev)
+        if (isGoogleConnected) {
           for (const ev of data.events ?? []) {
             const d = gDate(ev)
             if (d >= from && d <= to) get(d).google.push(ev)
           }
         }
-      } catch { /* silent */ }
-    }
+      }
+    } catch { /* silent */ }
 
     setByDate(grouped)
     setLoading(false)

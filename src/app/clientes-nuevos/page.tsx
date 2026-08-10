@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import { unstable_noStore as noStore } from 'next/cache'
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import { getNewLocalClients } from '@/lib/db/clients'
 import type { Client } from '@/types/platform'
 import AutoRefresh from '@/components/AutoRefresh'
 import ClientQuickActions from '@/components/ClientQuickActions'
@@ -27,13 +27,7 @@ export default async function ClientesNuevosPage() {
   noStore()
   let clients: Client[] = []
   try {
-    const { data } = await supabaseAdmin
-      .from('clients')
-      .select('*')
-      .eq('status', 'prospecto')
-      .like('onedrive_folder_url', '/%')
-      .order('created_at', { ascending: false })
-    clients = (data ?? []) as Client[]
+    clients = await getNewLocalClients()
   } catch {
     clients = []
   }

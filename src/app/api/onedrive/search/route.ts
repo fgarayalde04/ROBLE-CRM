@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
-import { supabaseAdmin } from '@/lib/supabase/admin'
 import { getGraphToken, searchInFolder } from '@/lib/microsoft/graph'
 
 export const dynamic = 'force-dynamic'

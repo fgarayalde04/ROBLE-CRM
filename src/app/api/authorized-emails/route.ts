@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import { listAuthorizedEmails, listOrderHistoryEmails, upsertAuthorizedEmail } from '@/lib/db/authorizedEmails'
 import { getValidGoogleToken } from '@/lib/google/tokens'
 
 export const dynamic = 'force-dynamic'
@@ -118,15 +118,7 @@ export async function GET(req: NextRequest) {
   }
 
   // ── 1. Authorized emails from DB ──────────────────────────────────────────
-  let authQuery = supabaseAdmin
-    .from('client_authorized_emails')
-    .select('id, email, nombre_cliente, fecha_autorizacion, ultima_utilizacion, cantidad_utilizaciones, autorizado')
-    .eq('autorizado', true)
-    .order('cantidad_utilizaciones', { ascending: false })
-
-  if (clientNumber) authQuery = authQuery.eq('numero_cliente', clientNumber)
-
-  const { data: authorizedData } = await authQuery
+  const authorizedData = await listAuthorizedEmails(clientNumber ?? null)
   const authorized: AuthorizedEmail[] = (authorizedData ?? [])
     .filter((r) => !r.email?.toLowerCase().endsWith(`@${INTERNAL_DOMAIN}`))
     .map((r) => ({
@@ -155,18 +147,7 @@ export async function GET(req: NextRequest) {
   // ── 3. Suggestions from order_history (fallback / extra context) ───────────
   let historialEmails: string[] = []
   try {
-    let ordQuery = supabaseAdmin
-      .from('order_history')
-      .select('to_email')
-      .not('to_email', 'is', null)
-      .not('to_email', 'ilike', `%@${INTERNAL_DOMAIN}`)
-      .order('created_at', { ascending: false })
-      .limit(100)
-
-    if (clientNumber) ordQuery = ordQuery.eq('client_number', clientNumber)
-    else if (clientName) ordQuery = ordQuery.ilike('client_name', `%${clientName}%`)
-
-    const { data: orderData } = await ordQuery
+    const orderData = await listOrderHistoryEmails(clientNumber ?? null, clientName ?? null)
     historialEmails = (orderData ?? [])
       .map((r: any) => (r.to_email as string).toLowerCase().trim())
       .filter((em: string) => em && !em.endsWith(`@${INTERNAL_DOMAIN}`))
@@ -200,19 +181,17 @@ export async function POST(req: NextRequest) {
   const { numero_cliente, nombre_cliente, email } = await req.json()
   if (!email) return NextResponse.json({ error: 'email requerido' }, { status: 400 })
 
-  const { data, error } = await supabaseAdmin
-    .from('client_authorized_emails')
-    .upsert({
+  try {
+    const data = await upsertAuthorizedEmail({
       numero_cliente:     numero_cliente ?? null,
       nombre_cliente:     nombre_cliente ?? null,
       email:              email.toLowerCase().trim(),
       autorizado:         true,
       fecha_autorizacion: new Date().toISOString(),
       usuario_autorizo:   session.name ?? null,
-    }, { onConflict: 'numero_cliente,email' })
-    .select()
-    .single()
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 400 })
-  return NextResponse.json(data)
+    })
+    return NextResponse.json(data)
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 400 })
+  }
 }

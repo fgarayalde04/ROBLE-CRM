@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import { nextPosition, insertProposalLine, updateProposalLine, deleteProposalLine } from '@/lib/db/proposals'
 import { getSession } from '@/lib/auth'
+
+const TABLE = 'proposal_equities'
 
 export async function POST(req: Request, { params }: { params: { id: string } }) {
   try {
@@ -8,25 +10,19 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     if (!session) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
     const body = await req.json()
-    const { count } = await supabaseAdmin
-      .from('proposal_equities').select('*', { count: 'exact', head: true }).eq('proposal_id', params.id)
+    const position = await nextPosition(TABLE, params.id)
 
-    const { data, error } = await supabaseAdmin
-      .from('proposal_equities')
-      .insert({
-        proposal_id:  params.id,
-        position:     (count ?? 0),
-        ticker:       body.ticker       ?? null,
-        company_name: body.company_name ?? null,
-        sector:       body.sector       ?? null,
-        country:      body.country      ?? null,
-        currency:     body.currency     ?? 'USD',
-        pct:          body.pct          ?? 0,
-        amount:       body.amount       ?? 0,
-      })
-      .select().single()
-
-    if (error) throw error
+    const data = await insertProposalLine(TABLE, {
+      proposal_id:  params.id,
+      position,
+      ticker:       body.ticker       ?? null,
+      company_name: body.company_name ?? null,
+      sector:       body.sector       ?? null,
+      country:      body.country      ?? null,
+      currency:     body.currency     ?? 'USD',
+      pct:          body.pct          ?? 0,
+      amount:       body.amount       ?? 0,
+    })
     return NextResponse.json(data)
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 })
@@ -44,10 +40,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       if (fields[c] !== undefined) allowed[c] = fields[c]
     }
 
-    const { data, error } = await supabaseAdmin
-      .from('proposal_equities').update(allowed).eq('id', equity_id).eq('proposal_id', params.id).select().single()
-
-    if (error) throw error
+    const data = await updateProposalLine(TABLE, equity_id, params.id, allowed)
     return NextResponse.json(data)
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 })
@@ -60,10 +53,7 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
     if (!session) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
     const { searchParams } = new URL(req.url)
-    const { error } = await supabaseAdmin
-      .from('proposal_equities').delete().eq('id', searchParams.get('equity_id')).eq('proposal_id', params.id)
-
-    if (error) throw error
+    await deleteProposalLine(TABLE, searchParams.get('equity_id'), params.id)
     return NextResponse.json({ ok: true })
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 })

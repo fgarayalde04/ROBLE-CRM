@@ -3,7 +3,12 @@
  * Downloads files from OneDrive, extracts client name from content, and creates portfolio_reviews.
  */
 import { NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import {
+  getClientByNumber, searchClientsByTokens, getScoringFilesByIds, updateScoringFileClientId,
+  getScoringBaseCache, upsertScoringBaseAsset, updateScoringBaseSeen,
+  createPortfolioReview, insertPortfolioPositionsBatch, updateReviewScore,
+  getReviewsByPeriod, updateScoringPeriod,
+} from '@/lib/db/suitability'
 import { getSession } from '@/lib/auth'
 import { getGraphToken, downloadDriveFile } from '@/lib/microsoft/graph'
 import { parseCSV, parseExcel, parsePDF } from '@/lib/portfolio-parser'
@@ -107,11 +112,7 @@ async function matchClient(
       (v, i, arr) => v.length > 0 && arr.indexOf(v) === i,
     )
     for (const num of candidates) {
-      const { data } = await supabaseAdmin
-        .from('clients')
-        .select('id, first_name, last_name')
-        .eq('client_number', num)
-        .maybeSingle()
+      const data = await getClientByNumber(num)
       if (data) {
         return {
           id:            data.id,
@@ -136,16 +137,7 @@ async function matchClient(
     if (!tokens.length) continue
 
     // Query candidates: any token matches first_name or last_name
-    const orClauses = tokens.flatMap(t => [
-      `last_name.ilike.%${t}%`,
-      `first_name.ilike.%${t}%`,
-    ]).join(',')
-
-    const { data: candidates } = await supabaseAdmin
-      .from('clients')
-      .select('id, first_name, last_name')
-      .or(orClauses)
-      .limit(15)
+    const candidates = await searchClientsByTokens(tokens)
 
     if (!candidates?.length) continue
 
@@ -228,10 +220,7 @@ async function analyzePositions(
 
   // ── Step 1: scoring_base cache ────────────────────────────────────────────
   if (uniqueKeys.length > 0) {
-    const { data: cached } = await supabaseAdmin
-      .from('scoring_base')
-      .select('security_identifier, asset_class, risk_score, category, figi, source, classification_status, score_explanation, normalized_name, security_type, market_sector, manual_override')
-      .in('security_identifier', uniqueKeys.map(k => k.key))
+    const cached = await getScoringBaseCache(uniqueKeys.map(k => k.key))
     for (const c of cached ?? []) {
       if (c.risk_score != null) {
         results.set(c.security_identifier, {
@@ -281,8 +270,8 @@ async function analyzePositions(
         }
         results.set(key, entry)
 
-        // Save to scoring_base via RPC (handles seen-tracking + manual_override protection)
-        const { error: rpcErr } = await supabaseAdmin.rpc('upsert_scoring_base_asset', {
+        // Save to scoring_base (handles seen-tracking + manual_override protection)
+        await upsertScoringBaseAsset({
           p_security_identifier:  key,
           p_identifier_type:      type,
           p_figi:                 figi.figi         ?? null,
@@ -300,7 +289,6 @@ async function analyzePositions(
           p_client_name:          clientName,
           p_review_id:            reviewId,
         })
-        if (rpcErr) console.error('[scoring_base] openfigi upsert error:', key, rpcErr)
       } catch (e) { console.error('[scoring_base] openfigi error:', key, e) }
     }))
   }
@@ -327,12 +315,7 @@ export async function POST(req: Request) {
     const clientProfile = body.client_profile ?? 'moderado'
     const periodId      = body.period_id ?? null
 
-    const { data: scoringFiles, error: sfErr } = await supabaseAdmin
-      .from('scoring_files')
-      .select('id, name, drive_id, item_id, client_folder, client_id')
-      .in('id', body.scoring_file_ids)
-
-    if (sfErr) throw sfErr
+    const scoringFiles = await getScoringFilesByIds(body.scoring_file_ids)
     if (!scoringFiles?.length) return NextResponse.json({ error: 'Archivos no encontrados' }, { status: 404 })
 
     const token = await getGraphToken()
@@ -375,26 +358,20 @@ export async function POST(req: Request) {
 
         // If we found a confident match, update scoring_files record
         if (matched && matched.confidence >= 60 && !sf.client_id) {
-          await supabaseAdmin.from('scoring_files').update({ client_id: matched.id }).eq('id', sf.id)
+          await updateScoringFileClientId(sf.id, matched.id)
         }
 
         // Create review
-        const { data: review, error: revErr } = await supabaseAdmin
-          .from('portfolio_reviews')
-          .insert({
-            client_id:      clientId,
-            client_name:    clientName,
-            client_profile: clientProfile,
-            uploaded_by:    session.id,
-            file_name:      sf.name,
-            notes:          body.notes ?? null,
-            advisor:        meta.advisor ?? null,
-            period_id:      periodId,
-          })
-          .select('id')
-          .single()
-
-        if (revErr) throw revErr
+        const review = await createPortfolioReview({
+          client_id:      clientId,
+          client_name:    clientName,
+          client_profile: clientProfile,
+          uploaded_by:    session.id,
+          file_name:      sf.name,
+          notes:          body.notes ?? null,
+          advisor:        meta.advisor ?? null,
+          period_id:      periodId,
+        })
 
         const reviewId = review.id
         const { results: analyzedMap, cachedKeys } = await analyzePositions(rawPositions, clientName, reviewId)
@@ -557,24 +534,17 @@ export async function POST(req: Request) {
         // ── Flush all scoring_base saves (Tiers 0/3/4) in parallel ───────────
         await Promise.allSettled(
           scoringBaseSaves.map(params =>
-            supabaseAdmin.rpc('upsert_scoring_base_asset', params as any)
-              .then(({ error }) => { if (error) console.error('[scoring_base] upsert error:', params.p_security_identifier, error) })
+            upsertScoringBaseAsset(params as any)
+              .catch((error) => console.error('[scoring_base] upsert error:', (params as any).p_security_identifier, error))
           )
         )
 
-        const { data: savedPositions } = await supabaseAdmin
-          .from('portfolio_positions').insert(positionInserts).select()
+        const savedPositions = await insertPortfolioPositionsBatch(positionInserts)
 
         // ── Update seen-metrics for assets that were already in scoring_base ──
         if (cachedKeys.size > 0) {
-          supabaseAdmin.rpc('update_scoring_base_seen', {
-            p_identifiers: Array.from(cachedKeys),
-            p_client_name: clientName,
-            p_review_id:   reviewId,
-          }).then(
-            () => {},
-            (e) => console.error('[scoring_base] seen update error:', e),
-          )
+          updateScoringBaseSeen(Array.from(cachedKeys), clientName, reviewId)
+            .catch((e) => console.error('[scoring_base] seen update error:', e))
         }
 
         const scoredForCalc = (savedPositions ?? []).map(p => ({
@@ -587,14 +557,13 @@ export async function POST(req: Request) {
         const aligned = profile === clientProfile
         const explanation = generateExplanation(score, profile, clientProfile as any, aligned, pending_weight)
 
-        await supabaseAdmin.from('portfolio_reviews').update({
+        await updateReviewScore(reviewId, {
           portfolio_score: Math.round(score * 100) / 100,
           portfolio_profile: profile,
           classified_weight: Math.round(classified_weight * 10) / 10,
           pending_weight: Math.round(pending_weight * 10) / 10,
           explanation,
-          updated_at: new Date().toISOString(),
-        }).eq('id', reviewId)
+        })
 
         results.push({
           file_name:        sf.name,
@@ -613,27 +582,20 @@ export async function POST(req: Request) {
     // Update period aggregate stats if this analysis belongs to a period
     if (periodId) {
       try {
-        const { data: periodReviews } = await supabaseAdmin
-          .from('portfolio_reviews')
-          .select('portfolio_profile, client_profile, pending_weight')
-          .eq('period_id', periodId)
+        const periodReviews = await getReviewsByPeriod(periodId)
 
         const total      = periodReviews?.length ?? 0
         const aligned    = periodReviews?.filter(r => r.portfolio_profile === r.client_profile).length ?? 0
         const misaligned = total - aligned
         const pending    = periodReviews?.filter(r => (r.pending_weight ?? 0) > 20).length ?? 0
 
-        await supabaseAdmin
-          .from('scoring_periods')
-          .update({
-            total_reviews:      total,
-            clients_aligned:    aligned,
-            clients_misaligned: misaligned,
-            pending_assets:     pending,
-            status:             'draft',
-            updated_at:         new Date().toISOString(),
-          })
-          .eq('id', periodId)
+        await updateScoringPeriod(periodId, {
+          total_reviews:      total,
+          clients_aligned:    aligned,
+          clients_misaligned: misaligned,
+          pending_assets:     pending,
+          status:             'draft',
+        })
       } catch { /* non-fatal */ }
     }
 

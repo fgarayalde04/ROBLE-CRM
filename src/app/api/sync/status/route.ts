@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import { listSyncLogs } from '@/lib/db/sync'
 
 export async function GET() {
   const session = await getSession()
@@ -9,18 +9,13 @@ export async function GET() {
   }
 
   // Fetch last 50 logs then deduplicate per sync_type in JS
-  // (avoids needing a raw rpc call for DISTINCT ON)
-  const { data, error } = await supabaseAdmin
-    .from('sync_logs')
-    .select('*')
-    .order('started_at', { ascending: false })
-    .limit(50)
-
-  if (error) {
+  let rows
+  try {
+    rows = await listSyncLogs(50)
+  } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  const rows = data ?? []
   const seen = new Set<string>()
   const latest: typeof rows = []
 

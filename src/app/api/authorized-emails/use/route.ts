@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import { findAuthorizedEmailForUse, bumpAuthorizedEmailUsage } from '@/lib/db/authorizedEmails'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,24 +15,10 @@ export async function POST(req: NextRequest) {
   if (!email) return NextResponse.json({ ok: false })
 
   // Find the record
-  let query = supabaseAdmin
-    .from('client_authorized_emails')
-    .select('id, cantidad_utilizaciones')
-    .eq('email', email.toLowerCase().trim())
-    .eq('autorizado', true)
-
-  if (numero_cliente) query = query.eq('numero_cliente', numero_cliente)
-
-  const { data } = await query.maybeSingle()
+  const data = await findAuthorizedEmailForUse(email.toLowerCase().trim(), numero_cliente ?? null)
   if (!data) return NextResponse.json({ ok: false })
 
-  await supabaseAdmin
-    .from('client_authorized_emails')
-    .update({
-      ultima_utilizacion:     new Date().toISOString(),
-      cantidad_utilizaciones: (data.cantidad_utilizaciones ?? 0) + 1,
-    })
-    .eq('id', data.id)
+  await bumpAuthorizedEmailUsage(data.id, (data.cantidad_utilizaciones ?? 0) + 1)
 
   return NextResponse.json({ ok: true })
 }

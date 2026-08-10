@@ -1,39 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import { listResources, createResource } from '@/lib/db/resources'
+import { uploadObject } from '@/lib/storage/s3'
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
-    const category = searchParams.get('category')
-    const q = searchParams.get('q')
-    const featured = searchParams.get('featured')
+    const category = searchParams.get('category') ?? undefined
+    const q = searchParams.get('q') ?? undefined
+    const featured = searchParams.get('featured') === 'true'
 
-    let query = supabaseAdmin
-      .from('resources')
-      .select('*')
-      .order('created_at', { ascending: false })
-
-    if (category) {
-      query = query.eq('category', category)
-    }
-
-    if (featured === 'true') {
-      query = query.eq('is_featured', true)
-    }
-
-    if (q) {
-      query = query.or(
-        `name.ilike.%${q}%,description.ilike.%${q}%,company.ilike.%${q}%`
-      )
-    }
-
-    const { data, error } = await query
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 })
-    }
-
-    return NextResponse.json(data ?? [])
+    const data = await listResources({ category, q, featured })
+    return NextResponse.json(data)
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 })
   }
@@ -65,26 +42,24 @@ export async function POST(request: NextRequest) {
       ? tagsRaw.split(',').map((t) => t.trim()).filter(Boolean)
       : []
 
-    // Upload file to Supabase Storage
+    // Upload file to S3-compatible storage
     const timestamp = Date.now()
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
-    const filePath = `${timestamp}_${safeName}`
+    const key = `recursos/${timestamp}_${safeName}`
 
     const arrayBuffer = await file.arrayBuffer()
     const buffer = Buffer.from(arrayBuffer)
 
-    const { data: uploadData, error: uploadError } = await supabaseAdmin.storage
-      .from('recursos')
-      .upload(filePath, buffer, { contentType: 'application/pdf', upsert: false })
-
-    if (uploadError) {
+    try {
+      await uploadObject(key, buffer, file.type || 'application/pdf')
+    } catch (uploadError: any) {
       return NextResponse.json({ error: `Upload failed: ${uploadError.message}` }, { status: 500 })
     }
 
-    const { data: { publicUrl } } = supabaseAdmin.storage.from('recursos').getPublicUrl(filePath)
+    const fileUrl = `/api/recursos/download?key=${encodeURIComponent(key)}`
 
     // Save metadata to DB
-    const { data, error } = await supabaseAdmin.from('resources').insert({
+    const data = await createResource({
       name,
       category,
       description: description || null,
@@ -92,14 +67,10 @@ export async function POST(request: NextRequest) {
       responsible: responsible || null,
       tags,
       is_featured: isFeatured,
-      file_url: publicUrl,
+      file_url: fileUrl,
       file_name: file.name,
       file_size: file.size,
-    }).select().single()
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 })
-    }
+    })
 
     return NextResponse.json(data, { status: 201 })
   } catch (err) {

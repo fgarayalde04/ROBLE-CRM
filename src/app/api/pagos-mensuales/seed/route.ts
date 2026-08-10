@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import { pool } from '@/lib/db/pool'
 
 interface SeedRow {
   concept: string
@@ -64,26 +64,22 @@ async function seedCompany(
   seedRows: SeedRow[]
 ) {
   // Check if already exists
-  const { data: existing } = await supabaseAdmin
-    .from('monthly_payment_tables')
-    .select('id')
-    .eq('company', company)
-    .eq('year', year)
-    .single()
-
-  if (existing) {
+  const { rows: existingRows } = await pool.query(
+    `select id from monthly_payment_tables where company = $1 and year = $2`,
+    [company, year]
+  )
+  if (existingRows[0]) {
     return { skipped: true, company, year }
   }
 
   // Create table
-  const { data: table, error: tableError } = await supabaseAdmin
-    .from('monthly_payment_tables')
-    .insert({ company, year, exchange_rate: exchangeRate })
-    .select()
-    .single()
-
-  if (tableError || !table) {
-    throw new Error(`Failed to create table for ${company} ${year}: ${tableError?.message}`)
+  const { rows: tableRows } = await pool.query(
+    `insert into monthly_payment_tables (company, year, exchange_rate) values ($1, $2, $3) returning *`,
+    [company, year, exchangeRate]
+  )
+  const table = tableRows[0]
+  if (!table) {
+    throw new Error(`Failed to create table for ${company} ${year}`)
   }
 
   // Create rows
@@ -95,13 +91,17 @@ async function seedCompany(
     sort_order: idx,
   }))
 
-  const { data: insertedRows, error: rowsError } = await supabaseAdmin
-    .from('monthly_payment_rows')
-    .insert(rowsToInsert)
-    .select()
-
-  if (rowsError || !insertedRows) {
-    throw new Error(`Failed to insert rows: ${rowsError?.message}`)
+  const values: any[] = []
+  const placeholders = rowsToInsert.map((r, i) => {
+    values.push(r.table_id, r.concept, r.expense_type, r.category, r.sort_order)
+    return `($${i * 5 + 1}, $${i * 5 + 2}, $${i * 5 + 3}, $${i * 5 + 4}, $${i * 5 + 5})`
+  })
+  const { rows: insertedRows } = await pool.query(
+    `insert into monthly_payment_rows (table_id, concept, expense_type, category, sort_order) values ${placeholders.join(', ')} returning *`,
+    values
+  )
+  if (!insertedRows.length) {
+    throw new Error(`Failed to insert rows`)
   }
 
   // Insert may values
@@ -135,13 +135,15 @@ async function seedCompany(
   }
 
   if (valuesToInsert.length > 0) {
-    const { error: valError } = await supabaseAdmin
-      .from('monthly_payment_values')
-      .insert(valuesToInsert)
-
-    if (valError) {
-      throw new Error(`Failed to insert values: ${valError.message}`)
-    }
+    const vValues: any[] = []
+    const vPlaceholders = valuesToInsert.map((v, i) => {
+      vValues.push(v.row_id, v.month, v.value, v.raw_value)
+      return `($${i * 4 + 1}, $${i * 4 + 2}, $${i * 4 + 3}, $${i * 4 + 4})`
+    })
+    await pool.query(
+      `insert into monthly_payment_values (row_id, month, value, raw_value) values ${vPlaceholders.join(', ')}`,
+      vValues
+    )
   }
 
   return { seeded: true, company, year, rowCount: insertedRows.length, valueCount: valuesToInsert.length }

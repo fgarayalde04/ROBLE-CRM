@@ -1,5 +1,6 @@
 import { unstable_noStore as noStore } from 'next/cache'
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import { getInboxTasks, getInboxOpenings, getInboxBcuStatuses, getInboxRecentClients } from '@/lib/db/inbox'
+import { getEvents } from '@/lib/db/events'
 import InboxClient from './InboxClient'
 import type { Metadata } from 'next'
 
@@ -42,43 +43,19 @@ export default async function InboxPage() {
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
   const sevenDaysAgoStr = sevenDaysAgo.toISOString()
 
-  const [
-    { data: tasksRaw },
-    { data: openingsRaw },
-    { data: bcuRaw },
-    { data: clientsRaw },
-    { data: todayEventsRaw },
-  ] = await Promise.all([
-    supabaseAdmin
-      .from('tasks')
-      .select('*, clients(first_name, last_name)')
-      .neq('status', 'completado')
-      .order('due_date', { ascending: true, nullsFirst: false }),
-    supabaseAdmin
-      .from('account_openings')
-      .select('*, client:clients(id, first_name, last_name, client_number)')
-      .not('status', 'in', '("cuenta_abierta","descartado")')
-      .order('updated_at', { ascending: true }),
-    supabaseAdmin
-      .from('banco_central_records')
-      .select('id, status'),
-    supabaseAdmin
-      .from('clients')
-      .select('id, client_number, first_name, last_name, status, advisor, created_at, updated_at')
-      .gte('created_at', thirtyDaysAgoStr)
-      .order('created_at', { ascending: false }),
-    supabaseAdmin
-      .from('events')
-      .select('id, title, type, event_date, start_time, end_time, description')
-      .eq('event_date', todayStr)
-      .order('start_time', { ascending: true, nullsFirst: false }),
+  const [tasksRaw, openingsRaw, bcuRaw, clientsRaw, todayEventsRaw] = await Promise.all([
+    getInboxTasks(),
+    getInboxOpenings(),
+    getInboxBcuStatuses(),
+    getInboxRecentClients(thirtyDaysAgoStr),
+    getEvents({ from: todayStr, to: todayStr }),
   ])
 
   const tasks = tasksRaw ?? []
   const openings = openingsRaw ?? []
   const bcuRecords = bcuRaw ?? []
   const clients = clientsRaw ?? []
-  const todayEvents: TodayEvent[] = (todayEventsRaw ?? []) as TodayEvent[]
+  const todayEvents: TodayEvent[] = (todayEventsRaw ?? []) as unknown as TodayEvent[]
 
   const overdue_tasks = tasks.filter(
     (t) => t.due_date && t.due_date < todayStr

@@ -1,4 +1,4 @@
-import { supabase } from './client'
+import { pool } from '@/lib/db/pool'
 import type {
   Client, Document, Task, Deadline, ActivityLog, Event, TeamMember,
   AccountOpening, OpeningChecklistItem, NewFolder, TaskChecklistItem,
@@ -22,456 +22,117 @@ const DEFAULT_CHECKLIST: { title: string; sort_order: number }[] = [
 
 // =============================================
 // CLIENTS
+// Migrado a Postgres nativo (Railway) — ver src/lib/db/clients.ts
 // =============================================
 
-/**
- * Clientes detectados automáticamente desde carpetas locales.
- * Identifica por: onedrive_folder_url empieza con '/' (ruta local) y status = prospecto.
- */
-export async function getNewLocalClients() {
-  const { data, error } = await supabase
-    .from('clients')
-    .select('*')
-    .eq('status', 'prospecto')
-    .like('onedrive_folder_url', '/%')
-    .order('created_at', { ascending: false })
-  if (error) throw error
-  return data as Client[]
-}
-
-export async function getClients(search?: string) {
-  let query = supabase
-    .from('clients')
-    .select('*')
-    .order('updated_at', { ascending: false })
-
-  if (search) {
-    query = query.or(
-      `first_name.ilike.%${search}%,last_name.ilike.%${search}%,client_number.ilike.%${search}%,email.ilike.%${search}%`
-    )
-  }
-
-  const { data, error } = await query
-  if (error) throw error
-  return data as Client[]
-}
-
-export async function getClient(id: string) {
-  const { data, error } = await supabase
-    .from('clients')
-    .select('*')
-    .eq('id', id)
-    .single()
-  if (error) throw error
-  return data as Client
-}
-
-export async function createClient(client: Omit<Client, 'id' | 'created_at' | 'updated_at'>) {
-  const { data, error } = await supabase
-    .from('clients')
-    .insert(client)
-    .select()
-    .single()
-  if (error) throw error
-  await logActivity('client', data.id, 'crear', `Cliente ${client.first_name} ${client.last_name} creado`)
-  return data as Client
-}
-
-export async function updateClient(id: string, updates: Partial<Client>) {
-  const { data, error } = await supabase
-    .from('clients')
-    .update(updates)
-    .eq('id', id)
-    .select()
-    .single()
-  if (error) throw error
-  await logActivity('client', id, 'actualizar', `Cliente actualizado`)
-  return data as Client
-}
-
-export async function deleteClient(id: string) {
-  const { error } = await supabase.from('clients').delete().eq('id', id)
-  if (error) throw error
-}
+export {
+  getNewLocalClients,
+  getClients,
+  getClient,
+  createClient,
+  updateClient,
+  deleteClient,
+} from '@/lib/db/clients'
 
 // =============================================
 // DOCUMENTS
 // =============================================
 
-export async function getDocuments(filters?: {
-  clientId?: string
-  status?: string
-  category?: string
-  search?: string
-}) {
-  let query = supabase
-    .from('documents')
-    .select('*, client:clients(id, first_name, last_name, client_number)')
-    .order('updated_at', { ascending: false })
-
-  if (filters?.clientId) query = query.eq('client_id', filters.clientId)
-  if (filters?.status) query = query.eq('status', filters.status)
-  if (filters?.category) query = query.eq('category', filters.category)
-  if (filters?.search) query = query.ilike('name', `%${filters.search}%`)
-
-  const { data, error } = await query
-  if (error) throw error
-  return data as (Document & { client: Pick<Client, 'id' | 'first_name' | 'last_name' | 'client_number'> | null })[]
-}
-
-export async function getDocument(id: string) {
-  const { data, error } = await supabase
-    .from('documents')
-    .select('*, client:clients(*)')
-    .eq('id', id)
-    .single()
-  if (error) throw error
-  return data as Document & { client: Client | null }
-}
-
-export async function createDocument(doc: Omit<Document, 'id' | 'created_at' | 'updated_at' | 'client'>) {
-  const { data, error } = await supabase
-    .from('documents')
-    .insert(doc)
-    .select()
-    .single()
-  if (error) throw error
-  await logActivity('document', data.id, 'crear', `Documento "${doc.name}" creado`)
-  return data as Document
-}
-
-export async function updateDocument(id: string, updates: Partial<Document>) {
-  const { client: _c, ...safeUpdates } = updates as any
-  const { data, error } = await supabase
-    .from('documents')
-    .update(safeUpdates)
-    .eq('id', id)
-    .select()
-    .single()
-  if (error) throw error
-  return data as Document
-}
-
-export async function deleteDocument(id: string) {
-  const { error } = await supabase.from('documents').delete().eq('id', id)
-  if (error) throw error
-}
+export {
+  getDocuments,
+  getDocument,
+  createDocument,
+  updateDocument,
+  deleteDocument,
+} from '@/lib/db/documents'
 
 // =============================================
-// TASKS
+// TASKS + TASK CHECKLIST ITEMS
+// Migrado a Postgres nativo (Railway) — ver src/lib/db/tasks.ts
 // =============================================
 
-export async function getTasks(filters?: {
-  clientId?: string
-  status?: string
-  responsible?: string
-  search?: string
-}) {
-  let query = supabase
-    .from('tasks')
-    .select('*, client:clients(id, first_name, last_name, client_number)')
-    .order('due_date', { ascending: true, nullsFirst: false })
-
-  if (filters?.clientId) query = query.eq('client_id', filters.clientId)
-  if (filters?.status) query = query.eq('status', filters.status)
-  if (filters?.responsible) query = query.eq('responsible', filters.responsible)
-  if (filters?.search) query = query.ilike('title', `%${filters.search}%`)
-
-  const { data, error } = await query
-  if (error) throw error
-  return data as (Task & { client: Pick<Client, 'id' | 'first_name' | 'last_name' | 'client_number'> | null })[]
-}
-
-export async function getTask(id: string) {
-  const { data, error } = await supabase
-    .from('tasks')
-    .select('*, client:clients(*), checklist_items:task_checklist_items(*)')
-    .eq('id', id)
-    .single()
-  if (error) throw error
-  return data as Task & { client: Client | null; checklist_items: TaskChecklistItem[] }
-}
-
-export async function createTask(task: Omit<Task, 'id' | 'created_at' | 'updated_at' | 'client'>) {
-  const { data, error } = await supabase
-    .from('tasks')
-    .insert(task)
-    .select()
-    .single()
-  if (error) throw error
-  await logActivity('task', data.id, 'crear', `Tarea "${task.title}" creada`)
-  return data as Task
-}
-
-export async function updateTask(id: string, updates: Partial<Task>) {
-  const { client: _c, checklist_items: _ch, ...safeUpdates } = updates as any
-  const { data, error } = await supabase
-    .from('tasks')
-    .update(safeUpdates)
-    .eq('id', id)
-    .select()
-    .single()
-  if (error) throw error
-  return data as Task
-}
-
-export async function deleteTask(id: string) {
-  const { error } = await supabase.from('tasks').delete().eq('id', id)
-  if (error) throw error
-}
-
-// =============================================
-// TASK CHECKLIST ITEMS
-// =============================================
-
-export async function toggleTaskChecklistItem(id: string, completed: boolean) {
-  const { error } = await supabase
-    .from('task_checklist_items')
-    .update({ completed, completed_at: completed ? new Date().toISOString() : null })
-    .eq('id', id)
-  if (error) throw error
-}
-
-export async function createTaskChecklistItem(taskId: string, title: string) {
-  const { data, error } = await supabase
-    .from('task_checklist_items')
-    .insert({ task_id: taskId, title })
-    .select()
-    .single()
-  if (error) throw error
-  return data as TaskChecklistItem
-}
+export {
+  getTasks,
+  getTask,
+  createTask,
+  updateTask,
+  deleteTask,
+  toggleTaskChecklistItem,
+  createTaskChecklistItem,
+} from '@/lib/db/tasks'
 
 // =============================================
 // DEADLINES
 // =============================================
 
-export async function getDeadlines(filters?: {
-  clientId?: string
-  status?: string
-  category?: string
-  responsible?: string
-  from?: string
-  to?: string
-}) {
-  let query = supabase
-    .from('deadlines')
-    .select('*, client:clients(id, first_name, last_name, client_number)')
-    .order('due_date', { ascending: true })
-
-  if (filters?.clientId) query = query.eq('client_id', filters.clientId)
-  if (filters?.status) query = query.eq('status', filters.status)
-  if (filters?.category) query = query.eq('category', filters.category)
-  if (filters?.responsible) query = query.eq('responsible', filters.responsible)
-  if (filters?.from) query = query.gte('due_date', filters.from)
-  if (filters?.to) query = query.lte('due_date', filters.to)
-
-  const { data, error } = await query
-  if (error) throw error
-  return data as (Deadline & { client: Pick<Client, 'id' | 'first_name' | 'last_name' | 'client_number'> | null })[]
-}
-
-export async function createDeadline(deadline: Omit<Deadline, 'id' | 'created_at' | 'updated_at' | 'client'>) {
-  const { data, error } = await supabase
-    .from('deadlines')
-    .insert(deadline)
-    .select()
-    .single()
-  if (error) throw error
-  await logActivity('deadline', data.id, 'crear', `Vencimiento "${deadline.title}" creado`)
-  return data as Deadline
-}
-
-export async function updateDeadline(id: string, updates: Partial<Deadline>) {
-  const { client: _c, ...safeUpdates } = updates as any
-  const { data, error } = await supabase
-    .from('deadlines')
-    .update(safeUpdates)
-    .eq('id', id)
-    .select()
-    .single()
-  if (error) throw error
-  return data as Deadline
-}
-
-export async function deleteDeadline(id: string) {
-  const { error } = await supabase.from('deadlines').delete().eq('id', id)
-  if (error) throw error
-}
+export {
+  getDeadlines,
+  createDeadline,
+  updateDeadline,
+  deleteDeadline,
+} from '@/lib/db/deadlines'
 
 // =============================================
 // EVENTS
 // =============================================
 
-export async function getEvents(filters?: {
-  from?: string
-  to?: string
-  type?: string
-  clientId?: string
-}) {
-  let query = supabase
-    .from('events')
-    .select('*, client:clients(id, first_name, last_name, client_number)')
-    .order('event_date', { ascending: true })
-    .order('start_time', { ascending: true, nullsFirst: false })
-
-  if (filters?.from) query = query.gte('event_date', filters.from)
-  if (filters?.to) query = query.lte('event_date', filters.to)
-  if (filters?.type) query = query.eq('type', filters.type)
-  if (filters?.clientId) query = query.eq('client_id', filters.clientId)
-
-  const { data, error } = await query
-  if (error) throw error
-  return data as Event[]
-}
-
-export async function createEvent(event: Omit<Event, 'id' | 'created_at' | 'updated_at' | 'client'>) {
-  const { data, error } = await supabase
-    .from('events')
-    .insert(event)
-    .select()
-    .single()
-  if (error) throw error
-  await logActivity('client', data.id, 'crear', `Evento "${event.title}" creado`)
-  return data as Event
-}
-
-export async function updateEvent(id: string, updates: Partial<Event>) {
-  const { client: _c, ...safeUpdates } = updates as any
-  const { data, error } = await supabase
-    .from('events')
-    .update(safeUpdates)
-    .eq('id', id)
-    .select()
-    .single()
-  if (error) throw error
-  return data as Event
-}
-
-export async function deleteEvent(id: string) {
-  const { error } = await supabase.from('events').delete().eq('id', id)
-  if (error) throw error
-}
+export {
+  getEvents,
+  createEvent,
+  updateEvent,
+  deleteEvent,
+} from '@/lib/db/events'
 
 // =============================================
 // ACCOUNT OPENINGS
 // =============================================
 
-export async function getOpenings(filters?: { status?: string; advisor?: string }) {
-  let query = supabase
-    .from('account_openings')
-    .select('*, client:clients(id, first_name, last_name, client_number)')
-    .order('created_at', { ascending: false })
-
-  if (filters?.status) query = query.eq('status', filters.status)
-  if (filters?.advisor) query = query.eq('advisor', filters.advisor)
-
-  const { data, error } = await query
-  if (error) throw error
-  return data as AccountOpening[]
-}
-
-export async function getOpening(id: string) {
-  const { data, error } = await supabase
-    .from('account_openings')
-    .select('*, client:clients(id, first_name, last_name, client_number), checklist_items:opening_checklist_items(*)')
-    .eq('id', id)
-    .single()
-  if (error) throw error
-  const opening = data as AccountOpening & { checklist_items: OpeningChecklistItem[] }
-  if (opening.checklist_items) {
-    opening.checklist_items.sort((a, b) => a.sort_order - b.sort_order)
-  }
-  return opening
-}
-
-export async function createOpening(
-  opening: Omit<AccountOpening, 'id' | 'created_at' | 'updated_at' | 'client' | 'checklist_items'>
-) {
-  const { data, error } = await supabase
-    .from('account_openings')
-    .insert(opening)
-    .select()
-    .single()
-  if (error) throw error
-
-  const checklistRows = DEFAULT_CHECKLIST.map((item) => ({
-    opening_id: data.id,
-    title: item.title,
-    sort_order: item.sort_order,
-  }))
-  await supabase.from('opening_checklist_items').insert(checklistRows)
-
-  return data as AccountOpening
-}
-
-export async function updateOpening(id: string, updates: Partial<AccountOpening>) {
-  const { client: _c, checklist_items: _ch, ...safeUpdates } = updates as any
-  const { data, error } = await supabase
-    .from('account_openings')
-    .update(safeUpdates)
-    .eq('id', id)
-    .select()
-    .single()
-  if (error) throw error
-  return data as AccountOpening
-}
-
-export async function toggleOpeningChecklistItem(id: string, completed: boolean) {
-  const { error } = await supabase
-    .from('opening_checklist_items')
-    .update({ completed, completed_at: completed ? new Date().toISOString() : null })
-    .eq('id', id)
-  if (error) throw error
-}
-
-export async function updateOpeningChecklistItem(
-  id: string,
-  updates: Partial<Pick<OpeningChecklistItem, 'completed' | 'responsible' | 'note' | 'completed_at'>>
-) {
-  const { error } = await supabase
-    .from('opening_checklist_items')
-    .update(updates)
-    .eq('id', id)
-  if (error) throw error
-}
+export {
+  getOpenings,
+  getOpening,
+  createOpening,
+  updateOpening,
+  toggleOpeningChecklistItem,
+  updateOpeningChecklistItem,
+} from '@/lib/db/openings'
 
 // =============================================
 // NEW FOLDERS
 // =============================================
 
 export async function getNewFolders(status?: string) {
-  let query = supabase
-    .from('new_folders')
-    .select('*')
-    .order('detected_at', { ascending: false })
-
-  if (status) query = query.eq('status', status)
-
-  const { data, error } = await query
-  if (error) throw error
-  return data as NewFolder[]
+  const where: string[] = []
+  const params: any[] = []
+  if (status) { params.push(status); where.push(`status = $${params.length}`) }
+  const whereClause = where.length > 0 ? `where ${where.join(' and ')}` : ''
+  const { rows } = await pool.query(
+    `select * from new_folders ${whereClause} order by detected_at desc`,
+    params
+  )
+  return rows as NewFolder[]
 }
 
 export async function createNewFolder(folder: Omit<NewFolder, 'id' | 'created_at'>) {
-  const { data, error } = await supabase
-    .from('new_folders')
-    .insert(folder)
-    .select()
-    .single()
-  if (error) throw error
-  return data as NewFolder
+  const cols = Object.keys(folder)
+  const placeholders = cols.map((_, i) => `$${i + 1}`)
+  const values = cols.map((c) => (folder as any)[c])
+  const { rows } = await pool.query(
+    `insert into new_folders (${cols.map((c) => `"${c}"`).join(', ')}) values (${placeholders.join(', ')}) returning *`,
+    values
+  )
+  return rows[0] as NewFolder
 }
 
 export async function updateNewFolder(id: string, updates: Partial<NewFolder>) {
-  const { data, error } = await supabase
-    .from('new_folders')
-    .update(updates)
-    .eq('id', id)
-    .select()
-    .single()
-  if (error) throw error
-  return data as NewFolder
+  const entries = Object.entries(updates)
+  const setClause = entries.map(([k], i) => `"${k}" = $${i + 1}`)
+  const values = entries.map(([, v]) => v)
+  values.push(id)
+  const { rows } = await pool.query(
+    `update new_folders set ${setClause.join(', ')} where id = $${values.length} returning *`,
+    values
+  )
+  return rows[0] as NewFolder
 }
 
 // =============================================
@@ -479,18 +140,20 @@ export async function updateNewFolder(id: string, updates: Partial<NewFolder>) {
 // =============================================
 
 export async function getTeamMembers() {
-  const { data, error } = await supabase
-    .from('team_members')
-    .select('*')
-    .eq('active', true)
-    .order('name')
-  if (error) throw error
-  return data as TeamMember[]
+  const { rows } = await pool.query(
+    `select * from team_members where active = true order by name`
+  )
+  return rows as TeamMember[]
 }
 
 // =============================================
 // DASHBOARD STATS
 // =============================================
+
+const OPENING_IN_PROCESS_STATUSES = [
+  'nueva_carpeta', 'en_contacto', 'documentacion_solicitada',
+  'documentacion_recibida', 'formularios_enviados', 'formularios_firmados', 'en_revision',
+]
 
 export async function getDashboardStats() {
   const today = new Date().toISOString().split('T')[0]
@@ -498,99 +161,58 @@ export async function getDashboardStats() {
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
 
   const [
-    { count: openTasks },
-    { count: overdueTasks },
-    { count: urgentTasks },
-    { count: upcomingDeadlines },
-    { count: pendingDocs },
-    { count: openingsInProcess },
-    { count: openingsDelayed },
-    { count: pendingFolders },
-    { data: todayEvents },
-    { data: todayTasks },
-    { data: recentClients },
-    { data: recentActivity },
+    openTasks, overdueTasks, urgentTasks, upcomingDeadlines, pendingDocs,
+    openingsInProcess, openingsDelayed, pendingFolders,
+    todayEvents, todayTasks, recentClients, recentActivity,
   ] = await Promise.all([
-    supabase
-      .from('tasks')
-      .select('*', { count: 'exact', head: true })
-      .in('status', ['pendiente', 'en_proceso', 'bloqueado']),
-    supabase
-      .from('tasks')
-      .select('*', { count: 'exact', head: true })
-      .in('status', ['pendiente', 'en_proceso'])
-      .lt('due_date', today),
-    supabase
-      .from('tasks')
-      .select('*', { count: 'exact', head: true })
-      .eq('priority', 'urgente')
-      .in('status', ['pendiente', 'en_proceso', 'bloqueado']),
-    supabase
-      .from('deadlines')
-      .select('*', { count: 'exact', head: true })
-      .eq('status', 'pendiente')
-      .lte('due_date', nextWeek)
-      .gte('due_date', today),
-    supabase
-      .from('documents')
-      .select('*', { count: 'exact', head: true })
-      .in('status', ['pendiente', 'revisar']),
-    supabase
-      .from('account_openings')
-      .select('*', { count: 'exact', head: true })
-      .in('status', [
-        'nueva_carpeta', 'en_contacto', 'documentacion_solicitada',
-        'documentacion_recibida', 'formularios_enviados', 'formularios_firmados', 'en_revision',
-      ]),
-    supabase
-      .from('account_openings')
-      .select('*', { count: 'exact', head: true })
-      .in('status', [
-        'nueva_carpeta', 'en_contacto', 'documentacion_solicitada',
-        'documentacion_recibida', 'formularios_enviados', 'formularios_firmados', 'en_revision',
-      ])
-      .lt('start_date', thirtyDaysAgo),
-    supabase
-      .from('new_folders')
-      .select('*', { count: 'exact', head: true })
-      .eq('status', 'pendiente'),
-    supabase
-      .from('events')
-      .select('*, client:clients(id, first_name, last_name)')
-      .eq('event_date', today)
-      .order('start_time', { ascending: true, nullsFirst: false }),
-    supabase
-      .from('tasks')
-      .select('*, client:clients(id, first_name, last_name, client_number)')
-      .in('status', ['pendiente', 'en_proceso', 'bloqueado'])
-      .lte('due_date', today)
-      .order('due_date', { ascending: true })
-      .limit(10),
-    supabase
-      .from('clients')
-      .select('*')
-      .order('updated_at', { ascending: false })
-      .limit(5),
-    supabase
-      .from('activity_log')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(10),
+    pool.query(`select count(*) from tasks where status in ('pendiente','en_proceso','bloqueado')`),
+    pool.query(`select count(*) from tasks where status in ('pendiente','en_proceso') and due_date < $1`, [today]),
+    pool.query(`select count(*) from tasks where priority = 'urgente' and status in ('pendiente','en_proceso','bloqueado')`),
+    pool.query(`select count(*) from deadlines where status = 'pendiente' and due_date <= $1 and due_date >= $2`, [nextWeek, today]),
+    pool.query(`select count(*) from documents where status in ('pendiente','revisar')`),
+    pool.query(`select count(*) from account_openings where status = ANY($1)`, [OPENING_IN_PROCESS_STATUSES]),
+    pool.query(`select count(*) from account_openings where status = ANY($1) and start_date < $2`, [OPENING_IN_PROCESS_STATUSES, thirtyDaysAgo]),
+    pool.query(`select count(*) from new_folders where status = 'pendiente'`).catch(() => ({ rows: [{ count: 0 }] })),
+    pool.query(
+      `select e.*, c.id as client__id, c.first_name as client__first_name, c.last_name as client__last_name
+       from events e left join clients c on c.id = e.client_id
+       where e.event_date = $1 order by e.start_time asc nulls last`,
+      [today]
+    ),
+    pool.query(
+      `select t.*, c.id as client__id, c.first_name as client__first_name, c.last_name as client__last_name, c.client_number as client__client_number
+       from tasks t left join clients c on c.id = t.client_id
+       where t.status in ('pendiente','en_proceso','bloqueado') and t.due_date <= $1
+       order by t.due_date asc limit 10`,
+      [today]
+    ),
+    pool.query(`select * from clients order by updated_at desc limit 5`),
+    pool.query(`select * from activity_log order by created_at desc limit 10`),
   ])
 
+  const shapeClient = (row: any) => {
+    const { client__id, client__first_name, client__last_name, client__client_number, ...rest } = row
+    return {
+      ...rest,
+      client: client__id
+        ? { id: client__id, first_name: client__first_name, last_name: client__last_name, client_number: client__client_number }
+        : null,
+    }
+  }
+
   return {
-    open_tasks: openTasks ?? 0,
-    overdue_tasks: overdueTasks ?? 0,
-    urgent_tasks: urgentTasks ?? 0,
-    upcoming_deadlines: upcomingDeadlines ?? 0,
-    pending_documents: pendingDocs ?? 0,
-    openings_in_process: openingsInProcess ?? 0,
-    openings_delayed: openingsDelayed ?? 0,
-    pending_folders: pendingFolders ?? 0,
-    today_events: (todayEvents ?? []) as Event[],
-    today_tasks: (todayTasks ?? []) as Task[],
-    recent_clients: (recentClients ?? []) as Client[],
-    recent_activity: (recentActivity ?? []) as ActivityLog[],
+    open_tasks: Number(openTasks.rows[0].count),
+    overdue_tasks: Number(overdueTasks.rows[0].count),
+    urgent_tasks: Number(urgentTasks.rows[0].count),
+    upcoming_deadlines: Number(upcomingDeadlines.rows[0].count),
+    pending_documents: Number(pendingDocs.rows[0].count),
+    openings_in_process: Number(openingsInProcess.rows[0].count),
+    openings_delayed: Number(openingsDelayed.rows[0].count),
+    pending_folders: Number(pendingFolders.rows[0].count),
+    today_events: todayEvents.rows.map(shapeClient) as Event[],
+    today_tasks: todayTasks.rows.map(shapeClient) as Task[],
+    recent_clients: recentClients.rows as Client[],
+    recent_activity: recentActivity.rows as ActivityLog[],
   }
 }
 
@@ -604,57 +226,77 @@ export async function getCeoData(): Promise<CeoData> {
   const firstOfMonth = `${currentMonth}-01`
 
   const [
-    { data: aumRecords },
-    { data: productionRecords },
-    { data: revenueRecords },
-    { count: activeClients },
-    { count: inAperturaClients },
-    { count: newClientsThisMonth },
-    { count: openingsThisMonth },
-    { data: uploadedFiles },
+    aumRecords, productionRecords, revenueRecords,
+    activeClients, inAperturaClients, newClientsThisMonth, openingsThisMonth,
+    uploadedFiles,
   ] = await Promise.all([
-    supabase.from('aum_records').select('*').order('period', { ascending: true }),
-    supabase.from('production_records').select('*').order('period', { ascending: true }),
-    supabase.from('revenue_records').select('*').order('period', { ascending: true }),
-    supabase.from('clients').select('*', { count: 'exact', head: true }).eq('status', 'activo'),
-    supabase.from('clients').select('*', { count: 'exact', head: true }).eq('status', 'en_apertura'),
-    supabase.from('clients').select('*', { count: 'exact', head: true }).gte('created_at', firstOfMonth),
-    supabase.from('account_openings').select('*', { count: 'exact', head: true })
-      .eq('status', 'cuenta_abierta').gte('opened_date', firstOfMonth),
-    supabase.from('uploaded_files').select('*').order('uploaded_at', { ascending: false }).limit(20),
+    pool.query(`select * from aum_records order by period asc`),
+    pool.query(`select * from production_records order by period asc`),
+    pool.query(`select * from revenue_records order by period asc`),
+    pool.query(`select count(*) from clients where status = 'activo'`),
+    pool.query(`select count(*) from clients where status = 'en_apertura'`),
+    pool.query(`select count(*) from clients where created_at >= $1`, [firstOfMonth]),
+    pool.query(`select count(*) from account_openings where status = 'cuenta_abierta' and opened_date >= $1`, [firstOfMonth]),
+    pool.query(`select * from uploaded_files order by uploaded_at desc limit 20`),
   ])
 
   return {
-    aum_records: (aumRecords ?? []) as AumRecord[],
-    production_records: (productionRecords ?? []) as ProductionRecord[],
-    revenue_records: (revenueRecords ?? []) as RevenueRecord[],
-    active_clients: activeClients ?? 0,
-    in_apertura_clients: inAperturaClients ?? 0,
-    new_clients_this_month: newClientsThisMonth ?? 0,
-    openings_this_month: openingsThisMonth ?? 0,
-    uploaded_files: (uploadedFiles ?? []) as UploadedFile[],
+    aum_records: aumRecords.rows as AumRecord[],
+    production_records: productionRecords.rows as ProductionRecord[],
+    revenue_records: revenueRecords.rows as RevenueRecord[],
+    active_clients: Number(activeClients.rows[0].count),
+    in_apertura_clients: Number(inAperturaClients.rows[0].count),
+    new_clients_this_month: Number(newClientsThisMonth.rows[0].count),
+    openings_this_month: Number(openingsThisMonth.rows[0].count),
+    uploaded_files: uploadedFiles.rows as UploadedFile[],
   }
 }
 
 export async function insertAumRecords(rows: Omit<AumRecord, 'id' | 'created_at'>[], fileId: string) {
-  const { error } = await supabase.from('aum_records').insert(rows.map((r) => ({ ...r, source_file: fileId })))
-  if (error) throw error
+  if (rows.length === 0) return
+  const withSource = rows.map((r) => ({ ...r, source_file: fileId }))
+  const cols = Object.keys(withSource[0])
+  const values: any[] = []
+  const rowsSql = withSource.map((rec, i) => {
+    const placeholders = cols.map((c, j) => { values.push((rec as any)[c]); return `$${i * cols.length + j + 1}` })
+    return `(${placeholders.join(', ')})`
+  })
+  await pool.query(`insert into aum_records (${cols.map((c) => `"${c}"`).join(', ')}) values ${rowsSql.join(', ')}`, values)
 }
 
 export async function insertProductionRecords(rows: Omit<ProductionRecord, 'id' | 'created_at'>[], fileId: string) {
-  const { error } = await supabase.from('production_records').insert(rows.map((r) => ({ ...r, source_file: fileId })))
-  if (error) throw error
+  if (rows.length === 0) return
+  const withSource = rows.map((r) => ({ ...r, source_file: fileId }))
+  const cols = Object.keys(withSource[0])
+  const values: any[] = []
+  const rowsSql = withSource.map((rec, i) => {
+    const placeholders = cols.map((c, j) => { values.push((rec as any)[c]); return `$${i * cols.length + j + 1}` })
+    return `(${placeholders.join(', ')})`
+  })
+  await pool.query(`insert into production_records (${cols.map((c) => `"${c}"`).join(', ')}) values ${rowsSql.join(', ')}`, values)
 }
 
 export async function insertRevenueRecords(rows: Omit<RevenueRecord, 'id' | 'created_at'>[], fileId: string) {
-  const { error } = await supabase.from('revenue_records').insert(rows.map((r) => ({ ...r, source_file: fileId })))
-  if (error) throw error
+  if (rows.length === 0) return
+  const withSource = rows.map((r) => ({ ...r, source_file: fileId }))
+  const cols = Object.keys(withSource[0])
+  const values: any[] = []
+  const rowsSql = withSource.map((rec, i) => {
+    const placeholders = cols.map((c, j) => { values.push((rec as any)[c]); return `$${i * cols.length + j + 1}` })
+    return `(${placeholders.join(', ')})`
+  })
+  await pool.query(`insert into revenue_records (${cols.map((c) => `"${c}"`).join(', ')}) values ${rowsSql.join(', ')}`, values)
 }
 
 export async function registerUploadedFile(file: Omit<UploadedFile, 'id' | 'uploaded_at'>) {
-  const { data, error } = await supabase.from('uploaded_files').insert(file).select().single()
-  if (error) throw error
-  return data as UploadedFile
+  const cols = Object.keys(file)
+  const placeholders = cols.map((_, i) => `$${i + 1}`)
+  const values = cols.map((c) => (file as any)[c])
+  const { rows } = await pool.query(
+    `insert into uploaded_files (${cols.map((c) => `"${c}"`).join(', ')}) values (${placeholders.join(', ')}) returning *`,
+    values
+  )
+  return rows[0] as UploadedFile
 }
 
 // =============================================
@@ -664,39 +306,36 @@ export async function registerUploadedFile(file: Omit<UploadedFile, 'id' | 'uplo
 export async function globalSearch(query: string) {
   if (!query.trim()) return { clients: [], documents: [], tasks: [], deadlines: [] }
 
-  const [
-    { data: clients },
-    { data: documents },
-    { data: tasks },
-    { data: deadlines },
-  ] = await Promise.all([
-    supabase
-      .from('clients')
-      .select('*')
-      .or(`first_name.ilike.%${query}%,last_name.ilike.%${query}%,client_number.ilike.%${query}%,email.ilike.%${query}%`)
-      .limit(5),
-    supabase
-      .from('documents')
-      .select('*, client:clients(id, first_name, last_name, client_number)')
-      .ilike('name', `%${query}%`)
-      .limit(5),
-    supabase
-      .from('tasks')
-      .select('*, client:clients(id, first_name, last_name, client_number)')
-      .ilike('title', `%${query}%`)
-      .limit(5),
-    supabase
-      .from('deadlines')
-      .select('*, client:clients(id, first_name, last_name, client_number)')
-      .ilike('title', `%${query}%`)
-      .limit(5),
+  const like = `%${query}%`
+  const clientJoin = `left join clients c on c.id = t.client_id`
+  const clientSelect = `c.id as "client__id", c.first_name as "client__first_name", c.last_name as "client__last_name", c.client_number as "client__client_number"`
+  const shapeRow = (row: any) => {
+    const { client__id, client__first_name, client__last_name, client__client_number, ...rest } = row
+    return {
+      ...rest,
+      client: client__id
+        ? { id: client__id, first_name: client__first_name, last_name: client__last_name, client_number: client__client_number }
+        : null,
+    }
+  }
+
+  const [clients, documents, tasks, deadlines] = await Promise.all([
+    pool.query(
+      `select * from clients
+       where first_name ilike $1 or last_name ilike $1 or client_number ilike $1 or email ilike $1
+       limit 5`,
+      [like]
+    ),
+    pool.query(`select t.*, ${clientSelect} from documents t ${clientJoin} where t.name ilike $1 limit 5`, [like]),
+    pool.query(`select t.*, ${clientSelect} from tasks t ${clientJoin} where t.title ilike $1 limit 5`, [like]),
+    pool.query(`select t.*, ${clientSelect} from deadlines t ${clientJoin} where t.title ilike $1 limit 5`, [like]),
   ])
 
   return {
-    clients: (clients ?? []) as Client[],
-    documents: (documents ?? []) as Document[],
-    tasks: (tasks ?? []) as Task[],
-    deadlines: (deadlines ?? []) as Deadline[],
+    clients: clients.rows as Client[],
+    documents: documents.rows.map(shapeRow) as Document[],
+    tasks: tasks.rows.map(shapeRow) as Task[],
+    deadlines: deadlines.rows.map(shapeRow) as Deadline[],
   }
 }
 
@@ -711,11 +350,8 @@ async function logActivity(
   description: string,
   userName?: string
 ) {
-  await supabase.from('activity_log').insert({
-    entity_type: entityType,
-    entity_id: entityId,
-    action,
-    description,
-    user_name: userName ?? null,
-  })
+  await pool.query(
+    `insert into activity_log (entity_type, entity_id, action, description, user_name) values ($1, $2, $3, $4, $5)`,
+    [entityType, entityId, action, description, userName ?? null]
+  )
 }

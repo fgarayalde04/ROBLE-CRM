@@ -1,8 +1,8 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { unstable_noStore as noStore } from 'next/cache'
-import { supabaseAdmin } from '@/lib/supabase/admin'
 import { getSession } from '@/lib/auth'
+import { listOpeningsWithStats } from '@/lib/db/openings'
 import type { AccountOpening, Client, OpeningStatus } from '@/types/platform'
 import { differenceInDays, parseISO, startOfMonth, endOfMonth } from 'date-fns'
 import AutoRefresh from '@/components/AutoRefresh'
@@ -66,47 +66,13 @@ export default async function OpeningsPage({ searchParams }: Props) {
   const folderFilter = session?.allowed_folders ?? null
 
   const filter = (searchParams.filter ?? 'activas') as FilterKey
-  let openingsQuery = supabaseAdmin
-    .from('account_openings')
-    .select(`
-      *,
-      client:clients(id, first_name, last_name, client_number),
-      checklist_items:opening_checklist_items(id, completed)
-    `)
-    .order('created_at', { ascending: false })
 
-  if (folderFilter) {
-    openingsQuery = openingsQuery.in('advisor', folderFilter)
-  }
+  const { openings: allOpenings, openNotesByOpening, pendingTasksByOpening } = await listOpeningsWithStats(folderFilter)
 
-  const { data: allOpenings } = await openingsQuery
-
-  const openings = (allOpenings ?? []) as (AccountOpening & {
+  const openings = allOpenings as (AccountOpening & {
     client: Pick<Client, 'id' | 'first_name' | 'last_name' | 'client_number'> | null
     checklist_items: { id: string; completed: boolean }[]
   })[]
-
-  // Fetch open notes count per opening
-  const { data: notesData } = await supabaseAdmin
-    .from('opening_notes')
-    .select('opening_id')
-    .eq('status', 'abierta')
-
-  const openNotesByOpening: Record<string, number> = {}
-  for (const n of notesData ?? []) {
-    openNotesByOpening[n.opening_id] = (openNotesByOpening[n.opening_id] ?? 0) + 1
-  }
-
-  // Fetch pending tasks count per opening
-  const { data: tasksData } = await supabaseAdmin
-    .from('opening_tasks')
-    .select('opening_id')
-    .neq('status', 'completada')
-
-  const pendingTasksByOpening: Record<string, number> = {}
-  for (const t of tasksData ?? []) {
-    pendingTasksByOpening[t.opening_id] = (pendingTasksByOpening[t.opening_id] ?? 0) + 1
-  }
 
   // KPIs
   const today = new Date()

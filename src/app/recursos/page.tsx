@@ -1,39 +1,17 @@
 export const dynamic = 'force-dynamic'
 
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import { resourcesTableExists, listResources } from '@/lib/db/resources'
 import ResourcesClient from '@/components/ResourcesClient'
 import SetupNeeded from './SetupNeeded'
 
-async function checkTableExists(): Promise<boolean> {
-  try {
-    const { error } = await supabaseAdmin.from('resources').select('id').limit(1)
-    if (error && error.message.toLowerCase().includes('does not exist')) {
-      return false
-    }
-    return true
-  } catch {
-    return false
-  }
-}
-
-async function getResources() {
-  const { data, error } = await supabaseAdmin
-    .from('resources')
-    .select('*')
-    .order('created_at', { ascending: false })
-
-  if (error) return []
-  return data ?? []
-}
-
 export default async function RecursosPage() {
-  const tableExists = await checkTableExists()
+  const tableExists = await resourcesTableExists()
 
   if (!tableExists) {
     return <SetupNeeded />
   }
 
-  const resources = await getResources()
+  const resources = await listResources().catch(() => [])
 
   return (
     <div className="p-6 lg:p-8">

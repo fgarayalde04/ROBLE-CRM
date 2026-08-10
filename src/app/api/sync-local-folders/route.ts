@@ -1,22 +1,8 @@
 import { NextResponse } from 'next/server'
 import { readdir, stat } from 'fs/promises'
 import { join } from 'path'
-import { supabaseAdmin } from '@/lib/supabase/admin'
-
-const DEFAULT_CHECKLIST = [
-  { title: 'Ficha de cliente hecha', sort_order: 0 },
-  { title: 'Cedulas conseguidas', sort_order: 1 },
-  { title: 'Comprobante de domicilio recibido', sort_order: 2 },
-  { title: 'Informacion de madre/padre completa', sort_order: 3 },
-  { title: 'Perfil de riesgo completado', sort_order: 4 },
-  { title: 'Formularios enviados al cliente', sort_order: 5 },
-  { title: 'Formularios firmados recibidos', sort_order: 6 },
-  { title: 'Documentacion revisada internamente', sort_order: 7 },
-  { title: 'Documentacion enviada al banco', sort_order: 8 },
-  { title: 'Confirmacion del banco recibida', sort_order: 9 },
-  { title: 'Numero de cliente asignado', sort_order: 10 },
-  { title: 'Cuenta marcada como activa', sort_order: 11 },
-]
+import { getClientsByOnedriveUrls, createClientFromRecord } from '@/lib/db/clients'
+import { createOpening } from '@/lib/db/openings'
 
 export async function GET() {
   const folderPath = process.env.LOCAL_CLIENTS_FOLDER_PATH ?? null
@@ -76,10 +62,7 @@ export async function POST() {
 
   // Buscar clientes ya existentes por folder_path
   const paths = dirs.map((d) => d.path)
-  const { data: existing } = await supabaseAdmin
-    .from('clients')
-    .select('onedrive_folder_url')
-    .in('onedrive_folder_url', paths)
+  const existing = await getClientsByOnedriveUrls(paths)
 
   const existingPaths = new Set((existing ?? []).map((e: any) => e.onedrive_folder_url as string))
 
@@ -92,9 +75,9 @@ export async function POST() {
     const { first_name, last_name } = parseName(dir.name)
 
     // Insert client
-    const { data: clientData, error: clientError } = await supabaseAdmin
-      .from('clients')
-      .insert({
+    let clientData
+    try {
+      clientData = await createClientFromRecord({
         client_number: generateClientNumber(dir.name),
         first_name,
         last_name,
@@ -103,18 +86,14 @@ export async function POST() {
         onedrive_folder_url: dir.path,
         notes: `Detectado automaticamente desde carpeta local: ${dir.path}`,
       })
-      .select()
-      .single()
-
-    if (clientError || !clientData) {
+    } catch {
       errors++
       continue
     }
 
-    // Create account opening for the new client
-    const { data: openingData, error: openingError } = await supabaseAdmin
-      .from('account_openings')
-      .insert({
+    // Create account opening for the new client (inserts default checklist too)
+    try {
+      await createOpening({
         client_id: clientData.id,
         folder_name: dir.name,
         status: 'carpeta_creada',
@@ -123,18 +102,7 @@ export async function POST() {
         source: 'local_folder',
         folder_path: dir.path,
       })
-      .select()
-      .single()
-
-    if (!openingError && openingData) {
-      // Insert default checklist for the opening
-      const checklistRows = DEFAULT_CHECKLIST.map((item) => ({
-        opening_id: openingData.id,
-        title: item.title,
-        sort_order: item.sort_order,
-      }))
-      await supabaseAdmin.from('opening_checklist_items').insert(checklistRows)
-    }
+    } catch { /* client was still created */ }
 
     created++
   }

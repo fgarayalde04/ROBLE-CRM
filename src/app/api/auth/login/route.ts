@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import { findUserByEmail } from '@/lib/db/users'
 import { createSession, SESSION_COOKIE, SESSION_MAX_AGE } from '@/lib/auth'
 import bcrypt from 'bcryptjs'
 
@@ -10,18 +10,11 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Email y contraseña requeridos' }, { status: 400 })
     }
 
-    const { data: user, error } = await supabaseAdmin
-      .from('crm_users')
-      .select('id, name, email, role, password_hash, active, permissions, must_change_password')
-      .eq('email', email.toLowerCase().trim())
-      .single()
-
-    if (error) {
-      // PGRST116 = no rows found (wrong email), anything else is a server error
-      if (error.code === 'PGRST116') {
-        return NextResponse.json({ error: 'Usuario o contraseña incorrectos' }, { status: 401 })
-      }
-      console.error('[login] DB error:', error.message)
+    let user
+    try {
+      user = await findUserByEmail(email)
+    } catch (err: any) {
+      console.error('[login] DB error:', err.message)
       return NextResponse.json({ error: 'Error del servidor. Intentá de nuevo en unos minutos.' }, { status: 500 })
     }
     if (!user) {
@@ -40,20 +33,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Usuario o contraseña incorrectos' }, { status: 401 })
     }
 
-    // Load modo_asesor separately — column may not exist pre-migration
-    let modoAsesor = false
-    try {
-      const { data: ma } = await supabaseAdmin
-        .from('crm_users').select('modo_asesor').eq('id', user.id).maybeSingle()
-      modoAsesor = ma?.modo_asesor ?? false
-    } catch { /* pre-migration: default false */ }
-
     const token = await createSession({
       id: user.id,
       name: user.name,
       email: user.email,
       role: user.role,
-      modo_asesor: modoAsesor,
+      modo_asesor: user.modo_asesor ?? false,
     })
 
     const res = NextResponse.json({

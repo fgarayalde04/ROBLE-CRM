@@ -3,7 +3,6 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { Client, ClientStatus, RiskProfile, ClientType } from '@/types/platform'
-import { supabase } from '@/lib/supabase/client'
 
 interface Props {
   initial?: Partial<Client>
@@ -60,7 +59,7 @@ export default function ClientForm({ initial, mode }: Props) {
         })
         const data = await res.json()
         if (!res.ok) throw new Error(data.error ?? 'Error al crear cliente')
-        router.push(`clients/${data.id}`)
+        router.push(`/clients/${data.id}`)
       } else {
         const res = await fetch('/api/clients', {
           method: 'PUT',
@@ -69,7 +68,7 @@ export default function ClientForm({ initial, mode }: Props) {
         })
         const data = await res.json()
         if (!res.ok) throw new Error(data.error ?? 'Error al guardar')
-        router.push(`clients/${initial!.id}`)
+        router.push(`/clients/${initial!.id}`)
       }
       router.refresh()
     } catch (err: any) {

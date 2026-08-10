@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase/admin'
 import { getSession } from '@/lib/auth'
 import bcrypt from 'bcryptjs'
+import { listUsers, createUser, updateUser, getUserPermissions, approveUser, deleteUser } from '@/lib/db/users'
 
 async function requireAdmin() {
   const session = await getSession()
@@ -14,12 +14,8 @@ async function requireAdmin() {
 export async function GET() {
   try {
     await requireAdmin()
-    const { data, error } = await supabaseAdmin
-      .from('crm_users')
-      .select('id, name, email, role, active, permissions, created_at, updated_at')
-      .order('name')
-    if (error) throw error
-    return NextResponse.json(data ?? [])
+    const data = await listUsers()
+    return NextResponse.json(data)
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: err.message.includes('autorizado') ? 403 : 400 })
   }
@@ -33,22 +29,16 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Nombre, contraseña y rol son requeridos' }, { status: 400 })
     }
     const hash = await bcrypt.hash(password, 12)
-    const { data, error } = await supabaseAdmin
-      .from('crm_users')
-      .insert({
-        name,
-        email: email?.toLowerCase().trim() || null,
-        password_hash: hash,
-        role,
-        active: true,
-        must_change_password: must_change_password ?? true,
-        onedrive_drive_id:    onedrive_drive_id    ?? null,
-        onedrive_folder_id:   onedrive_folder_id   ?? null,
-        onedrive_folder_path: onedrive_folder_path ?? null,
-      })
-      .select('id, name, email, role, active, created_at')
-      .single()
-    if (error) throw error
+    const data = await createUser({
+      name,
+      email: email?.toLowerCase().trim() || null,
+      passwordHash: hash,
+      role,
+      mustChangePassword: must_change_password ?? true,
+      onedriveDriveId: onedrive_drive_id,
+      onedriveFolderId: onedrive_folder_id,
+      onedriveFolderPath: onedrive_folder_path,
+    })
     return NextResponse.json(data)
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 400 })
@@ -61,7 +51,7 @@ export async function PUT(req: Request) {
     const { id, password, name, email, role, active, permissions, modo_asesor, onedrive_drive_id, onedrive_folder_id, onedrive_folder_path } = await req.json()
     if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
 
-    const update: Record<string, unknown> = { updated_at: new Date().toISOString() }
+    const update: Record<string, unknown> = {}
     if (name !== undefined)        update.name = name
     if (email !== undefined)       update.email = email ? email.toLowerCase().trim() : null
     if (role !== undefined)        update.role = role
@@ -73,13 +63,7 @@ export async function PUT(req: Request) {
     if (onedrive_folder_id  !== undefined) update.onedrive_folder_id  = onedrive_folder_id  || null
     if (onedrive_folder_path !== undefined) update.onedrive_folder_path = onedrive_folder_path || null
 
-    const { data, error } = await supabaseAdmin
-      .from('crm_users')
-      .update(update)
-      .eq('id', id)
-      .select('id, name, email, role, active, permissions, modo_asesor, onedrive_drive_id, onedrive_folder_id, onedrive_folder_path')
-      .single()
-    if (error) throw error
+    const data = await updateUser(id, update)
     return NextResponse.json(data)
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 400 })
@@ -94,33 +78,14 @@ export async function PATCH(req: Request) {
     if (!id || !action) return NextResponse.json({ error: 'id y action requeridos' }, { status: 400 })
 
     if (action === 'approve') {
-      // Fetch current permissions to strip _pending_approval
-      const { data: u } = await supabaseAdmin
-        .from('crm_users')
-        .select('permissions')
-        .eq('id', id)
-        .single()
-
-      const cleaned = (u?.permissions ?? []).filter((p: string) => p !== '_pending_approval')
-
-      const { data, error } = await supabaseAdmin
-        .from('crm_users')
-        .update({
-          active: true,
-          permissions: cleaned.length > 0 ? cleaned : null,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', id)
-        .select('id, name, email, role, active, permissions')
-        .single()
-
-      if (error) throw error
+      const permissions = await getUserPermissions(id)
+      const cleaned = (permissions ?? []).filter((p: string) => p !== '_pending_approval')
+      const data = await approveUser(id, cleaned)
       return NextResponse.json(data)
     }
 
     if (action === 'reject') {
-      const { error } = await supabaseAdmin.from('crm_users').delete().eq('id', id)
-      if (error) throw error
+      await deleteUser(id)
       return NextResponse.json({ ok: true, deleted: id })
     }
 
@@ -137,8 +102,7 @@ export async function DELETE(req: Request) {
     if (id === session.id) {
       return NextResponse.json({ error: 'No podés eliminarte a vos mismo' }, { status: 400 })
     }
-    const { error } = await supabaseAdmin.from('crm_users').delete().eq('id', id)
-    if (error) throw error
+    await deleteUser(id)
     return NextResponse.json({ ok: true })
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 400 })

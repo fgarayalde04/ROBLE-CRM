@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import { listSyncLogs } from '@/lib/db/sync'
 
 export async function GET() {
   const session = await getSession()
@@ -8,15 +8,10 @@ export async function GET() {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const { data, error } = await supabaseAdmin
-    .from('sync_logs')
-    .select('*')
-    .order('started_at', { ascending: false })
-    .limit(50)
-
-  if (error) {
+  try {
+    const data = await listSyncLogs(50)
+    return NextResponse.json(data ?? [])
+  } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
-
-  return NextResponse.json(data ?? [])
 }

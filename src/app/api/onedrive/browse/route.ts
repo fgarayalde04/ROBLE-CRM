@@ -1,18 +1,9 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import { getUserOneDriveConfig } from '@/lib/db/users'
 import { getGraphToken, listFolderChildren, getDriveItem } from '@/lib/microsoft/graph'
 
 export const dynamic = 'force-dynamic'
-
-async function getUserOneDriveConfig(userId: string, role: string) {
-  const { data } = await supabaseAdmin
-    .from('crm_users')
-    .select('onedrive_drive_id, onedrive_folder_id, onedrive_folder_path')
-    .eq('id', userId)
-    .single()
-  return data
-}
 
 export async function GET(req: Request) {
   try {
@@ -24,7 +15,7 @@ export async function GET(req: Request) {
     const requestedDriveId  = searchParams.get('driveId')
 
     // Get user's OneDrive config
-    const cfg = await getUserOneDriveConfig(session.id, session.role)
+    const cfg = await getUserOneDriveConfig(session.id)
 
     // Linked CRM folders can be browsed by any authenticated user. The CRM is
     // the access gate; Graph is used server-side so SharePoint browser cookies

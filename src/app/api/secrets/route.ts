@@ -17,7 +17,7 @@
 // );
 
 import { NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import { listSecrets, createSecret } from '@/lib/db/secrets'
 import { getSession } from '@/lib/auth'
 
 async function requireSession() {
@@ -29,11 +29,7 @@ async function requireSession() {
 export async function GET() {
   try {
     await requireSession()
-    const { data, error } = await supabaseAdmin
-      .from('secrets_vault')
-      .select('*')
-      .order('service_name', { ascending: true })
-    if (error) throw error
+    const data = await listSecrets()
     return NextResponse.json(data ?? [])
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Error inesperado'
@@ -63,13 +59,7 @@ export async function POST(req: Request) {
       updated_at: now,
     }
 
-    const { data, error } = await supabaseAdmin
-      .from('secrets_vault')
-      .insert(record)
-      .select()
-      .single()
-
-    if (error) throw error
+    const data = await createSecret(record)
     return NextResponse.json(data)
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Error inesperado'

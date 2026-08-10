@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import { searchInstruments, createInstrument } from '@/lib/db/instruments'
 
 export const dynamic = 'force-dynamic'
 
@@ -25,31 +25,13 @@ export async function GET(req: NextRequest) {
   if (!session) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
   const { searchParams } = req.nextUrl
-  const q     = searchParams.get('q')?.trim()
-  const tipo  = searchParams.get('tipo')  // 'fondo' | 'bono' | 'accion'
+  const q     = searchParams.get('q')?.trim() ?? null
+  const tipo  = searchParams.get('tipo')
   const all   = searchParams.get('all') === 'true'
   const limit = Math.min(parseInt(searchParams.get('limit') ?? '20'), 200)
 
-  let query = supabaseAdmin
-    .from('instrument_master')
-    .select('*')
-    .eq('activo', true)
-    .order('nombre', { ascending: true })
-    .limit(all ? 500 : limit)
-
-  if (tipo) query = query.eq('tipo_activo', tipo)
-
-  if (q) {
-    // Search by name (ilike), ISIN, or CUSIP
-    query = query.or(
-      `nombre.ilike.%${q}%,isin.ilike.%${q}%,cusip.ilike.%${q}%,ticker.ilike.%${q}%,emisor.ilike.%${q}%`
-    )
-  }
-
-  const { data, error } = await query
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-
-  return NextResponse.json({ instruments: data ?? [] })
+  const data = await searchInstruments(q, tipo, limit, all)
+  return NextResponse.json({ instruments: data })
 }
 
 // POST /api/instruments — create instrument
@@ -76,18 +58,13 @@ export async function POST(req: NextRequest) {
     activo:    true,
   }
 
-  const { data, error } = await supabaseAdmin
-    .from('instrument_master')
-    .insert(record)
-    .select()
-    .single()
-
-  if (error) {
-    if (error.code === '23505') {
+  try {
+    const data = await createInstrument(record)
+    return NextResponse.json(data, { status: 201 })
+  } catch (err: any) {
+    if (err.code === '23505') {
       return NextResponse.json({ error: 'Ya existe un instrumento con ese ISIN o CUSIP' }, { status: 409 })
     }
-    return NextResponse.json({ error: error.message }, { status: 400 })
+    return NextResponse.json({ error: err.message }, { status: 400 })
   }
-
-  return NextResponse.json(data, { status: 201 })
 }

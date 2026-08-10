@@ -1,5 +1,5 @@
 import { unstable_noStore as noStore } from 'next/cache'
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import { listProposals, getProposalAllocationsForIds } from '@/lib/db/proposals'
 import { getSession } from '@/lib/auth'
 import ProposalListClient from '@/components/proposals/ProposalListClient'
 
@@ -10,30 +10,11 @@ export default async function ProposalsPage() {
   const session = await getSession()
   if (!session) return null
 
-  let query = supabaseAdmin
-    .from('investment_proposals')
-    .select('*')
-    .order('created_at', { ascending: false })
+  const isPrivileged = session.role === 'admin' || session.role === 'ceo'
+  const proposals = await listProposals(null, isPrivileged ? null : { advisorId: session.id })
+  const ids = proposals.map(p => p.id)
 
-  if (session.role !== 'admin' && session.role !== 'ceo') {
-    query = query.or(`advisor_id.eq.${session.id},shared_with_all.eq.true`)
-  }
-
-  const { data: proposals } = await query
-  const ids = (proposals ?? []).map(p => p.id)
-
-  // Fetch allocation data for all proposals in parallel
-  const [{ data: funds }, { data: bonds }, { data: equities }] = await Promise.all([
-    ids.length > 0
-      ? supabaseAdmin.from('proposal_funds').select('proposal_id, pct, ytm_indicative').in('proposal_id', ids)
-      : { data: [] },
-    ids.length > 0
-      ? supabaseAdmin.from('proposal_bonds').select('proposal_id, pct, yield').in('proposal_id', ids)
-      : { data: [] },
-    ids.length > 0
-      ? supabaseAdmin.from('proposal_equities').select('proposal_id, pct').in('proposal_id', ids)
-      : { data: [] },
-  ])
+  const { funds, bonds, equities } = await getProposalAllocationsForIds(ids)
 
   // Compute per-proposal stats
   const stats: Record<string, { funds_pct: number; bonds_pct: number; equities_pct: number; avg_yield: number | null }> = {}

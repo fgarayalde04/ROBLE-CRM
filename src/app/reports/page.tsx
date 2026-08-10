@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { supabase } from '@/lib/supabase/client'
+import { pool } from '@/lib/db/pool'
 import StatusBadge from '@/components/StatusBadge'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
@@ -13,62 +13,64 @@ async function getReportData() {
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
   const nextThirtyDays = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
 
+  const clientJoin = `left join clients c on c.id = t.client_id`
+  const clientSelect = `c.id as "client__id", c.first_name as "client__first_name", c.last_name as "client__last_name"`
+  const shapeRow = (row: any) => {
+    const { client__id, client__first_name, client__last_name, ...rest } = row
+    return { ...rest, client: client__id ? { id: client__id, first_name: client__first_name, last_name: client__last_name } : null }
+  }
+
   const [
-    { data: clientsPendingDoc },
-    { data: overdueTasks },
-    { data: docsToReview },
-    { data: upcomingDeadlines },
-    { data: recentDocs },
-    { data: tasksByResponsible },
+    clientsPendingDoc, overdueTasks, docsToReview, upcomingDeadlines, recentDocs, tasksByResponsible,
   ] = await Promise.all([
-    supabase
-      .from('clients')
-      .select('id, client_number, first_name, last_name, advisor, status')
-      .eq('status', 'pendiente_documentacion')
-      .order('updated_at', { ascending: false }),
-    supabase
-      .from('tasks')
-      .select('id, title, responsible, priority, due_date, client:clients(id, first_name, last_name)')
-      .in('status', ['pendiente', 'en_proceso'])
-      .lt('due_date', today)
-      .order('due_date', { ascending: true }),
-    supabase
-      .from('documents')
-      .select('id, name, status, client:clients(id, first_name, last_name), responsible, updated_at')
-      .in('status', ['pendiente', 'revisar'])
-      .order('updated_at', { ascending: false })
-      .limit(20),
-    supabase
-      .from('deadlines')
-      .select('id, title, due_date, category, responsible, client:clients(id, first_name, last_name)')
-      .eq('status', 'pendiente')
-      .lte('due_date', nextThirtyDays)
-      .gte('due_date', today)
-      .order('due_date', { ascending: true }),
-    supabase
-      .from('documents')
-      .select('id, name, category, status, created_at, client:clients(id, first_name, last_name)')
-      .gte('created_at', thirtyDaysAgo)
-      .order('created_at', { ascending: false })
-      .limit(20),
-    supabase
-      .from('tasks')
-      .select('responsible, status')
-      .in('status', ['pendiente', 'en_proceso', 'bloqueado']),
+    pool.query(
+      `select id, client_number, first_name, last_name, advisor, status from clients
+       where status = 'pendiente_documentacion' order by updated_at desc`
+    ),
+    pool.query(
+      `select t.id, t.title, t.responsible, t.priority, t.due_date, ${clientSelect}
+       from tasks t ${clientJoin}
+       where t.status in ('pendiente','en_proceso') and t.due_date < $1
+       order by t.due_date asc`,
+      [today]
+    ),
+    pool.query(
+      `select t.id, t.name, t.status, ${clientSelect}, t.responsible, t.updated_at
+       from documents t ${clientJoin}
+       where t.status in ('pendiente','revisar')
+       order by t.updated_at desc limit 20`
+    ),
+    pool.query(
+      `select t.id, t.title, t.due_date, t.category, t.responsible, ${clientSelect}
+       from deadlines t ${clientJoin}
+       where t.status = 'pendiente' and t.due_date <= $1 and t.due_date >= $2
+       order by t.due_date asc`,
+      [nextThirtyDays, today]
+    ),
+    pool.query(
+      `select t.id, t.name, t.category, t.status, t.created_at, ${clientSelect}
+       from documents t ${clientJoin}
+       where t.created_at >= $1
+       order by t.created_at desc limit 20`,
+      [thirtyDaysAgo]
+    ),
+    pool.query(
+      `select responsible, status from tasks where status in ('pendiente','en_proceso','bloqueado')`
+    ),
   ])
 
   const responsibleCount: Record<string, number> = {}
-  for (const t of tasksByResponsible ?? []) {
+  for (const t of tasksByResponsible.rows) {
     const key = t.responsible ?? 'Sin asignar'
     responsibleCount[key] = (responsibleCount[key] ?? 0) + 1
   }
 
   return {
-    clientsPendingDoc: clientsPendingDoc ?? [],
-    overdueTasks: overdueTasks ?? [],
-    docsToReview: docsToReview ?? [],
-    upcomingDeadlines: upcomingDeadlines ?? [],
-    recentDocs: recentDocs ?? [],
+    clientsPendingDoc: clientsPendingDoc.rows,
+    overdueTasks: overdueTasks.rows.map(shapeRow),
+    docsToReview: docsToReview.rows.map(shapeRow),
+    upcomingDeadlines: upcomingDeadlines.rows.map(shapeRow),
+    recentDocs: recentDocs.rows.map(shapeRow),
     tasksByResponsible: Object.entries(responsibleCount).sort((a, b) => b[1] - a[1]),
   }
 }

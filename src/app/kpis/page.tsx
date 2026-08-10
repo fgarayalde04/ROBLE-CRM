@@ -1,5 +1,5 @@
 import { unstable_noStore as noStore } from 'next/cache'
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import { pool } from '@/lib/db/pool'
 import type { Metadata } from 'next'
 import type { OpeningStatus } from '@/types/platform'
 
@@ -111,26 +111,17 @@ export default async function KpisPage() {
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
   const thirtyDaysAgoStr = thirtyDaysAgo.toISOString()
 
-  const [
-    { data: tasksRaw },
-    { data: openingsRaw },
-    { data: clientsRaw },
-    { data: bcuRaw },
-  ] = await Promise.all([
-    supabaseAdmin.from('tasks').select('*'),
-    supabaseAdmin.from('account_openings').select('*'),
-    supabaseAdmin
-      .from('clients')
-      .select('id, created_at, status, advisor'),
-    supabaseAdmin
-      .from('banco_central_records')
-      .select('status, fa'),
+  const [tasksRaw, openingsRaw, clientsRaw, bcuRaw] = await Promise.all([
+    pool.query(`select * from tasks`),
+    pool.query(`select * from account_openings`),
+    pool.query(`select id, created_at, status, advisor from clients`),
+    pool.query(`select status, fa from banco_central_records`),
   ])
 
-  const tasks = tasksRaw ?? []
-  const openings = openingsRaw ?? []
-  const clients = clientsRaw ?? []
-  const bcuRecords = bcuRaw ?? []
+  const tasks = tasksRaw.rows ?? []
+  const openings = openingsRaw.rows ?? []
+  const clients = clientsRaw.rows ?? []
+  const bcuRecords = bcuRaw.rows ?? []
 
   // ── Section 1: Tareas ──────────────────────────────────────────────────────
   const openTasks = tasks.filter((t) => t.status !== 'completado')

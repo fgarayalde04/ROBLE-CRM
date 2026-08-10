@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase/admin'
 import { getSession } from '@/lib/auth'
+import {
+  getLegajosForEntity, getBaseAccountsWithClientCode, getBaseAccountsActivity,
+  createMonitoringRun, insertMonitoringRecordsBatch, upsertMonitoringBaseAccountsIgnoreDuplicates,
+  deleteMonitoringRun,
+} from '@/lib/db/monitoring'
 
 export interface MonitoringRecordInput {
   account_number: string | null
@@ -17,18 +21,14 @@ export interface MonitoringRecordInput {
 }
 
 // ── Build a map: normalized-name-fragment → customer_number from legajos ──────
-// Folder names look like "7683107 - BRANAA ALEJANDRA" or "7683107 - SURO SA"
-// Account names in monitoring are often truncated: "BRANAA", "SURO SA"
 function buildLegajosMap(legajos: any[]): Map<string, string> {
   const map = new Map<string, string>()
   for (const l of legajos) {
     const num = l.customer_number
     if (!num) continue
     const folder = (l.folder_name ?? '').toUpperCase()
-    // Extract name part after "XXXXXXX - "
     const namePart = folder.replace(/^\d+\s*-\s*/, '').trim()
     if (namePart) map.set(namePart, num)
-    // Also index each word of 4+ chars for partial matching
     for (const word of namePart.split(/\s+/)) {
       if (word.length >= 4 && !map.has(word)) map.set(word, num)
     }
@@ -40,20 +40,15 @@ function findClientCode(accountName: string | null, legajosMap: Map<string, stri
   if (!accountName) return null
   const name = accountName.trim().toUpperCase()
 
-  // 1. Exact match against full folder name part
   if (legajosMap.has(name)) return legajosMap.get(name)!
 
-  // 2. Folder name starts with account name, or vice versa
   const entries = Array.from(legajosMap.entries())
   for (const [key, code] of entries) {
     if (key.startsWith(name) || name.startsWith(key)) return code
   }
-
-  // 3. Account name is contained in folder name part, or vice versa
   for (const [key, code] of entries) {
     if (key.includes(name) || name.includes(key)) return code
   }
-
   return null
 }
 
@@ -75,40 +70,31 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Campos requeridos: period_year, period_quarter, records' }, { status: 400 })
   }
 
+  const ent = entity ?? 'roble'
+
   // ── Load legajos for client_code lookup ────────────────────────────────────
-  // roble → type=local, geliene → type=internacional
-  const legajosType = (entity ?? 'roble') === 'geliene' ? 'internacional' : 'local'
-  const { data: legajosData } = await supabaseAdmin
-    .from('banco_central_records')
-    .select('customer_number, folder_name')
-    .eq('type', legajosType)
-  const legajosMap = buildLegajosMap(legajosData ?? [])
+  const legajosType = ent === 'geliene' ? 'internacional' : 'local'
+  const legajosData = await getLegajosForEntity(legajosType)
+  const legajosMap = buildLegajosMap(legajosData)
 
   // ── Also load base accounts with client_code for known accounts ────────────
-  const { data: baseAccsWithCode } = await supabaseAdmin
-    .from('monitoring_base_accounts')
-    .select('account_number, account_name, client_code')
-    .eq('entity', entity ?? 'roble')
-    .not('client_code', 'is', null)
+  const baseAccsWithCode = await getBaseAccountsWithClientCode(ent)
   const baseCodeByNumber = new Map<string, string>()
   const baseCodeByName   = new Map<string, string>()
-  for (const a of (baseAccsWithCode ?? []) as any[]) {
+  for (const a of baseAccsWithCode as any[]) {
     if (a.account_number && a.client_code) baseCodeByNumber.set(a.account_number.trim().toUpperCase(), a.client_code)
     if (a.account_name   && a.client_code) baseCodeByName.set(a.account_name.trim().toUpperCase(), a.client_code)
   }
 
   // ── Server-side matching against base accounts ──────────────────────────────
-  const { data: baseAccs } = await supabaseAdmin
-    .from('monitoring_base_accounts')
-    .select('account_number, account_name, is_active')
-    .eq('entity', entity ?? 'roble')
+  const baseAccs = await getBaseAccountsActivity(ent)
 
   const activeNumbers   = new Set<string>()
   const activeNames     = new Set<string>()
   const inactiveNumbers = new Set<string>()
   const inactiveNames   = new Set<string>()
 
-  for (const a of (baseAccs ?? []) as any[]) {
+  for (const a of baseAccs as any[]) {
     const num  = (a.account_number ?? '').trim().toUpperCase()
     const name = (a.account_name   ?? '').trim().toUpperCase()
     if (a.is_active) {
@@ -120,7 +106,6 @@ export async function POST(req: Request) {
     }
   }
 
-  // Tag records, exclude inactive, and resolve client_code from legajos
   const taggedRecords = records
     .filter((r) => {
       const num  = (r.account_number ?? '').trim().toUpperCase()
@@ -133,7 +118,6 @@ export async function POST(req: Request) {
       const name = (r.account_name   ?? '').trim().toUpperCase()
       const inBase = (num && activeNumbers.has(num)) || (name && activeNames.has(name))
 
-      // Resolve client_code: base table → legajos lookup → original value
       const resolvedCode =
         (num  && baseCodeByNumber.get(num))  ||
         (name && baseCodeByName.get(name))   ||
@@ -150,24 +134,17 @@ export async function POST(req: Request) {
   const newAccounts      = taggedRecords.filter((r) => r.is_new_account).length
 
   // ── Create monitoring run ───────────────────────────────────────────────────
-  const { data: run, error: runError } = await supabaseAdmin
-    .from('monitoring_runs')
-    .insert({
-      period_year,
-      period_quarter,
-      original_file_name: original_file_name ?? null,
-      created_by: session.name,
-      entity: entity ?? 'roble',
-      total_accounts: total,
-      accounts_with_deviation: withDeviation,
-      accounts_without_deviation: withoutDeviation,
-      new_accounts_detected: newAccounts,
-      status: 'completed',
+  let run
+  try {
+    run = await createMonitoringRun({
+      period_year, period_quarter, original_file_name: original_file_name ?? null,
+      created_by: session.name, entity: ent,
+      total_accounts: total, accounts_with_deviation: withDeviation,
+      accounts_without_deviation: withoutDeviation, new_accounts_detected: newAccounts,
     })
-    .select('id')
-    .single()
-
-  if (runError || !run) return NextResponse.json({ error: runError?.message }, { status: 400 })
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 400 })
+  }
 
   // ── Insert records in batches of 100 ───────────────────────────────────────
   const BATCH = 100
@@ -187,10 +164,11 @@ export async function POST(req: Request) {
       explanation:           r.explanation           ?? null,
       is_new_account:        r.is_new_account,
     }))
-    const { error } = await supabaseAdmin.from('monitoring_records').insert(batch)
-    if (error) {
-      await supabaseAdmin.from('monitoring_runs').delete().eq('id', run.id)
-      return NextResponse.json({ error: error.message }, { status: 400 })
+    try {
+      await insertMonitoringRecordsBatch(batch)
+    } catch (err: any) {
+      await deleteMonitoringRun(run.id)
+      return NextResponse.json({ error: err.message }, { status: 400 })
     }
   }
 
@@ -200,18 +178,16 @@ export async function POST(req: Request) {
     const newBaseAccounts = unmatched.map((r) => ({
       account_number: r.account_number,
       account_name:   r.account_name   ?? null,
-      client_code:    r.client_code    ?? null,  // already resolved from legajos
+      client_code:    r.client_code    ?? null,
       risk_level:     null,
       activity_profile: null,
       risk_tolerance: null,
       comments:       null,
       is_active:      true,
       needs_review:   true,
-      entity:         entity ?? 'roble',
+      entity:         ent,
     }))
-    await supabaseAdmin
-      .from('monitoring_base_accounts')
-      .upsert(newBaseAccounts, { onConflict: 'account_number,entity', ignoreDuplicates: true })
+    await upsertMonitoringBaseAccountsIgnoreDuplicates(newBaseAccounts)
   }
 
   return NextResponse.json({ id: run.id, new_accounts: newAccounts })

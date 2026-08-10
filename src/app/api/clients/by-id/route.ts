@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import { pool } from '@/lib/db/pool'
+import { getClient } from '@/lib/db/clients'
 
 export async function GET(req: Request) {
   try {
@@ -7,17 +8,20 @@ export async function GET(req: Request) {
     const id = searchParams.get('id')
     if (!id) return NextResponse.json(null)
 
-    const [clientRes, bcRes, fichaRes] = await Promise.all([
-      supabaseAdmin.from('clients').select('*').eq('id', id).single(),
-      supabaseAdmin.from('banco_central_records').select('id, type, customer_number, authorized_email').eq('client_id', id),
-      supabaseAdmin.from('bc_fichas').select('ficha_data, tipo_cliente').eq('client_id', id).order('updated_at', { ascending: false }).limit(1).maybeSingle(),
+    const [client, bcRes, fichaRes] = await Promise.all([
+      getClient(id).catch(() => null),
+      pool.query(`select id, type, customer_number, authorized_email from banco_central_records where client_id = $1`, [id]),
+      pool.query(
+        `select ficha_data, tipo_cliente from bc_fichas where client_id = $1 order by updated_at desc limit 1`,
+        [id]
+      ),
     ])
 
-    if (clientRes.error || !clientRes.data) return NextResponse.json(null)
+    if (!client) return NextResponse.json(null)
     return NextResponse.json({
-      ...clientRes.data,
-      banco_central: bcRes.data ?? [],
-      bc_ficha: fichaRes.data ?? null,
+      ...client,
+      banco_central: bcRes.rows,
+      bc_ficha: fichaRes.rows[0] ?? null,
     })
   } catch {
     return NextResponse.json(null)

@@ -1,4 +1,5 @@
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import { listBrokerTables, fetchBrokerRows } from '@/lib/db/liquidacionBrokers'
+import { listPaymentTables, fetchPaymentTableRows } from '@/lib/db/pagosMensuales'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -53,44 +54,23 @@ function sortMonths(months: string[]): string[] {
 // ─── Broker Summaries ─────────────────────────────────────────────────────────
 
 export async function fetchBrokerSummaries(year: number): Promise<BrokerSummary[]> {
-  const { data: tables } = await supabaseAdmin
-    .from('broker_settlement_tables')
-    .select('*')
-    .eq('year', year)
+  const allTables = await listBrokerTables()
+  const tables = allTables.filter((t: any) => t.year === year)
 
-  if (!tables || tables.length === 0) return []
+  if (tables.length === 0) return []
 
   const summaries: BrokerSummary[] = []
 
   for (const table of tables) {
     const tableId = table.id as string
 
-    const { data: rawRows } = await supabaseAdmin
-      .from('broker_settlement_rows')
-      .select('*')
-      .eq('table_id', tableId)
-      .order('sort_order', { ascending: true })
+    const { rows } = await fetchBrokerRows(tableId)
+    if (!rows || rows.length === 0) continue
 
-    if (!rawRows || rawRows.length === 0) continue
-
-    const safeRows = rawRows as { id: string; concept: string }[]
-    const rowIds = safeRows.map((r) => r.id)
-
-    const { data: rawValues } = await supabaseAdmin
-      .from('broker_settlement_values')
-      .select('*')
-      .in('row_id', rowIds)
+    const safeRows = rows as { id: string; concept: string; values: Record<string, { raw_value: string | null }> }[]
 
     const allMonths = new Set<string>()
-    // Map: row_id → month → raw_value
-    const valuesByRow: Record<string, Record<string, string | null>> = {}
-
-    for (const v of rawValues ?? []) {
-      if (!valuesByRow[v.row_id]) valuesByRow[v.row_id] = {}
-      valuesByRow[v.row_id][v.month] = v.raw_value
-      allMonths.add(v.month)
-    }
-
+    for (const r of safeRows) for (const month of Object.keys(r.values)) allMonths.add(month)
     const months = sortMonths(Array.from(allMonths))
 
     // Helper to get value for a given concept
@@ -99,7 +79,7 @@ export async function fetchBrokerSummaries(year: number): Promise<BrokerSummary[
       if (!row) return {}
       const vals: Record<string, number> = {}
       for (const month of months) {
-        vals[month] = parseVal(valuesByRow[row.id]?.[month])
+        vals[month] = parseVal(row.values[month]?.raw_value)
       }
       return vals
     }
@@ -159,32 +139,15 @@ export async function fetchGastosSummaries(year: number): Promise<GastosSummary[
   const summaries: GastosSummary[] = []
 
   for (const company of companies) {
-    const { data: tables } = await supabaseAdmin
-      .from('monthly_payment_tables')
-      .select('*')
-      .eq('company', company)
-      .eq('year', year)
-      .limit(1)
-
-    const table = tables?.[0]
+    const allTables = await listPaymentTables()
+    const table = allTables.find((t: any) => t.company === company && t.year === year)
     if (!table) continue
 
     const tableId = table.id as string
     const exchangeRate = (table.exchange_rate as number) ?? 1
 
-    const { data: rawRows } = await supabaseAdmin
-      .from('monthly_payment_rows')
-      .select('*')
-      .eq('table_id', tableId)
-
+    const rawRows = await fetchPaymentTableRows(tableId)
     if (!rawRows || rawRows.length === 0) continue
-
-    const rowIds = rawRows.map((r: { id: string }) => r.id)
-
-    const { data: rawValues } = await supabaseAdmin
-      .from('monthly_payment_values')
-      .select('*')
-      .in('row_id', rowIds)
 
     // Aggregate
     const por_mes: Record<string, number> = {}
@@ -192,20 +155,13 @@ export async function fetchGastosSummaries(year: number): Promise<GastosSummary[
     let fijos = 0
     let variables = 0
 
-    const valuesByRow: Record<string, Record<string, string | null>> = {}
-    for (const v of rawValues ?? []) {
-      if (!valuesByRow[v.row_id]) valuesByRow[v.row_id] = {}
-      valuesByRow[v.row_id][v.month] = v.raw_value
-    }
-
     for (const row of rawRows) {
       const expenseType = row.expense_type as string
       const category = (row.category as string) ?? 'otros'
-      const rowVals = valuesByRow[row.id] ?? {}
       let rowTotal = 0
 
-      for (const [month, rawVal] of Object.entries(rowVals)) {
-        const val = parseVal(rawVal as string | null)
+      for (const [month, entry] of Object.entries(row.values)) {
+        const val = parseVal((entry as any)?.raw_value ?? null)
         if (val === 0) continue
         por_mes[month] = (por_mes[month] ?? 0) + val
         rowTotal += val

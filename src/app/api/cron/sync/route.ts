@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { syncAll } from '@/lib/microsoft/sync'
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import { resetMonthlyPaymentStatus } from '@/lib/db/sync'
 
 export const maxDuration = 300 // 5 minutes
 
@@ -18,12 +18,11 @@ async function maybeResetPayments() {
   lastResetMonth = key
   const monthName = MONTH_NAMES[now.getMonth()]
   console.log(`[cron/sync] Resetting payment status for "${monthName}"...`)
-  const { error } = await supabaseAdmin
-    .from('monthly_payment_values')
-    .update({ payment_status: 'pendiente', paid_at: null, updated_at: new Date().toISOString() })
-    .eq('month', monthName)
-    .neq('payment_status', 'pendiente')
-  if (error) console.error('[cron/sync] Reset error:', error.message)
+  try {
+    await resetMonthlyPaymentStatus(monthName)
+  } catch (e: any) {
+    console.error('[cron/sync] Reset error:', e.message)
+  }
 }
 
 export async function GET(req: NextRequest) {

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import { findUserByEmailForSSO, createPendingSSOUser } from '@/lib/db/users'
 import { createSession, SESSION_COOKIE, SESSION_MAX_AGE } from '@/lib/auth'
 import { storeMsTokens } from '@/lib/microsoft/tokens'
 
@@ -77,11 +77,7 @@ export async function GET(req: NextRequest) {
     }
 
     // ── 4. Find or create user in crm_users ──────────────────────────────────
-    const { data: existing } = await supabaseAdmin
-      .from('crm_users')
-      .select('id, name, email, role, active, permissions')
-      .eq('email', email)
-      .maybeSingle()
+    const existing = await findUserByEmailForSSO(email)
 
     if (existing) {
       const isPending =
@@ -122,15 +118,9 @@ export async function GET(req: NextRequest) {
     }
 
     // ── 5. New user → create with pending_approval ────────────────────────────
-    const { error: createError } = await supabaseAdmin.from('crm_users').insert({
-      name,
-      email,
-      role:        'asesor',
-      active:      false,
-      permissions: ['_pending_approval'],
-    })
-
-    if (createError) {
+    try {
+      await createPendingSSOUser(name, email)
+    } catch (createError) {
       console.error('[ms-callback] Create user failed:', createError)
       return NextResponse.redirect(`${base}/login?error=create_failed`)
     }

@@ -5,7 +5,7 @@
  * Solo admins.
  */
 import { NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import { insertAssetMasterIgnoreDuplicates } from '@/lib/db/suitability'
 import { getSession } from '@/lib/auth'
 
 const SEED_DATA: {
@@ -172,14 +172,9 @@ export async function POST() {
     let skipped  = 0
     for (let i = 0; i < rows.length; i += 20) {
       const batch = rows.slice(i, i + 20)
-      const { data, error } = await supabaseAdmin
-        .from('asset_master')
-        .upsert(batch, { onConflict: 'identifier', ignoreDuplicates: true })
-        .select('id')
-
-      if (error) throw error
-      inserted += data?.length ?? 0
-      skipped  += batch.length - (data?.length ?? 0)
+      const data = await insertAssetMasterIgnoreDuplicates(batch)
+      inserted += data.length
+      skipped  += batch.length - data.length
     }
 
     return NextResponse.json({

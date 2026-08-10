@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import { createEvent, updateEvent, deleteEvent, getEvents } from '@/lib/db/events'
 import { getValidGoogleToken } from '@/lib/google/tokens'
 import { getCalendarEvents, createCalendarEvent, deleteCalendarEvent } from '@/lib/google/calendar'
 
@@ -15,22 +15,25 @@ export async function GET(req: NextRequest) {
   const from = searchParams.get('from') // YYYY-MM-DD
   const to   = searchParams.get('to')   // YYYY-MM-DD
 
+  const local = from && to ? await getEvents({ from, to }) : []
+
   const accessToken = await getValidGoogleToken()
   if (!accessToken) {
-    return NextResponse.json({ source: 'none', events: [] })
+    return NextResponse.json({ source: 'none', events: [], local })
   }
 
   try {
     const events = from && to
       ? await getCalendarEvents(accessToken, from, to)
       : await getCalendarEvents(accessToken, 1, 14)
-    return NextResponse.json({ source: 'google', events })
+    return NextResponse.json({ source: 'google', events, local })
   } catch (err: any) {
     console.error('[api/events GET]', err.message)
     const status = err.message?.includes('403') ? 403 : 500
     return NextResponse.json({
       source: 'error',
       events: [],
+      local,
       consent_required: status === 403,
       error: err.message,
     })
@@ -60,10 +63,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Título y fecha son requeridos' }, { status: 400 })
   }
 
-  // ── 1. Create in local Supabase ────────────────────────────────────────────
-  const { data: localEvent, error: localError } = await supabaseAdmin
-    .from('events')
-    .insert({
+  // ── 1. Create in local DB ───────────────────────────────────────────────────
+  let localEvent
+  try {
+    localEvent = await createEvent({
       title: title.trim(),
       description: description?.trim() || null,
       event_date,
@@ -75,10 +78,7 @@ export async function POST(req: NextRequest) {
       reminder_minutes: reminder_minutes || null,
       created_by: session.name,
     })
-    .select()
-    .single()
-
-  if (localError) {
+  } catch (localError: any) {
     return NextResponse.json({ error: localError.message }, { status: 400 })
   }
 
@@ -124,6 +124,20 @@ export async function POST(req: NextRequest) {
   return NextResponse.json(result)
 }
 
+// PUT /api/events — update local event
+export async function PUT(req: NextRequest) {
+  const session = await getSession()
+  if (!session) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
+
+  const { id, ...updates } = await req.json()
+  try {
+    const data = await updateEvent(id, updates)
+    return NextResponse.json(data)
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 400 })
+  }
+}
+
 // DELETE /api/events?google_id=...&id=... — delete from Google + local
 export async function DELETE(req: NextRequest) {
   const session = await getSession()
@@ -140,7 +154,7 @@ export async function DELETE(req: NextRequest) {
       ? deleteCalendarEvent(accessToken, googleId)
       : Promise.resolve(),
     localId
-      ? supabaseAdmin.from('events').delete().eq('id', localId)
+      ? deleteEvent(localId)
       : Promise.resolve(),
   ])
 

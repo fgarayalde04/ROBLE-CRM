@@ -1,52 +1,11 @@
 import { NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase/admin'
-
-const DEFAULT_CHECKLIST = [
-  { title: 'Ficha de cliente hecha', sort_order: 0 },
-  { title: 'Cedulas conseguidas', sort_order: 1 },
-  { title: 'Comprobante de domicilio recibido', sort_order: 2 },
-  { title: 'Informacion de madre/padre completa', sort_order: 3 },
-  { title: 'Perfil de riesgo completado', sort_order: 4 },
-  { title: 'Formularios enviados al cliente', sort_order: 5 },
-  { title: 'Formularios firmados recibidos', sort_order: 6 },
-  { title: 'Documentacion revisada internamente', sort_order: 7 },
-  { title: 'Documentacion enviada al banco', sort_order: 8 },
-  { title: 'Confirmacion del banco recibida', sort_order: 9 },
-  { title: 'Numero de cliente asignado', sort_order: 10 },
-  { title: 'Cuenta marcada como activa', sort_order: 11 },
-]
+import { pool } from '@/lib/db/pool'
+import { createOpening, updateOpening, getOpeningRaw, deleteOpening } from '@/lib/db/openings'
 
 export async function POST(req: Request) {
   try {
     const payload = await req.json()
-
-    const insertPayload = {
-      status: 'carpeta_creada',
-      priority: 'normal',
-      ...payload,
-    }
-
-    const { data, error } = await supabaseAdmin
-      .from('account_openings')
-      .insert(insertPayload)
-      .select()
-      .single()
-    if (error) throw error
-
-    const checklistRows = DEFAULT_CHECKLIST.map((item) => ({
-      opening_id: data.id,
-      title: item.title,
-      sort_order: item.sort_order,
-    }))
-    await supabaseAdmin.from('opening_checklist_items').insert(checklistRows)
-
-    await supabaseAdmin.from('activity_log').insert({
-      entity_type: 'opening',
-      entity_id: data.id,
-      action: 'crear',
-      description: `Apertura iniciada: ${data.folder_name ?? ''}`,
-    })
-
+    const data = await createOpening(payload)
     return NextResponse.json(data)
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 400 })
@@ -60,12 +19,7 @@ export async function PUT(req: Request) {
     // When "Comenzar" is clicked (status → recolectando_informacion):
     // If the opening doesn't have a client yet, create one from the stored folder data.
     if (payload.status === 'recolectando_informacion') {
-      const { data: opening, error: fetchErr } = await supabaseAdmin
-        .from('account_openings')
-        .select('client_id, folder_name, advisor, item_id, drive_id, web_url, onedrive_url')
-        .eq('id', id)
-        .single()
-      if (fetchErr) throw fetchErr
+      const opening = await getOpeningRaw(id)
 
       if (!opening.client_id && opening.item_id) {
         const folderName: string = opening.folder_name ?? ''
@@ -77,66 +31,43 @@ export async function PUT(req: Request) {
           displayName = numMatch[2].trim()
         }
 
-        const { data: existingClient, error: existingClientErr } = await supabaseAdmin
-          .from('clients')
-          .select('id')
-          .eq('item_id', opening.item_id)
-          .maybeSingle()
-
-        if (existingClientErr) throw existingClientErr
-
-        let clientId = existingClient?.id ?? null
+        const { rows: existingRows } = await pool.query(
+          `select id from clients where item_id = $1`,
+          [opening.item_id]
+        )
+        let clientId = existingRows[0]?.id ?? null
 
         if (!clientId) {
-          const { data: newClient, error: clientErr } = await supabaseAdmin
-            .from('clients')
-            .insert({
-              first_name: '',
-              last_name: displayName,
-              client_number: clientNumber,
-              status: 'activo',
-              source: 'sharepoint',
-              drive_id: opening.drive_id,
-              item_id: opening.item_id,
-              web_url: opening.web_url ?? opening.onedrive_url,
-              onedrive_folder_url: opening.onedrive_url ?? opening.web_url,
-              advisor: opening.advisor,
-              last_synced_at: new Date().toISOString(),
-            })
-            .select('id')
-            .single()
-
-          if (clientErr) throw clientErr
-          clientId = newClient.id
+          const { rows: newClientRows } = await pool.query(
+            `insert into clients (first_name, last_name, client_number, status, source, drive_id, item_id, web_url, onedrive_folder_url, advisor, last_synced_at)
+             values ('', $1, $2, 'activo', 'sharepoint', $3, $4, $5, $6, $7, now())
+             returning id`,
+            [
+              displayName,
+              clientNumber,
+              opening.drive_id,
+              opening.item_id,
+              opening.web_url ?? opening.onedrive_url,
+              opening.onedrive_url ?? opening.web_url,
+              opening.advisor,
+            ]
+          )
+          clientId = newClientRows[0].id
         } else {
-          await supabaseAdmin
-            .from('clients')
-            .update({
-              status: 'activo',
-              drive_id: opening.drive_id,
-              web_url: opening.web_url ?? opening.onedrive_url,
-              onedrive_folder_url: opening.onedrive_url ?? opening.web_url,
-              advisor: opening.advisor,
-              updated_at: new Date().toISOString(),
-              last_synced_at: new Date().toISOString(),
-            })
-            .eq('id', clientId)
+          await pool.query(
+            `update clients set status = 'activo', drive_id = $1, web_url = $2, onedrive_folder_url = $3, advisor = $4, updated_at = now(), last_synced_at = now()
+             where id = $5`,
+            [opening.drive_id, opening.web_url ?? opening.onedrive_url, opening.onedrive_url ?? opening.web_url, opening.advisor, clientId]
+          )
         }
 
         payload.client_id = clientId
       } else if (opening.client_id) {
-        await supabaseAdmin
-          .from('clients')
-          .update({
-            status: 'activo',
-            drive_id: opening.drive_id,
-            web_url: opening.web_url ?? opening.onedrive_url,
-            onedrive_folder_url: opening.onedrive_url ?? opening.web_url,
-            advisor: opening.advisor,
-            updated_at: new Date().toISOString(),
-            last_synced_at: new Date().toISOString(),
-          })
-          .eq('id', opening.client_id)
+        await pool.query(
+          `update clients set status = 'activo', drive_id = $1, web_url = $2, onedrive_folder_url = $3, advisor = $4, updated_at = now(), last_synced_at = now()
+           where id = $5`,
+          [opening.drive_id, opening.web_url ?? opening.onedrive_url, opening.onedrive_url ?? opening.web_url, opening.advisor, opening.client_id]
+        )
       }
 
       const now = new Date().toISOString()
@@ -145,14 +76,7 @@ export async function PUT(req: Request) {
       payload.account_opened_at = now
     }
 
-    const { data, error } = await supabaseAdmin
-      .from('account_openings')
-      .update(payload)
-      .eq('id', id)
-      .select()
-      .single()
-    if (error) throw error
-
+    const data = await updateOpening(id, payload)
     return NextResponse.json(data)
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 400 })
@@ -163,15 +87,7 @@ export async function DELETE(req: Request) {
   try {
     const { id } = await req.json()
     if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
-    // Cascade: delete checklist items, tasks, notes, documents first
-    await Promise.all([
-      supabaseAdmin.from('opening_checklist_items').delete().eq('opening_id', id),
-      supabaseAdmin.from('opening_tasks').delete().eq('opening_id', id),
-      supabaseAdmin.from('opening_notes').delete().eq('opening_id', id),
-      supabaseAdmin.from('opening_documents').delete().eq('opening_id', id),
-    ])
-    const { error } = await supabaseAdmin.from('account_openings').delete().eq('id', id)
-    if (error) throw error
+    await deleteOpening(id)
     return NextResponse.json({ ok: true })
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 400 })

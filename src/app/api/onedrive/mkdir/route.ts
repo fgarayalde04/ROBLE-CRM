@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import { logDocumentActivity } from '@/lib/db/activityLog'
 import { getGraphToken, createFolder } from '@/lib/microsoft/graph'
 
 export const dynamic = 'force-dynamic'
@@ -19,7 +19,7 @@ export async function POST(req: Request) {
     const token  = await getGraphToken()
     const folder = await createFolder(driveId, parentId, name.trim(), token)
 
-    await supabaseAdmin.from('document_activity').insert({
+    await logDocumentActivity({
       user_id:   session.id,
       action:    'mkdir',
       item_id:   folder.id,

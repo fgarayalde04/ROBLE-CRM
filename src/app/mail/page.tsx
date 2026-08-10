@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import { hasGoogleConnection, getGoogleEmail } from '@/lib/google/tokens'
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import { listActivityLogByAction } from '@/lib/db/activityLog'
 import MailPageClient from './MailPageClient'
 
 export const metadata: Metadata = { title: 'Mail | Roble Capital' }
@@ -12,12 +12,7 @@ export default async function MailPage() {
     getGoogleEmail().catch(() => null),
   ])
 
-  const { data: sentLogs } = await supabaseAdmin
-    .from('activity_log')
-    .select('id, description, created_at, created_by')
-    .eq('action', 'email_enviado')
-    .order('created_at', { ascending: false })
-    .limit(30)
+  const sentLogs = await listActivityLogByAction('email_enviado', 30)
 
   return (
     <div className="p-4 md:p-6 bg-[#F4F6F8] min-h-screen">

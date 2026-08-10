@@ -1,6 +1,6 @@
 import { SignJWT, jwtVerify } from 'jose'
 import { cookies } from 'next/headers'
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import { upsertGoogleConnection, getGoogleConnection, hasGoogleConnectionRecord } from '@/lib/db/googleConnections'
 import { getSession } from '@/lib/auth'
 
 export const GOOGLE_TOKENS_COOKIE = 'google_tokens'
@@ -22,23 +22,18 @@ export interface GoogleTokenPayload {
 // ─── Supabase DB helpers ──────────────────────────────────────────────────────
 
 async function saveToDb(userEmail: string, tokens: GoogleTokenPayload) {
-  await supabaseAdmin.from('google_connections').upsert({
+  await upsertGoogleConnection({
     user_email:    userEmail,
     access_token:  tokens.access_token,
     refresh_token: tokens.refresh_token ?? null,
     expires_at:    tokens.expires_at,
     google_email:  tokens.email ?? null,
     google_name:   tokens.name ?? null,
-    updated_at:    new Date().toISOString(),
-  }, { onConflict: 'user_email' })
+  })
 }
 
 async function loadFromDb(userEmail: string): Promise<GoogleTokenPayload | null> {
-  const { data } = await supabaseAdmin
-    .from('google_connections')
-    .select('access_token, refresh_token, expires_at, google_email, google_name')
-    .eq('user_email', userEmail)
-    .maybeSingle()
+  const data = await getGoogleConnection(userEmail)
 
   if (!data) return null
   return {
@@ -186,13 +181,7 @@ export async function hasGoogleConnection(): Promise<boolean> {
   const session = await getSession()
   if (!session?.email) return false
 
-  const { data } = await supabaseAdmin
-    .from('google_connections')
-    .select('user_email')
-    .eq('user_email', session.email)
-    .maybeSingle()
-
-  return !!data
+  return hasGoogleConnectionRecord(session.email)
 }
 
 /** Returns the Google account email */

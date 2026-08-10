@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import { logDocumentActivity } from '@/lib/db/activityLog'
 import { getGraphToken, getDriveItem, deleteItem, renameItem, moveItem, getDownloadUrl } from '@/lib/microsoft/graph'
 
 export const dynamic = 'force-dynamic'
@@ -47,23 +47,25 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
     if (parentId) {
       item = await moveItem(driveId, params.id, parentId, token, newName)
-      await supabaseAdmin.from('document_activity').insert({
+      await logDocumentActivity({
         user_id:   session.id,
         action:    'move',
         item_id:   params.id,
         item_name: item.name,
         item_type: item.folder ? 'folder' : 'file',
+        folder_id: null,
         drive_id:  driveId,
         details:   { newParentId: parentId },
       })
     } else if (newName) {
       item = await renameItem(driveId, params.id, newName, token)
-      await supabaseAdmin.from('document_activity').insert({
+      await logDocumentActivity({
         user_id:   session.id,
         action:    'rename',
         item_id:   params.id,
         item_name: newName,
         item_type: item.folder ? 'folder' : 'file',
+        folder_id: null,
         drive_id:  driveId,
         details:   {},
       })
@@ -93,12 +95,13 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
     const token = await getGraphToken()
     await deleteItem(driveId, params.id, token)
 
-    await supabaseAdmin.from('document_activity').insert({
+    await logDocumentActivity({
       user_id:   session.id,
       action:    'delete',
       item_id:   params.id,
       item_name: itemName ?? null,
       item_type: itemType ?? null,
+      folder_id: null,
       drive_id:  driveId,
       details:   {},
     })

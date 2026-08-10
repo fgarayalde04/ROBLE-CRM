@@ -19,7 +19,7 @@ export async function register() {
   }
 
   const { syncAll } = await import('@/lib/microsoft/sync')
-  const { supabaseAdmin } = await import('@/lib/supabase/admin')
+  const { resetMonthlyPaymentStatus } = await import('@/lib/db/sync')
 
   const parsedInterval = parseInt(process.env.SYNC_INTERVAL_MINUTES ?? '1', 10)
   const intervalMins = Number.isFinite(parsedInterval) && parsedInterval > 0 ? parsedInterval : 1
@@ -40,13 +40,12 @@ export async function register() {
     lastResetMonth = key
     const monthName = MONTH_NAMES[now.getMonth()]
     console.log(`[auto-sync] Resetting payment status for "${monthName}"...`)
-    const { error } = await supabaseAdmin
-      .from('monthly_payment_values')
-      .update({ payment_status: 'pendiente', paid_at: null, updated_at: now.toISOString() })
-      .eq('month', monthName)
-      .neq('payment_status', 'pendiente')
-    if (error) console.error('[auto-sync] Reset error:', error.message)
-    else console.log(`[auto-sync] Payments reset to pendiente for ${monthName}`)
+    try {
+      await resetMonthlyPaymentStatus(monthName)
+      console.log(`[auto-sync] Payments reset to pendiente for ${monthName}`)
+    } catch (e: any) {
+      console.error('[auto-sync] Reset error:', e.message)
+    }
   }
 
   async function runAll() {

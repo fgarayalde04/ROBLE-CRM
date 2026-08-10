@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import { resetStuckSyncLogs } from '@/lib/db/sync'
 import {
   syncClients,
   syncBancoCentralLocal,
@@ -24,11 +24,7 @@ const SYNC_FNS: Record<Exclude<SyncType, 'all' | 'bcu'>, () => Promise<unknown>>
 // Reset any sync_logs stuck in "running" for more than 10 minutes
 async function resetStuckSyncs() {
   const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString()
-  await supabaseAdmin
-    .from('sync_logs')
-    .update({ status: 'error', message: 'Timeout — se canceló automáticamente', finished_at: new Date().toISOString() })
-    .eq('status', 'running')
-    .lt('started_at', tenMinutesAgo)
+  await resetStuckSyncLogs(tenMinutesAgo)
 }
 
 export async function POST(req: NextRequest) {

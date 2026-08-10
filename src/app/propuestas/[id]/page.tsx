@@ -1,6 +1,6 @@
 import { unstable_noStore as noStore } from 'next/cache'
 import { notFound } from 'next/navigation'
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import { getProposalWithLines } from '@/lib/db/proposals'
 import { getSession } from '@/lib/auth'
 import ProposalEditor from '@/components/proposals/ProposalEditor'
 
@@ -11,21 +11,16 @@ export default async function ProposalPage({ params }: { params: { id: string } 
   const session = await getSession()
   if (!session) return null
 
-  const [{ data: proposal }, { data: funds }, { data: bonds }, { data: equities }] = await Promise.all([
-    supabaseAdmin.from('investment_proposals').select('*').eq('id', params.id).single(),
-    supabaseAdmin.from('proposal_funds').select('*').eq('proposal_id', params.id).order('position'),
-    supabaseAdmin.from('proposal_bonds').select('*').eq('proposal_id', params.id).order('position'),
-    supabaseAdmin.from('proposal_equities').select('*').eq('proposal_id', params.id).order('position'),
-  ])
+  const { proposal, funds, bonds, equities } = await getProposalWithLines(params.id)
 
   if (!proposal) notFound()
 
   return (
     <ProposalEditor
       initialProposal={proposal}
-      initialFunds={funds ?? []}
-      initialBonds={bonds ?? []}
-      initialEquities={equities ?? []}
+      initialFunds={funds}
+      initialBonds={bonds}
+      initialEquities={equities}
     />
   )
 }

@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { getSession } from '@/lib/auth'
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import * as tasksDb from '@/lib/db/tasks'
+import { pool } from '@/lib/db/pool'
 
 async function getCurrentUserName() {
   const session = await getSession()
@@ -26,25 +27,13 @@ function cleanSharedWith(value: unknown, currentUser: string | null, responsible
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url)
-    const responsible = searchParams.get('responsible')
-    const status = searchParams.get('status')
-    const client_id = searchParams.get('client_id')
-    const opening_id = searchParams.get('opening_id')
-    const q = searchParams.get('q')
-
-    let query = supabaseAdmin
-      .from('tasks')
-      .select('*, client:clients(id, first_name, last_name, client_number)')
-      .order('due_date', { ascending: true, nullsFirst: false })
-
-    if (responsible) query = query.eq('responsible', responsible)
-    if (status) query = query.eq('status', status)
-    if (client_id) query = query.eq('client_id', client_id)
-    if (opening_id) query = query.eq('opening_id', opening_id)
-    if (q) query = query.ilike('title', `%${q}%`)
-
-    const { data, error } = await query
-    if (error) throw error
+    const data = await tasksDb.getTasks({
+      responsible: searchParams.get('responsible') ?? undefined,
+      status: searchParams.get('status') ?? undefined,
+      clientId: searchParams.get('client_id') ?? undefined,
+      openingId: searchParams.get('opening_id') ?? undefined,
+      search: searchParams.get('q') ?? undefined,
+    })
     return NextResponse.json(data ?? [])
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : (err as any)?.message ?? 'Error inesperado'
@@ -59,46 +48,25 @@ export async function POST(req: Request) {
     const { shared_with, ...taskPayload } = body
     const sharedWith = cleanSharedWith(shared_with, currentUser, taskPayload.responsible)
 
-    const { data, error } = await supabaseAdmin
-      .from('tasks')
-      .insert({
-        ...taskPayload,
-        created_by: currentUser,
-      })
-      .select()
-      .single()
-
-    if (error) throw error
+    const entries = Object.entries({ ...taskPayload, created_by: currentUser }).filter(([, v]) => v !== undefined)
+    const cols = entries.map(([k]) => `"${k}"`)
+    const placeholders = entries.map((_, i) => `$${i + 1}`)
+    const values = entries.map(([, v]) => v)
+    const { rows } = await pool.query(
+      `insert into tasks (${cols.join(', ')}) values (${placeholders.join(', ')}) returning *`,
+      values
+    )
+    const data = rows[0]
 
     if (sharedWith.length > 0) {
-      const shareRows = sharedWith.map((userName) => ({
-        task_id: data.id,
-        user_name: userName,
-        shared_by: currentUser,
-      }))
-      await supabaseAdmin.from('task_shares').upsert(shareRows, {
-        onConflict: 'task_id,user_name',
-        ignoreDuplicates: true,
-      })
-
-      await supabaseAdmin.from('notifications').insert(
-        sharedWith.map((userName) => ({
-          user_name: userName,
-          title: 'Tarea compartida',
-          message: `${currentUser ?? 'Un usuario'} compartió contigo la tarea: ${data.title}`,
-          entity_type: 'task',
-          entity_id: data.id,
-        }))
-      )
+      await tasksDb.upsertTaskShares(data.id, sharedWith, currentUser)
+      await tasksDb.notifyTaskShared(sharedWith, currentUser, data.id, data.title)
     }
 
-    await supabaseAdmin.from('activity_log').insert({
-      entity_type: 'task',
-      entity_id: data.id,
-      action: 'crear',
-      description: `Tarea "${data.title}" creada`,
-      user_name: currentUser,
-    })
+    await pool.query(
+      `insert into activity_log (entity_type, entity_id, action, description, user_name) values ($1, $2, $3, $4, $5)`,
+      ['task', data.id, 'crear', `Tarea "${data.title}" creada`, currentUser]
+    )
 
     return NextResponse.json(data)
   } catch (err: unknown) {
@@ -117,27 +85,11 @@ export async function PUT(req: Request) {
       updates.completed_by = currentUser
     }
 
-    const { data, error } = await supabaseAdmin
-      .from('tasks')
-      .update(updates)
-      .eq('id', id)
-      .select()
-      .single()
-
-    if (error) throw error
+    const data = await tasksDb.updateTask(id, updates)
 
     if (Array.isArray(shared_with)) {
-      const sharedWith = cleanSharedWith(shared_with, currentUser, updates.responsible ?? data.responsible)
-      await supabaseAdmin.from('task_shares').delete().eq('task_id', id)
-      if (sharedWith.length > 0) {
-        await supabaseAdmin.from('task_shares').insert(
-          sharedWith.map((userName) => ({
-            task_id: id,
-            user_name: userName,
-            shared_by: currentUser,
-          }))
-        )
-      }
+      const sharedWith = cleanSharedWith(shared_with, currentUser, updates.responsible ?? (data as any).responsible)
+      await tasksDb.replaceTaskShares(id, sharedWith, currentUser)
     }
 
     return NextResponse.json(data)

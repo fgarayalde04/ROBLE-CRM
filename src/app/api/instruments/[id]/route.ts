@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
-import { supabaseAdmin } from '@/lib/supabase/admin'
-
-const ADMIN_ROLES = ['admin', 'ceo', 'direccion']
+import { updateInstrument } from '@/lib/db/instruments'
 
 // PATCH /api/instruments/[id]
 export async function PATCH(
@@ -21,7 +19,6 @@ export async function PATCH(
       updates[key] = typeof body[key] === 'string' ? body[key].trim() || null : body[key]
     }
   }
-  // nombre can't be null
   if ('nombre' in updates && !updates.nombre) {
     return NextResponse.json({ error: 'nombre no puede estar vacío' }, { status: 400 })
   }
@@ -30,21 +27,15 @@ export async function PATCH(
     return NextResponse.json({ error: 'Nada que actualizar' }, { status: 400 })
   }
 
-  const { data, error } = await supabaseAdmin
-    .from('instrument_master')
-    .update(updates)
-    .eq('id', params.id)
-    .select()
-    .single()
-
-  if (error) {
-    if (error.code === '23505') {
+  try {
+    const data = await updateInstrument(params.id, updates)
+    return NextResponse.json(data)
+  } catch (err: any) {
+    if (err.code === '23505') {
       return NextResponse.json({ error: 'Ya existe un instrumento con ese ISIN o CUSIP' }, { status: 409 })
     }
-    return NextResponse.json({ error: error.message }, { status: 400 })
+    return NextResponse.json({ error: err.message }, { status: 400 })
   }
-
-  return NextResponse.json(data)
 }
 
 // DELETE /api/instruments/[id] — soft delete (activo = false)
@@ -55,13 +46,6 @@ export async function DELETE(
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
-  const { data, error } = await supabaseAdmin
-    .from('instrument_master')
-    .update({ activo: false })
-    .eq('id', params.id)
-    .select()
-    .single()
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+  const data = await updateInstrument(params.id, { activo: false })
   return NextResponse.json(data)
 }

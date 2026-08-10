@@ -1,7 +1,8 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { unstable_noStore } from 'next/cache'
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import { pool } from '@/lib/db/pool'
+import { getOrCreatePaymentTable, fetchPaymentTableRows } from '@/lib/db/pagosMensuales'
 import PagosMensualesTable, { type PaymentRow } from '@/components/PagosMensualesTable'
 import PagosMensualesDashboard from '@/components/PagosMensualesDashboard'
 
@@ -38,58 +39,15 @@ interface RawRow {
 // ─── Data helpers ─────────────────────────────────────────────────────────────
 
 async function getOrCreateTable(company: string, year: number): Promise<PaymentTable> {
-  const { data: existing } = await supabaseAdmin
-    .from('monthly_payment_tables')
-    .select('*')
-    .eq('company', company)
-    .eq('year', year)
-    .single()
-
-  if (existing) return existing as PaymentTable
-
-  const { data: created } = await supabaseAdmin
-    .from('monthly_payment_tables')
-    .insert({ company, year, exchange_rate: 39.65 })
-    .select()
-    .single()
-
-  return created as PaymentTable
+  return (await getOrCreatePaymentTable(company, year)) as PaymentTable
 }
 
 async function fetchRows(tableId: string): Promise<PaymentRow[]> {
-  const { data } = await supabaseAdmin
-    .from('monthly_payment_rows')
-    .select(`
-      id, concept, expense_type, category, comment, sort_order,
-      monthly_payment_values (id, month, value, raw_value, payment_status, paid_at)
-    `)
-    .eq('table_id', tableId)
-    .order('sort_order', { ascending: true })
-
-  return ((data as RawRow[] | null) ?? []).map((row) => {
-    const valuesMap: PaymentRow['values'] = {}
-    for (const v of row.monthly_payment_values ?? []) {
-      valuesMap[v.month] = { id: v.id, value: v.value, raw_value: v.raw_value, payment_status: v.payment_status ?? 'pendiente', paid_at: v.paid_at }
-    }
-    return {
-      id: row.id,
-      concept: row.concept,
-      expense_type: row.expense_type as 'fijo' | 'variable',
-      category: row.category,
-      comment: row.comment,
-      sort_order: row.sort_order,
-      values: valuesMap,
-    }
-  })
+  return (await fetchPaymentTableRows(tableId)) as unknown as PaymentRow[]
 }
 
 async function getAllTables(): Promise<{ table: PaymentTable; rows: PaymentRow[] }[]> {
-  const { data: tables } = await supabaseAdmin
-    .from('monthly_payment_tables')
-    .select('*')
-    .order('year', { ascending: true })
-
-  if (!tables) return []
+  const { rows: tables } = await pool.query(`select * from monthly_payment_tables order by year asc`)
 
   return Promise.all(
     (tables as PaymentTable[]).map(async (table) => {
@@ -100,13 +58,11 @@ async function getAllTables(): Promise<{ table: PaymentTable; rows: PaymentRow[]
 }
 
 async function getAvailableYears(company: string): Promise<number[]> {
-  const { data } = await supabaseAdmin
-    .from('monthly_payment_tables')
-    .select('year')
-    .eq('company', company)
-    .order('year', { ascending: true })
-
-  return (data ?? []).map((r: { year: number }) => r.year)
+  const { rows } = await pool.query(
+    `select year from monthly_payment_tables where company = $1 order by year asc`,
+    [company]
+  )
+  return rows.map((r) => r.year)
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────

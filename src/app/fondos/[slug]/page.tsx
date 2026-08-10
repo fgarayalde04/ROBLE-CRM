@@ -1,5 +1,5 @@
 import { unstable_noStore as noStore } from 'next/cache'
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import { getManagerBySlug, getFondosForManager, getUnclassifiedFactsheets } from '@/lib/db/fondos'
 import { getSession } from '@/lib/auth'
 import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
@@ -31,55 +31,6 @@ export type Manager = {
   logo_url: string | null
 }
 
-async function getManager(slug: string): Promise<Manager | null> {
-  const { data } = await supabaseAdmin
-    .from('asset_managers')
-    .select('id, slug, name, logo_url')
-    .eq('slug', slug)
-    .single()
-  return data ?? null
-}
-
-async function getFondos(managerId: string): Promise<FondoWithFactsheet[]> {
-  const { data: fondos } = await supabaseAdmin
-    .from('fondos')
-    .select(`
-      id, name, isin, ticker, clase, moneda,
-      factsheets(id, file_name, pdf_url, fecha_factsheet, created_at, is_latest)
-    `)
-    .eq('asset_manager_id', managerId)
-    .order('name')
-
-  if (!fondos) return []
-
-  return fondos.map(f => {
-    const sheets = (f as any).factsheets ?? []
-    const latest = sheets.find((s: any) => s.is_latest) ?? sheets[0] ?? null
-    return {
-      id:        f.id,
-      name:      f.name,
-      isin:      f.isin,
-      ticker:    f.ticker,
-      clase:     f.clase,
-      moneda:    f.moneda,
-      latest_factsheet: latest
-        ? { id: latest.id, file_name: latest.file_name, pdf_url: latest.pdf_url, fecha_factsheet: latest.fecha_factsheet, created_at: latest.created_at }
-        : null,
-      factsheet_count: sheets.length,
-    }
-  })
-}
-
-async function getUnclassified(managerId: string) {
-  const { data } = await supabaseAdmin
-    .from('factsheets')
-    .select('id, file_name, pdf_url, fecha_factsheet, created_at')
-    .eq('asset_manager_id', managerId)
-    .is('fondo_id', null)
-    .order('created_at', { ascending: false })
-  return data ?? []
-}
-
 interface Props { params: { slug: string } }
 
 export default async function GestoraPage({ params }: Props) {
@@ -87,12 +38,12 @@ export default async function GestoraPage({ params }: Props) {
   const session = await getSession()
   if (!session) redirect('/login')
 
-  const manager = await getManager(params.slug)
+  const manager = await getManagerBySlug(params.slug)
   if (!manager) notFound()
 
   const [fondos, unclassified] = await Promise.all([
-    getFondos(manager.id),
-    getUnclassified(manager.id),
+    getFondosForManager(manager.id) as Promise<FondoWithFactsheet[]>,
+    getUnclassifiedFactsheets(manager.id),
   ])
 
   return (

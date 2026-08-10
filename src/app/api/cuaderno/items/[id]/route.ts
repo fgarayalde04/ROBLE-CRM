@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import { updateCuadernoItem, deleteCuadernoItem } from '@/lib/db/cuaderno'
 
 // PATCH /api/cuaderno/items/[id]
 export async function PATCH(
@@ -21,18 +21,10 @@ export async function PATCH(
   if ('comments'    in body) updates.comments    = body.comments?.trim() ?? ''
   if ('shared_with' in body) updates.shared_with = Array.isArray(body.shared_with) ? body.shared_with : []
   if ('position'    in body) updates.position    = body.position
-  updates.updated_at = new Date().toISOString()
 
-  const { data, error } = await supabaseAdmin
-    .from('cuaderno_items')
-    .update(updates)
-    .eq('id', params.id)
-    .eq('owner_name', session.name)
-    .select()
-    .single()
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ ok: true, item: data })
+  const item = await updateCuadernoItem(params.id, session.name, updates)
+  if (!item) return NextResponse.json({ error: 'No encontrado' }, { status: 404 })
+  return NextResponse.json({ ok: true, item })
 }
 
 // DELETE /api/cuaderno/items/[id]
@@ -43,12 +35,6 @@ export async function DELETE(
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
-  const { error } = await supabaseAdmin
-    .from('cuaderno_items')
-    .delete()
-    .eq('id', params.id)
-    .eq('owner_name', session.name)
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  await deleteCuadernoItem(params.id, session.name)
   return NextResponse.json({ ok: true })
 }

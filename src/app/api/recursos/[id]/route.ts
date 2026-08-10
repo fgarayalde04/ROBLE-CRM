@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import { getResource, updateResource, deleteResource } from '@/lib/db/resources'
+import { deleteObject } from '@/lib/storage/s3'
 
 export async function PUT(
   request: NextRequest,
@@ -18,17 +19,8 @@ export async function PUT(
       }
     }
 
-    const { data, error } = await supabaseAdmin
-      .from('resources')
-      .update(update)
-      .eq('id', id)
-      .select()
-      .single()
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 })
-    }
-
+    const data = await updateResource(id, update)
+    if (!data) return NextResponse.json({ error: 'Resource not found' }, { status: 404 })
     return NextResponse.json(data)
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 })
@@ -42,35 +34,21 @@ export async function DELETE(
   try {
     const { id } = params
 
-    // Get the resource to find the file path
-    const { data: resource, error: fetchError } = await supabaseAdmin
-      .from('resources')
-      .select('file_url, file_name')
-      .eq('id', id)
-      .single()
-
-    if (fetchError || !resource) {
+    const resource = await getResource(id)
+    if (!resource) {
       return NextResponse.json({ error: 'Resource not found' }, { status: 404 })
     }
 
-    // Extract the storage path from the public URL
-    // public URL format: .../storage/v1/object/public/recursos/FILEPATH
-    const urlParts = resource.file_url.split('/recursos/')
-    if (urlParts.length > 1) {
-      const storagePath = urlParts[1]
-      await supabaseAdmin.storage.from('recursos').remove([storagePath])
+    // Extract the storage key from our download-redirect URL
+    const match = (resource.file_url as string).match(/[?&]key=([^&]+)/)
+    if (match) {
+      const key = decodeURIComponent(match[1])
+      try {
+        await deleteObject(key)
+      } catch { /* best-effort — still remove the DB record */ }
     }
 
-    // Delete from DB
-    const { error: deleteError } = await supabaseAdmin
-      .from('resources')
-      .delete()
-      .eq('id', id)
-
-    if (deleteError) {
-      return NextResponse.json({ error: deleteError.message }, { status: 500 })
-    }
-
+    await deleteResource(id)
     return NextResponse.json({ success: true })
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 })

@@ -2,7 +2,10 @@ import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { getValidGoogleToken, getGoogleEmail } from '@/lib/google/tokens'
 import { getGraphToken, uploadFile, createFolder } from '@/lib/microsoft/graph'
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import {
+  listAssetManagersWithHints, getImportedGmailMessageIds,
+  findFondoByManagerAndIsin, createFondo, markFactsheetsNotLatest, insertFundFactsheet,
+} from '@/lib/db/fondos'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -153,23 +156,12 @@ async function uploadToOneDrive(
 async function upsertFondo(managerId: string, name: string, isin: string | null) {
   // Try to find existing by ISIN
   if (isin) {
-    const { data } = await supabaseAdmin
-      .from('fondos')
-      .select('id')
-      .eq('asset_manager_id', managerId)
-      .eq('isin', isin)
-      .single()
-    if (data) return data.id
+    const existing = await findFondoByManagerAndIsin(managerId, isin)
+    if (existing) return existing.id
   }
 
   // Create new
-  const { data } = await supabaseAdmin
-    .from('fondos')
-    .insert({ asset_manager_id: managerId, name, isin: isin ?? null })
-    .select('id')
-    .single()
-
-  return data?.id ?? null
+  return createFondo(managerId, name, isin)
 }
 
 // ── Main sync handler ─────────────────────────────────────────────────────────
@@ -192,9 +184,7 @@ export async function POST() {
   const userEmail = await getGoogleEmail()
 
   // Load all managers
-  const { data: managers } = await supabaseAdmin
-    .from('asset_managers')
-    .select('id, slug, name, domain_hints, keyword_hints')
+  const managers = await listAssetManagersWithHints()
 
   if (!managers?.length) {
     return NextResponse.json({ error: 'No hay gestoras configuradas. Ejecutá la migración SQL primero.' }, { status: 500 })
@@ -221,12 +211,9 @@ export async function POST() {
   }
 
   // Get already-imported message IDs
-  const { data: existing } = await supabaseAdmin
-    .from('factsheets')
-    .select('gmail_message_id')
-    .in('gmail_message_id', messages.map(m => m.id))
+  const existing = await getImportedGmailMessageIds(messages.map(m => m.id))
 
-  const alreadyImported = new Set((existing ?? []).map(r => r.gmail_message_id))
+  const alreadyImported = new Set(existing)
 
   let imported = 0
   const errors: string[] = []
@@ -288,27 +275,18 @@ export async function POST() {
         // Mark previous factsheets for this fondo as not latest
         let fondoId: string | null = null
         if (isin) {
-          const { data: prevFondo } = await supabaseAdmin
-            .from('fondos')
-            .select('id')
-            .eq('asset_manager_id', manager.id)
-            .eq('isin', isin)
-            .single()
+          const prevFondo = await findFondoByManagerAndIsin(manager.id, isin)
 
           if (prevFondo) {
-            fondoId = prevFondo.id
-            await supabaseAdmin
-              .from('factsheets')
-              .update({ is_latest: false })
-              .eq('fondo_id', fondoId)
-              .eq('is_latest', true)
+            fondoId = prevFondo.id as string
+            await markFactsheetsNotLatest(fondoId)
           } else {
             fondoId = await upsertFondo(manager.id, fundName, isin)
           }
         }
 
         // Insert factsheet record
-        await supabaseAdmin.from('factsheets').insert({
+        await insertFundFactsheet({
           fondo_id:         fondoId,
           asset_manager_id: manager.id,
           file_name:        filename,

@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import {
+  getConversationIdsForUser, getConversationsWithDetails,
+  findSharedDirectConversation, createConversation, addParticipants,
+} from '@/lib/db/chat'
 import { getSession } from '@/lib/auth'
 
 // GET /api/chat — list conversations for current user
@@ -7,25 +10,12 @@ export async function GET() {
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { data: participations } = await supabaseAdmin
-    .from('chat_participants')
-    .select('conversation_id')
-    .eq('user_id', session.id)
+  const convIds = await getConversationIdsForUser(session.id)
+  if (!convIds.length) return NextResponse.json([])
 
-  if (!participations?.length) return NextResponse.json([])
-  const convIds = participations.map((p: any) => p.conversation_id)
+  const convs = await getConversationsWithDetails(convIds)
 
-  const { data: convs } = await supabaseAdmin
-    .from('chat_conversations')
-    .select(`
-      id, type, name, updated_at,
-      participants:chat_participants(user_id, last_read_at, user:crm_users(id, name)),
-      messages:chat_messages(id, content, sender_name, message_type, task_title, created_at)
-    `)
-    .in('id', convIds)
-    .order('updated_at', { ascending: false })
-
-  const result = (convs ?? []).map((conv: any) => {
+  const result = convs.map((conv: any) => {
     const myParticipation = (conv.participants ?? []).find((p: any) => p.user_id === session.id)
     const lastReadAt = myParticipation?.last_read_at
 
@@ -74,49 +64,21 @@ export async function POST(req: Request) {
   // For direct messages between 2 users: find existing conversation
   if (type === 'direct' && participantIds.length === 1) {
     const otherId = participantIds[0]
-
-    const { data: myConvs } = await supabaseAdmin
-      .from('chat_participants')
-      .select('conversation_id')
-      .eq('user_id', session.id)
-
-    const myConvIds = (myConvs ?? []).map((c: any) => c.conversation_id)
-
-    if (myConvIds.length > 0) {
-      const { data: sharedConvs } = await supabaseAdmin
-        .from('chat_participants')
-        .select('conversation_id')
-        .eq('user_id', otherId)
-        .in('conversation_id', myConvIds)
-
-      if (sharedConvs?.length) {
-        const sharedIds = sharedConvs.map((c: any) => c.conversation_id)
-        const { data: existing } = await supabaseAdmin
-          .from('chat_conversations')
-          .select('id')
-          .eq('type', 'direct')
-          .in('id', sharedIds)
-          .limit(1)
-          .single()
-
-        if (existing) return NextResponse.json({ id: existing.id, existing: true })
-      }
-    }
+    const myConvIds = await getConversationIdsForUser(session.id)
+    const existing = await findSharedDirectConversation(myConvIds, otherId)
+    if (existing) return NextResponse.json({ id: existing.id, existing: true })
   }
 
   // Create new conversation
-  const { data: conv, error } = await supabaseAdmin
-    .from('chat_conversations')
-    .insert({ type: type ?? 'direct', name: name ?? null })
-    .select('id')
-    .single()
-
-  if (error || !conv) return NextResponse.json({ error: error?.message }, { status: 400 })
+  let conv
+  try {
+    conv = await createConversation(type ?? 'direct', name ?? null)
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 400 })
+  }
 
   const allIds = [session.id, ...participantIds.filter((id: string) => id !== session.id)]
-  await supabaseAdmin
-    .from('chat_participants')
-    .insert(allIds.map((uid: string) => ({ conversation_id: conv.id, user_id: uid })))
+  await addParticipants(conv.id, allIds)
 
   return NextResponse.json({ id: conv.id, existing: false })
 }

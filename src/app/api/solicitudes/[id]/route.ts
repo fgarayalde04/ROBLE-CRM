@@ -1,27 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import { getSolicitud, getSolicitudEventos, updateSolicitud, insertSolicitudEvento, notifyAsesor } from '@/lib/db/solicitudes'
 
 const MESA_ROLES  = ['admin', 'ceo', 'direccion', 'mesa', 'asistente']
 const ADMIN_ROLES = ['admin', 'ceo', 'direccion']
-
-async function notifyAsesor(
-  solicitudId: string,
-  asesor: string,
-  title: string,
-  message: string,
-  tipo: 'ejecutada' | 'normal',
-) {
-  await supabaseAdmin.from('notifications').insert({
-    user_name:    asesor,
-    title,
-    message,
-    entity_type: 'solicitud',
-    entity_id:    solicitudId,
-    // mark ejecutada notifications with a special flag stored in title prefix
-    ...(tipo === 'ejecutada' ? { title: '✅ ' + title } : {}),
-  })
-}
 
 // GET /api/solicitudes/[id]
 export async function GET(
@@ -33,20 +15,15 @@ export async function GET(
 
   const isMesa = MESA_ROLES.includes(session.role)
 
-  const { data: sol, error } = await supabaseAdmin
-    .from('solicitudes').select('*').eq('id', params.id).single()
+  const sol = await getSolicitud(params.id)
 
-  if (error || !sol) return NextResponse.json({ error: 'No encontrada' }, { status: 404 })
+  if (!sol) return NextResponse.json({ error: 'No encontrada' }, { status: 404 })
   if (!isMesa && sol.asesor !== session.name)
     return NextResponse.json({ error: 'Sin permiso' }, { status: 403 })
 
-  const { data: eventos } = await supabaseAdmin
-    .from('solicitud_eventos')
-    .select('id, tipo, descripcion, usuario, datos, created_at')
-    .eq('solicitud_id', params.id)
-    .order('created_at', { ascending: true })
+  const eventos = await getSolicitudEventos(params.id)
 
-  return NextResponse.json({ solicitud: sol, eventos: eventos ?? [] })
+  return NextResponse.json({ solicitud: sol, eventos })
 }
 
 // PATCH /api/solicitudes/[id]
@@ -62,12 +39,11 @@ export async function PATCH(
   const body    = await req.json()
   const { accion } = body
 
-  const { data: sol } = await supabaseAdmin
-    .from('solicitudes').select('*').eq('id', params.id).single()
+  const sol = await getSolicitud(params.id)
   if (!sol) return NextResponse.json({ error: 'No encontrada' }, { status: 404 })
 
   async function logEvento(tipo: string, descripcion: string, datos?: any) {
-    await supabaseAdmin.from('solicitud_eventos').insert({
+    await insertSolicitudEvento({
       solicitud_id: params.id, tipo, descripcion,
       usuario: session!.name, usuario_id: session!.id,
       ...(datos ? { datos } : {}),
@@ -83,22 +59,18 @@ export async function PATCH(
     if (sol.operador && !isAdmin)
       return NextResponse.json({ error: 'Ya fue tomada por ' + sol.operador }, { status: 400 })
 
-    // New flow orders (pendiente_revision / devuelta) advance to en_revision when taken
     const nuevoEstado = (sol.estado === 'pendiente_revision' || sol.estado === 'devuelta')
       ? 'en_revision' : undefined
 
-    const { data, error } = await supabaseAdmin.from('solicitudes')
-      .update({
-        operador: session.name, operador_id: session.id, tomado_at: new Date().toISOString(),
-        ...(nuevoEstado ? { estado: nuevoEstado } : {}),
-      })
-      .eq('id', params.id).select().single()
+    const data = await updateSolicitud(params.id, {
+      operador: session.name, operador_id: session.id, tomado_at: new Date().toISOString(),
+      ...(nuevoEstado ? { estado: nuevoEstado } : {}),
+    })
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     await logEvento('tomada', `Solicitud tomada por ${session.name}${nuevoEstado ? ' — en revisión' : ''}`)
 
     if (!sol.notif_tomada_enviada) {
-      await supabaseAdmin.from('solicitudes').update({ notif_tomada_enviada: true }).eq('id', params.id)
+      await updateSolicitud(params.id, { notif_tomada_enviada: true })
       await notifyAsesor(
         params.id, sol.asesor,
         `Solicitud tomada — ${sol.client_name}`,
@@ -112,10 +84,9 @@ export async function PATCH(
   // ── devolver ───────────────────────────────────────────────────────────────
   if (accion === 'devolver') {
     if (!isMesa) return NextResponse.json({ error: 'Sin permiso' }, { status: 403 })
-    const { data, error } = await supabaseAdmin.from('solicitudes')
-      .update({ estado: 'devuelta', operador: null, operador_id: null, tomado_at: null })
-      .eq('id', params.id).select().single()
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    const data = await updateSolicitud(params.id, {
+      estado: 'devuelta', operador: null, operador_id: null, tomado_at: null,
+    })
     await logEvento('devuelta', `Orden devuelta al asesor por ${session.name}${body.motivo ? ': ' + body.motivo : ''}`, { motivo: body.motivo })
     await notifyAsesor(
       params.id, sol.asesor,
@@ -129,11 +100,10 @@ export async function PATCH(
   // ── generar_email ──────────────────────────────────────────────────────────
   if (accion === 'generar_email') {
     if (!isMesa) return NextResponse.json({ error: 'Sin permiso' }, { status: 403 })
-    const { data, error } = await supabaseAdmin.from('solicitudes')
-      .update({ mail_asunto: body.asunto, mail_cuerpo: body.cuerpo,
-        email_generado_at: new Date().toISOString(), email_generado_by: session.name })
-      .eq('id', params.id).select().single()
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    const data = await updateSolicitud(params.id, {
+      mail_asunto: body.asunto, mail_cuerpo: body.cuerpo,
+      email_generado_at: new Date().toISOString(), email_generado_by: session.name,
+    })
     await logEvento('email_generado', `Email generado por ${session.name}`)
     return NextResponse.json({ ok: true, row: data })
   }
@@ -141,20 +111,17 @@ export async function PATCH(
   // ── mail_enviado ───────────────────────────────────────────────────────────
   if (accion === 'mail_enviado') {
     if (!isMesa) return NextResponse.json({ error: 'Sin permiso' }, { status: 403 })
-    const { data, error } = await supabaseAdmin.from('solicitudes')
-      .update({
-        estado: 'mail_enviado',
-        mail_enviado_at: new Date().toISOString(),
-        mail_enviado_by: session.name,
-        ...(body.asunto ? { mail_asunto: body.asunto } : {}),
-        ...(body.cuerpo ? { mail_cuerpo: body.cuerpo } : {}),
-      })
-      .eq('id', params.id).select().single()
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    const data = await updateSolicitud(params.id, {
+      estado: 'mail_enviado',
+      mail_enviado_at: new Date().toISOString(),
+      mail_enviado_by: session.name,
+      ...(body.asunto ? { mail_asunto: body.asunto } : {}),
+      ...(body.cuerpo ? { mail_cuerpo: body.cuerpo } : {}),
+    })
     await logEvento('mail_enviado', `Mail enviado al cliente por ${session.name}`)
 
     if (!sol.notif_mail_enviada) {
-      await supabaseAdmin.from('solicitudes').update({ notif_mail_enviada: true }).eq('id', params.id)
+      await updateSolicitud(params.id, { notif_mail_enviada: true })
       await notifyAsesor(
         params.id, sol.asesor,
         `Mail enviado — ${sol.client_name}`,
@@ -171,13 +138,11 @@ export async function PATCH(
     if (sol.estado !== 'mail_enviado')
       return NextResponse.json({ error: 'Requiere mail enviado primero' }, { status: 400 })
 
-    const { data, error } = await supabaseAdmin.from('solicitudes')
-      .update({ estado: 'en_ejecucion' }).eq('id', params.id).select().single()
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    const data = await updateSolicitud(params.id, { estado: 'en_ejecucion' })
     await logEvento('en_ejecucion', `Operación en ejecución — registrado por ${session.name}`)
 
     if (!sol.notif_ejecucion_enviada) {
-      await supabaseAdmin.from('solicitudes').update({ notif_ejecucion_enviada: true }).eq('id', params.id)
+      await updateSolicitud(params.id, { notif_ejecucion_enviada: true })
       await notifyAsesor(
         params.id, sol.asesor,
         `En ejecución — ${sol.client_name}`,
@@ -195,18 +160,17 @@ export async function PATCH(
     const valorEfectivo   = body.valor_efectivo   != null ? Number(body.valor_efectivo)   : null
     const now = new Date().toISOString()
 
-    const { data, error } = await supabaseAdmin.from('solicitudes')
-      .update({ estado: 'ejecutada', ejecutado_at: now, ejecutado_by: session.name,
-        precio_ejecutado: precioEjecutado, valor_efectivo: valorEfectivo })
-      .eq('id', params.id).select().single()
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    const data = await updateSolicitud(params.id, {
+      estado: 'ejecutada', ejecutado_at: now, ejecutado_by: session.name,
+      precio_ejecutado: precioEjecutado, valor_efectivo: valorEfectivo,
+    })
     await logEvento('ejecutada',
       `Operación ejecutada por ${session.name}${precioEjecutado ? ` a precio ${precioEjecutado}` : ''}`,
       { precio_ejecutado: precioEjecutado, valor_efectivo: valorEfectivo }
     )
 
     if (!sol.notificacion_asesor_enviada) {
-      await supabaseAdmin.from('solicitudes').update({ notificacion_asesor_enviada: true }).eq('id', params.id)
+      await updateSolicitud(params.id, { notificacion_asesor_enviada: true })
       const montoStr = sol.monto
         ? `${sol.moneda} ${Number(sol.monto).toLocaleString('es-UY')}`
         : sol.cantidad ? `${sol.cantidad} unidades` : ''
@@ -231,11 +195,10 @@ export async function PATCH(
   if (accion === 'cancelar') {
     const isOwner = sol.asesor === session.name
     if (!isMesa && !isOwner) return NextResponse.json({ error: 'Sin permiso' }, { status: 403 })
-    const { data, error } = await supabaseAdmin.from('solicitudes')
-      .update({ estado: 'cancelada', cancelado_at: new Date().toISOString(),
-        cancelado_by: session.name, cancelado_motivo: body.motivo ?? null })
-      .eq('id', params.id).select().single()
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    const data = await updateSolicitud(params.id, {
+      estado: 'cancelada', cancelado_at: new Date().toISOString(),
+      cancelado_by: session.name, cancelado_motivo: body.motivo ?? null,
+    })
     await logEvento('cancelada', `Solicitud cancelada por ${session.name}${body.motivo ? ': ' + body.motivo : ''}`, { motivo: body.motivo })
     return NextResponse.json({ ok: true, row: data })
   }
@@ -251,9 +214,7 @@ export async function PATCH(
       'precio_tipo','precio_limite','vigencia','maturity','cupon','comision']
     const updates: Record<string, unknown> = {}
     for (const key of allowed) if (key in body) updates[key] = body[key]
-    const { data, error } = await supabaseAdmin.from('solicitudes')
-      .update(updates).eq('id', params.id).select().single()
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    const data = await updateSolicitud(params.id, updates)
     await logEvento('editada', `Solicitud editada por ${session.name}`, updates)
     return NextResponse.json({ ok: true, row: data })
   }

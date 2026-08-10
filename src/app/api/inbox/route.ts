@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import { getInboxTasks, getInboxOpenings, getInboxBcuStatuses, getInboxRecentClients } from '@/lib/db/inbox'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,30 +17,11 @@ export async function GET() {
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
     const sevenDaysAgoStr = sevenDaysAgo.toISOString()
 
-    const [
-      { data: tasksRaw },
-      { data: openingsRaw },
-      { data: bcuRaw },
-      { data: clientsRaw },
-    ] = await Promise.all([
-      supabaseAdmin
-        .from('tasks')
-        .select('*, clients(first_name, last_name)')
-        .neq('status', 'completado')
-        .order('due_date', { ascending: true, nullsFirst: false }),
-      supabaseAdmin
-        .from('account_openings')
-        .select('*, client:clients(id, first_name, last_name, client_number)')
-        .not('status', 'in', '("cuenta_abierta","descartado")')
-        .order('updated_at', { ascending: true }),
-      supabaseAdmin
-        .from('banco_central_records')
-        .select('id, status'),
-      supabaseAdmin
-        .from('clients')
-        .select('id, client_number, first_name, last_name, status, advisor, created_at, updated_at')
-        .gte('created_at', thirtyDaysAgoStr)
-        .order('created_at', { ascending: false }),
+    const [tasksRaw, openingsRaw, bcuRaw, clientsRaw] = await Promise.all([
+      getInboxTasks(),
+      getInboxOpenings(),
+      getInboxBcuStatuses(),
+      getInboxRecentClients(thirtyDaysAgoStr),
     ])
 
     const tasks = tasksRaw ?? []
@@ -50,17 +31,17 @@ export async function GET() {
 
     // Summary calculations
     const overdue_tasks = tasks.filter(
-      (t) => t.due_date && t.due_date < todayStr
+      (t: any) => t.due_date && t.due_date < todayStr
     ).length
 
-    const urgent_tasks = tasks.filter((t) => t.priority === 'urgente').length
+    const urgent_tasks = tasks.filter((t: any) => t.priority === 'urgente').length
     const open_tasks = tasks.length
 
-    const bcu_incomplete = bcuRecords.filter((r) => r.status === 'incompleto').length
+    const bcu_incomplete = bcuRecords.filter((r: any) => r.status === 'incompleto').length
 
     // Stalled = trabado status OR no update in >7 days
     const stalled_openings = openings.filter(
-      (o) =>
+      (o: any) =>
         o.status === 'trabado' ||
         (o.updated_at && o.updated_at < sevenDaysAgoStr)
     ).length

@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import { getSession } from '@/lib/auth'
 import { redirect } from 'next/navigation'
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import { getUserOneDriveConfig } from '@/lib/db/users'
 import MiCarpetaClient from './MiCarpetaClient'
 
 export const metadata: Metadata = { title: 'Mi carpeta | Roble Capital' }
@@ -11,11 +11,7 @@ export default async function MiCarpetaPage() {
   const session = await getSession()
   if (!session) redirect('/login')
 
-  const { data: user } = await supabaseAdmin
-    .from('crm_users')
-    .select('onedrive_drive_id, onedrive_folder_id, onedrive_folder_path')
-    .eq('id', session.id)
-    .single()
+  const user = await getUserOneDriveConfig(session.id)
 
   return (
     <MiCarpetaClient

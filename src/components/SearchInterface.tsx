@@ -2,7 +2,6 @@
 
 import { useState, useCallback } from 'react'
 import Link from 'next/link'
-import { globalSearch } from '@/lib/supabase/queries'
 import type { Client, Document, Task, Deadline } from '@/types/platform'
 import StatusBadge from './StatusBadge'
 import { format } from 'date-fns'
@@ -34,7 +33,8 @@ export default function SearchInterface() {
     if (!q.trim()) { setResults(null); return }
     setLoading(true)
     try {
-      const r = await globalSearch(q)
+      const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`)
+      const r = await res.json()
       setResults(r as any)
     } finally {
       setLoading(false)

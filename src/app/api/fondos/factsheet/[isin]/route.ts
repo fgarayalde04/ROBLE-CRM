@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { getGraphToken } from '@/lib/microsoft/graph'
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import { getLatestFactsheetForIsin } from '@/lib/db/fondos'
 
 export const dynamic = 'force-dynamic'
 
@@ -13,25 +13,10 @@ export async function GET(req: NextRequest, { params }: { params: { isin: string
 
   const isin = params.isin.toUpperCase()
 
-  // Get factsheet record from Supabase
-  const { data: fondo } = await supabaseAdmin
-    .from('fondos')
-    .select('id, asset_managers(name, slug)')
-    .eq('isin', isin)
-    .single()
+  const result = await getLatestFactsheetForIsin(isin)
+  if (!result) return new NextResponse('Fondo o factsheet no encontrado', { status: 404 })
+  const { factsheet, manager } = result
 
-  if (!fondo) return new NextResponse('Fondo no encontrado', { status: 404 })
-
-  const { data: factsheet } = await supabaseAdmin
-    .from('factsheets')
-    .select('file_name')
-    .eq('fondo_id', fondo.id)
-    .eq('is_latest', true)
-    .single()
-
-  if (!factsheet) return new NextResponse('Factsheet no encontrado', { status: 404 })
-
-  const manager = (Array.isArray(fondo.asset_managers) ? fondo.asset_managers[0] : fondo.asset_managers) as { name: string; slug: string } | null
   if (!manager) return new NextResponse('Gestora no encontrada', { status: 404 })
 
   try {

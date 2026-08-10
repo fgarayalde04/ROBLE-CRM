@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { unstable_noStore } from 'next/cache'
 import { getCeoData } from '@/lib/supabase/queries'
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import { pool } from '@/lib/db/pool'
 import { fetchBrokerSummaries, fetchGastosSummaries } from '@/lib/ceo-data'
 import type { AumRecord, ProductionRecord, RevenueRecord, UploadedFile } from '@/types/platform'
 import CeoDashboardProduccion from '@/components/CeoDashboardProduccion'
@@ -138,10 +138,8 @@ export default async function CeoDashboardPage({ searchParams }: PageProps) {
   // Fetch openings by status
   let openingsByStatus: Record<string, number> = {}
   try {
-    const { data: openings } = await supabaseAdmin
-      .from('account_openings')
-      .select('status')
-    for (const o of openings ?? []) {
+    const { rows: openings } = await pool.query(`select status from account_openings`)
+    for (const o of openings) {
       const s = o.status as string
       openingsByStatus[s] = (openingsByStatus[s] ?? 0) + 1
     }
@@ -150,13 +148,11 @@ export default async function CeoDashboardPage({ searchParams }: PageProps) {
   // Fetch clients by advisor
   let clientsByAdvisor: { advisor: string; count: number }[] = []
   try {
-    const { data: clients } = await supabaseAdmin
-      .from('clients')
-      .select('advisor')
-      .eq('status', 'activo')
-      .not('advisor', 'is', null)
+    const { rows: clients } = await pool.query(
+      `select advisor from clients where status = 'activo' and advisor is not null`
+    )
     const map: Record<string, number> = {}
-    for (const c of clients ?? []) {
+    for (const c of clients) {
       if (c.advisor) map[c.advisor as string] = (map[c.advisor as string] ?? 0) + 1
     }
     clientsByAdvisor = Object.entries(map)

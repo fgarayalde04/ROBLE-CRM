@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import { logDocumentActivity } from '@/lib/db/activityLog'
 import { getGraphToken, uploadFile } from '@/lib/microsoft/graph'
 
 export const dynamic = 'force-dynamic'
@@ -30,7 +30,7 @@ export async function POST(req: Request) {
     // Audit log (best-effort — don't fail upload if log fails)
     ;(async () => {
       try {
-        await supabaseAdmin.from('document_activity').insert({
+        await logDocumentActivity({
           user_id:   session.id,
           action:    'upload',
           item_id:   item.id,

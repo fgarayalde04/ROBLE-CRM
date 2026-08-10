@@ -2,23 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabase/client'
 import type { AccountOpening, OpeningStatus, Client } from '@/types/platform'
-
-const DEFAULT_CHECKLIST = [
-  'Confirmar datos del cliente',
-  'Solicitar documento de identidad / pasaporte',
-  'Solicitar comprobante de domicilio',
-  'Solicitar perfil de riesgo',
-  'Enviar formularios de apertura',
-  'Recibir formularios firmados',
-  'Revisar documentación',
-  'Enviar documentación a aprobación',
-  'Confirmar apertura de cuenta',
-  'Registrar número de cliente',
-  'Agregar link de carpeta',
-  'Marcar cuenta como activa',
-]
 
 interface Props {
   mode: 'new' | 'edit'
@@ -68,27 +52,22 @@ export default function OpeningForm({ mode, initial, clients }: Props) {
       }
 
       if (mode === 'new') {
-        const { data, error: err } = await supabase
-          .from('account_openings')
-          .insert(payload)
-          .select()
-          .single()
-        if (err) throw err
-
-        const checklistRows = DEFAULT_CHECKLIST.map((title, i) => ({
-          opening_id: data.id,
-          title,
-          sort_order: i,
-        }))
-        await supabase.from('opening_checklist_items').insert(checklistRows)
-
+        const res = await fetch('/api/openings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error ?? 'Error al crear apertura')
         router.push(`/openings/${data.id}`)
       } else {
-        const { error: err } = await supabase
-          .from('account_openings')
-          .update(payload)
-          .eq('id', initial!.id!)
-        if (err) throw err
+        const res = await fetch('/api/openings', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: initial!.id!, ...payload }),
+        })
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error ?? 'Error al guardar')
         router.push(`/openings/${initial!.id}`)
       }
       router.refresh()

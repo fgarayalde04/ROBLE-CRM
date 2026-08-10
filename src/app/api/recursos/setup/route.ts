@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import { resourcesTableExists } from '@/lib/db/resources'
 
 const CREATE_TABLE_SQL = `CREATE TABLE IF NOT EXISTS resources (
   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -24,10 +24,7 @@ CREATE INDEX IF NOT EXISTS idx_resources_is_featured ON resources(is_featured);`
 
 export async function GET() {
   try {
-    const { error } = await supabaseAdmin.from('resources').select('id').limit(1)
-
-    const exists = !error || !error.message.includes('does not exist')
-
+    const exists = await resourcesTableExists()
     return NextResponse.json({ exists, sql: CREATE_TABLE_SQL })
   } catch (err) {
     return NextResponse.json({ exists: false, sql: CREATE_TABLE_SQL, error: String(err) })

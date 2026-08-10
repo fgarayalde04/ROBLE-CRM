@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import { pool } from '@/lib/db/pool'
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
@@ -40,13 +40,11 @@ export async function POST() {
 
     for (const { advisor, company } of ADVISOR_COMPANIES) {
       // Find the table for this advisor+company+year
-      const { data: tableRecord } = await supabaseAdmin
-        .from('broker_settlement_tables')
-        .select('id')
-        .eq('advisor_name', advisor)
-        .eq('company', company)
-        .eq('year', YEAR)
-        .single()
+      const { rows: tableRows } = await pool.query(
+        `select id from broker_settlement_tables where advisor_name = $1 and company = $2 and year = $3`,
+        [advisor, company, YEAR]
+      )
+      const tableRecord = tableRows[0]
 
       if (!tableRecord) {
         summary.push({ advisor, company, months_added: [], months_skipped: [], status: 'no_rows', error: 'Table not found' })
@@ -56,10 +54,7 @@ export async function POST() {
       const tableId = tableRecord.id
 
       // Get all rows for this table
-      const { data: rows } = await supabaseAdmin
-        .from('broker_settlement_rows')
-        .select('id')
-        .eq('table_id', tableId)
+      const { rows } = await pool.query(`select id from broker_settlement_rows where table_id = $1`, [tableId])
 
       if (!rows || rows.length === 0) {
         summary.push({ advisor, company, months_added: [], months_skipped: [], status: 'no_rows', error: 'No rows found — run seed first' })
@@ -69,10 +64,10 @@ export async function POST() {
       const rowIds = rows.map((r: { id: string }) => r.id)
 
       // Get all existing month entries for these rows
-      const { data: existingValues } = await supabaseAdmin
-        .from('broker_settlement_values')
-        .select('month')
-        .in('row_id', rowIds)
+      const { rows: existingValues } = await pool.query(
+        `select month from broker_settlement_values where row_id = ANY($1)`,
+        [rowIds]
+      )
 
       const existingMonths = new Set((existingValues ?? []).map((v: { month: string }) => v.month))
 
@@ -86,24 +81,23 @@ export async function POST() {
         }
 
         // Insert null placeholder for every row so the column appears
-        const toInsert = rowIds.map((id: string) => ({
-          row_id: id,
-          month,
-          value: null,
-          raw_value: null,
-        }))
-
-        const { error: insertError } = await supabaseAdmin
-          .from('broker_settlement_values')
-          .insert(toInsert)
-
-        if (insertError) {
+        try {
+          const values: any[] = []
+          const placeholders = rowIds.map((id: string, i: number) => {
+            values.push(id, month)
+            return `($${i * 2 + 1}, $${i * 2 + 2}, null, null)`
+          })
+          await pool.query(
+            `insert into broker_settlement_values (row_id, month, value, raw_value) values ${placeholders.join(', ')}`,
+            values
+          )
+        } catch (e: any) {
           summary.push({
             advisor, company,
             months_added: monthsAdded,
             months_skipped: monthsSkipped,
             status: 'error',
-            error: insertError.message,
+            error: e.message,
           })
           break
         }

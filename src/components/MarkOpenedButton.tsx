@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabase/client'
 
 interface Props {
   openingId: string
@@ -27,10 +26,11 @@ export default function MarkOpenedButton({ openingId, currentStatus }: Props) {
   async function handleClick() {
     setLoading(true)
     const today = new Date().toISOString().split('T')[0]
-    await supabase
-      .from('account_openings')
-      .update({ status: 'cuenta_abierta', opened_date: today })
-      .eq('id', openingId)
+    await fetch('/api/openings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: openingId, status: 'cuenta_abierta', opened_date: today }),
+    })
     router.push('/openings')
     router.refresh()
   }

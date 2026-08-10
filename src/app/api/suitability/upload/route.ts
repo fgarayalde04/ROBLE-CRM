@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import { createPortfolioReview, getAssetMasterCache, upsertAssetMaster, insertPortfolioPositionsBatch, updateReviewScore } from '@/lib/db/suitability'
 import { getSession } from '@/lib/auth'
 import { parseCSV, parseExcel, parsePDF } from '@/lib/portfolio-parser'
 import { identifyInstrument } from '@/lib/openfigi'
@@ -54,26 +54,20 @@ export async function POST(req: Request) {
     const resolvedClientName = clientName || fileMeta.client_name || null
 
     // Create the review record first
-    const { data: review, error: reviewErr } = await supabaseAdmin
-      .from('portfolio_reviews')
-      .insert({
-        client_id:      clientId || null,
-        client_name:    resolvedClientName,
-        client_profile: clientProfile,
-        uploaded_by:    session.id,
-        file_name:      fileName,
-        notes:          notes || null,
-        advisor:        fileMeta.advisor ?? null,
-        portfolio_score:     null,
-        portfolio_profile:   null,
-        classified_weight:   null,
-        pending_weight:      null,
-        explanation:         null,
-      })
-      .select('id')
-      .single()
-
-    if (reviewErr) throw reviewErr
+    const review = await createPortfolioReview({
+      client_id:      clientId || null,
+      client_name:    resolvedClientName,
+      client_profile: clientProfile,
+      uploaded_by:    session.id,
+      file_name:      fileName,
+      notes:          notes || null,
+      advisor:        fileMeta.advisor ?? null,
+      portfolio_score:     null,
+      portfolio_profile:   null,
+      classified_weight:   null,
+      pending_weight:      null,
+      explanation:         null,
+    })
 
     const reviewId = review.id
 
@@ -89,12 +83,8 @@ export async function POST(req: Request) {
     // Check cache
     const cachedMap = new Map<string, { asset_class: string; risk_score: number; category: string; figi: string | null }>()
     if (uniqueKeys.length > 0) {
-      const { data: cached } = await supabaseAdmin
-        .from('asset_master')
-        .select('identifier, asset_class, risk_score, category, figi')
-        .in('identifier', uniqueKeys.map(k => k.key))
-
-      for (const c of cached ?? []) {
+      const cached = await getAssetMasterCache(uniqueKeys.map(k => k.key))
+      for (const c of cached) {
         cachedMap.set(c.identifier, c)
       }
     }
@@ -130,7 +120,7 @@ export async function POST(req: Request) {
             figiMap.set(key, entry)
 
             // Save to cache (upsert by identifier)
-            await supabaseAdmin.from('asset_master').upsert({
+            await upsertAssetMaster({
               identifier:      key,
               identifier_type: type,
               name:            figi.name,
@@ -140,7 +130,7 @@ export async function POST(req: Request) {
               risk_score:      scored.riskScore,
               category:        scored.category,
               updated_at:      new Date().toISOString(),
-            }, { onConflict: 'identifier' })
+            })
           } catch (e) {
             console.error('[suitability/upload] FIGI error for', key, e)
           }
@@ -192,15 +182,10 @@ export async function POST(req: Request) {
       }
     })
 
-    const { data: savedPositions, error: posErr } = await supabaseAdmin
-      .from('portfolio_positions')
-      .insert(positionInserts)
-      .select()
-
-    if (posErr) throw posErr
+    const savedPositions = await insertPortfolioPositionsBatch(positionInserts)
 
     // Calculate portfolio score
-    const scoredForCalc = (savedPositions ?? []).map(p => ({
+    const scoredForCalc = savedPositions.map(p => ({
       raw_name:              p.raw_name,
       market_value:          p.market_value ?? 0,
       weight:                p.weight ?? 0,
@@ -214,21 +199,13 @@ export async function POST(req: Request) {
     const explanation = generateExplanation(score, profile, clientProfile as any, aligned, pending_weight)
 
     // Update review with computed scores
-    const { data: updatedReview, error: updateErr } = await supabaseAdmin
-      .from('portfolio_reviews')
-      .update({
-        portfolio_score:   Math.round(score * 100) / 100,
-        portfolio_profile: profile,
-        classified_weight: Math.round(classified_weight * 10) / 10,
-        pending_weight:    Math.round(pending_weight * 10) / 10,
-        explanation,
-        updated_at:        new Date().toISOString(),
-      })
-      .eq('id', reviewId)
-      .select()
-      .single()
-
-    if (updateErr) throw updateErr
+    const updatedReview = await updateReviewScore(reviewId, {
+      portfolio_score:   Math.round(score * 100) / 100,
+      portfolio_profile: profile,
+      classified_weight: Math.round(classified_weight * 10) / 10,
+      pending_weight:    Math.round(pending_weight * 10) / 10,
+      explanation,
+    })
 
     return NextResponse.json({ review: updatedReview, positions: savedPositions })
   } catch (err: any) {

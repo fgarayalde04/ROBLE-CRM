@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import { createInstrument, updateInstrument, findInstrumentByIsin, findInstrumentByCusip } from '@/lib/db/instruments'
 
 export const dynamic = 'force-dynamic'
 
@@ -64,27 +64,22 @@ export async function POST(req: NextRequest) {
     }
 
     try {
-      // Try upsert by ISIN first, then CUSIP, then insert
       if (record.isin) {
-        const { data: existing } = await supabaseAdmin
-          .from('instrument_master').select('id').eq('isin', record.isin).maybeSingle()
-
+        const existing = await findInstrumentByIsin(record.isin)
         if (existing) {
-          await supabaseAdmin.from('instrument_master').update(record).eq('id', existing.id)
+          await updateInstrument(existing.id, record)
           updated++; continue
         }
       }
       if (record.cusip) {
-        const { data: existing } = await supabaseAdmin
-          .from('instrument_master').select('id').eq('cusip', record.cusip).maybeSingle()
-
+        const existing = await findInstrumentByCusip(record.cusip)
         if (existing) {
-          await supabaseAdmin.from('instrument_master').update(record).eq('id', existing.id)
+          await updateInstrument(existing.id, record)
           updated++; continue
         }
       }
 
-      await supabaseAdmin.from('instrument_master').insert(record)
+      await createInstrument(record)
       inserted++
     } catch (e: any) {
       errors.push(`Error en "${record.nombre}": ${e.message}`)

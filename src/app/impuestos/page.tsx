@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import { unstable_noStore } from 'next/cache'
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import { listTaxRecords } from '@/lib/db/impuestos'
 import ImpuestosTable, { type TaxRecord } from '@/components/ImpuestosTable'
 
 export const metadata: Metadata = { title: 'Impuestos' }
@@ -9,14 +9,7 @@ export const dynamic = 'force-dynamic'
 export default async function ImpuestosPage() {
   unstable_noStore()
 
-  const { data } = await supabaseAdmin
-    .from('tax_records')
-    .select('*')
-    .order('sort_order', { ascending: true })
-    .order('company', { ascending: true })
-    .order('tax_name', { ascending: true })
-
-  const records = (data ?? []) as TaxRecord[]
+  const records = await listTaxRecords() as TaxRecord[]
 
   return (
     <div className="p-6 space-y-6">

@@ -1,22 +1,8 @@
 import { NextResponse } from 'next/server'
 import { readdir, stat } from 'fs/promises'
 import { join } from 'path'
-import { supabaseAdmin } from '@/lib/supabase/admin'
-
-const DEFAULT_CHECKLIST = [
-  'Ficha de cliente hecha',
-  'Cedulas conseguidas',
-  'Comprobante de domicilio recibido',
-  'Informacion de madre/padre completa',
-  'Perfil de riesgo completado',
-  'Formularios enviados al cliente',
-  'Formularios firmados recibidos',
-  'Documentacion revisada internamente',
-  'Documentacion enviada al banco',
-  'Confirmacion del banco recibida',
-  'Numero de cliente asignado',
-  'Cuenta marcada como activa',
-]
+import { getClientsWithOnedriveFolder } from '@/lib/db/clients'
+import { getAllOpeningOnedriveUrls, createOpening } from '@/lib/db/openings'
 
 export async function GET() {
   return NextResponse.json({ clients_folder: process.env.CLIENTS_FOLDER_PATH ?? null })
@@ -107,37 +93,14 @@ export async function POST() {
     return NextResponse.json({ total_found: 0, created: 0, duplicates: 0, errors: 0, advisors: [] })
   }
 
-  // ── 2. Find already-linked folders via paginated fetch + in-memory match ──
-  // (Using .in() with 389+ long paths exceeds PostgREST URL limits → returns 0 results silently)
-  const CHUNK = 500
+  // ── 2. Find already-linked folders (native Postgres — no URL length limit) ──
+  const existingClients = await getClientsWithOnedriveFolder()
   const existingPaths = new Set<string>()
-  let page = 0
-  while (true) {
-    const { data } = await supabaseAdmin
-      .from('clients')
-      .select('onedrive_folder_url')
-      .not('onedrive_folder_url', 'is', null)
-      .range(page * CHUNK, (page + 1) * CHUNK - 1)
-    if (!data || data.length === 0) break
-    for (const r of data) existingPaths.add(r.onedrive_folder_url as string)
-    if (data.length < CHUNK) break
-    page++
-  }
+  for (const c of existingClients) if (c.onedrive_folder_url) existingPaths.add(c.onedrive_folder_url)
 
   // ── 3. Also check already-tracked openings to avoid double-inserting ──────
-  const existingOpeningPaths = new Set<string>()
-  let oPage = 0
-  while (true) {
-    const { data } = await supabaseAdmin
-      .from('account_openings')
-      .select('onedrive_url')
-      .not('onedrive_url', 'is', null)
-      .range(oPage * CHUNK, (oPage + 1) * CHUNK - 1)
-    if (!data || data.length === 0) break
-    for (const r of data) existingOpeningPaths.add(r.onedrive_url as string)
-    if (data.length < CHUNK) break
-    oPage++
-  }
+  const existingOpeningUrls = await getAllOpeningOnedriveUrls()
+  const existingOpeningPaths = new Set(existingOpeningUrls)
 
   // ── 4. Filter to only new folders (not yet in clients OR openings) ────────
   const newFolders = allFolders.filter(
@@ -175,28 +138,12 @@ export async function POST() {
   let createdCount = 0
   let errors = 0
 
-  for (let i = 0; i < openingRows.length; i += CHUNK) {
-    const batch = openingRows.slice(i, i + CHUNK)
-    const { data, error } = await supabaseAdmin
-      .from('account_openings')
-      .insert(batch)
-      .select('id')
-
-    if (error) {
-      errors += batch.length
-    } else {
-      // Create default checklist for each new opening
-      const checklistRows = (data ?? []).flatMap((opening: { id: string }) =>
-        DEFAULT_CHECKLIST.map((title, idx) => ({
-          opening_id: opening.id,
-          title,
-          sort_order: idx,
-        }))
-      )
-      if (checklistRows.length > 0) {
-        await supabaseAdmin.from('opening_checklist_items').insert(checklistRows)
-      }
-      createdCount += (data ?? []).length
+  for (const row of openingRows) {
+    try {
+      await createOpening(row)
+      createdCount++
+    } catch {
+      errors++
     }
   }
 

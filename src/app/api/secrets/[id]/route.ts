@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import { updateSecret, deleteSecret } from '@/lib/db/secrets'
 import { getSession } from '@/lib/auth'
 
 async function requireSession() {
@@ -34,14 +34,7 @@ export async function PATCH(
       }
     }
 
-    const { data, error } = await supabaseAdmin
-      .from('secrets_vault')
-      .update(update)
-      .eq('id', id)
-      .select()
-      .single()
-
-    if (error) throw error
+    const data = await updateSecret(id, update)
     return NextResponse.json(data)
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Error inesperado'
@@ -57,12 +50,7 @@ export async function DELETE(
     await requireSession()
     const { id } = params
 
-    const { error } = await supabaseAdmin
-      .from('secrets_vault')
-      .delete()
-      .eq('id', id)
-
-    if (error) throw error
+    await deleteSecret(id)
     return NextResponse.json({ ok: true })
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Error inesperado'

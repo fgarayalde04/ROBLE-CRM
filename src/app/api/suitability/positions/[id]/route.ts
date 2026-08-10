@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import { updatePortfolioPosition } from '@/lib/db/suitability'
 import { getSession } from '@/lib/auth'
 import { ASSET_CLASS_DEFAULT_SCORE, type AssetClass } from '@/lib/risk-scoring'
 
@@ -20,12 +20,10 @@ export async function PATCH(
 
     const update: Record<string, unknown> = {
       classification_status: 'manual',
-      updated_at: new Date().toISOString(),
     }
 
     if (body.asset_class !== undefined) {
       update.asset_class = body.asset_class
-      // Auto-fill risk_score from default if not provided
       if (body.risk_score === undefined) {
         update.risk_score = ASSET_CLASS_DEFAULT_SCORE[body.asset_class]
       }
@@ -33,14 +31,7 @@ export async function PATCH(
     if (body.risk_score !== undefined) update.risk_score = body.risk_score
     if (body.category   !== undefined) update.category   = body.category
 
-    const { data, error } = await supabaseAdmin
-      .from('portfolio_positions')
-      .update(update)
-      .eq('id', id)
-      .select()
-      .single()
-
-    if (error) throw error
+    const data = await updatePortfolioPosition(id, update)
     return NextResponse.json(data)
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 })

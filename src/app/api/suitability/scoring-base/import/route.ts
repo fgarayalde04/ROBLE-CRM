@@ -9,7 +9,7 @@
  */
 import { NextResponse } from 'next/server'
 import * as XLSX from 'xlsx'
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import { bulkUpsertScoringBase } from '@/lib/db/suitability'
 import { getSession } from '@/lib/auth'
 
 export const maxDuration = 30
@@ -146,15 +146,12 @@ export async function POST(req: Request) {
     let inserted = 0; let skipped = 0
     for (let i = 0; i < upserts.length; i += 100) {
       const chunk = upserts.slice(i, i + 100)
-      const { data, error } = await supabaseAdmin
-        .from('scoring_base')
-        .upsert(chunk, { onConflict: 'security_identifier' })
-        .select('id')
-      if (error) {
-        errors.push(`Chunk ${Math.floor(i / 100) + 1}: ${error.message}`)
+      try {
+        const data = await bulkUpsertScoringBase(chunk)
+        inserted += data.length || chunk.length
+      } catch (e: any) {
+        errors.push(`Chunk ${Math.floor(i / 100) + 1}: ${e.message}`)
         skipped += chunk.length
-      } else {
-        inserted += data?.length ?? chunk.length
       }
     }
 

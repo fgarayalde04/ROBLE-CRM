@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import { getBlotterItem, getOrderHistoryParent, updateBlotterItem, insertOrderEvento, getOrderEventos } from '@/lib/db/ordenes'
 
 const ADMIN_ROLES = ['admin', 'ceo', 'direccion']
 
@@ -16,7 +16,6 @@ function computeEstado(item: {
   if (item.done)          return 'ejecutada'
   if (item.en_mercado_at) return 'en_mercado'
   if (item.mail_respondido) return 'autorizada'
-  // check vencida: vigencia=DIA and order_date is in the past
   if (item.vigencia === 'DIA' && item.order_date) {
     const today = new Date().toISOString().split('T')[0]
     if (item.order_date < today) return 'vencida'
@@ -37,61 +36,32 @@ export async function PATCH(
   const body    = await req.json()
   const { accion } = body
 
-  // Fetch the item
-  const { data: item } = await supabaseAdmin
-    .from('order_history_items')
-    .select('id, order_id, mail_respondido, done, en_mercado_at, cancelado_at, vigencia, order_date, estado')
-    .eq('id', params.id)
-    .single()
-
+  const item = await getBlotterItem(params.id)
   if (!item) return NextResponse.json({ error: 'No encontrado' }, { status: 404 })
 
-  // Get parent to check ownership
-  const { data: parent } = await supabaseAdmin
-    .from('order_history')
-    .select('id, user_name, orden_id, client_name')
-    .eq('id', item.order_id)
-    .single()
-
+  const parent = await getOrderHistoryParent(item.order_id)
   if (!parent) return NextResponse.json({ error: 'Orden padre no encontrada' }, { status: 404 })
 
   const isOwner = parent.user_name === session.name
-
-  // ── Acciones ──────────────────────────────────────────────────────
 
   if (accion === 'mail_respondido') {
     if (!isAdmin) return NextResponse.json({ error: 'Sin permiso' }, { status: 403 })
 
     const val = body.value === true
-    const nuevoEstado = computeEstado({
-      ...item,
-      mail_respondido: val,
-      cancelado_at: item.cancelado_at,
+    const nuevoEstado = computeEstado({ ...item, mail_respondido: val, cancelado_at: item.cancelado_at })
+
+    const data = await updateBlotterItem(params.id, {
+      mail_respondido:    val,
+      mail_respondido_at: val ? new Date().toISOString() : null,
+      mail_respondido_by: val ? session.name             : null,
+      estado:             nuevoEstado,
     })
 
-    const { data, error } = await supabaseAdmin
-      .from('order_history_items')
-      .update({
-        mail_respondido:    val,
-        mail_respondido_at: val ? new Date().toISOString() : null,
-        mail_respondido_by: val ? session.name             : null,
-        estado:             nuevoEstado,
-      })
-      .eq('id', params.id)
-      .select()
-      .single()
-
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-
-    await supabaseAdmin.from('order_eventos').insert({
-      item_id:     params.id,
-      order_id:    item.order_id,
-      tipo:        val ? 'mail_respondido' : 'mail_respondido_revertido',
-      descripcion: val
-        ? `Mail respondido registrado por ${session.name}`
-        : `Mail respondido removido por ${session.name}`,
-      usuario:    session.name,
-      usuario_id: session.id,
+    await insertOrderEvento({
+      item_id: params.id, order_id: item.order_id,
+      tipo: val ? 'mail_respondido' : 'mail_respondido_revertido',
+      descripcion: val ? `Mail respondido registrado por ${session.name}` : `Mail respondido removido por ${session.name}`,
+      usuario: session.name, usuario_id: session.id,
     })
 
     return NextResponse.json({ ok: true, row: data })
@@ -101,28 +71,16 @@ export async function PATCH(
     if (!isAdmin) return NextResponse.json({ error: 'Sin permiso' }, { status: 403 })
     if (!item.mail_respondido) return NextResponse.json({ error: 'Requiere mail respondido' }, { status: 400 })
 
-    const nuevoEstado = 'en_mercado'
+    const data = await updateBlotterItem(params.id, {
+      en_mercado_at: new Date().toISOString(),
+      en_mercado_by: session.name,
+      estado:        'en_mercado',
+    })
 
-    const { data, error } = await supabaseAdmin
-      .from('order_history_items')
-      .update({
-        en_mercado_at: new Date().toISOString(),
-        en_mercado_by: session.name,
-        estado:        nuevoEstado,
-      })
-      .eq('id', params.id)
-      .select()
-      .single()
-
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-
-    await supabaseAdmin.from('order_eventos').insert({
-      item_id:     params.id,
-      order_id:    item.order_id,
-      tipo:        'en_mercado',
+    await insertOrderEvento({
+      item_id: params.id, order_id: item.order_id, tipo: 'en_mercado',
       descripcion: `Orden enviada al mercado por ${session.name}`,
-      usuario:    session.name,
-      usuario_id: session.id,
+      usuario: session.name, usuario_id: session.id,
     })
 
     return NextResponse.json({ ok: true, row: data })
@@ -135,30 +93,20 @@ export async function PATCH(
     const precioEjecutado = body.precio_ejecutado != null ? Number(body.precio_ejecutado) : null
     const valorEfectivo   = body.valor_efectivo   != null ? Number(body.valor_efectivo)   : null
 
-    const { data, error } = await supabaseAdmin
-      .from('order_history_items')
-      .update({
-        done:             true,
-        precio_ejecutado: precioEjecutado,
-        valor_efectivo:   valorEfectivo,
-        ejecutado_at:     new Date().toISOString(),
-        ejecutado_by:     session.name,
-        estado:           'ejecutada',
-      })
-      .eq('id', params.id)
-      .select()
-      .single()
+    const data = await updateBlotterItem(params.id, {
+      done:             true,
+      precio_ejecutado: precioEjecutado,
+      valor_efectivo:   valorEfectivo,
+      ejecutado_at:     new Date().toISOString(),
+      ejecutado_by:     session.name,
+      estado:           'ejecutada',
+    })
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-
-    await supabaseAdmin.from('order_eventos').insert({
-      item_id:     params.id,
-      order_id:    item.order_id,
-      tipo:        'ejecutada',
+    await insertOrderEvento({
+      item_id: params.id, order_id: item.order_id, tipo: 'ejecutada',
       descripcion: `Orden ejecutada por ${session.name}${precioEjecutado ? ` a precio ${precioEjecutado}` : ''}`,
-      usuario:    session.name,
-      usuario_id: session.id,
-      datos:      { precio_ejecutado: precioEjecutado, valor_efectivo: valorEfectivo },
+      usuario: session.name, usuario_id: session.id,
+      datos: { precio_ejecutado: precioEjecutado, valor_efectivo: valorEfectivo },
     })
 
     return NextResponse.json({ ok: true, row: data })
@@ -167,28 +115,17 @@ export async function PATCH(
   if (accion === 'cancelar') {
     if (!isAdmin && !isOwner) return NextResponse.json({ error: 'Sin permiso' }, { status: 403 })
 
-    const { data, error } = await supabaseAdmin
-      .from('order_history_items')
-      .update({
-        cancelado_at:     new Date().toISOString(),
-        cancelado_by:     session.name,
-        cancelado_motivo: body.motivo ?? null,
-        estado:           'cancelada',
-      })
-      .eq('id', params.id)
-      .select()
-      .single()
+    const data = await updateBlotterItem(params.id, {
+      cancelado_at:     new Date().toISOString(),
+      cancelado_by:     session.name,
+      cancelado_motivo: body.motivo ?? null,
+      estado:           'cancelada',
+    })
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-
-    await supabaseAdmin.from('order_eventos').insert({
-      item_id:     params.id,
-      order_id:    item.order_id,
-      tipo:        'cancelada',
+    await insertOrderEvento({
+      item_id: params.id, order_id: item.order_id, tipo: 'cancelada',
       descripcion: `Orden cancelada por ${session.name}${body.motivo ? `: ${body.motivo}` : ''}`,
-      usuario:    session.name,
-      usuario_id: session.id,
-      datos:      { motivo: body.motivo },
+      usuario: session.name, usuario_id: session.id, datos: { motivo: body.motivo },
     })
 
     return NextResponse.json({ ok: true, row: data })
@@ -200,18 +137,13 @@ export async function PATCH(
 
     const nuevoEstado = computeEstado({ ...item, cancelado_at: null })
 
-    const { data, error } = await supabaseAdmin
-      .from('order_history_items')
-      .update({ cancelado_at: null, cancelado_by: null, cancelado_motivo: null, estado: nuevoEstado })
-      .eq('id', params.id)
-      .select()
-      .single()
+    const data = await updateBlotterItem(params.id, {
+      cancelado_at: null, cancelado_by: null, cancelado_motivo: null, estado: nuevoEstado,
+    })
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-
-    await supabaseAdmin.from('order_eventos').insert({
-      item_id: params.id, order_id: item.order_id,
-      tipo: 'descancelada', descripcion: `Orden descancelada por ${session.name}`,
+    await insertOrderEvento({
+      item_id: params.id, order_id: item.order_id, tipo: 'descancelada',
+      descripcion: `Orden descancelada por ${session.name}`,
       usuario: session.name, usuario_id: session.id,
     })
 
@@ -228,23 +160,12 @@ export async function PATCH(
 
     if (Object.keys(updates).length === 0) return NextResponse.json({ error: 'Sin cambios' }, { status: 400 })
 
-    const { data, error } = await supabaseAdmin
-      .from('order_history_items')
-      .update(updates)
-      .eq('id', params.id)
-      .select()
-      .single()
+    const data = await updateBlotterItem(params.id, updates)
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-
-    await supabaseAdmin.from('order_eventos').insert({
-      item_id:     params.id,
-      order_id:    item.order_id,
-      tipo:        'editado',
+    await insertOrderEvento({
+      item_id: params.id, order_id: item.order_id, tipo: 'editado',
       descripcion: `Orden editada por ${session.name}`,
-      usuario:    session.name,
-      usuario_id: session.id,
-      datos:      updates,
+      usuario: session.name, usuario_id: session.id, datos: updates,
     })
 
     return NextResponse.json({ ok: true, row: data })
@@ -261,12 +182,6 @@ export async function GET(
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
-  const { data, error } = await supabaseAdmin
-    .from('order_eventos')
-    .select('id, tipo, descripcion, usuario, datos, created_at')
-    .eq('item_id', params.id)
-    .order('created_at', { ascending: true })
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ eventos: data ?? [] })
+  const eventos = await getOrderEventos(params.id)
+  return NextResponse.json({ eventos })
 }

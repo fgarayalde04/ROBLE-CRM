@@ -1,10 +1,11 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { unstable_noStore as noStore } from 'next/cache'
-import { supabaseAdmin } from '@/lib/supabase/admin'
 import { getSession } from '@/lib/auth'
 import type { Client } from '@/types/platform'
 import ClientsTable from '@/components/ClientsTable'
+import { listClients, countClientsByStatus } from '@/lib/db/clients'
+import { getPendingTaskClientIds } from '@/lib/db/tasks'
 
 // Roles que pueden ver TODOS los clientes (no solo los propios)
 const ALL_CLIENTS_ROLES = ['admin', 'asistente', 'ceo']
@@ -44,67 +45,31 @@ export default async function ClientsPage({ searchParams }: Props) {
 
   try {
     // Counts for tab badges (scoped by advisor if needed)
-    let qActivos = supabaseAdmin.from('clients').select('id', { count: 'exact', head: true }).eq('status', 'activo')
-    let qCerrados = supabaseAdmin.from('clients').select('id', { count: 'exact', head: true }).eq('status', 'cerrado')
-    let qPendientes = supabaseAdmin.from('clients').select('id', { count: 'exact', head: true }).eq('status', 'pendiente')
-    if (folderFilter) {
-      qActivos = qActivos.in('advisor', folderFilter)
-      qCerrados = qCerrados.in('advisor', folderFilter)
-      qPendientes = qPendientes.in('advisor', folderFilter)
-    }
-    const [{ count: ca }, { count: cc }, { count: cp }] = await Promise.all([qActivos, qCerrados, qPendientes])
-    totalActivos    = ca ?? 0
-    totalCerrados   = cc ?? 0
-    totalPendientes = cp ?? 0
+    const [ca, cc, cp] = await Promise.all([
+      countClientsByStatus('activo', folderFilter),
+      countClientsByStatus('cerrado', folderFilter),
+      countClientsByStatus('pendiente', folderFilter),
+    ])
+    totalActivos    = ca
+    totalCerrados   = cc
+    totalPendientes = cp
 
-    let query = supabaseAdmin
-      .from('clients')
-      .select('id, first_name, last_name, status, advisor, phone, onedrive_folder_url, drive_id, item_id, web_url, updated_at, created_at, closed_at, closed_by, close_reason')
-
-    if (activeSort === 'nombre') {
-      query = query
-        .order('last_name',  { ascending: activeDir === 'asc' })
-        .order('first_name', { ascending: activeDir === 'asc' })
-    } else {
-      query = query.order(activeSort, { ascending: activeDir === 'asc' })
-    }
-
-    if (activeTab === 'activos') {
-      query = query.eq('status', 'activo')
-    } else if (activeTab === 'cerrados') {
-      query = query.eq('status', 'cerrado')
-    } else if (activeTab === 'pendientes') {
-      query = query.eq('status', 'pendiente')
-    }
-
-    // Scope by allowed folders
-    if (folderFilter) {
-      query = query.in('advisor', folderFilter)
-    }
-
-    if (searchParams.q) {
-      query = query.or(
-        `first_name.ilike.%${searchParams.q}%,last_name.ilike.%${searchParams.q}%`
-      )
-    }
-    // Manual advisor filter pill — only when no folder restriction
-    if (!folderFilter && searchParams.advisor) {
-      query = query.eq('advisor', searchParams.advisor)
-    }
-
-    const [{ data: clientData }, { data: taskData }] = await Promise.all([
-      query,
-      supabaseAdmin
-        .from('tasks')
-        .select('client_id')
-        .eq('status', 'pendiente')
-        .not('client_id', 'is', null),
+    const [clientData, pendingTaskClientIds] = await Promise.all([
+      listClients({
+        tab: activeTab,
+        sort: activeSort,
+        dir: activeDir,
+        folderFilter,
+        search: searchParams.q,
+        advisor: searchParams.advisor,
+      }),
+      getPendingTaskClientIds(),
     ])
 
-    clients = (clientData ?? []) as Client[]
+    clients = clientData
 
-    for (const t of taskData ?? []) {
-      if (t.client_id) taskCounts[t.client_id] = (taskCounts[t.client_id] ?? 0) + 1
+    for (const clientId of pendingTaskClientIds) {
+      taskCounts[clientId] = (taskCounts[clientId] ?? 0) + 1
     }
   } catch {
     clients = []

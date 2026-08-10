@@ -1,4 +1,13 @@
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import {
+  insertOpeningChecklistItems, insertSyncLog,
+  getKnownClientsForSync, getKnownOpeningItemIds,
+  updateClientSharePointFieldsByItemId, updateClientSharePointFieldsById,
+  insertPendingClient, insertAccountOpeningStub,
+  getBancoCentralByItemIds, getBancoCentralWithCustomerNumberByType,
+  bulkInsertBancoCentralRecords, updateBancoCentralRecordById,
+  getRecursoByItemId, insertRecurso, updateRecursoById,
+  getScoringFileByItemId, insertScoringFile, updateScoringFileById,
+} from '@/lib/db/sync'
 import { getGraphToken, listFolderChildren, DriveItem } from './graph'
 
 export interface SyncResult {
@@ -46,13 +55,7 @@ interface ExistingClientMatch {
 }
 
 async function createDefaultOpeningChecklist(openingId: string) {
-  await supabaseAdmin.from('opening_checklist_items').insert(
-    DEFAULT_OPENING_CHECKLIST.map((title, sort_order) => ({
-      opening_id: openingId,
-      title,
-      sort_order,
-    }))
-  )
+  await insertOpeningChecklistItems(openingId, DEFAULT_OPENING_CHECKLIST)
 }
 
 async function logSync(
@@ -62,7 +65,7 @@ async function logSync(
   startedAt: Date,
   message?: string
 ) {
-  await supabaseAdmin.from('sync_logs').insert({
+  await insertSyncLog({
     sync_type: syncType,
     status,
     message: message ?? null,
@@ -107,15 +110,15 @@ export async function syncClients(): Promise<SyncResult> {
   const knownOpeningIds = new Set<string>()       // item_id → already an opening
   const clientByNumber = new Map<string, string>() // client_number → client.id
   try {
-    const [{ data: existingClients }, { data: existingOpenings }] = await Promise.all([
-      supabaseAdmin.from('clients').select('id, item_id, client_number'),
-      supabaseAdmin.from('account_openings').select('item_id').not('item_id', 'is', null),
+    const [existingClients, existingOpeningItemIds] = await Promise.all([
+      getKnownClientsForSync(),
+      getKnownOpeningItemIds(),
     ])
     for (const c of existingClients ?? []) {
       if (c.item_id) knownClientIds.add(c.item_id)
       if (c.client_number) clientByNumber.set(c.client_number, c.id)
     }
-    for (const o of existingOpenings ?? []) if (o.item_id) knownOpeningIds.add(o.item_id)
+    for (const itemId of existingOpeningItemIds ?? []) knownOpeningIds.add(itemId)
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e)
     result.errors.push(`Failed to load known IDs: ${msg}`)
@@ -149,17 +152,14 @@ export async function syncClients(): Promise<SyncResult> {
 
             // ── 1. Already a client by item_id → update SharePoint fields only ──
             if (knownClientIds.has(itemId)) {
-              await supabaseAdmin
-                .from('clients')
-                .update({
-                  drive_id: driveId,
-                  web_url: clientFolder.webUrl,
-                  onedrive_folder_url: clientFolder.webUrl,
-                  parent_path: advisorName,
-                  advisor: advisorName,
-                  last_synced_at: new Date().toISOString(),
-                })
-                .eq('item_id', itemId)
+              await updateClientSharePointFieldsByItemId(itemId, {
+                drive_id: driveId,
+                web_url: clientFolder.webUrl,
+                onedrive_folder_url: clientFolder.webUrl,
+                parent_path: advisorName,
+                advisor: advisorName,
+                last_synced_at: new Date().toISOString(),
+              })
               result.updated++
               continue
             }
@@ -172,18 +172,15 @@ export async function syncClients(): Promise<SyncResult> {
             // ── 3. Existing client matched by client_number → link item_id ──
             if (clientNumber && clientByNumber.has(clientNumber)) {
               const existingClientId = clientByNumber.get(clientNumber)!
-              await supabaseAdmin
-                .from('clients')
-                .update({
-                  item_id: itemId,
-                  drive_id: driveId,
-                  web_url: clientFolder.webUrl,
-                  onedrive_folder_url: clientFolder.webUrl,
-                  parent_path: advisorName,
-                  advisor: advisorName,
-                  last_synced_at: new Date().toISOString(),
-                })
-                .eq('id', existingClientId)
+              await updateClientSharePointFieldsById(existingClientId, {
+                item_id: itemId,
+                drive_id: driveId,
+                web_url: clientFolder.webUrl,
+                onedrive_folder_url: clientFolder.webUrl,
+                parent_path: advisorName,
+                advisor: advisorName,
+                last_synced_at: new Date().toISOString(),
+              })
               knownClientIds.add(itemId)
               result.updated++
               continue
@@ -194,9 +191,9 @@ export async function syncClients(): Promise<SyncResult> {
               const now = new Date().toISOString()
 
               // 1. Create pendiente client so it shows in the clients list
-              const { data: newClient, error: clientErr } = await supabaseAdmin
-                .from('clients')
-                .insert({
+              let newClient: { id: string } | null = null
+              try {
+                newClient = await insertPendingClient({
                   first_name: '',
                   last_name: displayName,
                   client_number: clientNumber,
@@ -210,19 +207,15 @@ export async function syncClients(): Promise<SyncResult> {
                   advisor: advisorName,
                   last_synced_at: now,
                 })
-                .select('id')
-                .single()
-
-              if (clientErr) {
-                result.errors.push(`Insert pending client ${folderName}: ${clientErr.message}`)
-              } else {
                 knownClientIds.add(itemId)
+              } catch (e: unknown) {
+                const msg = e instanceof Error ? e.message : String(e)
+                result.errors.push(`Insert pending client ${folderName}: ${msg}`)
               }
 
               // 2. Create apertura linked to the client
-              const { data: opening, error: openingErr } = await supabaseAdmin
-                .from('account_openings')
-                .insert({
+              try {
+                const opening = await insertAccountOpeningStub({
                   client_id: newClient?.id ?? null,
                   folder_name: folderName,
                   advisor: advisorName,
@@ -233,14 +226,12 @@ export async function syncClients(): Promise<SyncResult> {
                   drive_id: driveId,
                   web_url: clientFolder.webUrl,
                 })
-                .select('id')
-                .single()
-              if (openingErr) {
-                result.errors.push(`Opening insert ${folderName}: ${openingErr.message}`)
-              } else {
                 await createDefaultOpeningChecklist(opening.id)
                 result.created++
                 knownOpeningIds.add(itemId)
+              } catch (e: unknown) {
+                const msg = e instanceof Error ? e.message : String(e)
+                result.errors.push(`Opening insert ${folderName}: ${msg}`)
               }
             }
           } catch (e: unknown) {
@@ -314,16 +305,9 @@ async function syncBancoCentral(
 
     // Bulk-load existing records in 2 queries instead of N×3 individual ones
     const allItemIds = onlyFolders.map(f => f.id)
-    const [{ data: byItemIdRows }, { data: byCustomerRows }] = await Promise.all([
-      supabaseAdmin
-        .from('banco_central_records')
-        .select('id, item_id, customer_number')
-        .in('item_id', allItemIds),
-      supabaseAdmin
-        .from('banco_central_records')
-        .select('id, item_id, customer_number')
-        .eq('type', bcuType)
-        .not('customer_number', 'is', null),
+    const [byItemIdRows, byCustomerRows] = await Promise.all([
+      getBancoCentralByItemIds(allItemIds),
+      getBancoCentralWithCustomerNumberByType(bcuType),
     ])
 
     // Build lookup maps
@@ -377,11 +361,13 @@ async function syncBancoCentral(
     // Batch insert new records
     const CHUNK = 200
     for (let i = 0; i < toInsert.length; i += CHUNK) {
-      const { error } = await supabaseAdmin
-        .from('banco_central_records')
-        .insert(toInsert.slice(i, i + CHUNK))
-      if (error) result.errors.push(`Insert batch: ${error.message}`)
-      else result.created += toInsert.slice(i, i + CHUNK).length
+      try {
+        await bulkInsertBancoCentralRecords(toInsert.slice(i, i + CHUNK))
+        result.created += toInsert.slice(i, i + CHUNK).length
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e)
+        result.errors.push(`Insert batch: ${msg}`)
+      }
     }
 
     // Update existing records in parallel batches
@@ -389,10 +375,7 @@ async function syncBancoCentral(
     for (let i = 0; i < toUpdate.length; i += UPDATE_CONCURRENCY) {
       await Promise.all(
         toUpdate.slice(i, i + UPDATE_CONCURRENCY).map(({ id, fields }) =>
-          supabaseAdmin
-            .from('banco_central_records')
-            .update(fields)
-            .eq('id', id)
+          updateBancoCentralRecordById(id, fields)
         )
       )
       result.updated += toUpdate.slice(i, i + UPDATE_CONCURRENCY).length
@@ -456,11 +439,7 @@ async function syncFolderRecursive(
     } else if (item.file) {
       result.found++
       try {
-        const { data: existing } = await supabaseAdmin
-          .from('recursos')
-          .select('id')
-          .eq('item_id', item.id)
-          .maybeSingle()
+        const existing = await getRecursoByItemId(item.id)
 
         const fields = {
           name: item.name,
@@ -475,10 +454,10 @@ async function syncFolderRecursive(
         }
 
         if (existing) {
-          await supabaseAdmin.from('recursos').update(fields).eq('id', existing.id)
+          await updateRecursoById(existing.id, fields)
           result.updated++
         } else {
-          await supabaseAdmin.from('recursos').insert(fields)
+          await insertRecurso(fields)
           result.created++
         }
       } catch (e: unknown) {
@@ -545,17 +524,13 @@ export async function syncScoring(): Promise<SyncResult> {
           updated_at:     new Date().toISOString(),
         }
 
-        const { data: existing } = await supabaseAdmin
-          .from('scoring_files')
-          .select('id')
-          .eq('item_id', file.id)
-          .maybeSingle()
+        const existing = await getScoringFileByItemId(file.id)
 
         if (existing) {
-          await supabaseAdmin.from('scoring_files').update(fields).eq('id', existing.id)
+          await updateScoringFileById(existing.id, fields)
           result.updated++
         } else {
-          await supabaseAdmin.from('scoring_files').insert(fields)
+          await insertScoringFile(fields)
           result.created++
         }
       } catch (e: unknown) {

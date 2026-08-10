@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { supabase } from '@/lib/supabase/client'
 
 interface Props {
   openingId: string
@@ -37,12 +36,13 @@ export default function OpeningNotesPanel({ openingId, initialNotes }: Props) {
     const line = `[${dateStr}] ${newComment.trim()}`
     const updated = notes ? `${notes}\n${line}` : line
 
-    const { error } = await supabase
-      .from('account_openings')
-      .update({ notes: updated })
-      .eq('id', openingId)
+    const res = await fetch('/api/openings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: openingId, notes: updated }),
+    })
 
-    if (!error) {
+    if (res.ok) {
       setNotes(updated)
       setNewComment('')
     }

@@ -1,6 +1,6 @@
 import { SignJWT, jwtVerify } from 'jose'
 import { cookies } from 'next/headers'
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import { getUserAuthExtras, getUserFolderPermissions } from '@/lib/db/users'
 
 export type UserRole = 'admin' | 'asesor' | 'asistente' | 'compliance' | 'direccion' | 'ceo'
 
@@ -51,22 +51,7 @@ export async function getSession(): Promise<SessionUser | null> {
 
   // Fetch custom permissions + folder access from DB
   try {
-    const { data: userData } = await supabaseAdmin
-      .from('crm_users')
-      .select('permissions, see_all_folders')
-      .eq('id', user.id)
-      .maybeSingle()
-
-    // Load modo_asesor separately — column may not exist yet (pre-migration)
-    let modoAsesorValue = false
-    try {
-      const { data: maData } = await supabaseAdmin
-        .from('crm_users')
-        .select('modo_asesor')
-        .eq('id', user.id)
-        .maybeSingle()
-      modoAsesorValue = maData?.modo_asesor ?? false
-    } catch { /* column not migrated yet — default false */ }
+    const userData = await getUserAuthExtras(user.id)
 
     const extra: Partial<SessionUser> = {}
 
@@ -77,7 +62,7 @@ export async function getSession(): Promise<SessionUser | null> {
       : undefined
 
     // Sync modo_asesor from DB (always authoritative)
-    extra.modo_asesor = modoAsesorValue
+    extra.modo_asesor = userData?.modo_asesor ?? false
 
     // Admin always sees all — no folder restriction
     if (user.role === 'admin') {
@@ -86,18 +71,9 @@ export async function getSession(): Promise<SessionUser | null> {
       extra.allowed_folders = null
     } else {
       // Load folder permissions for this user
-      const { data: folderPerms } = await supabaseAdmin
-        .from('user_client_folder_permissions')
-        .select('folder_name')
-        .eq('user_id', user.id)
-        .eq('can_view', true)
+      const folderPerms = await getUserFolderPermissions(user.id)
 
-      if (folderPerms && folderPerms.length > 0) {
-        extra.allowed_folders = folderPerms.map((f: { folder_name: string }) => f.folder_name)
-      } else {
-        // No folders configured yet → no restriction (show all)
-        extra.allowed_folders = null
-      }
+      extra.allowed_folders = folderPerms.length > 0 ? folderPerms : null
     }
 
     return { ...user, ...extra }

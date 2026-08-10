@@ -1,6 +1,7 @@
 import { unstable_noStore as noStore } from 'next/cache'
 import Link from 'next/link'
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import { pool } from '@/lib/db/pool'
+import { listBancoCentralRecords } from '@/lib/db/bancoCentral'
 import { getSession } from '@/lib/auth'
 import BancoCentralTable, { type BancoCentralRecord } from '@/components/BancoCentralTable'
 import SyncBancoCentralButton from '@/components/SyncBancoCentralButton'
@@ -45,30 +46,15 @@ export default async function BancoCentralPage({
   // If folder-scoped, get client_numbers belonging to those advisor folders
   let allowedCustomerNumbers: string[] | null = null
   if (folderFilter) {
-    const { data: advisorClients } = await supabaseAdmin
-      .from('clients')
-      .select('client_number')
-      .in('advisor', folderFilter)
-      .not('client_number', 'is', null)
-    allowedCustomerNumbers = (advisorClients ?? []).map((c: any) => c.client_number).filter(Boolean)
+    const { rows: advisorClients } = await pool.query(
+      `select client_number from clients where advisor = ANY($1) and client_number is not null`,
+      [folderFilter]
+    )
+    allowedCustomerNumbers = advisorClients.map((c: any) => c.client_number).filter(Boolean)
   }
 
-  let bcuQuery = supabaseAdmin
-    .from('banco_central_records')
-    .select('*')
-    .order('customer_number', { ascending: true, nullsFirst: false })
-    .order('folder_name', { ascending: true })
-
-  if (allowedCustomerNumbers !== null) {
-    if (allowedCustomerNumbers.length === 0) {
-      bcuQuery = bcuQuery.eq('id', 'no-match-empty')
-    } else {
-      bcuQuery = bcuQuery.in('customer_number', allowedCustomerNumbers)
-    }
-  }
-
-  const { data: allRecords } = await bcuQuery
-  const records   = (allRecords ?? []) as BancoCentralRecord[]
+  const allRecords = await listBancoCentralRecords(null, allowedCustomerNumbers)
+  const records   = allRecords as BancoCentralRecord[]
   const localRecs = records.filter((r) => r.type === 'local')
   const intlRecs  = records.filter((r) => r.type === 'internacional')
   const totalKpis = computeKpis(records)

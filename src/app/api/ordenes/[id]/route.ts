@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import { getOrderHistoryEntry, getOrderHistoryItems, deleteOrderHistoryEntry, updateOrderHistoryEntry } from '@/lib/db/ordenes'
 
 const ADMIN_ROLES = ['admin', 'ceo', 'direccion']
 
@@ -14,25 +14,16 @@ export async function GET(
 
   const isAdmin = ADMIN_ROLES.includes(session.role)
 
-  const { data: entry, error } = await supabaseAdmin
-    .from('order_history')
-    .select('*')
-    .eq('id', params.id)
-    .single()
-
-  if (error || !entry) return NextResponse.json({ error: 'No encontrado' }, { status: 404 })
+  const entry = await getOrderHistoryEntry(params.id)
+  if (!entry) return NextResponse.json({ error: 'No encontrado' }, { status: 404 })
 
   if (!isAdmin && entry.user_name !== session.name) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
   }
 
-  const { data: items } = await supabaseAdmin
-    .from('order_history_items')
-    .select('*')
-    .eq('order_id', params.id)
-    .order('created_at', { ascending: true })
+  const items = await getOrderHistoryItems(params.id)
 
-  return NextResponse.json({ ...entry, items: items ?? [] })
+  return NextResponse.json({ ...entry, items })
 }
 
 // DELETE /api/ordenes/[id] — hard delete
@@ -45,22 +36,13 @@ export async function DELETE(
 
   const isAdmin = ADMIN_ROLES.includes(session.role)
 
-  const { data: entry } = await supabaseAdmin
-    .from('order_history')
-    .select('user_name')
-    .eq('id', params.id)
-    .single()
-
+  const entry = await getOrderHistoryEntry(params.id)
   if (!entry) return NextResponse.json({ error: 'No encontrado' }, { status: 404 })
   if (!isAdmin && entry.user_name !== session.name) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
   }
 
-  // Delete items first
-  await supabaseAdmin.from('order_history_items').delete().eq('order_id', params.id)
-  const { error } = await supabaseAdmin.from('order_history').delete().eq('id', params.id)
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+  await deleteOrderHistoryEntry(params.id)
   return NextResponse.json({ ok: true })
 }
 
@@ -74,13 +56,7 @@ export async function PATCH(
 
   const isAdmin = ADMIN_ROLES.includes(session.role)
 
-  // Check ownership
-  const { data: entry } = await supabaseAdmin
-    .from('order_history')
-    .select('user_name')
-    .eq('id', params.id)
-    .single()
-
+  const entry = await getOrderHistoryEntry(params.id)
   if (!entry) return NextResponse.json({ error: 'No encontrado' }, { status: 404 })
   if (!isAdmin && entry.user_name !== session.name) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
@@ -97,13 +73,6 @@ export async function PATCH(
     return NextResponse.json({ error: 'Nada que actualizar' }, { status: 400 })
   }
 
-  const { data, error } = await supabaseAdmin
-    .from('order_history')
-    .update(updates)
-    .eq('id', params.id)
-    .select()
-    .single()
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+  const data = await updateOrderHistoryEntry(params.id, updates)
   return NextResponse.json(data)
 }

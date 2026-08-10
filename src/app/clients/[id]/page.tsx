@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { getDocuments, getTasks, getDeadlines } from '@/lib/supabase/queries'
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import { getClient } from '@/lib/db/clients'
 import StatusBadge from '@/components/StatusBadge'
 import ComplianceBlock from '@/components/ComplianceBlock'
 import OneDriveFolderButton from '@/components/OneDriveFolderButton'
@@ -10,7 +10,6 @@ import ClientCloseButton from '@/components/ClientCloseButton'
 import DeleteClientButton from '@/components/DeleteClientButton'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
-import type { Client } from '@/types/platform'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,8 +17,7 @@ interface Props { params: { id: string } }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   try {
-    const { data } = await supabaseAdmin.from('clients').select('first_name, last_name').eq('id', params.id).single()
-    if (!data) return { title: 'Cliente' }
+    const data = await getClient(params.id)
     return { title: `${data.first_name} ${data.last_name}` }
   } catch {
     return { title: 'Cliente' }
@@ -40,9 +38,8 @@ const categoryLabel: Record<string, string> = {
 }
 
 export default async function ClientDetailPage({ params }: Props) {
-  const { data: clientData } = await supabaseAdmin.from('clients').select('*').eq('id', params.id).single()
-  if (!clientData) notFound()
-  const client = clientData as Client
+  const client = await getClient(params.id).catch(() => null)
+  if (!client) notFound()
 
   let documents, tasks, deadlines
   try {

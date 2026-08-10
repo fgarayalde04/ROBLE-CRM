@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import { pool } from '@/lib/db/pool'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -215,24 +215,21 @@ async function getOrCreateTable(
   company: string,
   year: number
 ): Promise<{ id: string } | null> {
-  const { data: existing } = await supabaseAdmin
-    .from('broker_settlement_tables')
-    .select('id')
-    .eq('advisor_name', advisor)
-    .eq('company', company)
-    .eq('year', year)
-    .single()
+  const { rows: existingRows } = await pool.query(
+    `select id from broker_settlement_tables where advisor_name = $1 and company = $2 and year = $3`,
+    [advisor, company, year]
+  )
+  if (existingRows[0]) return existingRows[0]
 
-  if (existing) return existing as { id: string }
-
-  const { data: created, error } = await supabaseAdmin
-    .from('broker_settlement_tables')
-    .insert({ advisor_name: advisor, company, year })
-    .select('id')
-    .single()
-
-  if (error || !created) return null
-  return created as { id: string }
+  try {
+    const { rows: created } = await pool.query(
+      `insert into broker_settlement_tables (advisor_name, company, year) values ($1, $2, $3) returning id`,
+      [advisor, company, year]
+    )
+    return created[0] ?? null
+  } catch {
+    return null
+  }
 }
 
 // ─── POST handler ─────────────────────────────────────────────────────────────
@@ -253,35 +250,33 @@ export async function POST() {
       const tableId = tableRecord.id
 
       // Check if rows already exist — skip if any rows present
-      const { data: existingRows } = await supabaseAdmin
-        .from('broker_settlement_rows')
-        .select('id')
-        .eq('table_id', tableId)
+      const { rows: existingRows } = await pool.query(
+        `select id from broker_settlement_rows where table_id = $1`,
+        [tableId]
+      )
 
-      if (existingRows && existingRows.length > 0) {
+      if (existingRows.length > 0) {
         summary.push({ advisor, company, status: 'skipped' })
         continue
       }
 
       // Insert all rows for this template
-      const rowsToInsert = rowDefs.map(r => ({
-        table_id: tableId,
-        concept: r.concept,
-        sort_order: r.sort_order,
-        is_formula: r.is_formula,
-        formula_type: r.formula_type,
-      }))
-
-      const { error: insertError } = await supabaseAdmin
-        .from('broker_settlement_rows')
-        .insert(rowsToInsert)
-
-      if (insertError) {
+      try {
+        const values: any[] = []
+        const placeholders = rowDefs.map((r, i) => {
+          values.push(tableId, r.concept, r.sort_order, r.is_formula, r.formula_type)
+          return `($${i * 5 + 1}, $${i * 5 + 2}, $${i * 5 + 3}, $${i * 5 + 4}, $${i * 5 + 5})`
+        })
+        await pool.query(
+          `insert into broker_settlement_rows (table_id, concept, sort_order, is_formula, formula_type) values ${placeholders.join(', ')}`,
+          values
+        )
+      } catch {
         summary.push({ advisor, company, status: 'skipped' })
         continue
       }
 
-      summary.push({ advisor, company, status: 'seeded', rows_inserted: rowsToInsert.length })
+      summary.push({ advisor, company, status: 'seeded', rows_inserted: rowDefs.length })
     }
 
     return NextResponse.json({ ok: true, summary })

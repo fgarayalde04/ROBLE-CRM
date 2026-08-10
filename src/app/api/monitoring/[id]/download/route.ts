@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import { getMonitoringRunMeta, getMonitoringRunRecords } from '@/lib/db/monitoring'
 import { getSession } from '@/lib/auth'
 import * as XLSX from 'xlsx'
 
@@ -28,52 +28,16 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
   const format = searchParams.get('format') === 'csv' ? 'csv' : 'xlsx'
 
   // Get run metadata
-  const { data: run } = await supabaseAdmin
-    .from('monitoring_runs')
-    .select('period_year, period_quarter, created_at, entity')
-    .eq('id', params.id)
-    .single()
+  const run = await getMonitoringRunMeta(params.id)
 
   if (!run) return NextResponse.json({ error: 'Monitoreo no encontrado' }, { status: 404 })
 
   const period = `Q${run.period_quarter} ${run.period_year}`
 
-  // Get inactive accounts for this entity (to exclude them)
-  const { data: inactiveAccs } = await supabaseAdmin
-    .from('monitoring_base_accounts')
-    .select('account_number, account_name')
-    .eq('entity', run?.entity ?? 'roble')
-    .eq('is_active', false)
+  // Get records (already excludes inactive accounts)
+  const records = await getMonitoringRunRecords(params.id)
 
-  const inactiveNumbers = new Set<string>()
-  const inactiveNames   = new Set<string>()
-  for (const a of (inactiveAccs ?? []) as any[]) {
-    if (a.account_number) inactiveNumbers.add((a.account_number as string).trim().toUpperCase())
-    if (a.account_name)   inactiveNames.add((a.account_name as string).trim().toUpperCase())
-  }
-
-  // Get records
-  const { data: rawRecords, error } = await supabaseAdmin
-    .from('monitoring_records')
-    .select('*')
-    .eq('monitoring_run_id', params.id)
-    .order('is_new_account', { ascending: true })
-    .order('client_code',    { ascending: true, nullsFirst: false })
-    .order('account_name',   { ascending: true, nullsFirst: false })
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 400 })
-
-  // Exclude inactive accounts
-  const records = (rawRecords ?? []).filter((r: any) => {
-    const num  = (r.account_number ?? '').trim().toUpperCase()
-    const name = (r.account_name   ?? '').trim().toUpperCase()
-    return !(
-      (num  && inactiveNumbers.has(num)) ||
-      (name && inactiveNames.has(name))
-    )
-  })
-
-  const rows = (records ?? []).map((r: any) => ({
+  const rows = records.map((r: any) => ({
     account_name: r.account_name ?? '',
     account_number: r.account_number ?? '',
     client_code: r.client_code ?? '',

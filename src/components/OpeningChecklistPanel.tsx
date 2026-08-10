@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { supabase } from '@/lib/supabase/client'
 import type { OpeningChecklistItem } from '@/types/platform'
 
 interface Props {
@@ -26,11 +25,12 @@ export default function OpeningChecklistPanel({ items: initial, openingId }: Pro
   async function toggle(item: OpeningChecklistItem) {
     setSavingId(item.id)
     const newVal = !item.completed
-    const { error } = await supabase
-      .from('opening_checklist_items')
-      .update({ completed: newVal, completed_at: newVal ? new Date().toISOString() : null })
-      .eq('id', item.id)
-    if (!error) {
+    const res = await fetch('/api/openings/checklist-item', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: item.id, completed: newVal }),
+    })
+    if (res.ok) {
       setItems((prev) =>
         prev.map((i) =>
           i.id === item.id
@@ -44,10 +44,11 @@ export default function OpeningChecklistPanel({ items: initial, openingId }: Pro
 
   async function saveNote(item: OpeningChecklistItem) {
     setSavingId(item.id)
-    await supabase
-      .from('opening_checklist_items')
-      .update({ note: notes[item.id] || null, responsible: responsibles[item.id] || null })
-      .eq('id', item.id)
+    await fetch('/api/openings/checklist-item', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: item.id, note: notes[item.id] || null, responsible: responsibles[item.id] || null }),
+    })
     setItems((prev) =>
       prev.map((i) =>
         i.id === item.id

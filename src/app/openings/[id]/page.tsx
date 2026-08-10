@@ -2,63 +2,27 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { unstable_noStore as noStore } from 'next/cache'
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import { getOpening, getOpeningNotes, getOpeningTasks, getOpeningDocuments } from '@/lib/db/openings'
 import OpeningDetail from '@/components/openings/OpeningDetail'
-import type { AccountOpening, OpeningChecklistItem, OpeningNote, OpeningTask, OpeningDocument } from '@/types/platform'
+import type { OpeningNote, OpeningTask, OpeningDocument } from '@/types/platform'
 
 export const dynamic = 'force-dynamic'
 
 export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
-  const { data } = await supabaseAdmin
-    .from('account_openings')
-    .select('folder_name')
-    .eq('id', params.id)
-    .single()
-  return { title: data?.folder_name ?? 'Apertura' }
+  const opening = await getOpening(params.id).catch(() => null)
+  return { title: opening?.folder_name ?? 'Apertura' }
 }
 
 export default async function OpeningDetailPage({ params }: { params: { id: string } }) {
   noStore()
-  const [openingRes, notesRes, tasksRes, docsRes] = await Promise.all([
-    supabaseAdmin
-      .from('account_openings')
-      .select(`
-        *,
-        client:clients(id, first_name, last_name, client_number),
-        checklist_items:opening_checklist_items(*)
-      `)
-      .eq('id', params.id)
-      .single(),
-    supabaseAdmin
-      .from('opening_notes')
-      .select('*')
-      .eq('opening_id', params.id)
-      .order('created_at', { ascending: false }),
-    supabaseAdmin
-      .from('opening_tasks')
-      .select('*')
-      .eq('opening_id', params.id)
-      .order('created_at', { ascending: false }),
-    supabaseAdmin
-      .from('opening_documents')
-      .select('*')
-      .eq('opening_id', params.id)
-      .order('created_at', { ascending: false }),
+  const opening = await getOpening(params.id).catch(() => null)
+  if (!opening) notFound()
+
+  const [notes, tasks, documents] = await Promise.all([
+    getOpeningNotes(params.id) as Promise<OpeningNote[]>,
+    getOpeningTasks(params.id) as Promise<OpeningTask[]>,
+    getOpeningDocuments(params.id) as Promise<OpeningDocument[]>,
   ])
-
-  if (openingRes.error || !openingRes.data) {
-    notFound()
-  }
-
-  const opening = openingRes.data as AccountOpening & { checklist_items: OpeningChecklistItem[] }
-  const notes = (notesRes.data ?? []) as OpeningNote[]
-  const tasks = (tasksRes.data ?? []) as OpeningTask[]
-  const documents = (docsRes.data ?? []) as OpeningDocument[]
-
-  // Sort checklist by sort_order
-  if (opening.checklist_items) {
-    opening.checklist_items.sort((a, b) => a.sort_order - b.sort_order)
-  }
 
   const openNotesCount = notes.filter((n) => n.status === 'abierta').length
   const pendingTasksCount = tasks.filter((t) => t.status !== 'completada').length

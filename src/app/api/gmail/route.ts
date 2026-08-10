@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import { logActivity } from '@/lib/db/activityLog'
 import { getValidGoogleToken, getGoogleEmail } from '@/lib/google/tokens'
 import { sendEmail } from '@/lib/google/gmail'
 
@@ -60,12 +60,12 @@ export async function POST(req: NextRequest) {
 
     // ── 3. Save record to activity_log ──────────────────────────────────────
     const toStr = Array.isArray(to) ? to.join(', ') : to
-    await supabaseAdmin.from('activity_log').insert({
+    await logActivity({
       entity_type: client_id ? 'client' : 'system',
       entity_id:   client_id ?? null,
       action:      'email_enviado',
       description: `Email enviado a ${toStr}: ${subject}`,
-      created_by:  session.name,
+      user_name:   session.name,
     })
 
     return NextResponse.json({

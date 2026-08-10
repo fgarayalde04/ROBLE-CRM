@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { getGraphToken, uploadFile, createFolder } from '@/lib/microsoft/graph'
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import {
+  listAssetManagersBasic, getFondosWithIsin, getCoveredFondoIds,
+  markFactsheetsNotLatest, insertFundFactsheet,
+} from '@/lib/db/fondos'
 import { scrapeDirectByISIN, BROWSER_SCRAPERS, genericSearch } from '@/lib/fondos/scrapers'
 import { getBrowser, closeBrowser } from '@/lib/fondos/browser'
 
@@ -70,30 +73,18 @@ export async function POST(req: NextRequest) {
   const limit      = parseInt(searchParams.get('limit') ?? '30')  // max funds per run
 
   // Load managers
-  const { data: managers } = await supabaseAdmin
-    .from('asset_managers')
-    .select('id, slug, name')
+  const managers = await listAssetManagersBasic()
 
   if (!managers?.length) {
-    return NextResponse.json({ error: 'No hay gestoras. Ejecutá fondos_carga.sql en Supabase primero.' }, { status: 500 })
+    return NextResponse.json({ error: 'No hay gestoras. Ejecutá fondos_carga.sql primero.' }, { status: 500 })
   }
 
   const managerMap = Object.fromEntries(managers.map(m => [m.slug, m]))
 
   // Load funds without current factsheet
-  let fundQuery = supabaseAdmin
-    .from('fondos')
-    .select('id, isin, name, asset_manager_id')
-    .not('isin', 'is', null)
+  const allFondos = await getFondosWithIsin()
 
-  const { data: allFondos } = await fundQuery
-
-  const { data: covered } = await supabaseAdmin
-    .from('factsheets')
-    .select('fondo_id')
-    .eq('is_latest', true)
-
-  const coveredIds = new Set((covered ?? []).map(r => r.fondo_id))
+  const coveredIds = new Set(await getCoveredFondoIds())
 
   // Build work queue: [ { fondo, manager } ] excluding already-covered
   type WorkItem = { fondo: { id: string; isin: string; name: string }; manager: { id: string; slug: string; name: string } }
@@ -193,13 +184,9 @@ export async function POST(req: NextRequest) {
       }
 
       // Mark previous latest as stale
-      await supabaseAdmin
-        .from('factsheets')
-        .update({ is_latest: false })
-        .eq('fondo_id', fondoId)
-        .eq('is_latest', true)
+      await markFactsheetsNotLatest(fondoId)
 
-      await supabaseAdmin.from('factsheets').insert({
+      await insertFundFactsheet({
         fondo_id:         fondoId,
         asset_manager_id: managerId,
         file_name:        scrapeResult.filename,

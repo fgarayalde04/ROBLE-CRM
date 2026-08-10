@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { readdir, stat } from 'fs/promises'
 import { join } from 'path'
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import { getClientsWithOnedriveFolder } from '@/lib/db/clients'
 
 async function listSubdirs(parentPath: string): Promise<string[]> {
   try {
@@ -49,25 +49,12 @@ export async function GET() {
     })
   }
 
-  // Fetch ALL clients that have a folder path — match in memory to avoid URL length limits
-  // with large .in() queries (389 long paths would exceed PostgREST URL limits)
+  // Fetch ALL clients that have a folder path — match in memory
   const linkedMap = new Map<string, { id: string; first_name: string; last_name: string; client_number: string; status: string }>()
 
-  let page = 0
-  const PAGE_SIZE = 1000
-  while (true) {
-    const { data: batch } = await supabaseAdmin
-      .from('clients')
-      .select('id, first_name, last_name, client_number, onedrive_folder_url, status')
-      .not('onedrive_folder_url', 'is', null)
-      .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1)
-
-    if (!batch || batch.length === 0) break
-    for (const c of batch) {
-      if (c.onedrive_folder_url) linkedMap.set(c.onedrive_folder_url, c)
-    }
-    if (batch.length < PAGE_SIZE) break
-    page++
+  const batch = await getClientsWithOnedriveFolder()
+  for (const c of batch) {
+    if (c.onedrive_folder_url) linkedMap.set(c.onedrive_folder_url, c)
   }
 
   // Build response

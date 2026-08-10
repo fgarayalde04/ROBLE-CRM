@@ -1,10 +1,15 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { unstable_noStore as noStore } from 'next/cache'
-import { supabaseAdmin } from '@/lib/supabase/admin'
 import { getSession } from '@/lib/auth'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
+import {
+  getTaskIdsSharedWith, getOpenTasksByResponsible, getOpenTasksByCreator, getOpenTasksByIds,
+  getMyOpenings, getCompanyOverdueTasks, getTasksWithoutResponsible,
+  getStuckOpenings, getStaleOpenings, getTodayEventsForDashboard, getUpcomingDeadlinesForDashboard,
+  getRecentActivityForDashboard, getCompletedTaskIds, getUnreadNotifications, getPendingBcuComplianceCount,
+} from '@/lib/db/dashboard'
 
 export const metadata: Metadata = { title: 'Panel del día | Roble Capital' }
 export const dynamic = 'force-dynamic'
@@ -94,214 +99,70 @@ export default async function PanelDelDiaPage({ searchParams }: PageProps) {
   const fourteenDaysAgo = new Date(Date.now() - 14 * 86_400_000).toISOString()
   const formattedDate = format(new Date(), "EEEE d 'de' MMMM", { locale: es })
 
-  const taskSelect = 'id, title, priority, due_date, responsible, created_by, status, client:clients(id, first_name, last_name), task_shares(user_name)'
-  const openTaskStatuses = ['pendiente', 'en_proceso', 'bloqueado']
-  const { data: sharedRefs } = userName
-    ? await supabaseAdmin.from('task_shares').select('task_id').eq('user_name', userName)
-    : { data: [] as any[] }
-  const sharedTaskIds = Array.from(new Set((sharedRefs ?? []).map((r: any) => r.task_id).filter(Boolean)))
+  const sharedTaskIds = userName ? await getTaskIdsSharedWith(userName) : []
 
   // ─── Personal tasks: responsible + created by me + shared with me ───────────
-  const tasksResponsibleQuery = userName
-    ? supabaseAdmin
-        .from('tasks')
-        .select(taskSelect)
-        .in('status', openTaskStatuses)
-        .eq('responsible', userName)
-        .order('due_date', { ascending: true, nullsFirst: false })
-        .limit(20)
-    : Promise.resolve({ data: [], error: null })
-
-  const tasksCreatedQuery = userName
-    ? supabaseAdmin
-        .from('tasks')
-        .select(taskSelect)
-        .in('status', openTaskStatuses)
-        .eq('created_by', userName)
-        .order('due_date', { ascending: true, nullsFirst: false })
-        .limit(20)
-    : Promise.resolve({ data: [], error: null })
-
-  const tasksSharedQuery = sharedTaskIds.length > 0
-    ? supabaseAdmin
-        .from('tasks')
-        .select(taskSelect)
-        .in('status', openTaskStatuses)
-        .in('id', sharedTaskIds)
-        .order('due_date', { ascending: true, nullsFirst: false })
-        .limit(20)
-    : Promise.resolve({ data: [], error: null })
-
-  // Personal openings (filtered by advisor for non-wide roles)
-  const myOpeningsQuery = isWideRole
-    ? supabaseAdmin
-        .from('account_openings')
-        .select('id, folder_name, status, priority, start_date, updated_at, advisor, client:clients(id, first_name, last_name), checklist_items:opening_checklist_items(id, completed)')
-        .not('status', 'in', '("cuenta_abierta","descartado")')
-        .order('priority', { ascending: false })
-        .order('updated_at', { ascending: false })
-        .limit(8)
-    : supabaseAdmin
-        .from('account_openings')
-        .select('id, folder_name, status, priority, start_date, updated_at, advisor, client:clients(id, first_name, last_name), checklist_items:opening_checklist_items(id, completed)')
-        .not('status', 'in', '("cuenta_abierta","descartado")')
-        .eq('advisor', userName)
-        .order('priority', { ascending: false })
-        .order('updated_at', { ascending: false })
-        .limit(8)
-
-  // Company-wide alerts — only for wide roles
-  const companyOverdueQuery = isWideRole
-    ? supabaseAdmin
-        .from('tasks')
-        .select('id, title, due_date, responsible, client:clients(id, first_name, last_name)')
-        .in('status', ['pendiente', 'en_proceso', 'bloqueado'])
-        .lt('due_date', today)
-        .order('due_date', { ascending: true })
-        .limit(10)
-    : supabaseAdmin
-        .from('tasks')
-        .select('id, title, due_date, responsible, client:clients(id, first_name, last_name)')
-        .in('status', ['pendiente', 'en_proceso', 'bloqueado'])
-        .eq('responsible', userName)
-        .lt('due_date', today)
-        .limit(0) // returns empty for non-wide (already tracked in myOverdue)
-
   const [
-    tasksResponsibleR,
-    tasksCreatedR,
-    tasksSharedR,
-    myOpeningsR,
-    companyOverdueR,
-    noResponsibleTasksR,
-    stuckOpeningsR,
-    staleOpeningsR,
-    todayEventsR,
-    upcomingDeadlinesR,
-    recentActivityR,
-    unreadNotificationsR,
-    pendingBcuR,
+    tasksResponsible,
+    tasksCreated,
+    tasksShared,
+    myOpenings,
+    companyOverdue_,
+    noResponsibleTasks,
+    stuckOpenings,
+    staleOpenings,
+    todayEventsRaw,
+    upcomingDeadlines,
+    recentActivityRaw,
+    unreadNotifications,
+    pendingBcuCount,
   ] = await Promise.all([
-    tasksResponsibleQuery,
-    tasksCreatedQuery,
-    tasksSharedQuery,
-    myOpeningsQuery,
+    userName ? getOpenTasksByResponsible(userName, 20) : Promise.resolve([]),
+    userName ? getOpenTasksByCreator(userName, 20) : Promise.resolve([]),
+    sharedTaskIds.length > 0 ? getOpenTasksByIds(sharedTaskIds, 20) : Promise.resolve([]),
+    getMyOpenings(isWideRole, userName, 8),
 
     // Company overdue (wide roles only)
-    companyOverdueQuery,
+    isWideRole ? getCompanyOverdueTasks(today, 10) : Promise.resolve([]),
 
     // Tareas sin responsable (wide roles only)
-    isWideRole
-      ? supabaseAdmin
-          .from('tasks')
-          .select('id, title, priority, due_date, created_at')
-          .in('status', ['pendiente', 'en_proceso'])
-          .is('responsible', null)
-          .order('created_at', { ascending: false })
-          .limit(8)
-      : Promise.resolve({ data: [], error: null }),
+    isWideRole ? getTasksWithoutResponsible(8) : Promise.resolve([]),
 
     // Aperturas trabadas
-    isWideRole
-      ? supabaseAdmin
-          .from('account_openings')
-          .select('id, folder_name, updated_at, advisor, client:clients(id, first_name, last_name)')
-          .eq('status', 'trabado')
-      : supabaseAdmin
-          .from('account_openings')
-          .select('id, folder_name, updated_at, advisor, client:clients(id, first_name, last_name)')
-          .eq('status', 'trabado')
-          .eq('advisor', userName),
+    getStuckOpenings(isWideRole, userName),
 
     // Aperturas sin movimiento > 14 días
-    isWideRole
-      ? supabaseAdmin
-          .from('account_openings')
-          .select('id, folder_name, updated_at, status, advisor, client:clients(id, first_name, last_name)')
-          .not('status', 'in', '("cuenta_abierta","descartado","trabado")')
-          .lt('updated_at', fourteenDaysAgo)
-          .order('updated_at', { ascending: true })
-          .limit(6)
-      : supabaseAdmin
-          .from('account_openings')
-          .select('id, folder_name, updated_at, status, advisor, client:clients(id, first_name, last_name)')
-          .not('status', 'in', '("cuenta_abierta","descartado","trabado")')
-          .eq('advisor', userName)
-          .lt('updated_at', fourteenDaysAgo)
-          .limit(6),
+    getStaleOpenings(isWideRole, userName, fourteenDaysAgo, 6),
 
     // Eventos de hoy
-    supabaseAdmin
-      .from('events')
-      .select('id, title, type, start_time, created_by, participants, client:clients(id, first_name, last_name)')
-      .eq('event_date', today)
-      .order('start_time', { ascending: true }),
+    getTodayEventsForDashboard(today),
 
     // Vencimientos próximos
-    (isWideRole
-      ? supabaseAdmin
-          .from('deadlines')
-          .select('id, title, due_date, category, responsible, client:clients(id, first_name, last_name)')
-          .eq('status', 'pendiente')
-          .gte('due_date', today)
-          .lte('due_date', sevenDaysLater)
-          .order('due_date', { ascending: true })
-          .limit(6)
-      : supabaseAdmin
-          .from('deadlines')
-          .select('id, title, due_date, category, responsible, client:clients(id, first_name, last_name)')
-          .eq('status', 'pendiente')
-          .eq('responsible', userName)
-          .gte('due_date', today)
-          .lte('due_date', sevenDaysLater)
-          .order('due_date', { ascending: true })
-          .limit(6)),
+    getUpcomingDeadlinesForDashboard(isWideRole, userName, today, sevenDaysLater, 6),
 
     // Actividad reciente
-    (isWideRole
-      ? supabaseAdmin
-          .from('activity_log')
-          .select('id, description, user_name, entity_type, entity_id, created_at')
-          .order('created_at', { ascending: false })
-          .limit(25)
-      : supabaseAdmin
-          .from('activity_log')
-          .select('id, description, user_name, entity_type, entity_id, created_at')
-          .eq('user_name', userName)
-          .order('created_at', { ascending: false })
-          .limit(25)),
+    getRecentActivityForDashboard(isWideRole, userName, 25),
 
-    userName
-      ? supabaseAdmin
-          .from('notifications')
-          .select('id, title, message, entity_type, entity_id, created_at')
-          .eq('user_name', userName)
-          .is('read_at', null)
-          .order('created_at', { ascending: false })
-          .limit(5)
-      : Promise.resolve({ data: [], error: null }),
+    // Notificaciones sin leer
+    userName ? getUnreadNotifications(userName, 5) : Promise.resolve([]),
 
     // BCU compliance pendiente
-    supabaseAdmin
-      .from('banco_central_compliance')
-      .select('id', { count: 'exact', head: true })
-      .eq('ficha', false)
-      .eq('lista_verificacion', false),
+    getPendingBcuComplianceCount(),
   ])
 
   const allMyTasksCombined = uniqueById([
-    ...((tasksResponsibleR.data ?? []) as any[]),
-    ...((tasksCreatedR.data ?? []) as any[]),
-    ...((tasksSharedR.data ?? []) as any[]),
+    ...(tasksResponsible as any[]),
+    ...(tasksCreated as any[]),
+    ...(tasksShared as any[]),
   ]).sort(sortByDueDate)
 
   let myTasks: any[]
   switch (effectiveTaskView) {
     case 'shared':
-      myTasks = uniqueById((tasksSharedR.data ?? []) as any[]).sort(sortByDueDate).slice(0, 20)
+      myTasks = uniqueById(tasksShared as any[]).sort(sortByDueDate).slice(0, 20)
       break
     case 'created':
-      myTasks = uniqueById((tasksCreatedR.data ?? []) as any[]).sort(sortByDueDate).slice(0, 20)
+      myTasks = uniqueById(tasksCreated as any[]).sort(sortByDueDate).slice(0, 20)
       break
     case 'overdue':
       myTasks = allMyTasksCombined.filter((t: any) => t.due_date && t.due_date < today).slice(0, 20)
@@ -311,39 +172,23 @@ export default async function PanelDelDiaPage({ searchParams }: PageProps) {
   }
   const myOverdue = myTasks.filter((t: any) => t.due_date && t.due_date < today).slice(0, 10)
   const myUrgent = myTasks.filter((t: any) => t.priority === 'urgente').slice(0, 6)
-  const myOpenings = (myOpeningsR.data ?? []) as any[]
-  const companyOverdue = isWideRole ? ((companyOverdueR.data ?? []) as any[]) : myOverdue
-  const noResponsibleTasks = (noResponsibleTasksR.data ?? []) as any[]
-  const stuckOpenings = (stuckOpeningsR.data ?? []) as any[]
-  const staleOpenings = (staleOpeningsR.data ?? []) as any[]
-  const todayEvents = ((todayEventsR.data ?? []) as any[]).filter((event: any) => {
+  const companyOverdue = isWideRole ? (companyOverdue_ as any[]) : myOverdue
+  const todayEvents = (todayEventsRaw as any[]).filter((event: any) => {
     if (isWideRole) return true
     const participants = Array.isArray(event.participants) ? event.participants : []
     return event.created_by === userName || participants.includes(userName)
   })
-  const upcomingDeadlines = (upcomingDeadlinesR.data ?? []) as any[]
 
   // Filter recent activity: exclude entries for completed tasks
-  const recentActivityRaw = (recentActivityR.data ?? []) as any[]
   const taskIdsInActivity = Array.from(new Set(
-    recentActivityRaw
+    (recentActivityRaw as any[])
       .filter((a: any) => a.entity_type === 'task' && a.entity_id)
       .map((a: any) => a.entity_id as string)
   ))
-  const completedTaskSet = new Set<string>()
-  if (taskIdsInActivity.length > 0) {
-    const { data: completedTasks } = await supabaseAdmin
-      .from('tasks')
-      .select('id')
-      .in('id', taskIdsInActivity)
-      .eq('status', 'completado')
-    for (const t of completedTasks ?? []) completedTaskSet.add(t.id)
-  }
-  const recentActivity = recentActivityRaw
+  const completedTaskSet = new Set(await getCompletedTaskIds(taskIdsInActivity))
+  const recentActivity = (recentActivityRaw as any[])
     .filter((a: any) => !(a.entity_type === 'task' && a.entity_id && completedTaskSet.has(a.entity_id)))
     .slice(0, 10)
-  const unreadNotifications = (unreadNotificationsR.data ?? []) as any[]
-  const pendingBcuCount = pendingBcuR.count ?? 0
 
   // Tasks due today (from my tasks)
   const myTasksToday = myTasks.filter((t: any) => t.due_date === today)

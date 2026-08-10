@@ -1,20 +1,12 @@
 import { NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import { pool } from '@/lib/db/pool'
 
 export async function GET() {
   try {
-    const { data, error } = await supabaseAdmin
-      .from('team_members')
-      .select('id, name')
-      .order('name')
-
-    if (error) {
-      // Table may not exist yet — return empty array gracefully
-      return NextResponse.json([])
-    }
-
-    return NextResponse.json(data ?? [])
+    const { rows } = await pool.query(`select id, name from team_members order by name`)
+    return NextResponse.json(rows ?? [])
   } catch {
+    // Table may not exist yet — return empty array gracefully
     return NextResponse.json([])
   }
 }

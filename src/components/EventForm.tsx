@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import type { Event, EventType } from '@/types/platform'
-import { supabase } from '@/lib/supabase/client'
 import EmailAutocomplete from './EmailAutocomplete'
 
 interface ClientOption { id: string; first_name: string; last_name: string; client_number: string }
@@ -51,11 +50,9 @@ export default function EventForm({ initial, mode }: Props) {
   })
 
   useEffect(() => {
-    supabase
-      .from('clients')
-      .select('id, first_name, last_name, client_number')
-      .order('last_name')
-      .then(({ data }) => setClients(data ?? []))
+    fetch('/api/clients?limit=1000')
+      .then((res) => res.json())
+      .then((data) => setClients(Array.isArray(data) ? data : []))
   }, [])
 
   function set<K extends keyof typeof form>(field: K, value: (typeof form)[K]) {
@@ -108,18 +105,24 @@ export default function EventForm({ initial, mode }: Props) {
         }
       } else {
         // Edit: update local only
-        const { error: err } = await supabase.from('events').update({
-          title:            form.title.trim(),
-          description:      form.description.trim() || null,
-          event_date:       form.event_date,
-          start_time:       form.start_time || null,
-          end_time:         form.end_time   || null,
-          type:             form.type,
-          client_id:        form.client_id  || null,
-          participants,
-          reminder_minutes: form.reminder_minutes ? parseInt(form.reminder_minutes) : null,
-        }).eq('id', initial!.id!)
-        if (err) throw err
+        const res = await fetch('/api/events', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: initial!.id!,
+            title:            form.title.trim(),
+            description:      form.description.trim() || null,
+            event_date:       form.event_date,
+            start_time:       form.start_time || null,
+            end_time:         form.end_time   || null,
+            type:             form.type,
+            client_id:        form.client_id  || null,
+            participants,
+            reminder_minutes: form.reminder_minutes ? parseInt(form.reminder_minutes) : null,
+          }),
+        })
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error ?? 'Error inesperado')
         router.push('/events')
         router.refresh()
       }

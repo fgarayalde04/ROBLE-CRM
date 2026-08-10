@@ -1,28 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import { generateOrdenId, listOrderHistory, createOrderHistory, insertOrderHistoryItems } from '@/lib/db/ordenes'
 
 const ADMIN_ROLES = ['admin', 'ceo', 'direccion']
-
-// Generate {client_number}{YYYYMMDD}.001 orden_id (sequential per client per day)
-async function generateOrdenId(clientNumber: string | null): Promise<string> {
-  const now     = new Date()
-  const dateStr = now.toISOString().split('T')[0]       // "2026-06-09"
-  const datePfx = dateStr.replace(/-/g, '')             // "20260609"
-  const prefix  = clientNumber ? `${clientNumber}${datePfx}` : datePfx
-
-  let query = supabaseAdmin
-    .from('order_history')
-    .select('*', { count: 'exact', head: true })
-    .gte('created_at', dateStr + 'T00:00:00.000Z')
-    .lte('created_at', dateStr + 'T23:59:59.999Z')
-
-  if (clientNumber) query = query.eq('client_number', clientNumber)
-
-  const { count } = await query
-  const seq = String((count ?? 0) + 1).padStart(3, '0')
-  return `${prefix}.${seq}`
-}
 
 // Build one-line summary from blocks  e.g. "Compra AAPL, Venta Bono YPF, Compra Fondo BLK"
 function buildSummary(blocks: any[]): string {
@@ -47,30 +27,12 @@ export async function GET(req: NextRequest) {
   const dateTo     = searchParams.get('dateTo')
   const userFilter = isAdmin ? searchParams.get('user') : null
 
-  let query = supabaseAdmin
-    .from('order_history')
-    .select(`
-      id, orden_id, user_name, client_name, client_number,
-      to_email, subject, status, order_count, instruments,
-      confirmacion_cliente, orden_ejecutada, comentarios, summary_text,
-      created_at, sent_at
-    `)
-    .order('created_at', { ascending: false })
-    .limit(500)
+  const data = await listOrderHistory({
+    userFilter: !isAdmin ? session.name : null,
+    user: userFilter, dateFrom, dateTo, q,
+  })
 
-  if (!isAdmin)       query = query.eq('user_name', session.name)
-  else if (userFilter) query = query.eq('user_name', userFilter)
-
-  if (dateFrom) query = query.gte('created_at', dateFrom)
-  if (dateTo)   query = query.lte('created_at', dateTo + 'T23:59:59.999Z')
-  if (q)        query = query.or(
-    `client_name.ilike.%${q}%,client_number.ilike.%${q}%,to_email.ilike.%${q}%,orden_id.ilike.%${q}%`
-  )
-
-  const { data, error } = await query
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-
-  return NextResponse.json({ entries: data ?? [], isAdmin })
+  return NextResponse.json({ entries: data, isAdmin })
 }
 
 // POST /api/ordenes — save order + items
@@ -85,9 +47,9 @@ export async function POST(req: NextRequest) {
   const summaryTxt = Array.isArray(blocks) && blocks.length > 0 ? buildSummary(blocks) : null
 
   // ── 1. Save main order record ───────────────────────────────────────────────
-  const { data, error } = await supabaseAdmin
-    .from('order_history')
-    .insert({
+  let data
+  try {
+    data = await createOrderHistory({
       orden_id:      ordenId,
       summary_text:  summaryTxt,
       user_name:     session.name       ?? null,
@@ -103,12 +65,9 @@ export async function POST(req: NextRequest) {
       instruments:   body.instruments   ?? [],
       sent_at:       body.status === 'enviado' ? new Date().toISOString() : null,
     })
-    .select()
-    .single()
-
-  if (error) {
-    console.error('[ORDER_HISTORY_ERROR]', error.message)
-    return NextResponse.json({ error: error.message }, { status: 400 })
+  } catch (err: any) {
+    console.error('[ORDER_HISTORY_ERROR]', err.message)
+    return NextResponse.json({ error: err.message }, { status: 400 })
   }
 
   console.log('[ORDER_HISTORY_CREATED]', data.orden_id, '| id:', data.id, '| user:', session.name)
@@ -137,20 +96,21 @@ export async function POST(req: NextRequest) {
       cupon:        block.type === 'bonos' ? (block.cupon?.trim()    || null) : null,
     }))
 
-    const { error: itemsError } = await supabaseAdmin
-      .from('order_history_items').insert(items)
-
-    if (itemsError) {
-      if (itemsError.message.includes('vigencia') || itemsError.message.includes('comision')) {
+    try {
+      await insertOrderHistoryItems(items)
+      console.log('[ORDER_ITEM_CREATED]', items.length, 'items for', data.orden_id)
+    } catch (itemsError: any) {
+      if (itemsError.message?.includes('vigencia') || itemsError.message?.includes('comision')) {
         const safeItems = items.map(({ vigencia: _v, comision: _c, ...rest }: any) => rest)
-        const { error: fe } = await supabaseAdmin.from('order_history_items').insert(safeItems)
-        if (fe) console.error('[ORDER_ITEM_ERROR]', fe.message)
-        else    console.log('[ORDER_ITEM_CREATED]', safeItems.length, 'items (migration pending)')
+        try {
+          await insertOrderHistoryItems(safeItems)
+          console.log('[ORDER_ITEM_CREATED]', safeItems.length, 'items (migration pending)')
+        } catch (fe: any) {
+          console.error('[ORDER_ITEM_ERROR]', fe.message)
+        }
       } else {
         console.error('[ORDER_ITEM_ERROR]', itemsError.message)
       }
-    } else {
-      console.log('[ORDER_ITEM_CREATED]', items.length, 'items for', data.orden_id)
     }
   }
 
