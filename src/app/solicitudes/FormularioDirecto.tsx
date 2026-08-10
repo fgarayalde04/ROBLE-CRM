@@ -354,7 +354,7 @@ export default function FormularioDirecto({ onBack }: Props) {
 
   function handleGenerate() {
     const globalErrors: string[] = []
-    if (!clientName.trim()) globalErrors.push('Seleccioná un cliente')
+    if (!clientName.trim()) globalErrors.push('Ingresá el nombre del cliente')
     if (blocks.length === 0) globalErrors.push('Agregá al menos un activo a la orden')
     const blockErrors = validateBlocks(blocks)
     const allErrors = [...globalErrors, ...blockErrors]
@@ -365,7 +365,7 @@ export default function FormularioDirecto({ onBack }: Props) {
 
   async function handleEnviarRevision() {
     const globalErrors: string[] = []
-    if (!clientName.trim()) globalErrors.push('Seleccioná un cliente')
+    if (!clientName.trim()) globalErrors.push('Ingresá el nombre del cliente')
     if (blocks.length === 0) globalErrors.push('Agregá al menos un activo')
     const blockErrors = validateBlocks(blocks)
     const allErrors = [...globalErrors, ...blockErrors]
@@ -540,12 +540,12 @@ export default function FormularioDirecto({ onBack }: Props) {
               </div>
               <div>
                 <label className={labelCls}>Nombre</label>
-                <input className={inputCls} placeholder="Autocompletado desde Legajos" value={clientName}
+                <input className={inputCls} placeholder="Nombre y apellido (o autocompletado desde Legajos)" value={clientName}
                   onChange={e => { setClientName(e.target.value); setPreview(null) }} />
               </div>
               <div>
                 <label className={labelCls}>N° de cliente</label>
-                <input className={inputCls} placeholder="Autocompletado desde Legajos" value={clientNumber}
+                <input className={inputCls} placeholder="Opcional — autocompletado desde Legajos" value={clientNumber}
                   onChange={e => { setClientNumber(e.target.value); setPreview(null) }} />
               </div>
               <div>
