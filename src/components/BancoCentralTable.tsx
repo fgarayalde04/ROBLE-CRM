@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useMemo, useEffect } from 'react'
+import Link from 'next/link'
 import OneDriveFolderButton from '@/components/OneDriveFolderButton'
 
 // ─── Checkbox localStorage backup ───────────────────────────────────────────
@@ -485,9 +486,19 @@ export default function BancoCentralTable({ initialRecords }: { initialRecords: 
                         {isCerrada && (
                           <span className="shrink-0 w-2 h-2 rounded-full bg-red-300" />
                         )}
-                        <span className={`text-sm font-medium truncate ${isCerrada ? 'text-red-500 line-through decoration-red-300' : 'text-[#2D3F52]'}`} title={record.folder_name}>
-                          {displayName(record.folder_name)}
-                        </span>
+                        {record.linked_client_id ? (
+                          <Link
+                            href={`/clients/${record.linked_client_id}`}
+                            className={`text-sm font-medium truncate hover:underline ${isCerrada ? 'text-red-500 line-through decoration-red-300' : 'text-[#2D3F52]'}`}
+                            title={`Ver ficha de cliente — ${record.folder_name}`}
+                          >
+                            {displayName(record.folder_name)}
+                          </Link>
+                        ) : (
+                          <span className={`text-sm font-medium truncate ${isCerrada ? 'text-red-500 line-through decoration-red-300' : 'text-[#2D3F52]'}`} title={record.folder_name}>
+                            {displayName(record.folder_name)}
+                          </span>
+                        )}
                       </div>
                     </td>
 
