@@ -8,6 +8,11 @@ types.setTypeParser(1082, (val) => val)                       // date -> 'YYYY-M
 types.setTypeParser(1114, (val) => val)                       // timestamp (no tz) -> raw string
 types.setTypeParser(1184, (val) => new Date(val).toISOString()) // timestamptz -> ISO 8601
 
+// pg returns `numeric`/`decimal` columns as strings (to avoid float precision loss),
+// but PostgREST/Supabase always serialized them as JSON numbers — every call site in
+// this app (deviation_percent.toFixed(), AUM math, etc.) assumes a real JS number.
+types.setTypeParser(1700, (val) => (val === null ? null : parseFloat(val))) // numeric -> number
+
 // Cached on globalThis so Next.js dev hot-reload doesn't spawn a new pool per edit.
 const globalForDb = globalThis as unknown as { pgPool?: Pool }
 
