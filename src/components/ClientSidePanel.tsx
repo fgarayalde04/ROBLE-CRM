@@ -210,9 +210,13 @@ export default function ClientSidePanel({ client, loading, onClose }: Props) {
                 const bcRecord = client.banco_central[0]
                 const email = client.email || titular.email || bcRecord?.authorized_email || null
                 const phone = client.phone || titular.celular || titular.telefono || null
-                const direccion = [titular.domicilio, titular.ciudad_cp, titular.pais].filter(Boolean).join(', ') || null
-                const cedula = titular.numero_documento || null
-                const fechaNac = titular.fecha_nacimiento || null
+                const direccion = client.address || [titular.domicilio, titular.ciudad_cp, titular.pais].filter(Boolean).join(', ') || null
+                const cedula = client.document_number
+                  ? [client.document_type, client.document_number].filter(Boolean).join(' ')
+                  : titular.numero_documento || null
+                const fechaNac = client.birth_date
+                  ? format(new Date(client.birth_date), 'd MMM yyyy', { locale: es })
+                  : titular.fecha_nacimiento || null
                 const empresa = titular.institucion || titular.profesion || null
                 const nroCliente = client.client_number || client.bc_ficha?.ficha_data?.codigo_cliente || bcRecord?.customer_number || null
                 return (

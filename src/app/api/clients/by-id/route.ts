@@ -10,7 +10,7 @@ export async function GET(req: Request) {
 
     const [client, bcRes, fichaRes] = await Promise.all([
       getClient(id).catch(() => null),
-      pool.query(`select id, type, customer_number, authorized_email from banco_central_records where client_id = $1`, [id]),
+      pool.query(`select id, type, customer_number, authorized_email from banco_central_records where linked_client_id = $1`, [id]),
       pool.query(
         `select ficha_data, tipo_cliente from bc_fichas where client_id = $1 order by updated_at desc limit 1`,
         [id]

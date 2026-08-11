@@ -87,6 +87,10 @@ export interface Client {
   closed_at: string | null
   closed_by: string | null
   close_reason: string | null
+  birth_date: string | null
+  address: string | null
+  document_type: string | null
+  document_number: string | null
 }
 
 export interface Event {

@@ -155,6 +155,28 @@ export default async function ClientDetailPage({ params }: Props) {
                   <dd className="text-sm text-gray-900 mt-0.5">{client.phone}</dd>
                 </div>
               )}
+              {client.address && (
+                <div>
+                  <dt className="text-xs text-gray-400">Dirección</dt>
+                  <dd className="text-sm text-gray-900 mt-0.5">{client.address}</dd>
+                </div>
+              )}
+              {client.document_number && (
+                <div>
+                  <dt className="text-xs text-gray-400">Documento</dt>
+                  <dd className="text-sm text-gray-900 mt-0.5">
+                    {[client.document_type, client.document_number].filter(Boolean).join(' ')}
+                  </dd>
+                </div>
+              )}
+              {client.birth_date && (
+                <div>
+                  <dt className="text-xs text-gray-400">Fecha de nacimiento</dt>
+                  <dd className="text-sm text-gray-900 mt-0.5">
+                    {format(new Date(client.birth_date), "d 'de' MMMM yyyy", { locale: es })}
+                  </dd>
+                </div>
+              )}
             </dl>
           </div>
 
