@@ -2,7 +2,13 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { jwtVerify } from 'jose'
 
-const PUBLIC_PATHS = ['/login', '/api/auth/login']
+const PUBLIC_PATHS = [
+  '/login',
+  '/api/auth/login',
+  '/api/auth/google-login',
+  '/api/auth/microsoft-login',
+  '/api/auth/microsoft/callback',
+]
 
 // Paths accessible to users with modo_asesor enabled (server-controlled)
 const ASESOR_ALLOWED = [
