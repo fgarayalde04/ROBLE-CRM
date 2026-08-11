@@ -1,7 +1,7 @@
 import { pool } from './pool'
 
 export const CHECKBOX_FIELDS = [
-  'ficha', 'perfil_inversor', 'ci', 'documentos_legales', 'cuestionario', 'perfil_de_riesgo',
+  'ficha', 'lista_verificacion', 'cuestionario', 'ci', 'cumplo', 'documentos_legales',
 ] as const
 export type CheckboxField = (typeof CHECKBOX_FIELDS)[number]
 
@@ -45,7 +45,7 @@ export async function reopenBancoCentralRecord(id: string) {
   return newStatus
 }
 
-export async function updateBancoCentralText(id: string, field: 'comentario' | 'fa', value: string) {
+export async function updateBancoCentralText(id: string, field: 'comentario' | 'fa' | 'customer_number', value: string) {
   await pool.query(`update banco_central_records set "${field}" = $1, updated_at = now() where id = $2`, [value, id])
 }
 

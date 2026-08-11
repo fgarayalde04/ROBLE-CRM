@@ -120,6 +120,39 @@ function Checkbox({ checked, onChange, disabled }: { checked: boolean; onChange:
   )
 }
 
+function NumeroCell({ recordId, value, isCerrada }: { recordId: string; value: string | null; isCerrada: boolean }) {
+  const [text, setText] = useState(value ?? '')
+  const [saving, setSaving] = useState(false)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  function handleChange(v: string) {
+    setText(v)
+    if (timerRef.current) clearTimeout(timerRef.current)
+    timerRef.current = setTimeout(async () => {
+      setSaving(true)
+      await fetch('/api/banco-central', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: recordId, field: 'customer_number', value: v.trim() || null }),
+      })
+      setSaving(false)
+    }, 600)
+  }
+
+  return (
+    <input
+      type="text"
+      value={text}
+      onChange={(e) => handleChange(e.target.value)}
+      placeholder="—"
+      maxLength={20}
+      className={`w-24 font-mono text-xs bg-transparent border-b border-transparent hover:border-gray-300 focus:border-[#16A34A] focus:outline-none py-0.5 transition-colors ${
+        saving ? 'text-gray-300' : isCerrada ? 'text-red-400' : 'text-gray-600'
+      }`}
+    />
+  )
+}
+
 function FaCell({ recordId, value }: { recordId: string; value: string | null }) {
   const [text, setText] = useState(value ?? '')
   const [saving, setSaving] = useState(false)
@@ -473,11 +506,9 @@ export default function BancoCentralTable({ initialRecords }: { initialRecords: 
                       <FaCell recordId={record.id} value={record.fa} />
                     </td>
 
-                    {/* N° Cliente */}
+                    {/* N° Cliente — editable */}
                     <td className="px-4 py-2.5">
-                      <span className={`font-mono text-xs ${isCerrada ? 'text-red-400' : 'text-gray-400'}`}>
-                        {record.customer_number ?? '—'}
-                      </span>
+                      <NumeroCell recordId={record.id} value={record.customer_number} isCerrada={isCerrada} />
                     </td>
 
                     {/* Nombre */}

@@ -35,7 +35,7 @@ export async function PUT(req: NextRequest) {
 
   if (!field) return NextResponse.json({ error: 'field requerido' }, { status: 400 })
 
-  if (field === 'comentario' || field === 'fa') {
+  if (field === 'comentario' || field === 'fa' || field === 'customer_number') {
     await updateBancoCentralText(id, field, value as string)
     return NextResponse.json({ ok: true })
   }
