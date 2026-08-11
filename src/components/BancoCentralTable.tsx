@@ -93,6 +93,9 @@ const CHECKBOX_FIELDS = [
 
 type CheckboxKey = typeof CHECKBOX_FIELDS[number]['key']
 
+// documentos_legales solo aplica a sociedades, no a personas físicas — no bloquea "Completo"
+const REQUIRED_FIELDS: CheckboxKey[] = ['ficha', 'lista_verificacion', 'cuestionario', 'ci', 'cumplo']
+
 function displayName(folderName: string) {
   return folderName.replace(/^\d+\s*-\s*/, '').trim()
 }
@@ -287,7 +290,7 @@ export default function BancoCentralTable({ initialRecords }: { initialRecords: 
         const item = toRestore.find((t) => t.id === r.id)
         if (!item) return r
         const updated = { ...r, ...item }
-        const allChecked = FIELDS.every((f) => updated[f])
+        const allChecked = REQUIRED_FIELDS.every((f) => updated[f])
         return { ...updated, status: allChecked ? 'completo' : 'incompleto' }
       }),
     )
@@ -313,7 +316,7 @@ export default function BancoCentralTable({ initialRecords }: { initialRecords: 
       prev.map((r) => {
         if (r.id !== recordId) return r
         const updated = { ...r, [field]: newValue }
-        const allChecked = CHECKBOX_FIELDS.every((f) => updated[f.key])
+        const allChecked = REQUIRED_FIELDS.every((f) => updated[f])
         return { ...updated, status: allChecked ? 'completo' : 'incompleto' }
       }),
     )
@@ -342,7 +345,7 @@ export default function BancoCentralTable({ initialRecords }: { initialRecords: 
     // Optimistic: recompute from current checkboxes
     setRecords((prev) => prev.map((r) => {
       if (r.id !== recordId) return r
-      const allChecked = CHECKBOX_FIELDS.every((f) => r[f.key])
+      const allChecked = REQUIRED_FIELDS.every((f) => r[f])
       return { ...r, status: allChecked ? 'completo' : 'incompleto' }
     }))
     await fetch('/api/banco-central', {

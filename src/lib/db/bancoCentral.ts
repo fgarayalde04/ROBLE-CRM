@@ -5,6 +5,11 @@ export const CHECKBOX_FIELDS = [
 ] as const
 export type CheckboxField = (typeof CHECKBOX_FIELDS)[number]
 
+// documentos_legales solo aplica a sociedades, no a personas físicas — no bloquea "Completo"
+export const REQUIRED_FIELDS = [
+  'ficha', 'lista_verificacion', 'cuestionario', 'ci', 'cumplo',
+] as const satisfies readonly CheckboxField[]
+
 export async function listBancoCentralRecords(type?: string | null, customerNumbers?: string[] | null) {
   const where: string[] = []
   const params: any[] = []
@@ -39,7 +44,7 @@ export async function closeBancoCentralRecord(id: string) {
 
 export async function reopenBancoCentralRecord(id: string) {
   const row = await getBancoCentralCheckboxes(id)
-  const allChecked = CHECKBOX_FIELDS.every((f) => row?.[f] === true)
+  const allChecked = REQUIRED_FIELDS.every((f) => row?.[f] === true)
   const newStatus = allChecked ? 'completo' : 'incompleto'
   await pool.query(`update banco_central_records set status = $1, updated_at = now() where id = $2`, [newStatus, id])
   return newStatus
@@ -53,7 +58,7 @@ export async function updateBancoCentralCheckbox(id: string, field: CheckboxFiel
   const row = await getBancoCentralCheckboxes(id)
   if (!row) return null
   const merged = { ...row, [field]: value }
-  const allChecked = CHECKBOX_FIELDS.every((f) => merged[f] === true)
+  const allChecked = REQUIRED_FIELDS.every((f) => merged[f] === true)
   const newStatus = allChecked ? 'completo' : 'incompleto'
   await pool.query(
     `update banco_central_records set "${field}" = $1, status = $2, updated_at = now() where id = $3`,
@@ -69,7 +74,7 @@ export async function bulkRestoreBancoCentralCheckboxes(records: ({ id: string }
     for (const f of CHECKBOX_FIELDS) {
       if (typeof rec[f] === 'boolean') checkboxes[f] = rec[f]
     }
-    const allChecked = CHECKBOX_FIELDS.every((f) => checkboxes[f] === true)
+    const allChecked = REQUIRED_FIELDS.every((f) => checkboxes[f] === true)
     const entries = Object.entries(checkboxes)
     const setClause = entries.map(([k], i) => `"${k}" = $${i + 1}`)
     const values: any[] = entries.map(([, v]) => v)
