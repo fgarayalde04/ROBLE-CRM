@@ -8,15 +8,15 @@ import OneDriveFolderButton from '@/components/OneDriveFolderButton'
 // Persists checkbox state keyed by folder_path so that even if DB records
 // are deleted and re-synced (new IDs), we can restore the previous state.
 
-const BACKUP_KEY = 'banco_central_checkboxes_v3'
+const BACKUP_KEY = 'banco_central_checkboxes_v4'
 
 type CheckboxSnapshot = {
-  ficha:             boolean
-  perfil_inversor:   boolean
-  ci:                boolean
+  ficha:              boolean
+  lista_verificacion: boolean
+  ci:                 boolean
   documentos_legales: boolean
-  cuestionario:      boolean
-  perfil_de_riesgo:  boolean
+  cuestionario:       boolean
+  cumplo:             boolean
 }
 type BackupMap = Record<string, CheckboxSnapshot> // item_id (or folder_path fallback) → checkboxes
 
@@ -39,11 +39,11 @@ function saveBackup(records: BancoCentralRecord[]) {
   for (const r of records) {
     map[backupKey(r)] = {
       ficha:              r.ficha,
-      perfil_inversor:    r.perfil_inversor,
+      lista_verificacion: r.lista_verificacion,
       ci:                 r.ci,
       documentos_legales: r.documentos_legales,
       cuestionario:       r.cuestionario,
-      perfil_de_riesgo:   r.perfil_de_riesgo,
+      cumplo:             r.cumplo,
     }
   }
   try { localStorage.setItem(BACKUP_KEY, JSON.stringify(map)) } catch {}
@@ -66,14 +66,14 @@ export interface BancoCentralRecord {
   type: 'local' | 'internacional'
   fa: string | null
   ficha: boolean
-  perfil_inversor: boolean
+  lista_verificacion: boolean
   ci: boolean
   documentos_legales: boolean
   cuestionario: boolean
-  perfil_de_riesgo: boolean
-  // Legacy fields kept in DB but not shown in UI
-  lista_verificacion: boolean
   cumplo: boolean
+  // Not used by the current compliance checklist
+  perfil_inversor: boolean
+  perfil_de_riesgo: boolean
   comentario: string | null
   status: string
   linked_client_id: string | null
@@ -84,11 +84,11 @@ export interface BancoCentralRecord {
 
 const CHECKBOX_FIELDS = [
   { key: 'ficha'              as const, label: 'Ficha cliente' },
-  { key: 'perfil_inversor'    as const, label: 'Perfil inversor' },
-  { key: 'ci'                 as const, label: 'Cédula' },
-  { key: 'documentos_legales' as const, label: 'Docs legales' },
+  { key: 'lista_verificacion' as const, label: 'Lista verif.' },
   { key: 'cuestionario'       as const, label: 'Cuest. asesor' },
-  { key: 'perfil_de_riesgo'   as const, label: 'Perfil riesgo' },
+  { key: 'ci'                 as const, label: 'Cédula' },
+  { key: 'cumplo'             as const, label: 'Cumplo' },
+  { key: 'documentos_legales' as const, label: 'Docs legales (sociedad)' },
 ]
 
 type CheckboxKey = typeof CHECKBOX_FIELDS[number]['key']
@@ -231,7 +231,7 @@ export default function BancoCentralTable({ initialRecords }: { initialRecords: 
     if (Object.keys(backup).length === 0) return
 
     const FIELDS: (keyof CheckboxSnapshot)[] = [
-      'ficha', 'perfil_inversor', 'ci', 'documentos_legales', 'cuestionario', 'perfil_de_riesgo',
+      'ficha', 'lista_verificacion', 'ci', 'documentos_legales', 'cuestionario', 'cumplo',
     ]
 
     type RestoreItem = CheckboxSnapshot & { id: string }
