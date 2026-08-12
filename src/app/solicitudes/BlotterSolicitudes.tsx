@@ -275,22 +275,69 @@ const TIPO_CFG: Record<string, { label: string; cls: string }> = {
   accion:   { label: 'Acción',   cls: 'bg-blue-50 text-blue-700' },
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function assetDisplay(a: any) {
+  const tipo = a?.type as string | undefined
+  const nombre =
+    tipo === 'acciones' ? (a.nombre || a.ticker || '—')
+    : tipo === 'fondos'  ? (a.fondo || '—')
+    : tipo === 'bonos'   ? (a.descripcion || '—')
+    : '—'
+  const cantidad = tipo !== 'fondos' && a?.cantidad ? Number(a.cantidad) : null
+  const monto    = tipo === 'fondos' && a?.monto    ? Number(a.monto)    : null
+  return { tipo: tipo ?? null, nombre, moneda: a?.moneda ?? null, cantidad, monto, operacion: a?.operacion ?? null }
+}
+
+// One line per asset — a solicitud with 4 activos must show as 4 separate blotter lines
+interface BlotterLine {
+  row: Solicitud
+  key: string
+  tipo: string | null
+  instrumento_nombre: string
+  moneda: string | null
+  monto: number | null
+  cantidad: number | null
+  operacion: string | null
+}
+
+function expandRows(rows: Solicitud[]): BlotterLine[] {
+  const lines: BlotterLine[] = []
+  for (const row of rows) {
+    const assets = Array.isArray(row.assets_json) ? row.assets_json : []
+    if (assets.length <= 1) {
+      lines.push({
+        row, key: row.id, tipo: row.instrumento_tipo, instrumento_nombre: row.instrumento_nombre,
+        moneda: row.moneda, monto: row.monto, cantidad: row.cantidad, operacion: row.tipo_operacion,
+      })
+    } else {
+      assets.forEach((asset, i) => {
+        const d = assetDisplay(asset)
+        lines.push({
+          row, key: `${row.id}-${i}`, tipo: d.tipo, instrumento_nombre: d.nombre,
+          moneda: d.moneda, monto: d.monto, cantidad: d.cantidad, operacion: d.operacion,
+        })
+      })
+    }
+  }
+  return lines
+}
+
 function exportCSV(rows: Solicitud[]) {
   const headers = ['N° Interno','Fecha','Hora','Cliente','N°','Asesor','Operación','Tipo','Instrumento','Moneda','Monto ($)','Cantidad','Estado','Operador','Fecha ejecución']
-  const lines = rows.map(r => [
-    r.solicitud_id,
-    r.fecha_operacion,
-    format(new Date(r.created_at), 'HH:mm'),
-    r.client_name, r.client_number, r.asesor,
-    OP_LABEL[r.tipo_operacion] ?? r.tipo_operacion,
-    r.instrumento_tipo,
-    r.instrumento_nombre,
-    r.moneda,
-    r.monto ?? '',
-    r.cantidad ?? '',
-    ESTADO_CFG[r.estado]?.label ?? r.estado,
-    r.operador ?? '',
-    r.ejecutado_at ? format(new Date(r.ejecutado_at), 'dd/MM/yyyy HH:mm') : '',
+  const lines = expandRows(rows).map(l => [
+    l.row.solicitud_id,
+    l.row.fecha_operacion,
+    format(new Date(l.row.created_at), 'HH:mm'),
+    l.row.client_name, l.row.client_number, l.row.asesor,
+    OP_LABEL[l.operacion ?? ''] ?? l.operacion,
+    l.tipo,
+    l.instrumento_nombre,
+    l.moneda,
+    l.monto ?? '',
+    l.cantidad ?? '',
+    ESTADO_CFG[l.row.estado]?.label ?? l.row.estado,
+    l.row.operador ?? '',
+    l.row.ejecutado_at ? format(new Date(l.row.ejecutado_at), 'dd/MM/yyyy HH:mm') : '',
   ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))
   const csv = [headers.join(','), ...lines].join('\n')
   const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' })
@@ -507,11 +554,12 @@ export default function BlotterSolicitudes({ isMesa, userName }: { isMesa: boole
             <tbody className="divide-y divide-gray-50">
               {rows.length === 0 && !loading ? (
                 <tr><td colSpan={14} className="px-4 py-8 text-center text-sm text-gray-400">Sin resultados.</td></tr>
-              ) : rows.map(row => {
+              ) : expandRows(rows).map(line => {
+                const row = line.row
                 const cfg = ESTADO_CFG[row.estado] ?? ESTADO_CFG.mesa_operaciones
-                const tipoCfg = TIPO_CFG[row.instrumento_tipo?.toLowerCase() ?? '']
+                const tipoCfg = TIPO_CFG[line.tipo?.toLowerCase() ?? '']
                 return (
-                  <tr key={row.id}
+                  <tr key={line.key}
                     onClick={() => { if (selectedRow?.id === row.id) { setSelectedRow(null); setEventos([]) } else { loadDetail(row) } }}
                     className={`cursor-pointer hover:bg-gray-50 transition-colors ${selectedRow?.id === row.id ? 'bg-blue-50' : ''}`}>
                     <td className="px-3 py-2 whitespace-nowrap">
@@ -525,22 +573,22 @@ export default function BlotterSolicitudes({ isMesa, userName }: { isMesa: boole
                       <p className="text-[10px] text-gray-400">#{row.client_number}</p>
                     </td>
                     <td className="px-3 py-2 text-xs text-gray-600 whitespace-nowrap">{row.asesor}</td>
-                    <td className="px-3 py-2 text-xs font-medium text-gray-700 whitespace-nowrap">{OP_LABEL[row.tipo_operacion] ?? row.tipo_operacion}</td>
+                    <td className="px-3 py-2 text-xs font-medium text-gray-700 whitespace-nowrap">{OP_LABEL[line.operacion ?? ''] ?? line.operacion}</td>
                     <td className="px-3 py-2 whitespace-nowrap">
                       {tipoCfg
                         ? <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${tipoCfg.cls}`}>{tipoCfg.label}</span>
-                        : <span className="text-xs text-gray-400">{row.instrumento_tipo ?? '—'}</span>
+                        : <span className="text-xs text-gray-400">{line.tipo ?? '—'}</span>
                       }
                     </td>
                     <td className="px-3 py-2 text-xs text-gray-800 max-w-[160px]">
-                      <p className="truncate">{row.instrumento_nombre}</p>
+                      <p className="truncate">{line.instrumento_nombre}</p>
                     </td>
-                    <td className="px-3 py-2 text-xs text-gray-600 whitespace-nowrap">{row.moneda}</td>
+                    <td className="px-3 py-2 text-xs text-gray-600 whitespace-nowrap">{line.moneda}</td>
                     <td className="px-3 py-2 text-xs text-gray-700 whitespace-nowrap font-mono tabular-nums text-right">
-                      {row.monto ? Number(row.monto).toLocaleString('es-UY') : '—'}
+                      {line.monto ? Number(line.monto).toLocaleString('es-UY') : '—'}
                     </td>
                     <td className="px-3 py-2 text-xs text-gray-700 whitespace-nowrap font-mono tabular-nums text-right">
-                      {row.cantidad ? Number(row.cantidad).toLocaleString('es-UY') : '—'}
+                      {line.cantidad ? Number(line.cantidad).toLocaleString('es-UY') : '—'}
                     </td>
                     <td className="px-3 py-2 whitespace-nowrap">
                       <div className="flex items-center gap-1.5">
