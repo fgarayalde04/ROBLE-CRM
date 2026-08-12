@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { searchBancoCentralRecords, getClientEmailsByNumbers } from '@/lib/db/bancoCentral'
+import { getAllEmailsByClientNumbers } from '@/lib/db/clients'
 
 // Strip numeric prefix "1234 - " from folder names
 function displayName(folderName: string): string {
@@ -33,10 +34,14 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  const allNumbers = rawResults.map((r) => r.customer_number).filter(Boolean) as string[]
+  const allEmailsMap = await getAllEmailsByClientNumbers(allNumbers)
+
   const results = rawResults.map((r) => {
     const authorizedEmail =
       (r.authorized_email as string | null) ||
       (r.customer_number ? (clientEmailMap.get(r.customer_number) ?? null) : null)
+    const allEmails = r.customer_number ? (allEmailsMap.get(r.customer_number) ?? []) : []
     return {
       id: r.id,
       customer_number: r.customer_number as string | null,
@@ -46,6 +51,7 @@ export async function GET(req: NextRequest) {
       fa: r.fa as string | null,
       status: r.status as string,
       authorized_email: authorizedEmail,
+      all_emails: allEmails.length > 0 ? allEmails : (authorizedEmail ? [authorizedEmail] : []),
     }
   })
 

@@ -5,6 +5,7 @@ import { getDocuments, getTasks, getDeadlines } from '@/lib/supabase/queries'
 import { getClient } from '@/lib/db/clients'
 import StatusBadge from '@/components/StatusBadge'
 import ComplianceBlock from '@/components/ComplianceBlock'
+import ClientEmailsManager from '@/components/ClientEmailsManager'
 import OneDriveFolderButton from '@/components/OneDriveFolderButton'
 import ClientCloseButton from '@/components/ClientCloseButton'
 import DeleteClientButton from '@/components/DeleteClientButton'
@@ -141,14 +142,6 @@ export default async function ClientDetailPage({ params }: Props) {
                 <dt className="text-xs text-gray-400">N° de cliente</dt>
                 <dd className="text-sm font-mono text-gray-900 mt-0.5">{client.client_number}</dd>
               </div>
-              {client.email && (
-                <div>
-                  <dt className="text-xs text-gray-400">Email</dt>
-                  <dd className="text-sm text-gray-900 mt-0.5">
-                    <a href={`mailto:${client.email}`} className="hover:underline">{client.email}</a>
-                  </dd>
-                </div>
-              )}
               {client.phone && (
                 <div>
                   <dt className="text-xs text-gray-400">Teléfono</dt>
@@ -179,6 +172,8 @@ export default async function ClientDetailPage({ params }: Props) {
               )}
             </dl>
           </div>
+
+          <ClientEmailsManager clientId={client.id} primaryEmail={client.email} />
 
           <div className="bg-white rounded-lg border border-gray-200 p-5">
             <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-4">Perfil</h2>

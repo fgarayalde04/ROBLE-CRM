@@ -300,6 +300,7 @@ export default function FormularioDirecto({ onBack }: Props) {
   const [clientNumber, setClientNumber] = useState('')
   const [clientEmail, setClientEmail]   = useState('')
   const [emailMissing, setEmailMissing] = useState(false)
+  const [availableEmails, setAvailableEmails] = useState<string[]>([])
   const [fecha, setFecha]               = useState(todayStr())
   const [ccEmails, setCcEmails]         = useState<string[]>([])
   const [ccInput, setCcInput]           = useState('')
@@ -522,10 +523,11 @@ export default function FormularioDirecto({ onBack }: Props) {
                 </label>
                 <LegajosSearchInput
                   value={clientId}
-                  onChange={(id, name, number, _fa, email) => {
+                  onChange={(id, name, number, _fa, email, allEmails) => {
                     setClientId(id)
                     if (name) setClientName(name)
                     if (number) setClientNumber(number)
+                    setAvailableEmails(allEmails ?? [])
                     if (!id) {
                       setClientName(''); setClientNumber(''); setClientEmail(''); setEmailMissing(false)
                     } else if (email) {
@@ -555,6 +557,24 @@ export default function FormularioDirecto({ onBack }: Props) {
                   onChange={e => { setClientEmail(e.target.value); setEmailMissing(false); setPreview(null) }} />
                 {emailMissing && (
                   <p className="mt-1 text-[11px] text-amber-600">No tiene email en su ficha. Ingresalo manualmente.</p>
+                )}
+                {availableEmails.length > 1 && (
+                  <div className="mt-1.5 flex flex-wrap gap-1.5">
+                    {availableEmails.map(e => (
+                      <button
+                        key={e}
+                        type="button"
+                        onClick={() => { setClientEmail(e); setEmailMissing(false); setPreview(null) }}
+                        className={`text-[10px] px-2 py-0.5 rounded-full border transition-colors ${
+                          clientEmail === e
+                            ? 'bg-[#2D3F52] text-white border-[#2D3F52]'
+                            : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
+                        }`}
+                      >
+                        {e}
+                      </button>
+                    ))}
+                  </div>
                 )}
               </div>
               <div>

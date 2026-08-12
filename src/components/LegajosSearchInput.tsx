@@ -11,11 +11,12 @@ interface LegajoResult {
   fa: string | null
   status: string
   authorized_email: string | null
+  all_emails?: string[]
 }
 
 interface Props {
   value: string
-  onChange: (id: string, displayName: string, customerNumber: string, fa?: string, email?: string | null) => void
+  onChange: (id: string, displayName: string, customerNumber: string, fa?: string, email?: string | null, allEmails?: string[]) => void
   placeholder?: string
   className?: string
 }
@@ -69,14 +70,14 @@ export default function LegajosSearchInput({ value, onChange, placeholder, class
     setSelectedName(r.display_name)
     setQuery('')
     setOpen(false)
-    onChange(r.id, r.display_name, r.customer_number ?? '', r.fa ?? undefined, r.authorized_email ?? null)
+    onChange(r.id, r.display_name, r.customer_number ?? '', r.fa ?? undefined, r.authorized_email ?? null, r.all_emails ?? [])
   }
 
   function handleClear() {
     setSelectedName('')
     setQuery('')
     setOpen(false)
-    onChange('', '', '', undefined, null)
+    onChange('', '', '', undefined, null, [])
   }
 
   return (

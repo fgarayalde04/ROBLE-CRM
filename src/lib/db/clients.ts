@@ -180,3 +180,64 @@ async function logActivity(entityType: string, entityId: string, action: string,
     [entityType, entityId, action, description, userName ?? null]
   )
 }
+
+// ─── Emails adicionales (una sociedad puede tener varios firmantes/contactos) ──
+
+export interface ClientEmail {
+  id: string
+  client_id: string
+  email: string
+  label: string | null
+  created_at: string
+}
+
+export async function listClientEmails(clientId: string) {
+  const { rows } = await pool.query(
+    `select * from client_emails where client_id = $1 order by created_at asc`,
+    [clientId]
+  )
+  return rows as ClientEmail[]
+}
+
+export async function addClientEmail(clientId: string, email: string, label: string | null) {
+  const { rows } = await pool.query(
+    `insert into client_emails (client_id, email, label) values ($1, $2, $3) returning *`,
+    [clientId, email.trim().toLowerCase(), label?.trim() || null]
+  )
+  return rows[0] as ClientEmail
+}
+
+export async function deleteClientEmail(id: string, clientId: string) {
+  await pool.query(`delete from client_emails where id = $1 and client_id = $2`, [id, clientId])
+}
+
+// All emails for a client: primary (clients.email) + additional (client_emails)
+export async function listAllEmailsForClient(clientId: string) {
+  const { rows } = await pool.query(
+    `select 'primary' as kind, id, email, null as label from clients where id = $1 and email is not null
+     union all
+     select 'additional' as kind, id, email, label from client_emails where client_id = $1
+     order by kind asc`,
+    [clientId]
+  )
+  return rows as { kind: 'primary' | 'additional'; id: string; email: string; label: string | null }[]
+}
+
+export async function getAllEmailsByClientNumbers(customerNumbers: string[]) {
+  if (customerNumbers.length === 0) return new Map<string, string[]>()
+  const { rows } = await pool.query(
+    `select c.client_number, c.email as primary_email,
+       coalesce(array_agg(ce.email) filter (where ce.email is not null), '{}') as additional_emails
+     from clients c
+     left join client_emails ce on ce.client_id = c.id
+     where c.client_number = ANY($1)
+     group by c.client_number, c.email`,
+    [customerNumbers]
+  )
+  const map = new Map<string, string[]>()
+  for (const r of rows) {
+    const emails = [r.primary_email, ...(r.additional_emails ?? [])].filter(Boolean)
+    map.set(r.client_number, Array.from(new Set(emails)))
+  }
+  return map
+}
