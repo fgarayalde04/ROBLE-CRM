@@ -63,6 +63,53 @@ const ESTADO_CFG: Record<string, { label: string; color: string; bg: string; dot
 }
 const OP_LABEL: Record<string,string> = { compra:'Compra',venta:'Venta',suscripcion:'Compra',rescate:'Venta' }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function assetDisplay(a: any) {
+  const tipo = a?.type as string | undefined
+  const nombre =
+    tipo === 'acciones' ? (a.nombre || a.ticker || '—')
+    : tipo === 'fondos'  ? (a.fondo || '—')
+    : tipo === 'bonos'   ? (a.descripcion || '—')
+    : '—'
+  const cantidad = tipo !== 'fondos' && a?.cantidad ? Number(a.cantidad) : null
+  const monto    = tipo === 'fondos' && a?.monto    ? Number(a.monto)    : null
+  return { tipo: tipo ?? null, nombre, moneda: a?.moneda ?? null, cantidad, monto, operacion: a?.operacion ?? null }
+}
+
+// One line per asset — a solicitud with N activos must show as N separate rows
+interface BlotterLine {
+  row: Solicitud
+  key: string
+  tipo: string | null
+  instrumento_nombre: string
+  moneda: string | null
+  monto: number | null
+  cantidad: number | null
+  operacion: string | null
+}
+
+function expandRows(rows: Solicitud[]): BlotterLine[] {
+  const lines: BlotterLine[] = []
+  for (const row of rows) {
+    const assets = Array.isArray(row.assets_json) ? row.assets_json : []
+    if (assets.length <= 1) {
+      lines.push({
+        row, key: row.id, tipo: row.instrumento_tipo, instrumento_nombre: row.instrumento_nombre,
+        moneda: row.moneda, monto: row.monto, cantidad: row.cantidad, operacion: row.tipo_operacion,
+      })
+    } else {
+      assets.forEach((asset, i) => {
+        const d = assetDisplay(asset)
+        lines.push({
+          row, key: `${row.id}-${i}`, tipo: d.tipo, instrumento_nombre: d.nombre,
+          moneda: d.moneda, monto: d.monto, cantidad: d.cantidad, operacion: d.operacion,
+        })
+      })
+    }
+  }
+  return lines
+}
+
 function ProgressBar({ estado }: { estado: string }) {
   if (estado === 'cancelada') return <span className="text-xs text-gray-400 italic">Cancelada</span>
   if (estado === 'devuelta')  return <span className="text-xs text-orange-600 font-medium">↩ Devuelta al asesor</span>
@@ -495,10 +542,11 @@ export default function MesaHoy({ isMesa, userName }: { isMesa: boolean; userNam
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
-                  {rows.map(row => {
+                  {expandRows(rows).map(line => {
+                    const row = line.row
                     const cfg = ESTADO_CFG[row.estado] ?? ESTADO_CFG.mesa_operaciones
                     return (
-                      <tr key={row.id} onClick={() => loadDetail(row.id)}
+                      <tr key={line.key} onClick={() => loadDetail(row.id)}
                         className={`cursor-pointer hover:bg-blue-50/50 transition-colors ${selected?.id === row.id ? 'bg-blue-50' : ''}`}>
                         <td className="px-3 py-2 text-[11px] text-gray-400 whitespace-nowrap">
                           {format(new Date(row.created_at), 'HH:mm')}
@@ -509,24 +557,24 @@ export default function MesaHoy({ isMesa, userName }: { isMesa: boolean; userNam
                         </td>
                         <td className="px-3 py-2 text-xs text-gray-600 whitespace-nowrap">{row.asesor}</td>
                         <td className="px-3 py-2 text-xs font-medium text-gray-700 whitespace-nowrap">
-                          {OP_LABEL[row.tipo_operacion] ?? row.tipo_operacion}
+                          {OP_LABEL[line.operacion ?? ''] ?? line.operacion}
                         </td>
                         <td className="px-3 py-2">
-                          <p className="text-xs text-gray-800 truncate max-w-[140px]">{row.instrumento_nombre}</p>
+                          <p className="text-xs text-gray-800 truncate max-w-[140px]">{line.instrumento_nombre}</p>
                           <div className="flex items-center gap-1 mt-0.5">
-                            {row.instrumento_tipo && (
+                            {line.tipo && (
                               <span className="text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-[#2D3F52]/10 text-[#2D3F52]">
-                                {row.instrumento_tipo}
+                                {line.tipo}
                               </span>
                             )}
                             {row.clase && <span className="text-[10px] text-gray-400">{row.clase}</span>}
                           </div>
                         </td>
                         <td className="px-3 py-2 text-xs text-gray-700 whitespace-nowrap font-mono tabular-nums text-right">
-                          {row.monto ? `${row.moneda} ${Number(row.monto).toLocaleString('es-UY')}` : <span className="text-gray-300">—</span>}
+                          {line.monto ? `${line.moneda} ${Number(line.monto).toLocaleString('es-UY')}` : <span className="text-gray-300">—</span>}
                         </td>
                         <td className="px-3 py-2 text-xs text-gray-700 whitespace-nowrap font-mono tabular-nums text-right">
-                          {row.cantidad ? Number(row.cantidad).toLocaleString('es-UY') : <span className="text-gray-300">—</span>}
+                          {line.cantidad ? Number(line.cantidad).toLocaleString('es-UY') : <span className="text-gray-300">—</span>}
                         </td>
                         <td className="px-3 py-2 whitespace-nowrap">
                           <div className="flex items-center gap-1.5">

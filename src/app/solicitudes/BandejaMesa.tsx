@@ -25,6 +25,8 @@ interface Solicitud {
   mail_enviado_at: string | null
   ejecutado_at: string | null
   created_at: string
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  assets_json?: any[] | null
 }
 
 interface SolicitudDetail extends Solicitud {
@@ -78,6 +80,54 @@ const TIPO_BADGE: Record<string, string> = {
   fondos:   'bg-emerald-50 text-emerald-700',
   bonos:    'bg-amber-50 text-amber-700',
   acciones: 'bg-blue-50 text-blue-700',
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function assetDisplay(a: any) {
+  const tipo = a?.type as string | undefined
+  const nombre =
+    tipo === 'acciones' ? (a.nombre || a.ticker || '—')
+    : tipo === 'fondos'  ? (a.fondo || '—')
+    : tipo === 'bonos'   ? (a.descripcion || '—')
+    : '—'
+  const cantidad = tipo !== 'fondos' && a?.cantidad ? Number(a.cantidad) : null
+  const monto    = tipo === 'fondos' && a?.monto    ? Number(a.monto)    : null
+  return { tipo: tipo ?? null, nombre, moneda: a?.moneda ?? null, cantidad, monto, operacion: a?.operacion ?? null }
+}
+
+// One line per asset — a solicitud with N activos must show as N separate rows
+interface BlotterLine {
+  row: Solicitud
+  key: string
+  tipo: string | null
+  instrumento_nombre: string
+  clase: string | null
+  moneda: string | null
+  monto: number | null
+  cantidad: number | null
+  operacion: string | null
+}
+
+function expandRows(rows: Solicitud[]): BlotterLine[] {
+  const lines: BlotterLine[] = []
+  for (const row of rows) {
+    const assets = Array.isArray(row.assets_json) ? row.assets_json : []
+    if (assets.length <= 1) {
+      lines.push({
+        row, key: row.id, tipo: row.instrumento_tipo, instrumento_nombre: row.instrumento_nombre,
+        clase: row.clase, moneda: row.moneda, monto: row.monto, cantidad: row.cantidad, operacion: row.tipo_operacion,
+      })
+    } else {
+      assets.forEach((asset, i) => {
+        const d = assetDisplay(asset)
+        lines.push({
+          row, key: `${row.id}-${i}`, tipo: d.tipo, instrumento_nombre: d.nombre,
+          clase: null, moneda: d.moneda, monto: d.monto, cantidad: d.cantidad, operacion: d.operacion,
+        })
+      })
+    }
+  }
+  return lines
 }
 
 function ProgressBar({ estado }: { estado: string }) {
@@ -320,12 +370,13 @@ export default function BandejaMesa({ isMesa, userName }: { isMesa: boolean; use
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
-                  {rows.map(row => {
+                  {expandRows(rows).map(line => {
+                    const row = line.row
                     const cfg = ESTADO_CFG[row.estado] ?? ESTADO_CFG.mesa_operaciones
                     const isSelected = selected?.id === row.id
                     return (
                       <tr
-                        key={row.id}
+                        key={line.key}
                         onClick={() => loadDetail(row.id)}
                         className={`cursor-pointer hover:bg-blue-50/50 transition-colors ${isSelected ? 'bg-blue-50' : ''}`}
                       >
@@ -336,14 +387,14 @@ export default function BandejaMesa({ isMesa, userName }: { isMesa: boolean; use
                         </td>
                         <td className="px-3 py-2.5 text-gray-600 whitespace-nowrap">{row.asesor}</td>
                         <td className="px-3 py-2.5 whitespace-nowrap">
-                          <span className="font-medium text-gray-700">{OP_LABEL[row.tipo_operacion] ?? row.tipo_operacion}</span>
+                          <span className="font-medium text-gray-700">{OP_LABEL[line.operacion ?? ''] ?? line.operacion}</span>
                         </td>
                         <td className="px-3 py-2.5">
-                          <p className="text-gray-800 truncate max-w-[160px]">{row.instrumento_nombre}</p>
-                          {row.clase && <p className="text-[11px] text-gray-400">{row.clase}</p>}
+                          <p className="text-gray-800 truncate max-w-[160px]">{line.instrumento_nombre}</p>
+                          {line.clase && <p className="text-[11px] text-gray-400">{line.clase}</p>}
                         </td>
                         <td className="px-3 py-2.5 whitespace-nowrap text-gray-700">
-                          {row.monto ? `${row.moneda} ${Number(row.monto).toLocaleString('es-UY')}` : row.cantidad ? `${row.cantidad} uds` : '—'}
+                          {line.monto ? `${line.moneda} ${Number(line.monto).toLocaleString('es-UY')}` : line.cantidad ? `${line.cantidad} uds` : '—'}
                         </td>
                         <td className="px-3 py-2.5 whitespace-nowrap">
                           <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${cfg.bg} ${cfg.color}`}>
