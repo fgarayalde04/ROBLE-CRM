@@ -80,6 +80,8 @@ export interface BancoCentralRecord {
   source: string | null
   last_synced_at: string | null
   updated_at: string | null
+  client_first_name?: string | null
+  client_last_name?: string | null
 }
 
 const CHECKBOX_FIELDS = [
@@ -98,6 +100,13 @@ const REQUIRED_FIELDS: CheckboxKey[] = ['ficha', 'lista_verificacion', 'cuestion
 
 function displayName(folderName: string) {
   return folderName.replace(/^\d+\s*-\s*/, '').trim()
+}
+
+// Prefer the linked client's real full name (editable in su ficha) over the
+// SharePoint folder name, which is often just an abbreviated last name.
+function legajoDisplayName(record: BancoCentralRecord) {
+  const full = [record.client_first_name, record.client_last_name].filter(Boolean).join(' ').trim()
+  return full || displayName(record.folder_name)
 }
 
 function Checkbox({ checked, onChange, disabled }: { checked: boolean; onChange: () => void; disabled?: boolean }) {
@@ -367,7 +376,7 @@ export default function BancoCentralTable({ initialRecords }: { initialRecords: 
 
   const filtered = useMemo(() => {
     const list = records.filter((r) => {
-      const name = displayName(r.folder_name).toLowerCase()
+      const name = legajoDisplayName(r).toLowerCase()
       const matchSearch =
         !q ||
         name.includes(q) ||
@@ -380,7 +389,7 @@ export default function BancoCentralTable({ initialRecords }: { initialRecords: 
     list.sort((a, b) => {
       let cmp = 0
       if (sortKey === 'name') {
-        cmp = displayName(a.folder_name).localeCompare(displayName(b.folder_name), 'es', { sensitivity: 'base' })
+        cmp = legajoDisplayName(a).localeCompare(legajoDisplayName(b), 'es', { sensitivity: 'base' })
       } else {
         cmp = (a.customer_number ?? '').localeCompare(b.customer_number ?? '', undefined, { numeric: true })
       }
@@ -526,11 +535,11 @@ export default function BancoCentralTable({ initialRecords }: { initialRecords: 
                             className={`text-sm font-medium truncate hover:underline ${isCerrada ? 'text-red-500 line-through decoration-red-300' : 'text-[#2D3F52]'}`}
                             title={`Ver ficha de cliente — ${record.folder_name}`}
                           >
-                            {displayName(record.folder_name)}
+                            {legajoDisplayName(record)}
                           </Link>
                         ) : (
                           <span className={`text-sm font-medium truncate ${isCerrada ? 'text-red-500 line-through decoration-red-300' : 'text-[#2D3F52]'}`} title={record.folder_name}>
-                            {displayName(record.folder_name)}
+                            {legajoDisplayName(record)}
                           </span>
                         )}
                       </div>

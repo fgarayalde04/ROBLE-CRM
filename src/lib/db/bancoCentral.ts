@@ -24,7 +24,11 @@ export async function listBancoCentralRecords(type?: string | null, customerNumb
   }
   const whereClause = where.length > 0 ? `where ${where.join(' and ')}` : ''
   const { rows } = await pool.query(
-    `select * from banco_central_records ${whereClause} order by customer_number asc nulls last, folder_name asc`,
+    `select b.*, c.first_name as client_first_name, c.last_name as client_last_name
+     from banco_central_records b
+     left join clients c on c.id = b.linked_client_id
+     ${whereClause.replace(/\btype =/g, 'b.type =').replace(/\bcustomer_number =/g, 'b.customer_number =')}
+     order by b.customer_number asc nulls last, b.folder_name asc`,
     params
   )
   return rows
