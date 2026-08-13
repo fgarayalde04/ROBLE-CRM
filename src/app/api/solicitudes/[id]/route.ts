@@ -203,6 +203,59 @@ export async function PATCH(
     return NextResponse.json({ ok: true, row: data })
   }
 
+  // ── cancelar_item ──────────────────────────────────────────────────────────
+  // Cancela un activo puntual dentro de una solicitud con varios activos, sin
+  // afectar al resto. Si la solicitud tiene un solo activo (o ninguno en
+  // assets_json), equivale a cancelar la solicitud completa.
+  if (accion === 'cancelar_item') {
+    if (!isMesa) return NextResponse.json({ error: 'Sin permiso' }, { status: 403 })
+    const itemIndex = Number(body.itemIndex)
+    const assets = Array.isArray(sol.assets_json) ? [...sol.assets_json] : []
+
+    if (assets.length <= 1) {
+      const data = await updateSolicitud(params.id, {
+        estado: 'cancelada', cancelado_at: new Date().toISOString(),
+        cancelado_by: session.name, cancelado_motivo: body.motivo ?? null,
+      })
+      await logEvento('cancelada', `Solicitud cancelada por ${session.name}${body.motivo ? ': ' + body.motivo : ''}`, { motivo: body.motivo })
+      return NextResponse.json({ ok: true, row: data })
+    }
+
+    if (!Number.isInteger(itemIndex) || itemIndex < 0 || itemIndex >= assets.length) {
+      return NextResponse.json({ error: 'itemIndex inválido' }, { status: 400 })
+    }
+
+    const target = assets[itemIndex]
+    const label = target?.type === 'acciones' ? (target.nombre || target.ticker)
+      : target?.type === 'fondos' ? target.fondo
+      : target?.descripcion || `activo #${itemIndex + 1}`
+
+    assets[itemIndex] = {
+      ...target,
+      cancelada: true,
+      cancelado_at: new Date().toISOString(),
+      cancelado_by: session.name,
+      cancelado_motivo: body.motivo ?? null,
+    }
+
+    const allCancelled = assets.every((a: any) => a.cancelada)
+    const updates: Record<string, any> = { assets_json: JSON.stringify(assets) }
+    if (allCancelled) {
+      updates.estado = 'cancelada'
+      updates.cancelado_at = new Date().toISOString()
+      updates.cancelado_by = session.name
+      updates.cancelado_motivo = 'Todos los activos fueron cancelados individualmente'
+    }
+
+    const data = await updateSolicitud(params.id, updates)
+    await logEvento(
+      'item_cancelado',
+      `${label} cancelado por ${session.name}${body.motivo ? ': ' + body.motivo : ''}${allCancelled ? ' — última orden activa, solicitud cancelada' : ''}`,
+      { itemIndex, motivo: body.motivo }
+    )
+    return NextResponse.json({ ok: true, row: data })
+  }
+
   // ── editar ─────────────────────────────────────────────────────────────────
   if (accion === 'editar') {
     const isOwner = sol.asesor === session.name

@@ -292,12 +292,14 @@ function assetDisplay(a: any) {
 interface BlotterLine {
   row: Solicitud
   key: string
+  itemIndex: number | null // null = solicitud de un solo activo (cancelar = cancelar la solicitud entera)
   tipo: string | null
   instrumento_nombre: string
   moneda: string | null
   monto: number | null
   cantidad: number | null
   operacion: string | null
+  cancelada: boolean
 }
 
 function expandRows(rows: Solicitud[]): BlotterLine[] {
@@ -306,15 +308,17 @@ function expandRows(rows: Solicitud[]): BlotterLine[] {
     const assets = Array.isArray(row.assets_json) ? row.assets_json : []
     if (assets.length <= 1) {
       lines.push({
-        row, key: row.id, tipo: row.instrumento_tipo, instrumento_nombre: row.instrumento_nombre,
+        row, key: row.id, itemIndex: null, tipo: row.instrumento_tipo, instrumento_nombre: row.instrumento_nombre,
         moneda: row.moneda, monto: row.monto, cantidad: row.cantidad, operacion: row.tipo_operacion,
+        cancelada: row.estado === 'cancelada',
       })
     } else {
       assets.forEach((asset, i) => {
         const d = assetDisplay(asset)
         lines.push({
-          row, key: `${row.id}-${i}`, tipo: d.tipo, instrumento_nombre: d.nombre,
+          row, key: `${row.id}-${i}`, itemIndex: i, tipo: d.tipo, instrumento_nombre: d.nombre,
           moneda: d.moneda, monto: d.monto, cantidad: d.cantidad, operacion: d.operacion,
+          cancelada: row.estado === 'cancelada' || !!asset?.cancelada,
         })
       })
     }
@@ -461,6 +465,19 @@ export default function BlotterSolicitudes({ isMesa, userName }: { isMesa: boole
 
   function loadMore() { doFetch(page + 1, true) }
 
+  async function handleCancelLine(line: ReturnType<typeof expandRows>[number]) {
+    const motivo = prompt('Motivo de la cancelación (opcional):') ?? ''
+    if (motivo === null) return
+    const res = await fetch('/api/solicitudes/' + line.row.id, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ accion: 'cancelar_item', itemIndex: line.itemIndex, motivo: motivo || undefined }),
+    })
+    const json = await res.json()
+    if (!res.ok) { alert(json.error ?? 'Error al cancelar'); return }
+    doFetch(0, false)
+    if (selectedRow?.id === line.row.id) loadDetail(line.row)
+  }
+
   function clearFilters() {
     setQ(''); setEstado(''); setDateFrom(''); setDateTo('')
     setAsesor(''); setOperador(''); setTipoOp(''); setTipoInst('')
@@ -546,18 +563,19 @@ export default function BlotterSolicitudes({ isMesa, userName }: { isMesa: boole
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-100">
               <tr>
-                {['N° Interno','Fecha','Hora','Cliente','Asesor','Operación','Tipo','Instrumento','Moneda','Monto ($)','Cantidad','Estado','Operador','Ejecutada'].map(h => (
+                {['N° Interno','Fecha','Hora','Cliente','Asesor','Operación','Tipo','Instrumento','Moneda','Monto ($)','Cantidad','Estado','Operador','Ejecutada',''].map(h => (
                   <th key={h} className="px-3 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
               {rows.length === 0 && !loading ? (
-                <tr><td colSpan={14} className="px-4 py-8 text-center text-sm text-gray-400">Sin resultados.</td></tr>
+                <tr><td colSpan={15} className="px-4 py-8 text-center text-sm text-gray-400">Sin resultados.</td></tr>
               ) : expandRows(rows).map(line => {
                 const row = line.row
-                const cfg = ESTADO_CFG[row.estado] ?? ESTADO_CFG.mesa_operaciones
+                const cfg = line.cancelada ? ESTADO_CFG.cancelada : (ESTADO_CFG[row.estado] ?? ESTADO_CFG.mesa_operaciones)
                 const tipoCfg = TIPO_CFG[line.tipo?.toLowerCase() ?? '']
+                const canCancel = isMesa && !line.cancelada && row.estado !== 'ejecutada' && !row._legacy
                 return (
                   <tr key={line.key}
                     onClick={() => { if (selectedRow?.id === row.id) { setSelectedRow(null); setEventos([]) } else { loadDetail(row) } }}
@@ -581,7 +599,7 @@ export default function BlotterSolicitudes({ isMesa, userName }: { isMesa: boole
                       }
                     </td>
                     <td className="px-3 py-2 text-xs text-gray-800 max-w-[160px]">
-                      <p className="truncate">{line.instrumento_nombre}</p>
+                      <p className={`truncate ${line.cancelada ? 'line-through text-gray-400' : ''}`}>{line.instrumento_nombre}</p>
                     </td>
                     <td className="px-3 py-2 text-xs text-gray-600 whitespace-nowrap">{line.moneda}</td>
                     <td className="px-3 py-2 text-xs text-gray-700 whitespace-nowrap font-mono tabular-nums text-right">
@@ -599,6 +617,16 @@ export default function BlotterSolicitudes({ isMesa, userName }: { isMesa: boole
                     <td className="px-3 py-2 text-xs text-gray-500 whitespace-nowrap">{row.operador ?? '—'}</td>
                     <td className="px-3 py-2 text-xs text-gray-400 whitespace-nowrap">
                       {row.ejecutado_at ? format(new Date(row.ejecutado_at), 'dd/MM HH:mm') : '—'}
+                    </td>
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      {canCancel && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleCancelLine(line) }}
+                          className="text-[10px] text-gray-300 hover:text-red-500 transition-colors"
+                        >
+                          Cancelar
+                        </button>
+                      )}
                     </td>
                   </tr>
                 )
