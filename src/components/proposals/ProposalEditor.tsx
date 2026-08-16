@@ -469,12 +469,15 @@ interface Proposal {
   created_at: string
 }
 
+type Operacion = 'compra' | 'venta'
+
 interface Fund {
   id: string
   isin: string | null
   issuer: string | null
   fund_name: string | null
   fund_class: string | null
+  return_ytd: number | null
   return_1y: number | null
   return_3y: number | null
   return_5y: number | null
@@ -482,6 +485,8 @@ interface Fund {
   duration_years: number | null
   pct: number
   amount: number
+  operacion: Operacion
+  broker: string | null
   needs_review: boolean
   data_source: string
 }
@@ -500,6 +505,8 @@ interface Bond {
   rating: string | null
   pct: number
   amount: number
+  operacion: Operacion
+  broker: string | null
 }
 
 interface Equity {
@@ -511,6 +518,8 @@ interface Equity {
   currency: string
   pct: number
   amount: number
+  operacion: Operacion
+  broker: string | null
 }
 
 // ─── Calculator ───────────────────────────────────────────────────────────────
@@ -696,6 +705,25 @@ function AllocationPanel({
 const TH = 'px-3 py-2.5 text-[9px] font-bold text-white uppercase tracking-wider whitespace-nowrap'
 const TD = 'px-3 py-2.5 text-xs border-b border-gray-100'
 
+// ─── Operación toggle (Compra / Venta) ─────────────────────────────────────────
+
+function OperacionToggle({ value, onChange }: { value: Operacion; onChange: (v: Operacion) => void }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onChange(value === 'compra' ? 'venta' : 'compra')}
+      className={`text-[9px] font-bold uppercase tracking-wider px-2 py-1 rounded-full transition-colors ${
+        value === 'venta'
+          ? 'bg-red-50 text-red-600 border border-red-200 hover:bg-red-100'
+          : 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'
+      }`}
+      title="Click para cambiar entre Compra y Venta"
+    >
+      {value === 'venta' ? 'Venta' : 'Compra'}
+    </button>
+  )
+}
+
 function FundsTable({
   proposalId, total, currency, funds, onUpdate,
 }: {
@@ -706,7 +734,7 @@ function FundsTable({
   const [showFactsheet, setShowFactsheet] = useState(false)
 
   const updateField = useCallback(async (fund: Fund, field: keyof Fund, raw: string) => {
-    const isNumeric = ['pct','return_1y','return_3y','return_5y','ytm_indicative','duration_years'].includes(field)
+    const isNumeric = ['pct','return_ytd','return_1y','return_3y','return_5y','ytm_indicative','duration_years'].includes(field)
     const value = isNumeric ? (raw === '' ? null : parseFloat(raw)) : (raw === '' ? null : raw)
     const updated = funds.map(f => {
       if (f.id !== fund.id) return f
@@ -724,11 +752,18 @@ function FundsTable({
     setSaving(null)
   }, [funds, total, proposalId, onUpdate])
 
+  const setOperacion = useCallback(async (fund: Fund, operacion: Operacion) => {
+    onUpdate(funds.map(f => f.id === fund.id ? { ...f, operacion } : f))
+    await fetch(`/api/proposals/${proposalId}/funds`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fund_id: fund.id, operacion }),
+    })
+  }, [funds, proposalId, onUpdate])
+
   const addFund = async () => {
     setAdding(true)
     const res = await fetch(`/api/proposals/${proposalId}/funds`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pct: 0, amount: 0 }),
+      body: JSON.stringify({ pct: 0, amount: 0, operacion: 'compra' }),
     })
     const data = await res.json()
     if (res.ok) onUpdate([...funds, data])
@@ -791,11 +826,14 @@ function FundsTable({
       ) : (
         <div className="rounded-xl overflow-hidden border border-[#E2E8F0]">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[820px]">
+            <table className="w-full text-sm min-w-[1060px]">
               <thead>
                 <tr style={{ backgroundColor: '#1B2E3C' }}>
+                  <th className={`${TH} text-left w-20`}>PORTAFOLIO</th>
+                  <th className={`${TH} text-center w-16`}>OPERACIÓN</th>
                   <th className={`${TH} text-left w-24`}>ISIN</th>
                   <th className={`${TH} text-left`}>ACTIVO</th>
+                  <th className={`${TH} text-right w-14`}>YTD</th>
                   <th className={`${TH} text-right w-16`}>1 AÑO</th>
                   <th className={`${TH} text-right w-16`}>3 AÑOS</th>
                   <th className={`${TH} text-right w-16`}>5 AÑOS</th>
@@ -809,6 +847,12 @@ function FundsTable({
               <tbody>
                 {funds.map((f, i) => (
                   <tr key={f.id} className={`group transition-colors hover:bg-blue-50/30 ${i % 2 === 1 ? 'bg-gray-50/50' : 'bg-white'} ${f.needs_review ? '!bg-amber-50/40' : ''}`}>
+                    <td className={TD}>
+                      <EditCell value={f.broker} onChange={v => updateField(f, 'broker', v)} placeholder="Custodio" className="text-[11px]" />
+                    </td>
+                    <td className={`${TD} text-center`}>
+                      <OperacionToggle value={f.operacion} onChange={v => setOperacion(f, v)} />
+                    </td>
                     <td className={`${TD} font-mono text-[10px]`}>
                       <EditCell value={f.isin} onChange={v => updateField(f, 'isin', v)} placeholder="ISIN" mono />
                     </td>
@@ -819,6 +863,9 @@ function FundsTable({
                         {f.needs_review && <span className="text-[9px] text-amber-500" title="Revisar">⚠</span>}
                         {saving === f.id && <span className="w-2.5 h-2.5 border border-gray-300 border-t-gray-500 rounded-full animate-spin" />}
                       </div>
+                    </td>
+                    <td className={`${TD} text-right`}>
+                      <EditCell value={f.return_ytd} onChange={v => updateField(f, 'return_ytd', v)} placeholder="—" numeric className={`text-right text-xs ${pctColor(f.return_ytd)}`} />
                     </td>
                     <td className={`${TD} text-right`}>
                       <EditCell value={f.return_1y} onChange={v => updateField(f, 'return_1y', v)} placeholder="—" numeric className={`text-right text-xs ${pctColor(f.return_1y)}`} />
@@ -852,7 +899,7 @@ function FundsTable({
               {/* Totals footer */}
               <tfoot>
                 <tr style={{ backgroundColor: '#1B2E3C' }}>
-                  <td colSpan={7} className="px-3 py-2.5 text-[9px] text-white/40 uppercase tracking-widest">Total fondos</td>
+                  <td colSpan={10} className="px-3 py-2.5 text-[9px] text-white/40 uppercase tracking-widest">Total fondos</td>
                   <td className="px-3 py-2.5 text-right text-sm font-bold text-white">{totalFundsPct.toFixed(1)}%</td>
                   <td className="px-3 py-2.5 text-right text-sm font-bold text-white font-mono tabular-nums">
                     {fmtMoney(totalFundsAmt, currency)}
@@ -895,11 +942,18 @@ function BondsTable({
     })
   }, [bonds, total, proposalId, onUpdate])
 
+  const setOperacion = useCallback(async (bond: Bond, operacion: Operacion) => {
+    onUpdate(bonds.map(b => b.id === bond.id ? { ...b, operacion } : b))
+    await fetch(`/api/proposals/${proposalId}/bonds`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bond_id: bond.id, operacion }),
+    })
+  }, [bonds, proposalId, onUpdate])
+
   const addBond = async () => {
     setAdding(true)
     const res = await fetch(`/api/proposals/${proposalId}/bonds`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pct: 0, amount: 0 }),
+      body: JSON.stringify({ pct: 0, amount: 0, operacion: 'compra' }),
     })
     const data = await res.json()
     if (res.ok) onUpdate([...bonds, data])
@@ -939,17 +993,19 @@ function BondsTable({
       ) : (
         <div className="bg-white border border-[#E2E8F0] rounded-xl overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[900px]">
+            <table className="w-full text-sm min-w-[1080px]">
               <thead>
                 <tr className="border-b border-gray-100 bg-gray-50/60">
-                  {['Emisor','ISIN','Precio','Moneda','Vencimiento','Cupón %','Yield %','Dur. (a)','Rating','%','Total',''].map(h => (
-                    <th key={h} className={`px-3 py-2.5 text-[9px] font-semibold text-gray-400 uppercase tracking-wider ${h === '' ? 'w-8' : h === 'Total' || h === '%' || h === 'Precio' ? 'text-right' : 'text-left'}`}>{h}</th>
+                  {['Portafolio','Operación','Emisor','ISIN','Precio','Moneda','Vencimiento','Cupón %','Yield %','Dur. (a)','Rating','%','Total',''].map(h => (
+                    <th key={h} className={`px-3 py-2.5 text-[9px] font-semibold text-gray-400 uppercase tracking-wider ${h === '' ? 'w-8' : h === 'Total' || h === '%' || h === 'Precio' ? 'text-right' : h === 'Operación' ? 'text-center' : 'text-left'}`}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {bonds.map(b => (
                   <tr key={b.id} className="hover:bg-gray-50/50 transition-colors group">
+                    <td className="px-3 py-2.5"><EditCell value={b.broker} onChange={v => updateField(b, 'broker', v)} placeholder="Custodio" className="text-[11px]" /></td>
+                    <td className="px-3 py-2.5 text-center"><OperacionToggle value={b.operacion} onChange={v => setOperacion(b, v)} /></td>
                     <td className="px-3 py-2.5"><EditCell value={b.issuer}   onChange={v => updateField(b, 'issuer',   v)} placeholder="Emisor" /></td>
                     <td className="px-3 py-2.5"><EditCell value={b.isin}     onChange={v => updateField(b, 'isin',     v)} placeholder="ISIN" mono /></td>
                     <td className="px-3 py-2.5 text-right"><EditCell value={b.price} onChange={v => updateField(b, 'price', v)} numeric placeholder="—" className="text-right text-xs" /></td>
@@ -1033,11 +1089,16 @@ function EquitiesTable({
     }
   }, [equities, total, proposalId, onUpdate, patchEquity])
 
+  const setOperacion = useCallback(async (eq: Equity, operacion: Operacion) => {
+    onUpdate(equities.map(e => e.id === eq.id ? { ...e, operacion } : e))
+    await patchEquity(eq.id, { operacion })
+  }, [equities, onUpdate, patchEquity])
+
   const addEquity = async () => {
     setAdding(true)
     const res = await fetch(`/api/proposals/${proposalId}/equities`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pct: 0, amount: 0 }),
+      body: JSON.stringify({ pct: 0, amount: 0, operacion: 'compra' }),
     })
     const data = await res.json()
     if (res.ok) onUpdate([...equities, data])
@@ -1077,17 +1138,19 @@ function EquitiesTable({
       ) : (
         <div className="bg-white border border-[#E2E8F0] rounded-xl overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[700px]">
+            <table className="w-full text-sm min-w-[880px]">
               <thead>
                 <tr className="border-b border-gray-100 bg-gray-50/60">
-                  {['Ticker','Empresa','Sector','País','Moneda','%','Total',''].map(h => (
-                    <th key={h} className={`px-3 py-2.5 text-[9px] font-semibold text-gray-400 uppercase tracking-wider ${h === '' ? 'w-8' : h === 'Total' || h === '%' ? 'text-right' : 'text-left'}`}>{h}</th>
+                  {['Portafolio','Operación','Ticker','Empresa','Sector','País','Moneda','%','Total',''].map(h => (
+                    <th key={h} className={`px-3 py-2.5 text-[9px] font-semibold text-gray-400 uppercase tracking-wider ${h === '' ? 'w-8' : h === 'Total' || h === '%' ? 'text-right' : h === 'Operación' ? 'text-center' : 'text-left'}`}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {equities.map(e => (
                   <tr key={e.id} className="hover:bg-gray-50/50 transition-colors group">
+                    <td className="px-3 py-2.5"><EditCell value={e.broker} onChange={v => updateField(e, 'broker', v)} placeholder="Custodio" className="text-[11px]" /></td>
+                    <td className="px-3 py-2.5 text-center"><OperacionToggle value={e.operacion} onChange={v => setOperacion(e, v)} /></td>
                     <td className="px-3 py-2.5">
                       <div className="flex items-center gap-1.5">
                         <EditCell value={e.ticker} onChange={v => updateField(e, 'ticker', v)} placeholder="AAPL" mono />

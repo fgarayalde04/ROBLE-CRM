@@ -22,6 +22,8 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       currency:     body.currency     ?? 'USD',
       pct:          body.pct          ?? 0,
       amount:       body.amount       ?? 0,
+      operacion:    body.operacion    ?? 'compra',
+      broker:       body.broker       ?? null,
     })
     return NextResponse.json(data)
   } catch (err: any) {
@@ -36,7 +38,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
     const { equity_id, ...fields } = await req.json()
     const allowed: Record<string, unknown> = {}
-    for (const c of ['ticker','company_name','sector','country','currency','pct','amount']) {
+    for (const c of ['ticker','company_name','sector','country','currency','pct','amount','operacion','broker']) {
       if (fields[c] !== undefined) allowed[c] = fields[c]
     }
 

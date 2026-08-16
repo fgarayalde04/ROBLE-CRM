@@ -4,11 +4,14 @@ import Image from 'next/image'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+type Operacion = 'compra' | 'venta'
+
 interface Fund {
   id: string
   isin: string | null
   issuer: string | null
   fund_name: string | null
+  return_ytd: number | null
   return_1y: number | null
   return_3y: number | null
   return_5y: number | null
@@ -16,6 +19,8 @@ interface Fund {
   duration_years: number | null
   pct: number
   amount: number
+  operacion: Operacion
+  broker: string | null
 }
 
 interface Bond {
@@ -32,6 +37,8 @@ interface Bond {
   pct: number
   amount: number
   currency: string
+  operacion: Operacion
+  broker: string | null
 }
 
 interface Equity {
@@ -43,6 +50,8 @@ interface Equity {
   pct: number
   amount: number
   currency: string
+  operacion: Operacion
+  broker: string | null
 }
 
 interface ProposalPDFTemplateProps {
@@ -62,11 +71,6 @@ interface ProposalPDFTemplateProps {
 function fmtAmt(n: number) {
   if (!n && n !== 0) return '—'
   return `$ ${n.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-}
-
-function fmtPct(n: number | null) {
-  if (n == null) return '—'
-  return `${n.toFixed(2)}%`
 }
 
 function fmtNum(n: number | null, decimals = 2) {
@@ -96,43 +100,74 @@ function getGestoras(funds: Fund[]): string[] {
   return result
 }
 
+// ─── Group items by broker/custodio, preserving first-seen order ─────────────
+
+function uniqueBrokers(...lists: { broker: string | null }[][]): (string | null)[] {
+  const seen = new Set<string | null>()
+  const order: (string | null)[] = []
+  for (const list of lists) {
+    for (const item of list) {
+      const key = item.broker?.trim() || null
+      if (!seen.has(key)) { seen.add(key); order.push(key) }
+    }
+  }
+  return order
+}
+
 // ─── Default disclaimer ───────────────────────────────────────────────────────
 
 const DEFAULT_DISCLAIMER =
   'This was prepared for informational purposes only. It is not an official confirmation of terms. It is based on information generally available to the public from sources believed to be reliable. No representation is made that it is accurate or complete or that any returns indicated will be achieved. Changes to assumptions may have a material impact on returns. Past performance is not indicative of future results. Price/availability is subject to change without notice. Additional info is available on request. This is neither an offer to sell nor a solicitation of an offer to buy a new issue security. For further info on a new issue, including a prospectus, please contact Roble Capital Wealth Management. Any unauthorized copying, disclosure or distribution of the material in this e-mail is strictly forbidden. If you have received it by mistake please let us know by fax or e-mail immediately and destroy or delete it from your files or system; you should also not copy the message nor disclose its contents to anyone. Thank you.'
 
-// ─── Table header style ───────────────────────────────────────────────────────
+// ─── Table styles ──────────────────────────────────────────────────────────────
 
 const TH_STYLE: React.CSSProperties = {
   backgroundColor: '#1B2E3C',
   color: '#FFFFFF',
   fontWeight: 700,
-  fontSize: 9,
+  fontSize: 9.5,
   textTransform: 'uppercase',
-  padding: '7px 6px',
+  padding: '8px 7px',
   textAlign: 'center',
   borderRight: '1px solid #2E4155',
   whiteSpace: 'nowrap',
-  letterSpacing: '0.03em',
+  letterSpacing: '0.04em',
 }
 
 const TD_STYLE: React.CSSProperties = {
-  fontSize: 9.5,
-  padding: '5px 6px',
+  fontSize: 10,
+  padding: '6px 7px',
   textAlign: 'center',
   borderRight: '1px solid #E8ECF0',
   borderBottom: '1px solid #E8ECF0',
   color: '#1a1a1a',
+  fontFamily: 'Arial, Helvetica, sans-serif',
 }
 
 const FOOTER_TD: React.CSSProperties = {
   backgroundColor: '#1B2E3C',
   color: '#FFFFFF',
   fontWeight: 700,
-  fontSize: 10,
+  fontSize: 10.5,
   padding: '7px 8px',
   textAlign: 'right',
   borderRight: '1px solid #2E4155',
+}
+
+function OperacionBadge({ value }: { value: Operacion }) {
+  const isVenta = value === 'venta'
+  return (
+    <span style={{
+      display: 'inline-block',
+      fontSize: 9,
+      fontWeight: 700,
+      textTransform: 'uppercase',
+      letterSpacing: '0.03em',
+      color: isVenta ? '#B91C1C' : '#15803D',
+    }}>
+      {isVenta ? 'Venta' : 'Compra'}
+    </span>
+  )
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -174,6 +209,132 @@ export default function ProposalPDFTemplate({
 
   const hasAssets = totalPct > 0
 
+  // ── Grouping: if nobody tagged a broker/custodio, keep the classic flat layout ──
+  const brokers = uniqueBrokers(funds, bonds, equities)
+  const grouped = brokers.length > 1 || (brokers.length === 1 && brokers[0] !== null)
+
+  function fundsTable(list: Fund[]) {
+    if (list.length === 0) return null
+    return (
+      <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 0 }}>
+        <thead>
+          <tr>
+            <th style={{ ...TH_STYLE, width: 60 }}>MONEDA</th>
+            <th style={{ ...TH_STYLE, width: 60 }}>OPERACIÓN</th>
+            <th style={{ ...TH_STYLE, textAlign: 'left' }}>FONDO DE INVERSIÓN</th>
+            <th style={{ ...TH_STYLE, width: 48 }}>YTD</th>
+            <th style={{ ...TH_STYLE, width: 48 }}>1 AÑO</th>
+            <th style={{ ...TH_STYLE, width: 48 }}>3 AÑOS</th>
+            <th style={{ ...TH_STYLE, width: 48 }}>5 AÑOS</th>
+            <th style={{ ...TH_STYLE, width: 90, borderRight: 'none' }}>INVERSIÓN</th>
+          </tr>
+        </thead>
+        <tbody>
+          {list.map((f, i) => (
+            <tr key={f.id} style={{ backgroundColor: i % 2 === 0 ? '#FFFFFF' : '#F7F9FB' }}>
+              <td style={TD_STYLE}>{currency}</td>
+              <td style={TD_STYLE}><OperacionBadge value={f.operacion} /></td>
+              <td style={{ ...TD_STYLE, textAlign: 'left', fontWeight: 600 }}>{f.fund_name?.toUpperCase() ?? '—'}</td>
+              <td style={TD_STYLE}>{fmtNum(f.return_ytd)}%</td>
+              <td style={TD_STYLE}>{fmtNum(f.return_1y)}%</td>
+              <td style={TD_STYLE}>{fmtNum(f.return_3y)}%</td>
+              <td style={TD_STYLE}>{fmtNum(f.return_5y)}%</td>
+              <td style={{ ...TD_STYLE, textAlign: 'right', fontWeight: 600, borderRight: 'none' }}>{fmtAmt(f.amount)}</td>
+            </tr>
+          ))}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td colSpan={7} style={{ ...FOOTER_TD, textAlign: 'left', fontSize: 9, opacity: 0.6, borderRight: 'none' }} />
+            <td style={{ ...FOOTER_TD, textAlign: 'right', borderRight: 'none' }}>{fmtAmt(list.reduce((s, f) => s + (f.amount ?? 0), 0))}</td>
+          </tr>
+        </tfoot>
+      </table>
+    )
+  }
+
+  function bondsTable(list: Bond[]) {
+    if (list.length === 0) return null
+    return (
+      <div style={{ marginTop: 14 }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr>
+              <th style={{ ...TH_STYLE, width: 60 }}>MONEDA</th>
+              <th style={{ ...TH_STYLE, width: 60 }}>OPERACIÓN</th>
+              <th style={{ ...TH_STYLE, textAlign: 'left' }}>BONOS</th>
+              <th style={{ ...TH_STYLE, width: 80 }}>VENCIMIENTO</th>
+              <th style={{ ...TH_STYLE, width: 55 }}>CUPÓN</th>
+              <th style={{ ...TH_STYLE, width: 65 }}>RENDIMIENTO</th>
+              <th style={{ ...TH_STYLE, width: 65 }}>PRECIO (IND)</th>
+              <th style={{ ...TH_STYLE, width: 90, borderRight: 'none' }}>INVERSIÓN</th>
+            </tr>
+          </thead>
+          <tbody>
+            {list.map((b, i) => (
+              <tr key={b.id} style={{ backgroundColor: i % 2 === 0 ? '#FFFFFF' : '#F7F9FB' }}>
+                <td style={TD_STYLE}>{b.currency}</td>
+                <td style={TD_STYLE}><OperacionBadge value={b.operacion} /></td>
+                <td style={{ ...TD_STYLE, textAlign: 'left', fontWeight: 600 }}>{b.issuer?.toUpperCase() ?? '—'}</td>
+                <td style={{ ...TD_STYLE, whiteSpace: 'nowrap' }}>{fmtDate(b.maturity_date)}</td>
+                <td style={TD_STYLE}>{b.coupon != null ? fmtNum(b.coupon, 3).replace(/\.?0+$/, '') : '—'}</td>
+                <td style={TD_STYLE}>{b.yield != null ? `${fmtNum(b.yield)}%` : '—'}</td>
+                <td style={TD_STYLE}>{b.price != null ? fmtNum(b.price, 3) : '—'}</td>
+                <td style={{ ...TD_STYLE, textAlign: 'right', fontWeight: 600, borderRight: 'none' }}>{fmtAmt(b.amount)}</td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr>
+              <td colSpan={7} style={{ ...FOOTER_TD, fontSize: 9, opacity: 0.6, borderRight: 'none' }} />
+              <td style={{ ...FOOTER_TD, textAlign: 'right', borderRight: 'none' }}>{fmtAmt(list.reduce((s, b) => s + (b.amount ?? 0), 0))}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    )
+  }
+
+  function equitiesTable(list: Equity[]) {
+    if (list.length === 0) return null
+    return (
+      <div style={{ marginTop: 14 }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr>
+              <th style={{ ...TH_STYLE, width: 60 }}>MONEDA</th>
+              <th style={{ ...TH_STYLE, width: 60 }}>OPERACIÓN</th>
+              <th style={{ ...TH_STYLE, width: 70 }}>TICKER</th>
+              <th style={{ ...TH_STYLE, textAlign: 'left' }}>EMPRESA</th>
+              <th style={{ ...TH_STYLE, textAlign: 'left' }}>SECTOR</th>
+              <th style={{ ...TH_STYLE, textAlign: 'left' }}>PAÍS</th>
+              <th style={{ ...TH_STYLE, width: 90, borderRight: 'none' }}>INVERSIÓN</th>
+            </tr>
+          </thead>
+          <tbody>
+            {list.map((e, i) => (
+              <tr key={e.id} style={{ backgroundColor: i % 2 === 0 ? '#FFFFFF' : '#F7F9FB' }}>
+                <td style={TD_STYLE}>{e.currency}</td>
+                <td style={TD_STYLE}><OperacionBadge value={e.operacion} /></td>
+                <td style={{ ...TD_STYLE, fontWeight: 700 }}>{e.ticker ?? '—'}</td>
+                <td style={{ ...TD_STYLE, textAlign: 'left', fontWeight: 600 }}>{e.company_name?.toUpperCase() ?? '—'}</td>
+                <td style={{ ...TD_STYLE, textAlign: 'left' }}>{e.sector ?? '—'}</td>
+                <td style={{ ...TD_STYLE, textAlign: 'left' }}>{e.country ?? '—'}</td>
+                <td style={{ ...TD_STYLE, textAlign: 'right', fontWeight: 600, borderRight: 'none' }}>{fmtAmt(e.amount)}</td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr>
+              <td colSpan={6} style={{ ...FOOTER_TD, fontSize: 9, opacity: 0.6, borderRight: 'none' }} />
+              <td style={{ ...FOOTER_TD, textAlign: 'right', borderRight: 'none' }}>{fmtAmt(list.reduce((s, e) => s + (e.amount ?? 0), 0))}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    )
+  }
+
   return (
     <div
       className="pdf-page"
@@ -202,150 +363,73 @@ export default function ProposalPDFTemplate({
       </div>
 
       {/* ── Cliente ── */}
-      <div style={{ marginBottom: 14 }}>
-        <span style={{ fontSize: 13, fontWeight: 700, textDecoration: 'underline', color: '#1a1a1a' }}>
+      <div style={{ marginBottom: 16 }}>
+        <span style={{ fontSize: 14, fontWeight: 700, textDecoration: 'underline', color: '#1a1a1a' }}>
           Cliente: {clientName ?? '—'}
         </span>
       </div>
 
-      {/* ══ FONDOS ══════════════════════════════════════════════════════════════ */}
-      {funds.length > 0 && (
-        <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 0 }}>
-          <thead>
-            <tr>
-              <th style={{ ...TH_STYLE, textAlign: 'left', width: 72 }}>ISIN</th>
-              <th style={{ ...TH_STYLE, textAlign: 'left' }}>ACTIVO</th>
-              <th style={{ ...TH_STYLE, width: 52 }}>1 AÑO</th>
-              <th style={{ ...TH_STYLE, width: 52 }}>3 AÑOS</th>
-              <th style={{ ...TH_STYLE, width: 52 }}>5 AÑOS</th>
-              <th style={{ ...TH_STYLE, width: 72 }}>YTM{'\n'}INDICATIVO</th>
-              <th style={{ ...TH_STYLE, width: 72 }}>DURACION{'\n'}(años)</th>
-              <th style={{ ...TH_STYLE, width: 52 }}>%</th>
-              <th style={{ ...TH_STYLE, width: 90, borderRight: 'none' }}>TOTAL</th>
-            </tr>
-          </thead>
-          <tbody>
-            {funds.map((f, i) => (
-              <tr key={f.id} style={{ backgroundColor: i % 2 === 0 ? '#FFFFFF' : '#F7F9FB' }}>
-                <td style={{ ...TD_STYLE, textAlign: 'left', fontFamily: 'monospace', fontSize: 9 }}>{f.isin ?? '—'}</td>
-                <td style={{ ...TD_STYLE, textAlign: 'left' }}>{f.fund_name?.toUpperCase() ?? '—'}</td>
-                <td style={{ ...TD_STYLE, color: f.return_1y != null && f.return_1y >= 0 ? '#1a1a1a' : '#dc2626' }}>
-                  {fmtNum(f.return_1y)}%
-                </td>
-                <td style={{ ...TD_STYLE, color: f.return_3y != null && f.return_3y >= 0 ? '#1a1a1a' : '#dc2626' }}>
-                  {fmtNum(f.return_3y)}%
-                </td>
-                <td style={{ ...TD_STYLE, color: f.return_5y != null && f.return_5y >= 0 ? '#1a1a1a' : '#dc2626' }}>
-                  {fmtNum(f.return_5y)}%
-                </td>
-                <td style={TD_STYLE}>{fmtNum(f.ytm_indicative)}%</td>
-                <td style={TD_STYLE}>{fmtNum(f.duration_years)}</td>
-                <td style={{ ...TD_STYLE, fontWeight: 600 }}>{fmtNum(f.pct)}%</td>
-                <td style={{ ...TD_STYLE, textAlign: 'right', fontWeight: 600, borderRight: 'none' }}>
-                  {fmtAmt(f.amount)}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-          {/* Totals footer */}
-          <tfoot>
-            <tr>
-              <td colSpan={7} style={{ ...FOOTER_TD, textAlign: 'left', fontSize: 9, opacity: 0.6, borderRight: 'none' }} />
-              <td style={{ ...FOOTER_TD, textAlign: 'right' }}>
-                {fmtNum(funds.reduce((s, f) => s + (f.pct ?? 0), 0))}%
-              </td>
-              <td style={{ ...FOOTER_TD, textAlign: 'right', borderRight: 'none' }}>
-                {fmtAmt(funds.reduce((s, f) => s + (f.amount ?? 0), 0))}
-              </td>
-            </tr>
-          </tfoot>
-        </table>
-      )}
-
-      {/* ══ BONOS ════════════════════════════════════════════════════════════════ */}
-      {bonds.length > 0 && (
-        <div style={{ marginTop: 24 }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: '#1B2E3C', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            Bonos
-          </div>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr>
-                {['Emisor','ISIN','Precio','Vencimiento','Cupón','Yield','Duración','Rating','%','Total'].map(h => (
-                  <th key={h} style={{ ...TH_STYLE, textAlign: h === 'Total' || h === '%' || h === 'Precio' ? 'right' : 'left' }}>{h.toUpperCase()}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {bonds.map((b, i) => (
-                <tr key={b.id} style={{ backgroundColor: i % 2 === 0 ? '#FFFFFF' : '#F7F9FB' }}>
-                  <td style={{ ...TD_STYLE, textAlign: 'left', fontWeight: 600 }}>{b.issuer?.toUpperCase() ?? '—'}</td>
-                  <td style={{ ...TD_STYLE, textAlign: 'left', fontFamily: 'monospace', fontSize: 9 }}>{b.isin ?? '—'}</td>
-                  <td style={{ ...TD_STYLE, textAlign: 'right' }}>{b.price != null ? fmtNum(b.price) : '—'}</td>
-                  <td style={{ ...TD_STYLE, textAlign: 'left', whiteSpace: 'nowrap' }}>{fmtDate(b.maturity_date)}</td>
-                  <td style={TD_STYLE}>{b.coupon != null ? `${fmtNum(b.coupon)}%` : '—'}</td>
-                  <td style={TD_STYLE}>{b.yield != null ? `${fmtNum(b.yield)}%` : '—'}</td>
-                  <td style={TD_STYLE}>{fmtNum(b.duration)}</td>
-                  <td style={TD_STYLE}>{b.rating ?? '—'}</td>
-                  <td style={{ ...TD_STYLE, textAlign: 'right', fontWeight: 600 }}>{fmtNum(b.pct)}%</td>
-                  <td style={{ ...TD_STYLE, textAlign: 'right', fontWeight: 600, borderRight: 'none' }}>{fmtAmt(b.amount)}</td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr>
-                <td colSpan={8} style={{ ...FOOTER_TD, fontSize: 9, opacity: 0.6, borderRight: 'none' }} />
-                <td style={{ ...FOOTER_TD, textAlign: 'right' }}>{fmtNum(bonds.reduce((s, b) => s + (b.pct ?? 0), 0))}%</td>
-                <td style={{ ...FOOTER_TD, textAlign: 'right', borderRight: 'none' }}>{fmtAmt(bonds.reduce((s, b) => s + (b.amount ?? 0), 0))}</td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-      )}
-
-      {/* ══ ACCIONES ═════════════════════════════════════════════════════════════ */}
-      {equities.length > 0 && (
-        <div style={{ marginTop: 24 }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: '#1B2E3C', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            Acciones
-          </div>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr>
-                {['Ticker','Empresa','Sector','País','%','Total'].map(h => (
-                  <th key={h} style={{ ...TH_STYLE, textAlign: h === 'Total' || h === '%' ? 'right' : 'left' }}>{h.toUpperCase()}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {equities.map((e, i) => (
-                <tr key={e.id} style={{ backgroundColor: i % 2 === 0 ? '#FFFFFF' : '#F7F9FB' }}>
-                  <td style={{ ...TD_STYLE, textAlign: 'left', fontFamily: 'monospace', fontWeight: 700 }}>{e.ticker ?? '—'}</td>
-                  <td style={{ ...TD_STYLE, textAlign: 'left', fontWeight: 600 }}>{e.company_name?.toUpperCase() ?? '—'}</td>
-                  <td style={{ ...TD_STYLE, textAlign: 'left' }}>{e.sector ?? '—'}</td>
-                  <td style={{ ...TD_STYLE, textAlign: 'left' }}>{e.country ?? '—'}</td>
-                  <td style={{ ...TD_STYLE, textAlign: 'right', fontWeight: 600 }}>{fmtNum(e.pct)}%</td>
-                  <td style={{ ...TD_STYLE, textAlign: 'right', fontWeight: 600, borderRight: 'none' }}>{fmtAmt(e.amount)}</td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr>
-                <td colSpan={4} style={{ ...FOOTER_TD, fontSize: 9, opacity: 0.6, borderRight: 'none' }} />
-                <td style={{ ...FOOTER_TD, textAlign: 'right' }}>{fmtNum(equities.reduce((s, e) => s + (e.pct ?? 0), 0))}%</td>
-                <td style={{ ...FOOTER_TD, textAlign: 'right', borderRight: 'none' }}>{fmtAmt(equities.reduce((s, e) => s + (e.amount ?? 0), 0))}</td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
+      {grouped ? (
+        // ══ Grouped by portafolio/custodio (ej. Pershing, Morgan) ═══════════════
+        brokers.map(broker => {
+          const bFunds    = funds.filter(f => (f.broker?.trim() || null) === broker)
+          const bBonds    = bonds.filter(b => (b.broker?.trim() || null) === broker)
+          const bEquities = equities.filter(e => (e.broker?.trim() || null) === broker)
+          if (bFunds.length === 0 && bBonds.length === 0 && bEquities.length === 0) return null
+          return (
+            <div key={broker ?? '__general'} style={{ marginBottom: 24, border: '1px solid #1B2E3C', borderRadius: 3 }}>
+              <div style={{
+                display: 'inline-block',
+                backgroundColor: '#FFFFFF',
+                border: '1px solid #1B2E3C',
+                borderBottom: 'none',
+                borderRadius: '3px 3px 0 0',
+                padding: '5px 14px',
+                marginLeft: 10,
+                marginTop: -1,
+                position: 'relative',
+                top: -1,
+                fontSize: 11,
+                fontWeight: 700,
+                color: '#1B2E3C',
+                textTransform: 'uppercase',
+                letterSpacing: '0.04em',
+              }}>
+                Portafolio {broker ?? 'General'}
+              </div>
+              <div style={{ padding: '2px 14px 14px' }}>
+                {fundsTable(bFunds)}
+                {bondsTable(bBonds)}
+                {equitiesTable(bEquities)}
+              </div>
+            </div>
+          )
+        })
+      ) : (
+        // ══ Flat layout (sin agrupar por custodio) ═══════════════════════════════
+        <>
+          {fundsTable(funds)}
+          {bonds.length > 0 && (
+            <div style={{ marginTop: funds.length > 0 ? 24 : 0 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#1B2E3C', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Bonos</div>
+              {bondsTable(bonds)}
+            </div>
+          )}
+          {equities.length > 0 && (
+            <div style={{ marginTop: 24 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#1B2E3C', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Acciones</div>
+              {equitiesTable(equities)}
+            </div>
+          )}
+        </>
       )}
 
       {/* ── Grand total (if multiple sections) ── */}
       {(bonds.length > 0 || equities.length > 0) && funds.length > 0 && (
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 4 }}>
           <div style={{
-            backgroundColor: '#1B2E3C', color: '#fff', fontWeight: 700, fontSize: 11,
-            padding: '6px 14px', borderRadius: 4,
+            backgroundColor: '#1B2E3C', color: '#fff', fontWeight: 700, fontSize: 12,
+            padding: '7px 16px', borderRadius: 4,
           }}>
             TOTAL: {fmtAmt(totalAssigned)}
           </div>
@@ -355,7 +439,7 @@ export default function ProposalPDFTemplate({
       {/* ── Resumen del Portafolio ── */}
       {hasAssets && (
         <div style={{
-          marginTop: 28,
+          marginTop: 24,
           backgroundColor: '#F7F9FB',
           border: '1px solid #E2E8F0',
           borderRadius: 8,
@@ -363,10 +447,10 @@ export default function ProposalPDFTemplate({
         }}>
           {/* Title row */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: '#1B2E3C', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: '#1B2E3C', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
               Distribución del Portafolio
             </span>
-            <span style={{ fontSize: 9, color: '#6b7280' }}>
+            <span style={{ fontSize: 9.5, color: '#6b7280' }}>
               {currency} {totalAssigned.toLocaleString('en-US', { maximumFractionDigits: 0 })}
             </span>
           </div>
@@ -396,9 +480,9 @@ export default function ProposalPDFTemplate({
                 <div key={row.label} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <div style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: row.color, flexShrink: 0 }} />
                   <div>
-                    <div style={{ fontSize: 8.5, color: '#6b7280', marginBottom: 1 }}>{row.label}</div>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: '#1B2E3C' }}>{row.pct.toFixed(1)}%</div>
-                    <div style={{ fontSize: 8, color: '#9ca3af', fontFamily: 'monospace' }}>
+                    <div style={{ fontSize: 9, color: '#6b7280', marginBottom: 1 }}>{row.label}</div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: '#1B2E3C' }}>{row.pct.toFixed(1)}%</div>
+                    <div style={{ fontSize: 8.5, color: '#9ca3af', fontFamily: 'monospace' }}>
                       {currency} {row.amt.toLocaleString('en-US', { maximumFractionDigits: 0 })}
                     </div>
                   </div>
@@ -418,13 +502,13 @@ export default function ProposalPDFTemplate({
                 justifyContent: 'center',
                 minWidth: 130,
               }}>
-                <span style={{ fontSize: 8, color: 'rgba(255,255,255,0.55)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 2 }}>
+                <span style={{ fontSize: 8.5, color: 'rgba(255,255,255,0.55)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 2 }}>
                   Yield Promedio
                 </span>
                 <span style={{ fontSize: 22, fontWeight: 700, color: '#FFFFFF', fontFamily: 'monospace', lineHeight: 1.1 }}>
                   {avgYield.toFixed(2)}%
                 </span>
-                <span style={{ fontSize: 7.5, color: 'rgba(255,255,255,0.4)', marginTop: 2 }}>
+                <span style={{ fontSize: 8, color: 'rgba(255,255,255,0.4)', marginTop: 2 }}>
                   ponderado por asignación
                 </span>
               </div>
