@@ -9,9 +9,12 @@ function writeCookie(value: boolean) {
 }
 
 /**
- * @param forcedByAdmin  When true, Modo Asesor is locked ON by the admin — user can't override it.
+ * @param forcedByAdmin      When true, Modo Asesor is locked ON by the admin — user can't override it.
+ * @param autoDefaultEligible When false, skip the "default ON for narrow viewports" heuristic on first
+ *                            visit — used to keep non-advisor roles (CEO, admin, etc.) out of the
+ *                            restrictive advisor UI by accident just because they're on a phone.
  */
-export function useAdvisorMode(forcedByAdmin = false) {
+export function useAdvisorMode(forcedByAdmin = false, autoDefaultEligible = true) {
   const [advisorMode, setAdvisorModeState] = useState(forcedByAdmin)
   const [initialized, setInitialized] = useState(false)
 
