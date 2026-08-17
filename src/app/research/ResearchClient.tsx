@@ -23,17 +23,8 @@ const MANUAL_TYPES: ResearchType[] = [
   'noticia_mercado', 'bono', 'fondo', 'nueva_emision', 'research', 'macro', 'regulacion', 'novedad_interna',
 ]
 
-const SECTION_LABEL: Record<string, string> = {
-  mercados: 'Mercados',
-  estados_unidos: 'Estados Unidos',
-  europa: 'Europa',
-  latam: 'LatAm',
-  renta_fija: 'Renta fija',
-  fondos: 'Fondos / Asset Management',
-  commodities: 'Commodities',
-  que_mirar_hoy: 'Qué mirar hoy',
-}
-const SECTION_KEYS = Object.keys(SECTION_LABEL)
+// Las secciones del Morning Brief tienen título libre (vienen tal cual del
+// mensaje de origen) — no hay una lista fija de claves.
 
 interface Post {
   id: string
@@ -430,14 +421,14 @@ function DetailPanel({
 
         {post.type === 'morning_brief' ? (
           <div className="mt-5 space-y-5">
-            {SECTION_KEYS.filter((k) => post.sections?.[k]?.text).map((k) => (
-              <div key={k}>
-                <h3 className="text-sm font-bold text-[#2D3F52] uppercase tracking-wide">{SECTION_LABEL[k]}</h3>
-                <p className="text-sm text-gray-700 mt-1 whitespace-pre-wrap">{post.sections![k].text}</p>
-                {post.sections![k].sources?.length > 0 && (
+            {Object.entries(post.sections ?? {}).filter(([, v]) => v?.text).map(([title, section]) => (
+              <div key={title}>
+                <h3 className="text-sm font-bold text-[#2D3F52] uppercase tracking-wide">{title}</h3>
+                <p className="text-sm text-gray-700 mt-1 whitespace-pre-wrap">{section.text}</p>
+                {section.sources?.length > 0 && (
                   <div className="mt-1.5 flex flex-wrap gap-1.5">
                     <span className="text-[10px] text-gray-400">Fuentes:</span>
-                    {post.sections![k].sources.map((s, i) => (
+                    {section.sources.map((s, i) => (
                       <a
                         key={i}
                         href={s.url}
@@ -445,14 +436,14 @@ function DetailPanel({
                         rel="noopener noreferrer"
                         className="text-[10px] text-blue-600 hover:underline"
                       >
-                        {s.source}{i < post.sections![k].sources.length - 1 ? ' ·' : ''}
+                        {s.source}{i < section.sources.length - 1 ? ' ·' : ''}
                       </a>
                     ))}
                   </div>
                 )}
               </div>
             ))}
-            {(!post.sections || SECTION_KEYS.every((k) => !post.sections?.[k]?.text)) && (
+            {(!post.sections || Object.keys(post.sections).length === 0) && (
               <p className="text-sm text-gray-400">Sin contenido cargado en este brief.</p>
             )}
           </div>
@@ -676,26 +667,19 @@ function CreatePostModal({ currentUserName, onClose, onCreated }: { currentUserN
 
 function CreateBriefModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
   const [briefDate, setBriefDate] = useState(() => new Date().toISOString().slice(0, 10))
-  const [headlinesRaw, setHeadlinesRaw] = useState('')
-  const [sectionText, setSectionText] = useState<Record<string, string>>({})
+  const [rawText, setRawText] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
   async function handleSubmit() {
-    const headlines = headlinesRaw.split('\n').map((h) => h.trim()).filter(Boolean)
-    if (headlines.length === 0) { setError('Cargá al menos 1 titular'); return }
+    if (!rawText.trim()) { setError('Pegá el resumen del día'); return }
     setSaving(true)
     setError('')
     try {
-      const sections: Record<string, { text: string; sources: any[] }> = {}
-      for (const key of SECTION_KEYS) {
-        const text = sectionText[key]?.trim()
-        if (text) sections[key] = { text, sources: [] }
-      }
       const res = await fetch('/api/research/morning-brief', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ briefDate, headlines, sections }),
+        body: JSON.stringify({ briefDate, rawText }),
       })
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
@@ -711,20 +695,17 @@ function CreateBriefModal({ onClose, onCreated }: { onClose: () => void; onCreat
   }
 
   return (
-    <Modal title="Morning Brief (manual / prueba)" onClose={onClose}>
+    <Modal title="Morning Brief" onClose={onClose}>
       <div className="space-y-3">
         <Input label="Fecha" type="date" value={briefDate} onChange={setBriefDate} />
-        <Textarea label="Titulares (uno por línea, 3-5)" value={headlinesRaw} onChange={setHeadlinesRaw} rows={4} placeholder={'Fed mantiene tasas sin cambios\nPetróleo sube 2% por tensión geopolítica'} />
-        <p className="text-[11px] text-gray-400">No hace falta completar todas las secciones — solo mostrá las que tengan información relevante ese día.</p>
-        {SECTION_KEYS.map((key) => (
-          <Textarea
-            key={key}
-            label={SECTION_LABEL[key]}
-            value={sectionText[key] ?? ''}
-            onChange={(v) => setSectionText((prev) => ({ ...prev, [key]: v }))}
-            rows={2}
-          />
-        ))}
+        <Textarea
+          label="Resumen del día (pegalo tal cual te llega)"
+          value={rawText}
+          onChange={setRawText}
+          rows={14}
+          placeholder="Pegá acá el mensaje completo…"
+        />
+        <p className="text-[11px] text-gray-400">Los titulares del Panel del Día se sacan solos de los títulos del texto.</p>
         {error && <p className="text-xs text-red-600">{error}</p>}
         <div className="flex justify-end gap-2 pt-2">
           <button onClick={onClose} className="px-4 py-2 text-sm text-gray-500 hover:text-gray-700">Cancelar</button>

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession, RESEARCH_AUTHOR_ROLES } from '@/lib/auth'
 import { listMorningBriefs, type MorningBriefSections } from '@/lib/db/research'
-import { saveMorningBrief } from '@/lib/research/generateMorningBrief'
+import { saveMorningBrief, buildMorningBriefFromRawText } from '@/lib/research/generateMorningBrief'
 import { notifyMorningBriefPublished } from '@/lib/notifications/researchEvents'
 
 function periodToRange(period: string | null): { from?: string; to?: string } {
@@ -53,19 +53,34 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json() as {
       briefDate: string
-      sections: MorningBriefSections
-      headlines: string[]
+      rawText?: string
+      sections?: MorningBriefSections
+      headlines?: string[]
     }
 
     if (!body.briefDate) return NextResponse.json({ error: 'briefDate es obligatorio' }, { status: 400 })
-    if (!body.headlines || body.headlines.length === 0) {
+
+    // Camino simple: pegar el mensaje tal cual (usado por Zapia y por el
+    // formulario manual) — se auto-extraen los titulares.
+    let sections: MorningBriefSections
+    let headlines: string[]
+    if (body.rawText?.trim()) {
+      const built = buildMorningBriefFromRawText(body.rawText)
+      sections = built.sections
+      headlines = built.headlines
+    } else {
+      sections = body.sections ?? {}
+      headlines = body.headlines ?? []
+    }
+
+    if (headlines.length === 0) {
       return NextResponse.json({ error: 'Se requiere al menos 1 titular' }, { status: 400 })
     }
 
     const post = await saveMorningBrief({
       briefDate: body.briefDate,
-      sections: body.sections ?? {},
-      headlines: body.headlines,
+      sections,
+      headlines,
       authorId,
       authorName,
     })

@@ -9,10 +9,10 @@ export interface MorningBriefSection {
   sources: { title: string; source: string; url: string }[]
 }
 
-export type MorningBriefSections = Partial<Record<
-  'mercados' | 'estados_unidos' | 'europa' | 'latam' | 'renta_fija' | 'fondos' | 'commodities' | 'que_mirar_hoy',
-  MorningBriefSection
->>
+// Claves dinámicas — antes eran fijas (mercados/estados_unidos/...), pero el
+// mensaje real de Zapia trae sus propios títulos por día, así que la sección
+// se guarda tal cual viene, sin forzarla a categorías predefinidas.
+export type MorningBriefSections = Record<string, MorningBriefSection>
 
 interface ListFilters {
   type?: ResearchType
