@@ -441,7 +441,7 @@ function DetailPanel({
   )
 }
 
-export default function MesaHoy({ isMesa, userName }: { isMesa: boolean; userName: string }) {
+export default function MesaHoy({ isMesa, userName, openId }: { isMesa: boolean; userName: string; openId?: string | null }) {
   const [rows, setRows]         = useState<Solicitud[]>([])
   const [loading, setLoading]   = useState(true)
   const [selected, setSelected] = useState<Solicitud | null>(null)
@@ -468,6 +468,12 @@ export default function MesaHoy({ isMesa, userName }: { isMesa: boolean; userNam
   }, [today, verSolo])
 
   useEffect(() => { fetchRows() }, [fetchRows])
+
+  // Llegamos acá desde una notificación (?open=ID) — abrir esa orden directamente.
+  useEffect(() => {
+    if (openId) loadDetail(openId)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openId])
 
   async function loadDetail(id: string) {
     const res = await fetch('/api/solicitudes/' + id)

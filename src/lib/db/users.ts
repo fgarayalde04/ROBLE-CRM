@@ -62,6 +62,14 @@ export async function listUsers() {
   return rows
 }
 
+export async function getUsersByRoles(roles: string[]) {
+  const { rows } = await pool.query(
+    `select id, name from crm_users where role = ANY($1) and active = true`,
+    [roles]
+  )
+  return rows as { id: string; name: string }[]
+}
+
 export async function listAdvisorFolders() {
   const { rows } = await pool.query(
     `select distinct advisor from clients where advisor is not null order by advisor`

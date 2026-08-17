@@ -109,13 +109,3 @@ export async function updateSolicitud(id: string, updates: Record<string, any>) 
   )
   return rows[0] ?? null
 }
-
-export async function notifyAsesor(
-  solicitudId: string, asesor: string, title: string, message: string, tipo: 'ejecutada' | 'normal'
-) {
-  const finalTitle = tipo === 'ejecutada' ? '✅ ' + title : title
-  await pool.query(
-    `insert into notifications (user_name, title, message, entity_type, entity_id) values ($1, $2, $3, 'solicitud', $4)`,
-    [asesor, finalTitle, message, solicitudId]
-  )
-}

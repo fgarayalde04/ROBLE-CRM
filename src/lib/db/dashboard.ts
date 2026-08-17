@@ -196,12 +196,12 @@ export async function getCompletedTaskIds(ids: string[]) {
   return rows.map((r) => r.id as string)
 }
 
-export async function getUnreadNotifications(userName: string, limit: number) {
+export async function getUnreadNotifications(userId: string, userName: string, limit: number) {
   const { rows } = await pool.query(
-    `select id, title, message, entity_type, entity_id, created_at
-     from notifications where user_name = $1 and read_at is null
-     order by created_at desc limit $2`,
-    [userName, limit]
+    `select id, title, message, entity_type, entity_id, notif_type, url, created_at
+     from notifications where (user_id = $1 or user_name = $2) and read_at is null
+     order by created_at desc limit $3`,
+    [userId, userName, limit]
   )
   return rows
 }

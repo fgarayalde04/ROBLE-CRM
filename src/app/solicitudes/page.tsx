@@ -1,3 +1,4 @@
+import { Suspense } from 'react'
 import { redirect } from 'next/navigation'
 import { getSession } from '@/lib/auth'
 import { hasGoogleConnection } from '@/lib/google/tokens'
@@ -16,11 +17,13 @@ export default async function SolicitudesPage() {
   const gmailConnected = await hasGoogleConnection()
 
   return (
-    <SolicitudesClient
-      isMesa={isMesa}
-      userName={session.name}
-      userEmail={session.email ?? ''}
-      gmailConnected={gmailConnected}
-    />
+    <Suspense>
+      <SolicitudesClient
+        isMesa={isMesa}
+        userName={session.name}
+        userEmail={session.email ?? ''}
+        gmailConnected={gmailConnected}
+      />
+    </Suspense>
   )
 }

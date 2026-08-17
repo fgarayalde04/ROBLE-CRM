@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useSearchParams } from 'next/navigation'
 import NuevaSolicitudForm from './NuevaSolicitudForm'
 import MesaHoy from './MesaHoy'
 import { useAdvisorModeCtx } from '@/contexts/AdvisorModeContext'
@@ -8,13 +9,18 @@ import { useAdvisorModeCtx } from '@/contexts/AdvisorModeContext'
 interface Props { isMesa: boolean; userName: string; userEmail: string; gmailConnected: boolean }
 
 function Section({
-  title, subtitle, accent = 'gray', defaultOpen = false, children,
+  title, subtitle, accent = 'gray', defaultOpen = false, forceOpen = false, children,
 }: {
   title: string; subtitle?: string
   accent?: 'blue' | 'amber' | 'gray'
-  defaultOpen?: boolean; children: React.ReactNode
+  defaultOpen?: boolean; forceOpen?: boolean; children: React.ReactNode
 }) {
   const [open, setOpen] = useState(defaultOpen)
+
+  // Llegamos acá desde una notificación (?open=ID) — asegurar que la sección esté visible.
+  useEffect(() => {
+    if (forceOpen) setOpen(true)
+  }, [forceOpen])
   const dotCls = { blue: 'bg-blue-500', amber: 'bg-amber-500', gray: 'bg-gray-400' }[accent ?? 'gray']
 
   return (
@@ -42,6 +48,8 @@ function Section({
 
 export default function SolicitudesClient({ isMesa, userName, userEmail, gmailConnected }: Props) {
   const { advisorMode } = useAdvisorModeCtx()
+  const searchParams = useSearchParams()
+  const openId = searchParams.get('open')
   // En modo asesor (toggle activo) siempre mostrar el formulario abierto
   const showEnviar = !isMesa || advisorMode
 
@@ -69,8 +77,9 @@ export default function SolicitudesClient({ isMesa, userName, userEmail, gmailCo
             subtitle="Solicitudes del día — estados y acciones"
             accent="amber"
             defaultOpen={isMesa}
+            forceOpen={!!openId}
           >
-            <MesaHoy isMesa={isMesa} userName={userName} />
+            <MesaHoy isMesa={isMesa} userName={userName} openId={openId} />
           </Section>
         )}
 

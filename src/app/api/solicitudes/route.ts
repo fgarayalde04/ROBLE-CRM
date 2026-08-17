@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { generateSolicitudId, listSolicitudes, createSolicitud, insertSolicitudEvento } from '@/lib/db/solicitudes'
+import { notifyNuevaOrden } from '@/lib/notifications/orderEvents'
 
 const MESA_ROLES  = ['admin', 'ceo', 'direccion', 'mesa', 'asistente']
 const ADMIN_ROLES = ['admin', 'ceo', 'direccion']
@@ -138,6 +139,13 @@ export async function POST(req: NextRequest) {
     usuario:      session.name,
     usuario_id:   session.id,
   })
+
+  // Envío directo al cliente no pasa por la cola de revisión de Mesa — nadie que notificar ahí.
+  if (!isDirecto) {
+    await notifyNuevaOrden({
+      id: data.id, clientName: body.client_name ?? null, asesorName: session.name, asesorId: session.id,
+    })
+  }
 
   return NextResponse.json({ ok: true, id: data.id, solicitud_id: data.solicitud_id, canal })
 }

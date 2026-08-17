@@ -144,7 +144,7 @@ export default async function PanelDelDiaPage({ searchParams }: PageProps) {
     getRecentActivityForDashboard(isWideRole, userName, 25),
 
     // Notificaciones sin leer
-    userName ? getUnreadNotifications(userName, 5) : Promise.resolve([]),
+    userName ? getUnreadNotifications(session?.id ?? '', userName, 5) : Promise.resolve([]),
 
     // BCU compliance pendiente
     getPendingBcuComplianceCount(),
@@ -657,21 +657,27 @@ export default async function PanelDelDiaPage({ searchParams }: PageProps) {
             <Section
               label="N"
               title="Notificaciones"
-              subtitle="Tareas compartidas contigo"
+              subtitle="Alertas y novedades"
             >
               <ul className="divide-y divide-gray-50">
-                {unreadNotifications.map((n: any) => (
-                  <li key={n.id}>
-                    <Link
-                      href={n.entity_type === 'task' ? `/tasks?view=shared&highlight=${n.entity_id}` : '/'}
-                      className="block px-4 py-3 hover:bg-gray-50 transition-colors"
-                    >
-                      <p className="text-xs font-semibold text-[#2D3F52]">{n.title}</p>
-                      <p className="text-xs text-gray-600 mt-0.5">{n.message}</p>
-                      <p className="text-[10px] text-gray-400 mt-1">{timeAgo(n.created_at)}</p>
-                    </Link>
-                  </li>
-                ))}
+                {unreadNotifications.map((n: any) => {
+                  const href = n.url ?? (n.entity_type === 'task' ? `/tasks?view=shared&highlight=${n.entity_id}` : '/')
+                  const accent =
+                    n.notif_type === 'orden_devuelta' ? 'bg-amber-50/60' :
+                    n.notif_type === 'orden_ejecutada' ? 'bg-emerald-50/60' : ''
+                  return (
+                    <li key={n.id}>
+                      <Link
+                        href={href}
+                        className={`block px-4 py-3 hover:bg-gray-50 transition-colors ${accent}`}
+                      >
+                        <p className="text-xs font-semibold text-[#2D3F52]">{n.title}</p>
+                        <p className="text-xs text-gray-600 mt-0.5">{n.message}</p>
+                        <p className="text-[10px] text-gray-400 mt-1">{timeAgo(n.created_at)}</p>
+                      </Link>
+                    </li>
+                  )
+                })}
               </ul>
             </Section>
           )}

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import type { SessionUser } from '@/lib/auth'
 import { useAdvisorModeCtx } from '@/contexts/AdvisorModeContext'
+import NotificationBell from './NotificationBell'
 
 const PAGE_TITLES: [string, string][] = [
   ['/', 'Panel del día'],
@@ -126,6 +127,8 @@ export default function MobileHeader({ user, onMenuToggle, showHamburger = true 
           />
         </div>
       </button>
+
+      <NotificationBell variant="dark" />
 
       {/* User avatar */}
       <div className="w-7 h-7 rounded-full bg-[#16A34A] flex items-center justify-center shrink-0">

@@ -33,3 +33,24 @@ create table if not exists push_preferences (
   alertas_importantes boolean not null default true,
   updated_at timestamptz not null default now()
 );
+
+-- ============================================================
+-- Migración: eventos de Órdenes (2da etapa)
+-- Ya ejecutada directamente contra la base de Railway.
+-- Extiende la tabla `notifications` existente — no crea un
+-- segundo sistema de notificaciones.
+-- ============================================================
+
+alter table notifications add column if not exists user_id uuid references crm_users(id);
+alter table notifications add column if not exists notif_type text;
+alter table notifications add column if not exists client_name text;
+alter table notifications add column if not exists url text;
+
+-- Dedup: misma orden + mismo tipo de evento + mismo destinatario nunca se duplica.
+-- Índice parcial: no afecta notificaciones de otros módulos (ej. tareas) que no
+-- setean notif_type.
+create unique index if not exists idx_notifications_dedup
+  on notifications(entity_id, notif_type, user_name)
+  where entity_id is not null and notif_type is not null;
+
+create index if not exists idx_notifications_user_id on notifications(user_id);

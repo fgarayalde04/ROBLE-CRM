@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
-import { getSolicitud, getSolicitudEventos, updateSolicitud, insertSolicitudEvento, notifyAsesor } from '@/lib/db/solicitudes'
+import { getSolicitud, getSolicitudEventos, updateSolicitud, insertSolicitudEvento } from '@/lib/db/solicitudes'
+import {
+  notifyOrdenTomada, notifyOrdenDevuelta, notifyMailEnviado, notifyEnEjecucion, notifyOrdenEjecutada,
+  type OrderCtx,
+} from '@/lib/notifications/orderEvents'
 
 const MESA_ROLES  = ['admin', 'ceo', 'direccion', 'mesa', 'asistente']
 const ADMIN_ROLES = ['admin', 'ceo', 'direccion']
@@ -50,8 +54,9 @@ export async function PATCH(
     })
   }
 
-  const opLabel = (t: string) =>
-    ({ compra: 'Compra', venta: 'Venta', suscripcion: 'Suscripción', rescate: 'Rescate' }[t] ?? t)
+  const orderCtx: OrderCtx = {
+    id: params.id, clientName: sol.client_name, asesorName: sol.asesor, asesorId: sol.asesor_id ?? null,
+  }
 
   // ── tomar ──────────────────────────────────────────────────────────────────
   if (accion === 'tomar') {
@@ -68,16 +73,7 @@ export async function PATCH(
     })
 
     await logEvento('tomada', `Solicitud tomada por ${session.name}${nuevoEstado ? ' — en revisión' : ''}`)
-
-    if (!sol.notif_tomada_enviada) {
-      await updateSolicitud(params.id, { notif_tomada_enviada: true })
-      await notifyAsesor(
-        params.id, sol.asesor,
-        `Solicitud tomada — ${sol.client_name}`,
-        `${session.name} está revisando tu orden de ${sol.instrumento_nombre}.`,
-        'normal'
-      )
-    }
+    await notifyOrdenTomada(orderCtx, session.name)
     return NextResponse.json({ ok: true, row: data })
   }
 
@@ -88,12 +84,7 @@ export async function PATCH(
       estado: 'devuelta', operador: null, operador_id: null, tomado_at: null,
     })
     await logEvento('devuelta', `Orden devuelta al asesor por ${session.name}${body.motivo ? ': ' + body.motivo : ''}`, { motivo: body.motivo })
-    await notifyAsesor(
-      params.id, sol.asesor,
-      `Orden devuelta — ${sol.client_name}`,
-      `${session.name} devolvió la orden de ${sol.instrumento_nombre}${body.motivo ? ': ' + body.motivo : '. Revisá los detalles.'}`,
-      'normal'
-    )
+    await notifyOrdenDevuelta(orderCtx, body.motivo)
     return NextResponse.json({ ok: true, row: data })
   }
 
@@ -119,16 +110,7 @@ export async function PATCH(
       ...(body.cuerpo ? { mail_cuerpo: body.cuerpo } : {}),
     })
     await logEvento('mail_enviado', `Mail enviado al cliente por ${session.name}`)
-
-    if (!sol.notif_mail_enviada) {
-      await updateSolicitud(params.id, { notif_mail_enviada: true })
-      await notifyAsesor(
-        params.id, sol.asesor,
-        `Mail enviado — ${sol.client_name}`,
-        `Se envió el mail de confirmación de ${opLabel(sol.tipo_operacion)} de ${sol.instrumento_nombre} a ${sol.client_name}.`,
-        'normal'
-      )
-    }
+    await notifyMailEnviado(orderCtx)
     return NextResponse.json({ ok: true, row: data })
   }
 
@@ -140,16 +122,7 @@ export async function PATCH(
 
     const data = await updateSolicitud(params.id, { estado: 'en_ejecucion' })
     await logEvento('en_ejecucion', `Operación en ejecución — registrado por ${session.name}`)
-
-    if (!sol.notif_ejecucion_enviada) {
-      await updateSolicitud(params.id, { notif_ejecucion_enviada: true })
-      await notifyAsesor(
-        params.id, sol.asesor,
-        `En ejecución — ${sol.client_name}`,
-        `La operación de ${opLabel(sol.tipo_operacion)} de ${sol.instrumento_nombre} está siendo ingresada al sistema.`,
-        'normal'
-      )
-    }
+    await notifyEnEjecucion(orderCtx)
     return NextResponse.json({ ok: true, row: data })
   }
 
@@ -168,26 +141,7 @@ export async function PATCH(
       `Operación ejecutada por ${session.name}${precioEjecutado ? ` a precio ${precioEjecutado}` : ''}`,
       { precio_ejecutado: precioEjecutado, valor_efectivo: valorEfectivo }
     )
-
-    if (!sol.notificacion_asesor_enviada) {
-      await updateSolicitud(params.id, { notificacion_asesor_enviada: true })
-      const montoStr = sol.monto
-        ? `${sol.moneda} ${Number(sol.monto).toLocaleString('es-UY')}`
-        : sol.cantidad ? `${sol.cantidad} unidades` : ''
-      await notifyAsesor(
-        params.id, sol.asesor,
-        `La operación de ${sol.client_name} fue ejecutada correctamente.`,
-        [
-          `Cliente: ${sol.client_name}`,
-          `Operación: ${opLabel(sol.tipo_operacion)}`,
-          `Instrumento: ${sol.instrumento_nombre}`,
-          montoStr ? `Monto: ${montoStr}` : '',
-          `Operador: ${session.name}`,
-          `Fecha: ${new Date(now).toLocaleString('es-UY')}`,
-        ].filter(Boolean).join(' · '),
-        'ejecutada'
-      )
-    }
+    await notifyOrdenEjecutada(orderCtx)
     return NextResponse.json({ ok: true, row: data })
   }
 

@@ -7,6 +7,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { clsx } from 'clsx'
 import type { SessionUser, Permission } from '@/lib/auth'
 import { useAdvisorModeCtx } from '@/contexts/AdvisorModeContext'
+import NotificationBell from './NotificationBell'
 
 // ─── Nav structure ────────────────────────────────────────────────────────────
 
@@ -174,16 +175,19 @@ export default function Sidebar({ user, isOpen = false, onToggle }: Props) {
           style={{ filter: 'invert(1) hue-rotate(180deg) brightness(0.92)' }}
           priority
         />
-        {/* Close button — only on mobile */}
-        <button
-          onClick={onToggle}
-          className="md:hidden w-7 h-7 flex items-center justify-center rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-colors shrink-0"
-          aria-label="Cerrar menú"
-        >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
+        <div className="flex items-center gap-1 shrink-0">
+          <NotificationBell variant="dark" />
+          {/* Close button — only on mobile */}
+          <button
+            onClick={onToggle}
+            className="md:hidden w-7 h-7 flex items-center justify-center rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-colors shrink-0"
+            aria-label="Cerrar menú"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
       </div>
 
       {/* ── MOBILE: simplified Modo Asesor nav ── */}
