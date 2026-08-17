@@ -5,7 +5,7 @@ import { hasGoogleConnection } from '@/lib/google/tokens'
 import SolicitudesClient from './SolicitudesClient'
 
 export const dynamic = 'force-dynamic'
-export const metadata = { title: 'Solicitudes | Roble Capital' }
+export const metadata = { title: 'Solicitudes' }
 
 const MESA_ROLES = ['admin', 'ceo', 'direccion', 'mesa', 'asistente']
 

@@ -5,7 +5,7 @@ import { getSession } from '@/lib/auth'
 import { listUsers, listAdvisorFolders } from '@/lib/db/users'
 import UsersManager from './UsersManager'
 
-export const metadata: Metadata = { title: 'Usuarios | Roble Capital' }
+export const metadata: Metadata = { title: 'Usuarios' }
 export const dynamic = 'force-dynamic'
 
 export default async function UsersPage() {

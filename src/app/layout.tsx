@@ -14,7 +14,7 @@ const inter = Inter({
 })
 
 export const metadata: Metadata = {
-  title: { template: '%s | Roble Capital', default: 'Roble Capital' },
+  title: { template: '%s | Roble Capital CRM', default: 'Roble Capital CRM' },
   robots: { index: false, follow: false },
   manifest: '/manifest.json',
   icons: {
@@ -28,7 +28,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'Roble',
+    title: 'Roble Capital CRM',
   },
 }
 

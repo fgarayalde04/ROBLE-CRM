@@ -10,8 +10,9 @@ import {
   getStuckOpenings, getStaleOpenings, getTodayEventsForDashboard, getUpcomingDeadlinesForDashboard,
   getRecentActivityForDashboard, getCompletedTaskIds, getUnreadNotifications, getPendingBcuComplianceCount,
 } from '@/lib/db/dashboard'
+import { getLatestMorningBrief } from '@/lib/db/research'
 
-export const metadata: Metadata = { title: 'Panel del día | Roble Capital' }
+export const metadata: Metadata = { title: 'Panel del día | Roble Capital CRM' }
 export const dynamic = 'force-dynamic'
 
 const OPENING_STATUS_LABEL: Record<string, string> = {
@@ -116,6 +117,7 @@ export default async function PanelDelDiaPage({ searchParams }: PageProps) {
     recentActivityRaw,
     unreadNotifications,
     pendingBcuCount,
+    latestMorningBrief,
   ] = await Promise.all([
     userName ? getOpenTasksByResponsible(userName, 20) : Promise.resolve([]),
     userName ? getOpenTasksByCreator(userName, 20) : Promise.resolve([]),
@@ -148,6 +150,9 @@ export default async function PanelDelDiaPage({ searchParams }: PageProps) {
 
     // BCU compliance pendiente
     getPendingBcuComplianceCount(),
+
+    // Morning Brief más reciente
+    getLatestMorningBrief(),
   ])
 
   const allMyTasksCombined = uniqueById([
@@ -243,6 +248,30 @@ export default async function PanelDelDiaPage({ searchParams }: PageProps) {
           </Link>
         </div>
       </div>
+
+      {/* ─── Morning Brief ─── */}
+      {latestMorningBrief && (
+        <Link
+          href={`/research?open=${latestMorningBrief.id}`}
+          className="block bg-[#2D3F52] rounded-xl px-5 py-4 mb-6 hover:bg-[#354A5E] transition-colors"
+        >
+          <div className="flex items-center justify-between gap-4">
+            <div className="min-w-0">
+              <p className="text-[11px] font-semibold text-[#16A34A] uppercase tracking-wide">
+                📰 Morning Brief — {latestMorningBrief.brief_date}
+              </p>
+              <ul className="mt-1.5 space-y-0.5">
+                {((latestMorningBrief.headlines as string[]) ?? []).slice(0, 5).map((h, i) => (
+                  <li key={i} className="text-sm text-white/85 truncate">• {h}</li>
+                ))}
+              </ul>
+            </div>
+            <span className="shrink-0 px-3 py-1.5 bg-[#16A34A] text-white text-xs font-semibold rounded-lg">
+              Leer Morning Brief
+            </span>
+          </div>
+        </Link>
+      )}
 
       {/* ─── Stat bar ─── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">

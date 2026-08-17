@@ -5,7 +5,7 @@ import { getSession } from '@/lib/auth'
 import { hasGoogleConnection } from '@/lib/google/tokens'
 import OrdenesClient from './OrdenesClient'
 
-export const metadata: Metadata = { title: 'Enviar órdenes | Roble Capital' }
+export const metadata: Metadata = { title: 'Enviar órdenes' }
 export const dynamic = 'force-dynamic'
 
 const ADMIN_ROLES = ['admin', 'ceo', 'direccion']

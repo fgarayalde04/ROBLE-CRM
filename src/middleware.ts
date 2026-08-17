@@ -42,6 +42,16 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next()
   }
 
+  // Worker-to-worker call (WhatsApp brief worker → Roble), authenticated with a
+  // shared secret instead of a user session — checked here since middleware
+  // would otherwise redirect it to /login before the route ever runs.
+  if (pathname === '/api/research/morning-brief' && req.method === 'POST') {
+    const workerSecret = req.headers.get('x-worker-secret')
+    if (workerSecret && process.env.RESEARCH_WORKER_SECRET && workerSecret === process.env.RESEARCH_WORKER_SECRET) {
+      return NextResponse.next()
+    }
+  }
+
   const token = req.cookies.get('crm_session')?.value
   if (!token) {
     const loginUrl = req.nextUrl.clone()

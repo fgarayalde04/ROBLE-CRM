@@ -4,7 +4,7 @@ import { redirect } from 'next/navigation'
 import { getUserOneDriveConfig } from '@/lib/db/users'
 import MiCarpetaClient from './MiCarpetaClient'
 
-export const metadata: Metadata = { title: 'Mi carpeta | Roble Capital' }
+export const metadata: Metadata = { title: 'Mi carpeta' }
 export const dynamic = 'force-dynamic'
 
 export default async function MiCarpetaPage() {

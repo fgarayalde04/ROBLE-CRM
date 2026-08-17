@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import { hasGoogleConnection, getGoogleEmail } from '@/lib/google/tokens'
 import CalendarView from './CalendarView'
 
-export const metadata: Metadata = { title: 'Agenda | Roble Capital' }
+export const metadata: Metadata = { title: 'Agenda' }
 export const dynamic = 'force-dynamic'
 
 export default async function EventsPage() {

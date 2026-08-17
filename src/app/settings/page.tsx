@@ -5,7 +5,7 @@ import { hasGoogleConnection, getGoogleEmail, getGoogleName } from '@/lib/google
 import SettingsClient from './SettingsClient'
 import PushNotificationsCard from '@/components/push/PushNotificationsCard'
 
-export const metadata: Metadata = { title: 'Configuración | Roble Capital' }
+export const metadata: Metadata = { title: 'Configuración' }
 export const dynamic = 'force-dynamic'
 
 export default async function SettingsPage({

@@ -3,7 +3,7 @@ import { getSession } from '@/lib/auth'
 import FichaModule from './FichaModule'
 
 export const dynamic = 'force-dynamic'
-export const metadata = { title: 'Ficha BCU | Roble Capital' }
+export const metadata = { title: 'Ficha BCU' }
 
 export default async function FichaPage({ searchParams }: { searchParams: { id?: string } }) {
   const session = await getSession()

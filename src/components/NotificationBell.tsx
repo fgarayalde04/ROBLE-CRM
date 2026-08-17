@@ -35,7 +35,7 @@ function accentFor(notifType: string | null) {
   return { bg: 'bg-white', border: 'border-gray-100', dot: 'bg-blue-400' }
 }
 
-export default function NotificationBell({ variant = 'dark' }: { variant?: 'dark' | 'light' }) {
+export default function NotificationBell({ variant = 'dark', align = 'right' }: { variant?: 'dark' | 'light'; align?: 'left' | 'right' }) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [items, setItems] = useState<NotificationRow[]>([])
@@ -115,7 +115,7 @@ export default function NotificationBell({ variant = 'dark' }: { variant?: 'dark
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-2 w-80 max-h-[70vh] overflow-y-auto bg-white border border-gray-200 rounded-xl shadow-xl z-50">
+        <div className={`absolute ${align === 'left' ? 'left-0' : 'right-0'} top-full mt-2 w-80 max-h-[70vh] overflow-y-auto bg-white border border-gray-200 rounded-xl shadow-xl z-50`}>
           <div className="px-4 py-2.5 border-b border-gray-100 flex items-center justify-between sticky top-0 bg-white">
             <span className="text-xs font-semibold text-gray-700">Notificaciones</span>
             {unreadCount > 0 && <span className="text-[10px] text-gray-400">{unreadCount} sin leer</span>}

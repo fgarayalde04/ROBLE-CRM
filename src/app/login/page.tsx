@@ -4,7 +4,7 @@ import { redirect } from 'next/navigation'
 import { getSession } from '@/lib/auth'
 import LoginForm from './LoginForm'
 
-export const metadata = { title: 'Iniciar Sesión | Roble Capital' }
+export const metadata = { title: 'Iniciar Sesión' }
 
 export default async function LoginPage() {
   const session = await getSession()

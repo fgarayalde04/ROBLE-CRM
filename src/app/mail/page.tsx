@@ -3,7 +3,7 @@ import { hasGoogleConnection, getGoogleEmail } from '@/lib/google/tokens'
 import { listActivityLogByAction } from '@/lib/db/activityLog'
 import MailPageClient from './MailPageClient'
 
-export const metadata: Metadata = { title: 'Mail | Roble Capital' }
+export const metadata: Metadata = { title: 'Mail' }
 export const dynamic = 'force-dynamic'
 
 export default async function MailPage() {

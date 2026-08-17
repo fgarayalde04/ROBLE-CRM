@@ -1,7 +1,7 @@
 import { Suspense } from 'react'
 import FactsheetClient from './FactsheetClient'
 
-export const metadata = { title: 'Portfolio Factsheet — Roble Capital' }
+export const metadata = { title: 'Portfolio Factsheet' }
 
 export default function FactsheetPage() {
   return (
