@@ -165,6 +165,7 @@ export default function Sidebar({ user, isOpen = false, onToggle }: Props) {
   const advisorItems = [
     { href: '/solicitudes',            label: 'Enviar órdenes', subtitle: 'Crear y enviar instrucciones', icon: OrdersIcon },
     { href: '/ordenes',                label: 'Historial',       subtitle: 'Órdenes enviadas',             icon: ClockIcon },
+    { href: '/research',               label: 'Research & Novedades', subtitle: 'Morning Brief y publicaciones', icon: ResearchIcon },
     { href: '/mail',                   label: 'Mail',            subtitle: 'Bandeja de entrada Gmail',     icon: MailIcon },
     { href: '/settings',               label: 'Configuración',   subtitle: 'Cuenta y Gmail',               icon: SettingsIconFn },
   ]
@@ -172,6 +173,7 @@ export default function Sidebar({ user, isOpen = false, onToggle }: Props) {
   function advisorIsActive(href: string): boolean {
     if (href === '/solicitudes') return pathname.startsWith('/solicitudes')
     if (href === '/ordenes') return pathname === '/ordenes'
+    if (href === '/research') return pathname.startsWith('/research')
     if (href === '/mail') return pathname.startsWith('/mail')
     if (href === '/settings') return pathname.startsWith('/settings')
     return false

@@ -22,6 +22,7 @@ const ASESOR_ALLOWED = [
   '/inbox',
   '/settings',
   '/change-password',
+  '/research',
   '/api/',
 ]
 
