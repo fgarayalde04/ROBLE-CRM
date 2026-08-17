@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { getSession } from '@/lib/auth'
 import { hasGoogleConnection, getGoogleEmail, getGoogleName } from '@/lib/google/tokens'
 import SettingsClient from './SettingsClient'
+import PushNotificationsCard from '@/components/push/PushNotificationsCard'
 
 export const metadata: Metadata = { title: 'Configuración | Roble Capital' }
 export const dynamic = 'force-dynamic'
@@ -55,6 +56,9 @@ export default async function SettingsPage({
             </div>
           </div>
         </div>
+
+        {/* Push notifications card */}
+        <PushNotificationsCard />
 
         {/* Google connection card */}
         <div className="bg-white border border-[#E2E8F0] rounded-lg p-5">

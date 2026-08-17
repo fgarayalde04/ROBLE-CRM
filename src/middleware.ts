@@ -8,6 +8,11 @@ const PUBLIC_PATHS = [
   '/api/auth/google-login',
   '/api/auth/microsoft-login',
   '/api/auth/microsoft/callback',
+  // PWA assets — must be reachable without a session (installed icon, SW registration)
+  '/manifest.json',
+  '/sw.js',
+  '/icons/',
+  '/apple-touch-icon.png',
 ]
 
 // Paths accessible to users with modo_asesor enabled (server-controlled)
