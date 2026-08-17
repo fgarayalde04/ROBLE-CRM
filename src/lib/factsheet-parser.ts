@@ -95,15 +95,23 @@ const COL_ALIASES: Record<string, string[]> = {
   symbol:       ['symbol', 'ticker', 'simbolo', 'bbg ticker', 'bloomberg ticker', 'sec symbol'],
   name:         ['security description', 'description', 'name', 'asset name', 'nombre', 'security name', 'instrumento'],
   securityType: ['security type', 'sec type', 'asset type', 'instrument type', 'tipo'],
-  identifier:   ['security identifier', 'cusip', 'isin', 'identifier', 'sec id'],
+  identifier:   ['security identifier', 'identifier', 'sec id'],
   tradeDate:    ['trade date', 'fecha', 'date', 'acquisition date', 'purchase date'],
-  quantity:     ['quantity', 'qty', 'units', 'shares', 'nominales', 'cantidad'],
+  quantity:     ['quantity', 'qty', 'units', 'shares', 'nominales', 'cantidad', 'trade date quantity', 'settlement date quantity'],
   marketValue:  ['market value', 'mkt value', 'fair value', 'valor mercado', 'current value'],
   costBasis:    ['current total cost', 'total cost', 'cost basis', 'total cost basis', 'book value', 'costo', 'base cost'],
   unrealizedGL: ['gain/loss', 'unrealized gain/loss', 'unrealized g/l', 'unreal g/l', 'unrealized', 'ganancia/perdida', 'g/l'],
   returnPct:    ['gain/loss %', 'unrealized gain/loss %', 'return %', '% gain/loss', 'rendimiento %', '% return'],
   weight:       ['% of portfolio', '% portfolio', 'weight', 'allocation', 'peso', '% port'],
-  currency:     ['currency', 'moneda', 'ccy'],
+  currency:     ['currency', 'moneda', 'ccy', 'position ccy'],
+  isin:         ['isin'],
+  cusip:        ['cusip'],
+  price:        ['market price', 'price', 'precio'],
+  maturityDate: ['maturity date', 'maturity', 'vencimiento'],
+  coupon:       ['% coupon rate', 'coupon rate', 'coupon', 'cupon'],
+  accruedInterest: ['accrued interest', 'accrued int', 'interes devengado'],
+  fundFamily:   ['fund family', 'gestora', 'manager', 'asset manager'],
+  dividendPolicy: ['dividend', 'dividend policy'],
 }
 
 function normalizeHeader(h: string): string {
@@ -112,10 +120,40 @@ function normalizeHeader(h: string): string {
 
 function matchCol(header: string): string | null {
   const h = normalizeHeader(header)
+  // Exact match first — avoids e.g. "Market Price (Position CCY)" being
+  // claimed by the `currency` field just because it contains "position ccy".
   for (const [field, aliases] of Object.entries(COL_ALIASES)) {
-    if (aliases.some(a => normalizeHeader(a) === h || h.includes(normalizeHeader(a)))) return field
+    if (aliases.some(a => normalizeHeader(a) === h)) return field
+  }
+  // Then prefix match — headers are usually "<concept> (<qualifier>)", so the
+  // concept alias should anchor the start, not appear anywhere in the string.
+  for (const [field, aliases] of Object.entries(COL_ALIASES)) {
+    if (aliases.some(a => h.startsWith(normalizeHeader(a)))) return field
   }
   return null
+}
+
+function parseDateStr(v: unknown): string | null {
+  if (v == null || v === '') return null
+  if (v instanceof Date) return isNaN(v.getTime()) ? null : v.toISOString().slice(0, 10)
+  // Excel serial date (days since 1899-12-30) — sheet_to_json without
+  // cellDates:true returns these as plain numbers, not JS Dates.
+  if (typeof v === 'number' && v > 0 && v < 2958466) {
+    const parsed = XLSX.SSF.parse_date_code(v)
+    if (parsed) {
+      const d = new Date(Date.UTC(parsed.y, parsed.m - 1, parsed.d))
+      return isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10)
+    }
+  }
+  const s = String(v).trim()
+  if (!s || /^\d+(\.\d+)?$/.test(s)) return null  // bare numeric string — not a real date
+  const d = new Date(s)
+  return isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10)
+}
+
+function parseStr(v: unknown): string | null {
+  const s = String(v ?? '').trim()
+  return s ? s : null
 }
 
 function parseNum(v: unknown): number | null {
@@ -224,6 +262,14 @@ export function parseFactsheetExcel(buffer: ArrayBuffer): ParsedFactsheet {
     retPct:     number | null
     qty:        number | null
     weight:     number | null
+    isin:            string | null
+    cusip:           string | null
+    price:           number | null
+    maturityDate:    string | null
+    coupon:          number | null
+    accruedInterest: number | null
+    fundFamily:      string | null
+    dividendPolicy:  string | null
   }
 
   const allRows: DataRow[] = []
@@ -261,7 +307,18 @@ export function parseFactsheetExcel(buffer: ArrayBuffer): ParsedFactsheet {
 
     if (tradeDate === 'Multiple') multiLotIds.add(key)
 
-    allRows.push({ rawIdx: i, identifier: key, tradeDate, name, sym, secType, currency, mv, costBasis, gl, retPct, qty: parseNum(get(row, 'quantity')), weight })
+    allRows.push({
+      rawIdx: i, identifier: key, tradeDate, name, sym, secType, currency, mv, costBasis, gl, retPct,
+      qty: parseNum(get(row, 'quantity')), weight,
+      isin: parseStr(get(row, 'isin')),
+      cusip: parseStr(get(row, 'cusip')),
+      price: parseNum(get(row, 'price')),
+      maturityDate: parseDateStr(get(row, 'maturityDate')),
+      coupon: parseNum(get(row, 'coupon')),
+      accruedInterest: parseNum(get(row, 'accruedInterest')),
+      fundFamily: parseStr(get(row, 'fundFamily')),
+      dividendPolicy: parseStr(get(row, 'dividendPolicy')),
+    })
   }
 
   // ── Pass 2: keep only position rows, skip individual lots ─────────────────
@@ -297,6 +354,15 @@ export function parseFactsheetExcel(buffer: ArrayBuffer): ParsedFactsheet {
       unrealizedGL: r.gl,
       returnPct,
       riskScore:    null,
+      isin:            r.isin,
+      cusip:           r.cusip,
+      price:           r.price,
+      maturityDate:    r.maturityDate,
+      coupon:          r.coupon,
+      accruedInterest: r.accruedInterest,
+      fundFamily:      r.fundFamily,
+      dividendPolicy:  r.dividendPolicy,
+      yield:           null,
     })
   }
 

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
-import { verifyParticipant, listMessages, createMessage, touchConversation, markParticipantRead } from '@/lib/db/chat'
+import { verifyParticipant, listMessages, createMessage, touchConversation, markParticipantRead, getParticipantIds } from '@/lib/db/chat'
 import { getSession } from '@/lib/auth'
+import { sendPushNotification } from '@/lib/push/server'
 
 // GET /api/chat/messages?conversationId=xxx
 export async function GET(req: Request) {
@@ -55,6 +56,22 @@ export async function POST(req: Request) {
     touchConversation(conversationId, now),
     markParticipantRead(conversationId, session.id, now),
   ])
+
+  // Push to every other participant — best-effort, never blocks the response.
+  // Deep-links to /?chat=<id> so the client can auto-open that conversation.
+  getParticipantIds(conversationId, session.id).then((recipientIds) => {
+    const body = msg.message_type === 'task_ref' ? `📎 ${msg.task_title}` : msg.content
+    return Promise.all(recipientIds.map((uid) =>
+      sendPushNotification({
+        userId: uid,
+        title: session.name,
+        body,
+        url: `/?chat=${conversationId}`,
+        type: 'chat_message',
+        entityId: conversationId,
+      }).catch((err) => console.error('[chat] push failed', uid, err))
+    ))
+  }).catch((err) => console.error('[chat] push lookup failed', err))
 
   return NextResponse.json(msg)
 }

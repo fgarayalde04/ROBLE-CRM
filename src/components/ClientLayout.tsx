@@ -19,7 +19,10 @@ export default function ClientLayout({ user, children }: Props) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const pathname = usePathname()
   const router = useRouter()
-  const { advisorMode, setAdvisorMode, initialized, forcedByAdmin } = useAdvisorMode(user.modo_asesor === true)
+  // Only asesores get auto-defaulted into Advisor Mode on narrow viewports —
+  // other roles (CEO, admin, etc.) keep the full sidebar unless they opt in,
+  // or unless an admin forces modo_asesor on for them.
+  const { advisorMode, setAdvisorMode, initialized, forcedByAdmin } = useAdvisorMode(user.modo_asesor === true, user.role === 'asesor')
 
   // Sidebar is hidden in Advisor Mode
   const showSidebar = !initialized || !advisorMode

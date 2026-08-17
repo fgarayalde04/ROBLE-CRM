@@ -64,6 +64,14 @@ function riskProfile(score: number | null): string {
   return 'Agresivo'
 }
 
+// Yield se carga a mano — mismo criterio que Propuestas: solo tiene sentido
+// para renta fija y fondos (proposal_bonds.yield / proposal_funds.ytm_indicative).
+function isYieldEligible(p: FactsheetPosition): boolean {
+  return p.assetClass === 'Fixed Income'
+    || ['Alternatives', 'Real Estate'].includes(p.assetClass)
+    || (p.securityType || '').toLowerCase().includes('fund')
+}
+
 const DEFAULT_DISCLAIMER = `Este documento ha sido preparado por Roble Capital con fines informativos y no constituye asesoramiento de inversión, oferta ni solicitud de compra o venta de valores. La información aquí contenida se basa en fuentes consideradas confiables, pero Roble Capital no garantiza su exactitud o integridad. El rendimiento pasado no garantiza resultados futuros. Las inversiones en valores conllevan riesgos, incluyendo la posible pérdida del capital invertido. Este material es confidencial y está destinado exclusivamente al cliente indicado.`
 
 const EMPTY_FACTSHEET = (): FactsheetData => ({
@@ -173,6 +181,8 @@ export default function FactsheetClient() {
   const setMeta   = (k: string, v: string) => setFactsheet(f => ({ ...f, meta:      { ...f.meta,      [k]: v } }))
   const setComm   = (k: string, v: string) => setFactsheet(f => ({ ...f, commentary: { ...f.commentary, [k]: v } }))
   const setPerf   = (k: string, v: number) => setFactsheet(f => ({ ...f, performance:{ ...f.performance,[k]: v } }))
+  const setPositionYield = (index: number, value: number | null) =>
+    setFactsheet(f => ({ ...f, positions: f.positions.map((p, i) => i === index ? { ...p, yield: value } : p) }))
 
   // ── Print ──────────────────────────────────────────────────────────────────
   function handlePrint() {
@@ -376,6 +386,29 @@ export default function FactsheetClient() {
                   ))}
                 </div>
               </section>
+
+              {/* Yield por posición — bonos y fondos, carga manual (no viene del Excel) */}
+              {factsheet.positions.some(isYieldEligible) && (
+                <section>
+                  <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Yield por posición</h3>
+                  <p className="text-[11px] text-gray-400 mb-2">Bonos y fondos — se usa para el promedio ponderado en Portada y Fixed Income Overview.</p>
+                  <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
+                    {factsheet.positions.map((p, i) => ({ p, i })).filter(({ p }) => isYieldEligible(p)).map(({ p, i }) => (
+                      <div key={i} className="flex items-center gap-2">
+                        <span className="flex-1 text-[11px] text-gray-600 truncate" title={p.name}>{p.name || p.symbol}</span>
+                        <input
+                          type="number" step="0.01"
+                          value={p.yield ?? ''}
+                          onChange={e => setPositionYield(i, e.target.value === '' ? null : parseFloat(e.target.value))}
+                          placeholder="—"
+                          className="w-16 text-[11px] border border-gray-200 rounded px-1.5 py-1 text-right focus:outline-none focus:border-[#2E7D52]"
+                        />
+                        <span className="text-[10px] text-gray-400 w-3">%</span>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
 
               {/* Commentary */}
               <section>

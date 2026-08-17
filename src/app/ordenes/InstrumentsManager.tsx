@@ -138,8 +138,68 @@ export default function InstrumentsManager() {
 
   // ── Excel import ──────────────────────────────────────────────────────────────
 
-  function parseExcel(json: any[]): any[] {
+  // ── Formato "Pershing NetX360 Consolidated Positions" (export real de Pershing) ──
+  // La hoja trae 3-4 filas de metadata (título, IBD/OFF/IP #, Asset Type) antes
+  // del header real, que puede estar en cualquier fila — no siempre la primera.
+  // Secciones por tipo de activo (Equities, Mutual Funds, Fixed Income Securities,
+  // Options, Cash, etc.) identificadas por filas con ASSET TYPE + Market Value
+  // numérico pero sin symbol/cusip/description (son subtotales, no posiciones).
+  function parsePershingConsolidated(rawRows: any[][]): any[] | null {
+    let headerIdx = -1
+    for (let i = 0; i < Math.min(rawRows.length, 20); i++) {
+      if (String(rawRows[i]?.[0] ?? '').trim().toUpperCase() === 'ASSET TYPE') { headerIdx = i; break }
+    }
+    if (headerIdx === -1) return null
+
+    // Solo importamos tipos que el sistema soporta (fondo/bono/accion).
+    // Options, Cash/Money Fund, Annuities, Others y Non Traditional se omiten.
+    const TYPE_MAP: Record<string, string> = {
+      'equities':                'accion',
+      'mutual funds':            'fondo',
+      'fixed income securities': 'bono',
+    }
+
+    const out: any[] = []
+    let currentType = ''
+    for (let i = headerIdx + 1; i < rawRows.length; i++) {
+      const r       = rawRows[i] ?? []
+      const assetType = String(r[0] ?? '').trim()
+      const symbol    = String(r[1] ?? '').trim()
+      const cusip     = String(r[2] ?? '').trim()
+      const isin      = String(r[3] ?? '').trim()
+      const nombre    = String(r[4] ?? '').trim()
+      const marketVal = r[5]
+
+      // Fila de sección/subtotal: tiene ASSET TYPE y un Market Value numérico,
+      // pero no symbol/cusip/description — marca el tipo de las filas siguientes.
+      if (assetType && !symbol && !cusip && !nombre) {
+        if (typeof marketVal === 'number') currentType = assetType.toLowerCase()
+        continue
+      }
+      if (!nombre) continue // fila vacía o de pie de página (disclosures)
+
+      const tipo = TYPE_MAP[currentType]
+      if (!tipo) continue // sección no soportada (Options, Cash, Annuities, Others, Non Traditional)
+
+      out.push({
+        tipo_activo: tipo,
+        nombre,
+        isin:   isin   || null,
+        cusip:  cusip  || null,
+        ticker: symbol || null,
+        moneda: 'USD',
+      })
+    }
+    return out
+  }
+
+  function parseExcel(json: any[], rawRows?: any[][]): any[] {
     if (json.length === 0) return []
+
+    if (rawRows) {
+      const pershing = parsePershingConsolidated(rawRows)
+      if (pershing && pershing.length > 0) return pershing
+    }
 
     const firstRow = json[0]
     const firstKey = Object.keys(firstRow)[0] ?? ''
@@ -192,12 +252,15 @@ export default function InstrumentsManager() {
           .normalize('NFD').replace(/[̀-ͯ]/g, '')
         out[key] = String(v ?? '').trim()
       }
-      if (!out.nombre      && out.name)        out.nombre      = out.name
-      if (!out.tipo_activo && out.tipo)        out.tipo_activo = out.tipo
-      if (!out.tipo_activo && out.asset_type)  out.tipo_activo = out.asset_type
-      if (!out.tipo_activo && out.type)        out.tipo_activo = out.type
-      if (!out.emisor      && out.issuer)      out.emisor      = out.issuer
-      if (!out.categoria   && out.category)    out.categoria   = out.category
+      if (!out.nombre      && out.name)          out.nombre      = out.name
+      if (!out.nombre      && out.description)   out.nombre      = out.description
+      if (!out.nombre      && out.security_name) out.nombre      = out.security_name
+      if (!out.tipo_activo && out.tipo)          out.tipo_activo = out.tipo
+      if (!out.tipo_activo && out.asset_type)    out.tipo_activo = out.asset_type
+      if (!out.tipo_activo && out.security_type) out.tipo_activo = out.security_type
+      if (!out.tipo_activo && out.type)          out.tipo_activo = out.type
+      if (!out.emisor      && out.issuer)        out.emisor      = out.issuer
+      if (!out.categoria   && out.category)      out.categoria   = out.category
       return out
     }).filter((r) => r.nombre)
   }
@@ -208,11 +271,26 @@ export default function InstrumentsManager() {
     const reader = new FileReader()
     reader.onload = (ev) => {
       try {
-        const wb   = XLSX.read(ev.target?.result, { type: 'array' })
-        const ws   = wb.Sheets[wb.SheetNames[0]]
-        const json = XLSX.utils.sheet_to_json(ws, { defval: '' }) as any[]
+        const wb      = XLSX.read(ev.target?.result, { type: 'array' })
+        const ws      = wb.Sheets[wb.SheetNames[0]]
+        const json    = XLSX.utils.sheet_to_json(ws, { defval: '' }) as any[]
+        const rawRows = XLSX.utils.sheet_to_json(ws, { defval: '', header: 1 }) as any[][]
 
-        const normalized = parseExcel(json)
+        if (json.length === 0) {
+          alert('El archivo no tiene filas de datos (¿está vacía la primera hoja?).')
+          return
+        }
+
+        const normalized = parseExcel(json, rawRows)
+
+        if (normalized.length === 0) {
+          const detectedCols = Object.keys(json[0] ?? {}).join(', ') || '(ninguna)'
+          alert(
+            'No se encontraron filas válidas para importar.\n\n' +
+            `Columnas detectadas en el archivo: ${detectedCols}\n\n` +
+            'Asegurate de que el Excel tenga una columna "nombre" (o "name"/"description") con el nombre del instrumento.'
+          )
+        }
 
         setImportRows(normalized)
         setImportResult(null)

@@ -62,6 +62,15 @@ export async function listUsers() {
   return rows
 }
 
+// Minimal, non-sensitive projection — safe for any authenticated user (not just
+// admins) to fetch, e.g. to populate the chat "select participants" pickers.
+export async function listUserDirectory() {
+  const { rows } = await pool.query(
+    `select id, name, role, active from crm_users where active = true order by name`
+  )
+  return rows as { id: string; name: string; role: string; active: boolean }[]
+}
+
 export async function getUsersByRoles(roles: string[]) {
   const { rows } = await pool.query(
     `select id, name from crm_users where role = ANY($1) and active = true`,

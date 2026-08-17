@@ -67,7 +67,7 @@ function DetalleSolicitud({ sol, eventos, isMesa, onAction, onClose, onRefresh }
   }
 
   return (
-    <div className="w-80 shrink-0 bg-white rounded-lg border border-gray-200 flex flex-col overflow-hidden">
+    <div className="w-full md:w-80 shrink-0 bg-white rounded-lg border border-gray-200 flex flex-col overflow-hidden">
       {/* Header */}
       <div className="px-4 pt-4 pb-3 border-b border-gray-100 flex items-start justify-between gap-2">
         <div className="min-w-0">
@@ -551,8 +551,8 @@ export default function BlotterSolicitudes({ isMesa, userName }: { isMesa: boole
         </div>
       )}
 
-      {/* Tabla + Panel detalle */}
-      <div className="flex gap-3 items-start">
+      {/* Tabla + Panel detalle — apilados en mobile, lado a lado en desktop */}
+      <div className="flex flex-col md:flex-row gap-3 items-start">
       <div className="flex-1 min-w-0 bg-white rounded-lg border border-gray-200 overflow-hidden">
         <div className="px-4 py-2.5 border-b border-gray-100 flex items-center justify-between">
           <p className="text-xs text-gray-500">

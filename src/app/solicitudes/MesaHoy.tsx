@@ -207,7 +207,7 @@ function DetailPanel({
   const canAct = isMesa && sol.estado !== 'cancelada' && sol.estado !== 'ejecutada'
 
   return (
-    <div className="w-80 shrink-0 bg-white rounded-lg border border-gray-200 flex flex-col overflow-hidden">
+    <div className="w-full md:w-80 shrink-0 bg-white rounded-lg border border-gray-200 flex flex-col overflow-hidden">
       {/* Header */}
       <div className="px-4 pt-4 pb-3 border-b border-gray-100 flex items-start justify-between gap-2">
         <div className="min-w-0">
@@ -512,9 +512,10 @@ export default function MesaHoy({ isMesa, userName, openId }: { isMesa: boolean;
         ))}
       </div>
 
-      <div className="flex gap-4">
+      {/* Tabla + Panel detalle — apilados en mobile, lado a lado en desktop */}
+      <div className="flex flex-col md:flex-row gap-4">
         {/* Tabla */}
-        <div className="flex-1 bg-white rounded-lg border border-gray-200 overflow-hidden">
+        <div className="flex-1 min-w-0 bg-white rounded-lg border border-gray-200 overflow-hidden">
           <div className="px-4 py-2.5 border-b border-gray-100 flex items-center justify-between gap-3">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider shrink-0">
               {rows.length} solicitud{rows.length !== 1 ? 'es' : ''}

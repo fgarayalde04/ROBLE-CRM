@@ -32,8 +32,8 @@ export function useAdvisorMode(forcedByAdmin = false, autoDefaultEligible = true
     if (stored !== null) {
       value = stored === '1'
     } else {
-      // Default: ON for mobile viewport, OFF for desktop
-      value = window.innerWidth < 768
+      // Default: ON for mobile viewport, OFF for desktop — only for roles eligible for auto-default
+      value = autoDefaultEligible && window.innerWidth < 768
     }
     setAdvisorModeState(value)
     writeCookie(value)

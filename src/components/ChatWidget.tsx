@@ -89,12 +89,28 @@ export default function ChatWidget({ user }: { user: SessionUser }) {
   useEffect(() => {
     if (!open && chatOpen) setChatOpen(false)
   }, [open])
+
+  // Deep-link from a push notification: /?chat=<conversationId> auto-opens it.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const chatParam = params.get('chat')
+    if (!chatParam) return
+    setOpen(true)
+    setActiveConvId(chatParam)
+    const url = new URL(window.location.href)
+    url.searchParams.delete('chat')
+    window.history.replaceState({}, '', url.toString())
+  }, [])
   const [activeConvId, setActiveConvId] = useState<string | null>(null)
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [messages, setMessages] = useState<Message[]>([])
   const [composerText, setComposerText] = useState('')
   const [attachedTask, setAttachedTask] = useState<TaskResult | null>(null)
   const [showNewConv, setShowNewConv] = useState(false)
+  const [showGroupSettings, setShowGroupSettings] = useState(false)
+  const [editGroupName, setEditGroupName] = useState('')
+  const [addParticipantIds, setAddParticipantIds] = useState<string[]>([])
+  const [savingGroup, setSavingGroup] = useState(false)
   const [showTaskSearch, setShowTaskSearch] = useState(false)
   const [taskQuery, setTaskQuery] = useState('')
   const [taskResults, setTaskResults] = useState<TaskResult[]>([])
@@ -222,7 +238,7 @@ export default function ChatWidget({ user }: { user: SessionUser }) {
     if (allUsers.length) return
     setLoadingUsers(true)
     try {
-      const res = await fetch('/api/users')
+      const res = await fetch('/api/users/directory')
       if (res.ok) {
         const data: CrmUser[] = await res.json()
         setAllUsers(data.filter((u) => u.active && u.id !== user.id))
@@ -250,6 +266,74 @@ export default function ChatWidget({ user }: { user: SessionUser }) {
     await fetchConversations()
     setActiveConvId(id)
     setShowNewConv(false)
+  }
+
+  // ── Group settings: open, rename, add/remove participants ────────────────
+  async function openGroupSettings() {
+    if (!activeConv) return
+    setEditGroupName(activeConv.name ?? '')
+    setAddParticipantIds([])
+    setShowGroupSettings(true)
+    if (!allUsers.length) {
+      setLoadingUsers(true)
+      try {
+        const res = await fetch('/api/users')
+        if (res.ok) {
+          const data: CrmUser[] = await res.json()
+          setAllUsers(data.filter((u) => u.active && u.id !== user.id))
+        }
+      } finally {
+        setLoadingUsers(false)
+      }
+    }
+  }
+
+  async function saveGroupName() {
+    if (!activeConvId || !editGroupName.trim()) return
+    setSavingGroup(true)
+    try {
+      const res = await fetch(`/api/chat/${activeConvId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: editGroupName.trim() }),
+      })
+      if (res.ok) await fetchConversations()
+    } finally {
+      setSavingGroup(false)
+    }
+  }
+
+  async function addGroupParticipants() {
+    if (!activeConvId || !addParticipantIds.length) return
+    setSavingGroup(true)
+    try {
+      const res = await fetch(`/api/chat/${activeConvId}/participants`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userIds: addParticipantIds }),
+      })
+      if (res.ok) {
+        setAddParticipantIds([])
+        await fetchConversations()
+      }
+    } finally {
+      setSavingGroup(false)
+    }
+  }
+
+  async function leaveGroup() {
+    if (!activeConvId) return
+    if (!window.confirm('¿Salir de este grupo?')) return
+    const res = await fetch(`/api/chat/${activeConvId}/participants`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: user.id }),
+    })
+    if (res.ok) {
+      setShowGroupSettings(false)
+      setActiveConvId(null)
+      await fetchConversations()
+    }
   }
 
   // ── Keyboard handler in composer ─────────────────────────────────────────
@@ -399,6 +483,14 @@ export default function ChatWidget({ user }: { user: SessionUser }) {
                       </p>
                     )}
                   </div>
+                  {activeConv?.type === 'group' && (
+                    <button onClick={openGroupSettings} title="Configuración del grupo" className="text-gray-400 hover:text-gray-600 transition-colors shrink-0">
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 010 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 010-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                    </button>
+                  )}
                   <button onClick={() => setActiveConvId(null)} className="text-gray-400 hover:text-gray-600 transition-colors shrink-0">
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -623,6 +715,107 @@ export default function ChatWidget({ user }: { user: SessionUser }) {
                   {selectedUserIds.length > 1 ? 'Crear grupo' : 'Iniciar chat'}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Group settings modal ── */}
+      {showGroupSettings && activeConv && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/30 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <h3 className="text-sm font-semibold text-gray-900">Configuración del grupo</h3>
+              <button onClick={() => setShowGroupSettings(false)} className="text-gray-400 hover:text-gray-600">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="px-5 py-4 space-y-4 max-h-[70vh] overflow-y-auto">
+              {/* Rename */}
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1.5">Nombre del grupo</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={editGroupName}
+                    onChange={(e) => setEditGroupName(e.target.value)}
+                    className="flex-1 text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#16A34A] focus:border-transparent"
+                  />
+                  <button
+                    onClick={saveGroupName}
+                    disabled={savingGroup || !editGroupName.trim() || editGroupName.trim() === activeConv.name}
+                    className="px-3 py-2 bg-[#2D3F52] text-white text-xs font-medium rounded-lg hover:bg-[#354A5E] transition-colors disabled:opacity-40"
+                  >
+                    Guardar
+                  </button>
+                </div>
+              </div>
+
+              {/* Current participants */}
+              <div>
+                <p className="text-xs font-medium text-gray-600 mb-2">Participantes</p>
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2.5 px-2 py-1.5">
+                    <div className="w-6 h-6 rounded-full bg-[#2D3F52]/10 flex items-center justify-center shrink-0">
+                      <span className="text-[10px] font-bold text-[#2D3F52]">{user.name.charAt(0)}</span>
+                    </div>
+                    <span className="text-sm text-gray-700 flex-1">{user.name} (vos)</span>
+                  </div>
+                  {activeConv.other_participants.map((p) => (
+                    <div key={p.id} className="flex items-center gap-2.5 px-2 py-1.5">
+                      <div className="w-6 h-6 rounded-full bg-[#2D3F52]/10 flex items-center justify-center shrink-0">
+                        <span className="text-[10px] font-bold text-[#2D3F52]">{p.name.charAt(0)}</span>
+                      </div>
+                      <span className="text-sm text-gray-700 flex-1">{p.name}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Add participants */}
+              <div>
+                <p className="text-xs font-medium text-gray-600 mb-2">Agregar participantes</p>
+                {loadingUsers ? (
+                  <p className="text-xs text-gray-400 py-2">Cargando...</p>
+                ) : (
+                  <div className="space-y-1 max-h-40 overflow-y-auto">
+                    {allUsers
+                      .filter((u) => !activeConv.other_participants.some((p) => p.id === u.id))
+                      .map((u) => (
+                        <label key={u.id} className="flex items-center gap-3 px-2 py-1.5 rounded-lg hover:bg-gray-50 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={addParticipantIds.includes(u.id)}
+                            onChange={(e) =>
+                              setAddParticipantIds((prev) =>
+                                e.target.checked ? [...prev, u.id] : prev.filter((id) => id !== u.id)
+                              )
+                            }
+                            className="rounded border-gray-300 text-[#2D3F52] focus:ring-[#16A34A]"
+                          />
+                          <span className="text-sm text-gray-700">{u.name}</span>
+                        </label>
+                      ))}
+                  </div>
+                )}
+                <button
+                  onClick={addGroupParticipants}
+                  disabled={savingGroup || !addParticipantIds.length}
+                  className="mt-2 w-full py-2 bg-[#2D3F52] text-white text-xs font-medium rounded-lg hover:bg-[#354A5E] transition-colors disabled:opacity-40"
+                >
+                  Agregar
+                </button>
+              </div>
+
+              {/* Leave group */}
+              <button
+                onClick={leaveGroup}
+                className="w-full py-2.5 border border-red-200 text-red-600 text-sm font-medium rounded-lg hover:bg-red-50 transition-colors"
+              >
+                Salir del grupo
+              </button>
             </div>
           </div>
         </div>

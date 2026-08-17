@@ -70,9 +70,43 @@ export async function addParticipants(conversationId: string, userIds: string[])
     return `($${i * 2 + 1}, $${i * 2 + 2})`
   })
   await pool.query(
-    `insert into chat_participants (conversation_id, user_id) values ${rowsSql.join(', ')}`,
+    `insert into chat_participants (conversation_id, user_id) values ${rowsSql.join(', ')}
+     on conflict (conversation_id, user_id) do nothing`,
     values
   )
+}
+
+export async function removeParticipant(conversationId: string, userId: string) {
+  await pool.query(
+    `delete from chat_participants where conversation_id = $1 and user_id = $2`,
+    [conversationId, userId]
+  )
+}
+
+export async function getParticipantIds(conversationId: string, excludeUserId?: string) {
+  const { rows } = await pool.query(
+    excludeUserId
+      ? `select user_id from chat_participants where conversation_id = $1 and user_id != $2`
+      : `select user_id from chat_participants where conversation_id = $1`,
+    excludeUserId ? [conversationId, excludeUserId] : [conversationId]
+  )
+  return rows.map((r) => r.user_id as string).filter(Boolean)
+}
+
+export async function getConversationMeta(conversationId: string) {
+  const { rows } = await pool.query(
+    `select id, type, name from chat_conversations where id = $1`,
+    [conversationId]
+  )
+  return rows[0] as { id: string; type: string; name: string | null } | undefined
+}
+
+export async function renameConversation(conversationId: string, name: string) {
+  const { rows } = await pool.query(
+    `update chat_conversations set name = $1 where id = $2 returning id, type, name`,
+    [name, conversationId]
+  )
+  return rows[0]
 }
 
 export async function verifyParticipant(conversationId: string, userId: string) {

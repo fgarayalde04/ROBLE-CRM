@@ -15,6 +15,21 @@ export interface FactsheetPosition {
   unrealizedGL:  number | null
   returnPct:     number | null
   riskScore:     number | null
+
+  // Extra fields from the positions Excel — used by the richer Fixed Income /
+  // Fund / Maturity sections. All optional: not every source Excel has them.
+  isin:            string | null
+  cusip:           string | null
+  price:           number | null   // market price per unit, position currency
+  maturityDate:    string | null   // ISO date string
+  coupon:          number | null   // % coupon rate
+  accruedInterest: number | null
+  fundFamily:      string | null   // gestora
+  dividendPolicy:  string | null   // e.g. "Reinvest" / "Distribute"
+
+  // Yield is never parsed from the Excel — the advisor enters it by hand,
+  // same as the Propuestas module (proposal_bonds.yield / funds.ytm_indicative).
+  yield: number | null
 }
 
 export interface AllocationItem {

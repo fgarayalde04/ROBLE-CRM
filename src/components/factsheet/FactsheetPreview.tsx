@@ -1,6 +1,6 @@
 'use client'
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend } from 'recharts'
-import type { FactsheetData, FactsheetPosition, AllocationItem } from '@/types/factsheet'
+import type { FactsheetData, FactsheetPosition } from '@/types/factsheet'
 
 // ── Brand ────────────────────────────────────────────────────────────────────
 
@@ -27,11 +27,94 @@ const CHART_COLORS = ['#1B3A2B','#2E7D52','#4CAF72','#81C995','#A5D6B7','#C8E6C9
 const fmtUSD = (n: number) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n)
 
+const fmtUSD2 = (n: number) =>
+  new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(n)
+
 const fmtPct = (n: number | null | undefined, decimals = 1) =>
   n == null ? '—' : `${n >= 0 ? '+' : ''}${n.toFixed(decimals)}%`
 
+const fmtPctPlain = (n: number | null | undefined, decimals = 1) =>
+  n == null ? '—' : `${n.toFixed(decimals)}%`
+
+const fmtDate = (iso: string | null) => {
+  if (!iso) return '—'
+  const d = new Date(iso + 'T00:00:00')
+  if (isNaN(d.getTime())) return '—'
+  return d.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' })
+}
+
 const fmtScore = (n: number | null | undefined) =>
   n == null ? '—' : n.toFixed(1)
+
+// ── Domain helpers (concentration / maturity / yield / cash) ─────────────────
+
+function computeCash(positions: FactsheetPosition[]): number {
+  return positions.filter(p => p.assetClass === 'Cash').reduce((s, p) => s + p.marketValue, 0)
+}
+
+// Weighted-average yield — same formula the Propuestas module already uses
+// (ProposalPDFTemplate.tsx): sum(yield * weight) / sum(weight), over
+// positions where an advisor has entered a yield by hand.
+function computeWeightedYield(positions: FactsheetPosition[]): number | null {
+  const items = positions.filter(p => p.yield != null && p.weight > 0)
+  if (!items.length) return null
+  const wSum = items.reduce((s, p) => s + p.weight, 0)
+  if (wSum <= 0) return null
+  return items.reduce((s, p) => s + (p.yield as number) * p.weight, 0) / wSum
+}
+
+function computeConcentration(positions: FactsheetPosition[]) {
+  const sorted = [...positions].sort((a, b) => b.weight - a.weight)
+  return {
+    largest: sorted[0] ?? null,
+    top3: sorted.slice(0, 3).reduce((s, p) => s + p.weight, 0),
+    top5: sorted.slice(0, 5).reduce((s, p) => s + p.weight, 0),
+  }
+}
+
+function computeGroupConcentration(positions: FactsheetPosition[], key: 'fundFamily' | 'currency' | 'assetClass', max = 5) {
+  const map = new Map<string, number>()
+  for (const p of positions) {
+    const k = p[key]
+    if (!k) continue
+    map.set(String(k), (map.get(String(k)) ?? 0) + p.weight)
+  }
+  return Array.from(map.entries())
+    .map(([name, weight]) => ({ name, weight }))
+    .sort((a, b) => b.weight - a.weight)
+    .slice(0, max)
+}
+
+const MATURITY_BUCKETS = ['< 1 año', '1–3 años', '3–5 años', '5–10 años', '+10 años']
+
+function maturityBucket(years: number): string {
+  if (years < 1) return MATURITY_BUCKETS[0]
+  if (years < 3) return MATURITY_BUCKETS[1]
+  if (years < 5) return MATURITY_BUCKETS[2]
+  if (years < 10) return MATURITY_BUCKETS[3]
+  return MATURITY_BUCKETS[4]
+}
+
+function computeMaturityProfile(positions: FactsheetPosition[]) {
+  const withMaturity = positions.filter(p => p.maturityDate)
+  const now = Date.now()
+  const totals: Record<string, number> = {}
+  for (const b of MATURITY_BUCKETS) totals[b] = 0
+  for (const p of withMaturity) {
+    const t = new Date(p.maturityDate as string).getTime()
+    if (isNaN(t)) continue
+    const years = (t - now) / (365.25 * 86400000)
+    totals[maturityBucket(Math.max(years, 0))] += p.marketValue
+  }
+  const total = withMaturity.reduce((s, p) => s + p.marketValue, 0)
+  return { totals, total, count: withMaturity.length }
+}
+
+function upcomingMaturities(positions: FactsheetPosition[]) {
+  return positions
+    .filter(p => p.maturityDate)
+    .sort((a, b) => (a.maturityDate as string).localeCompare(b.maturityDate as string))
+}
 
 // ── Shared sub-components ─────────────────────────────────────────────────────
 
@@ -41,13 +124,17 @@ function PageDivider() {
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{ marginBottom: 16 }}>
+    <div style={{ marginBottom: 14 }}>
       <h2 style={{ fontSize: 13, fontWeight: 700, color: C.darkGreen, letterSpacing: '0.05em', textTransform: 'uppercase', margin: 0 }}>
         {children}
       </h2>
       <div style={{ height: 2, background: `linear-gradient(to right, ${C.midGreen}, ${C.lightGreen})`, marginTop: 4, borderRadius: 1 }} />
     </div>
   )
+}
+
+function SubTitle({ children }: { children: React.ReactNode }) {
+  return <div style={{ fontSize: 11, fontWeight: 700, color: C.darkGreen, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 10 }}>{children}</div>
 }
 
 function KpiCard({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) {
@@ -64,21 +151,19 @@ function KpiCard({ label, value, sub, color }: { label: string; value: string; s
   )
 }
 
-function RiskBadge({ score }: { score: number | null }) {
-  if (score == null) return <span style={{ color: C.gray500 }}>—</span>
-  const color = score <= 3 ? '#16A34A' : score <= 6 ? '#D97706' : '#DC2626'
-  const label = score <= 3 ? 'CONSERVADOR' : score <= 6 ? 'MODERADO' : 'AGRESIVO'
-  return (
-    <span style={{ background: color + '15', color, border: `1px solid ${color}40`, borderRadius: 4, padding: '2px 6px', fontSize: 10, fontWeight: 700 }}>
-      {label} {fmtScore(score)}/10
-    </span>
-  )
+// small pill used for "additional info" cells that differ by instrument type
+function InfoPill({ children }: { children: React.ReactNode }) {
+  return <span style={{ fontSize: 9, color: C.gray500 }}>{children}</span>
 }
 
-// ── Cover Page ────────────────────────────────────────────────────────────────
+// ── Cover Page / Account Snapshot ─────────────────────────────────────────────
 
 function CoverPage({ data }: { data: FactsheetData }) {
-  const { meta, totalValue, performance } = data
+  const { meta, totalValue, performance, positions } = data
+  const cash = computeCash(positions)
+  const cashPct = totalValue > 0 ? (cash / totalValue) * 100 : 0
+  const weightedYield = computeWeightedYield(positions)
+
   return (
     <div style={{
       width: '210mm', minHeight: '297mm', background: C.white,
@@ -103,47 +188,47 @@ function CoverPage({ data }: { data: FactsheetData }) {
       </div>
 
       {/* Client name hero */}
-      <div style={{ padding: '40px 36px 32px', borderBottom: `1px solid ${C.gray200}` }}>
+      <div style={{ padding: '36px 36px 28px', borderBottom: `1px solid ${C.gray200}` }}>
         <div style={{ fontSize: 10, color: C.gray500, textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: 'Arial, sans-serif' }}>
           Prepared for
         </div>
         <div style={{ fontSize: 30, fontWeight: 700, color: C.gray900, marginTop: 6, lineHeight: 1.2 }}>
           {meta.clientName || 'Client Name'}
         </div>
-        {meta.accountNumber && (
-          <div style={{ fontSize: 12, color: C.gray500, marginTop: 6, fontFamily: 'Arial, sans-serif' }}>
-            Account: {meta.accountNumber}
-          </div>
-        )}
+        <div style={{ display: 'flex', gap: 20, marginTop: 8, fontFamily: 'Arial, sans-serif' }}>
+          {meta.accountNumber && (
+            <div style={{ fontSize: 12, color: C.gray500 }}>Account: <span style={{ color: C.gray700, fontWeight: 600 }}>{meta.accountNumber}</span></div>
+          )}
+          <div style={{ fontSize: 12, color: C.gray500 }}>Base Currency: <span style={{ color: C.gray700, fontWeight: 600 }}>{meta.currency || 'USD'}</span></div>
+          <div style={{ fontSize: 12, color: C.gray500 }}>Valuation Date: <span style={{ color: C.gray700, fontWeight: 600 }}>{meta.reportDate || '—'}</span></div>
+        </div>
       </div>
 
       {/* Key metrics */}
-      <div style={{ padding: '28px 36px', flex: 1 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${performance.ytdReturn != null ? 3 : 2}, 1fr)`, gap: 12, marginBottom: 16 }}>
+      <div style={{ padding: '24px 36px', flex: 1, fontFamily: 'Arial, sans-serif' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${weightedYield != null ? 4 : 3}, 1fr)`, gap: 12, marginBottom: 16 }}>
           <KpiCard label="Portfolio Value" value={fmtUSD(totalValue)} color={C.darkGreen} />
-          <KpiCard label="Posiciones"      value={String(data.positions.length)} color={C.midGreen} />
-          {performance.ytdReturn != null && (
-            <KpiCard label="YTD Return" value={fmtPct(performance.ytdReturn)} color={performance.ytdReturn >= 0 ? C.midGreen : C.red} />
-          )}
+          <KpiCard label="Positions" value={String(positions.length)} color={C.midGreen} />
+          <KpiCard label="Cash" value={fmtUSD(cash)} sub={`${cashPct.toFixed(1)}%`} />
+          {weightedYield != null && <KpiCard label="Yield" value={fmtPctPlain(weightedYield, 2)} color={C.midGreen} />}
         </div>
 
         {/* Performance panel — only render if at least one value exists */}
-        {[performance.return1y, performance.return3y, performance.return5y, performance.inceptionReturn].some(v => v != null) && (() => {
+        {[performance.ytdReturn, performance.return1y, performance.return3y, performance.return5y].some(v => v != null) && (() => {
           const perfCards = [
-            { label: '1 Año',     value: performance.return1y,        sub: 'Anualizado'   },
-            { label: '3 Años',    value: performance.return3y,        sub: 'Anualizado'   },
-            { label: '5 Años',    value: performance.return5y,        sub: 'Anualizado'   },
-            { label: 'Acumulado', value: performance.inceptionReturn, sub: 'Desde inicio' },
+            { label: 'YTD',    value: performance.ytdReturn },
+            { label: '1 Year', value: performance.return1y },
+            { label: '3 Years', value: performance.return3y },
+            { label: '5 Years', value: performance.return5y },
           ].filter(c => c.value != null)
           return (
             <div style={{ background: C.offWhite, border: `1px solid ${C.gray200}`, borderRadius: 8, padding: '14px 16px', marginBottom: 20 }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: C.darkGreen, textTransform: 'uppercase', letterSpacing: '0.07em', fontFamily: 'Arial, sans-serif', marginBottom: 10 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: C.darkGreen, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>
                 Performance
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: `repeat(${perfCards.length}, 1fr)`, gap: 10 }}>
                 {perfCards.map(c => (
-                  <KpiCard key={c.label} label={c.label} value={fmtPct(c.value)} sub={c.sub}
-                    color={c.value! >= 0 ? C.midGreen : C.red} />
+                  <KpiCard key={c.label} label={c.label} value={fmtPct(c.value)} color={c.value! >= 0 ? C.midGreen : C.red} />
                 ))}
               </div>
             </div>
@@ -151,8 +236,8 @@ function CoverPage({ data }: { data: FactsheetData }) {
         })()}
 
         {/* Allocation mini bar */}
-        <div style={{ marginTop: 28 }}>
-          <div style={{ fontSize: 10, color: C.gray500, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8, fontFamily: 'Arial, sans-serif', fontWeight: 600 }}>
+        <div style={{ marginTop: 24 }}>
+          <div style={{ fontSize: 10, color: C.gray500, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8, fontWeight: 600 }}>
             Asset Allocation
           </div>
           <div style={{ display: 'flex', height: 8, borderRadius: 4, overflow: 'hidden', background: C.gray200 }}>
@@ -164,7 +249,7 @@ function CoverPage({ data }: { data: FactsheetData }) {
             {data.allocation.byAssetClass.map((a, i) => (
               <div key={a.name} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                 <div style={{ width: 8, height: 8, borderRadius: 2, background: a.color || CHART_COLORS[i % CHART_COLORS.length] }} />
-                <span style={{ fontSize: 10, color: C.gray700, fontFamily: 'Arial, sans-serif' }}>{a.name} {a.pct.toFixed(1)}%</span>
+                <span style={{ fontSize: 10, color: C.gray700 }}>{a.name} {a.pct.toFixed(1)}%</span>
               </div>
             ))}
           </div>
@@ -185,67 +270,69 @@ function CoverPage({ data }: { data: FactsheetData }) {
   )
 }
 
-// ── Section 1: Overview ────────────────────────────────────────────────────────
+// ── Page 2: Performance & Allocation ──────────────────────────────────────────
 
-function OverviewSection({ data }: { data: FactsheetData }) {
-  const { positions, totalValue, allocation, performance } = data
+function PerformanceAllocationPage({ data }: { data: FactsheetData }) {
+  const { performance, allocation } = data
+  const perfCards = [
+    { label: 'YTD',    value: performance.ytdReturn },
+    { label: '1 Year', value: performance.return1y },
+    { label: '3 Years', value: performance.return3y },
+    { label: '5 Years', value: performance.return5y },
+  ].filter(c => c.value != null)
 
-  const cashPct = allocation.byAssetClass.find(a => a.name === 'Cash')?.pct ?? 0
-  const fxPct   = allocation.byAssetClass.find(a => a.name === 'Fixed Income')?.pct ?? 0
-  const totalGL = positions.reduce((s, p) => s + (p.unrealizedGL ?? 0), 0)
+  const hasGeo = allocation.byRegion.length > 1 || (allocation.byRegion.length === 1 && allocation.byRegion[0].name !== 'USA')
 
   return (
     <div style={{ padding: '28px 36px', fontFamily: 'Arial, sans-serif' }}>
-      <SectionTitle>Portfolio Overview</SectionTitle>
+      <SectionTitle>Performance</SectionTitle>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 24 }}>
-        <KpiCard label="Valor Total"   value={fmtUSD(totalValue)} color={C.darkGreen} />
-        <KpiCard label="Posiciones"    value={String(positions.length)} color={C.midGreen} />
-        <KpiCard label="Unreal. G/L"   value={fmtUSD(totalGL)} color={totalGL >= 0 ? C.midGreen : C.red} />
-      </div>
+      {perfCards.length > 0 ? (
+        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${perfCards.length}, 1fr)`, gap: 10, marginBottom: 16 }}>
+          {perfCards.map(c => (
+            <KpiCard key={c.label} label={c.label} value={fmtPct(c.value)} color={c.value! >= 0 ? C.midGreen : C.red} />
+          ))}
+        </div>
+      ) : (
+        <div style={{ background: C.offWhite, border: `1px solid ${C.gray200}`, borderRadius: 8, padding: '12px 16px', color: C.gray500, fontSize: 11, marginBottom: 16 }}>
+          Sin datos de performance disponibles para este período.
+        </div>
+      )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${performance.ytdReturn != null ? 2 : 1}, 1fr)`, gap: 10, marginBottom: 28 }}>
-        <KpiCard label="Cash" value={`${cashPct.toFixed(1)}%`} />
-        {performance.ytdReturn != null && (
-          <KpiCard label="YTD Return" value={fmtPct(performance.ytdReturn)} color={performance.ytdReturn >= 0 ? C.midGreen : C.red} />
-        )}
-      </div>
+      {performance.history && performance.history.length > 0 && (
+        <div style={{ marginBottom: 24 }}>
+          <ResponsiveContainer width="100%" height={150}>
+            <LineChart data={performance.history} margin={{ top: 4, right: 16, bottom: 0, left: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke={C.gray200} />
+              <XAxis dataKey="period" tick={{ fontSize: 9, fill: C.gray500 }} />
+              <YAxis tick={{ fontSize: 9, fill: C.gray500 }} tickFormatter={v => `${v}%`} />
+              <Tooltip formatter={(v: any) => [`${Number(v).toFixed(2)}%`, '']} />
+              <Line type="monotone" dataKey="portfolio" stroke={C.midGreen} strokeWidth={2} dot={false} name="Portfolio" />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      )}
 
-      {/* Pie charts */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
+      <SectionTitle>Portfolio Allocation</SectionTitle>
+      <div style={{ display: 'grid', gridTemplateColumns: hasGeo ? '1fr 1fr 1fr' : '1fr 1fr', gap: 20 }}>
         {[
-          { title: 'Asset Class Allocation', data: allocation.byAssetClass },
-          { title: 'Geographic Allocation',  data: allocation.byRegion },
-        ].map(({ title, data }) => (
+          { title: 'Asset Class', items: allocation.byAssetClass },
+          { title: 'Currency', items: allocation.byCurrency },
+          ...(hasGeo ? [{ title: 'Geographic', items: allocation.byRegion }] : []),
+        ].map(({ title, items }) => (
           <div key={title}>
-            <div style={{ fontSize: 11, fontWeight: 600, color: C.gray700, marginBottom: 4 }}>{title}</div>
-            <ResponsiveContainer width="100%" height={190}>
-              <PieChart margin={{ top: 16, right: 24, bottom: 0, left: 24 }}>
-                <Pie
-                  data={data} dataKey="pct" cx="50%" cy="50%"
-                  outerRadius={68} innerRadius={34}
-                  labelLine={{ stroke: C.gray500, strokeWidth: 1 }}
-                  label={({ cx, cy, midAngle, outerRadius: r, pct }: any) => {
-                    if (pct < 6) return null
-                    const RAD = Math.PI / 180
-                    const x = cx + (r + 18) * Math.cos(-midAngle * RAD)
-                    const y = cy + (r + 18) * Math.sin(-midAngle * RAD)
-                    return (
-                      <text x={x} y={y} fill={C.gray900} textAnchor={x > cx ? 'start' : 'end'}
-                        dominantBaseline="central" fontSize={9} fontFamily="Arial, sans-serif" fontWeight={600}>
-                        {`${pct.toFixed(0)}%`}
-                      </text>
-                    )
-                  }}
-                >
-                  {data.map((a, i) => <Cell key={a.name} fill={a.color || CHART_COLORS[i % CHART_COLORS.length]} />)}
+            <div style={{ fontSize: 11, fontWeight: 600, color: C.gray700, marginBottom: 6 }}>{title}</div>
+            <ResponsiveContainer width="100%" height={160}>
+              <PieChart>
+                <Pie data={items} dataKey="pct" cx="50%" cy="50%" outerRadius={58} innerRadius={28}>
+                  {items.map((a, i) => <Cell key={a.name} fill={a.color || CHART_COLORS[i % CHART_COLORS.length]} />)}
                 </Pie>
                 <Tooltip formatter={(v: any) => [`${Number(v).toFixed(1)}%`, '']} />
               </PieChart>
             </ResponsiveContainer>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px 10px' }}>
-              {data.map((a, i) => (
-                <div key={a.name} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginTop: 4 }}>
+              {items.slice(0, 6).map((a, i) => (
+                <div key={a.name} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                   <div style={{ width: 7, height: 7, borderRadius: 2, background: a.color || CHART_COLORS[i % CHART_COLORS.length], flexShrink: 0 }} />
                   <span style={{ fontSize: 9, color: C.gray700 }}>{a.name} {a.pct.toFixed(1)}%</span>
                 </div>
@@ -258,98 +345,181 @@ function OverviewSection({ data }: { data: FactsheetData }) {
   )
 }
 
-// ── Section 2: Asset Allocation Charts ────────────────────────────────────────
+// ── Page 3: Portfolio Analysis (Concentration + Fixed Income + Maturity) ─────
 
-function AllocationSection({ data }: { data: FactsheetData }) {
-  const { allocation } = data
-
-  const barData = allocation.byAssetClass.map((a, i) => ({
-    name: a.name.replace('Fixed Income', 'Fixed Inc.').replace('Mutual Fund', 'Mut. Fund').replace('Alternatives', 'Alts'),
-    value: parseFloat(a.pct.toFixed(1)),
-    fill: a.color || CHART_COLORS[i],
-  }))
-
-  const sectorData = allocation.bySector.slice(0, 8).map((a, i) => ({
-    name: a.name,
-    value: parseFloat(a.pct.toFixed(1)),
-    fill: CHART_COLORS[i],
-  }))
+function ConcentrationSection({ data }: { data: FactsheetData }) {
+  const { positions } = data
+  const conc = computeConcentration(positions)
+  const byFamily = computeGroupConcentration(positions, 'fundFamily', 3)
+  const byCurrency = computeGroupConcentration(positions, 'currency', 3)
+  const byAssetClass = computeGroupConcentration(positions, 'assetClass', 3)
 
   return (
-    <div style={{ padding: '28px 36px', fontFamily: 'Arial, sans-serif' }}>
-      <SectionTitle>Asset Allocation Analysis</SectionTitle>
-
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
-
-        {/* By asset class bar */}
-        <div>
-          <div style={{ fontSize: 11, fontWeight: 600, color: C.gray700, marginBottom: 10 }}>By Asset Class</div>
-          <ResponsiveContainer width="100%" height={180}>
-            <BarChart data={barData} layout="vertical" margin={{ left: 0, right: 24, top: 0, bottom: 0 }}>
-              <XAxis type="number" tick={{ fontSize: 9, fill: C.gray500 }} tickFormatter={v => `${v}%`} />
-              <YAxis type="category" dataKey="name" tick={{ fontSize: 9, fill: C.gray700 }} width={70} />
-              <Bar dataKey="value" radius={[0, 3, 3, 0]}>
-                {barData.map((d, i) => <Cell key={i} fill={d.fill} />)}
-              </Bar>
-              <Tooltip formatter={(v: any) => [`${v}%`, '']} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-
-        {/* By sector bar */}
-        <div>
-          <div style={{ fontSize: 11, fontWeight: 600, color: C.gray700, marginBottom: 10 }}>By Sector</div>
-          <ResponsiveContainer width="100%" height={180}>
-            <BarChart data={sectorData} layout="vertical" margin={{ left: 0, right: 24, top: 0, bottom: 0 }}>
-              <XAxis type="number" tick={{ fontSize: 9, fill: C.gray500 }} tickFormatter={v => `${v}%`} />
-              <YAxis type="category" dataKey="name" tick={{ fontSize: 9, fill: C.gray700 }} width={80} />
-              <Bar dataKey="value" radius={[0, 3, 3, 0]}>
-                {sectorData.map((d, i) => <Cell key={i} fill={d.fill} />)}
-              </Bar>
-              <Tooltip formatter={(v: any) => [`${v}%`, '']} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-
-        {/* By region */}
-        <div>
-          <div style={{ fontSize: 11, fontWeight: 600, color: C.gray700, marginBottom: 10 }}>By Region</div>
-          <ResponsiveContainer width="100%" height={160}>
-            <BarChart data={allocation.byRegion.map((a, i) => ({ name: a.name, value: parseFloat(a.pct.toFixed(1)), fill: a.color || CHART_COLORS[i] }))} layout="vertical" margin={{ left: 0, right: 24 }}>
-              <XAxis type="number" tick={{ fontSize: 9, fill: C.gray500 }} tickFormatter={v => `${v}%`} />
-              <YAxis type="category" dataKey="name" tick={{ fontSize: 9, fill: C.gray700 }} width={90} />
-              <Bar dataKey="value" radius={[0, 3, 3, 0]}>
-                {allocation.byRegion.map((d, i) => <Cell key={i} fill={d.color || CHART_COLORS[i]} />)}
-              </Bar>
-              <Tooltip formatter={(v: any) => [`${v}%`, '']} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-
-        {/* By currency */}
-        <div>
-          <div style={{ fontSize: 11, fontWeight: 600, color: C.gray700, marginBottom: 10 }}>By Currency</div>
-          <ResponsiveContainer width="100%" height={160}>
-            <PieChart>
-              <Pie data={allocation.byCurrency} dataKey="pct" cx="50%" cy="50%" outerRadius={65} innerRadius={30}
-                label={({ name, pct }: any) => `${name} ${(pct as number).toFixed(0)}%`} labelLine={false}>
-                {allocation.byCurrency.map((a, i) => <Cell key={a.name} fill={CHART_COLORS[i]} />)}
-              </Pie>
-              <Tooltip formatter={(v: any) => [`${Number(v).toFixed(1)}%`, '']} />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
+    <div style={{ marginBottom: 24 }}>
+      <SubTitle>Portfolio Concentration</SubTitle>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 14 }}>
+        <KpiCard label="Largest Position" value={conc.largest ? `${conc.largest.weight.toFixed(1)}%` : '—'} sub={conc.largest?.name?.slice(0, 26)} />
+        <KpiCard label="Top 3 Concentration" value={fmtPctPlain(conc.top3)} />
+        <KpiCard label="Top 5 Concentration" value={fmtPctPlain(conc.top5)} />
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
+        {[
+          { title: 'By Fund Family', rows: byFamily },
+          { title: 'By Currency', rows: byCurrency },
+          { title: 'By Asset Type', rows: byAssetClass },
+        ].filter(g => g.rows.length > 0).map(g => (
+          <div key={g.title}>
+            <div style={{ fontSize: 10, fontWeight: 600, color: C.gray700, marginBottom: 6 }}>{g.title}</div>
+            {g.rows.map(r => (
+              <div key={r.name} style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', borderBottom: `1px solid ${C.gray100}` }}>
+                <span style={{ fontSize: 9, color: C.gray700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 110 }}>{r.name}</span>
+                <span style={{ fontSize: 9, fontWeight: 600, color: C.gray900 }}>{r.weight.toFixed(1)}%</span>
+              </div>
+            ))}
+          </div>
+        ))}
       </div>
     </div>
   )
 }
 
-// ── Section 3: Top Holdings ───────────────────────────────────────────────────
+function FixedIncomeOverviewSection({ data }: { data: FactsheetData }) {
+  const fi = data.positions.filter(p => p.assetClass === 'Fixed Income')
+  if (!fi.length) return null
+
+  const totalMV = fi.reduce((s, p) => s + p.marketValue, 0)
+  const totalAccrued = fi.reduce((s, p) => s + (p.accruedInterest ?? 0), 0)
+  const weightedYield = computeWeightedYield(fi)
+  const withCoupon = fi.filter(p => p.coupon != null)
+  const avgCoupon = withCoupon.length ? withCoupon.reduce((s, p) => s + (p.coupon as number) * p.marketValue, 0) / withCoupon.reduce((s, p) => s + p.marketValue, 0) : null
+
+  const thStyle: React.CSSProperties = { fontSize: 8, fontWeight: 700, color: C.gray500, textTransform: 'uppercase', letterSpacing: '0.03em', padding: '5px 6px', textAlign: 'left', background: C.gray100, borderBottom: `2px solid ${C.gray200}` }
+  const tdStyle: React.CSSProperties = { fontSize: 9, color: C.gray700, padding: '5px 6px', borderBottom: `1px solid ${C.gray100}` }
+
+  return (
+    <div style={{ marginBottom: 24 }}>
+      <SubTitle>Fixed Income Overview</SubTitle>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 12 }}>
+        <KpiCard label="Market Value" value={fmtUSD(totalMV)} />
+        {weightedYield != null && <KpiCard label="Yield" value={fmtPctPlain(weightedYield, 2)} color={C.midGreen} />}
+        {avgCoupon != null && <KpiCard label="Avg. Coupon" value={fmtPctPlain(avgCoupon, 2)} />}
+        <KpiCard label="Accrued Interest" value={fmtUSD(totalAccrued)} />
+      </div>
+      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <thead>
+          <tr>
+            <th style={thStyle}>Name</th>
+            <th style={{ ...thStyle, textAlign: 'right' }}>Coupon</th>
+            <th style={{ ...thStyle, textAlign: 'right' }}>Maturity</th>
+            <th style={{ ...thStyle, textAlign: 'right' }}>Nominal</th>
+            <th style={{ ...thStyle, textAlign: 'right' }}>Price</th>
+            <th style={{ ...thStyle, textAlign: 'right' }}>Market Value</th>
+            <th style={{ ...thStyle, textAlign: 'right' }}>Yield</th>
+          </tr>
+        </thead>
+        <tbody>
+          {[...fi].sort((a, b) => b.marketValue - a.marketValue).slice(0, 10).map((p, i) => (
+            <tr key={i} style={{ background: i % 2 === 0 ? C.white : C.offWhite }}>
+              <td style={{ ...tdStyle, maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={p.name}>{p.name}</td>
+              <td style={{ ...tdStyle, textAlign: 'right' }}>{p.coupon != null ? `${p.coupon.toFixed(2)}%` : '—'}</td>
+              <td style={{ ...tdStyle, textAlign: 'right' }}>{fmtDate(p.maturityDate)}</td>
+              <td style={{ ...tdStyle, textAlign: 'right' }}>{p.quantity != null ? p.quantity.toLocaleString('en-US') : '—'}</td>
+              <td style={{ ...tdStyle, textAlign: 'right' }}>{p.price != null ? p.price.toFixed(2) : '—'}</td>
+              <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 600 }}>{fmtUSD(p.marketValue)}</td>
+              <td style={{ ...tdStyle, textAlign: 'right', color: p.yield != null ? C.midGreen : C.gray500, fontWeight: p.yield != null ? 600 : 400 }}>{p.yield != null ? `${p.yield.toFixed(2)}%` : '—'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+function MaturityProfileSection({ data }: { data: FactsheetData }) {
+  const profile = computeMaturityProfile(data.positions)
+  if (profile.count === 0) return null
+
+  const barData = MATURITY_BUCKETS.map((b, i) => ({
+    name: b,
+    value: profile.total > 0 ? parseFloat(((profile.totals[b] / profile.total) * 100).toFixed(1)) : 0,
+    fill: CHART_COLORS[i],
+  }))
+
+  return (
+    <div>
+      <SubTitle>Maturity Profile</SubTitle>
+      <ResponsiveContainer width="100%" height={140}>
+        <BarChart data={barData} margin={{ top: 4, right: 16, bottom: 0, left: 0 }}>
+          <XAxis dataKey="name" tick={{ fontSize: 9, fill: C.gray500 }} />
+          <YAxis tick={{ fontSize: 9, fill: C.gray500 }} tickFormatter={v => `${v}%`} />
+          <Bar dataKey="value" radius={[3, 3, 0, 0]}>
+            {barData.map((d, i) => <Cell key={i} fill={d.fill} />)}
+          </Bar>
+          <Tooltip formatter={(v: any) => [`${v}%`, '']} />
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  )
+}
+
+function PortfolioAnalysisPage({ data }: { data: FactsheetData }) {
+  return (
+    <div style={{ padding: '28px 36px', fontFamily: 'Arial, sans-serif' }}>
+      <SectionTitle>Portfolio Analysis</SectionTitle>
+      <ConcentrationSection data={data} />
+      <FixedIncomeOverviewSection data={data} />
+      <MaturityProfileSection data={data} />
+    </div>
+  )
+}
+
+// ── Page 4: Upcoming Maturities + Top Holdings ────────────────────────────────
+
+function UpcomingMaturitiesSection({ data }: { data: FactsheetData }) {
+  const rows = upcomingMaturities(data.positions)
+  if (!rows.length) return null
+
+  const thStyle: React.CSSProperties = { fontSize: 8, fontWeight: 700, color: C.gray500, textTransform: 'uppercase', letterSpacing: '0.03em', padding: '5px 6px', textAlign: 'left', background: C.gray100, borderBottom: `2px solid ${C.gray200}` }
+  const tdStyle: React.CSSProperties = { fontSize: 9, color: C.gray700, padding: '5px 6px', borderBottom: `1px solid ${C.gray100}` }
+
+  return (
+    <div style={{ marginBottom: 24 }}>
+      <SubTitle>Upcoming Maturities</SubTitle>
+      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <thead>
+          <tr>
+            <th style={thStyle}>Instrument</th>
+            <th style={{ ...thStyle, textAlign: 'right' }}>Coupon</th>
+            <th style={{ ...thStyle, textAlign: 'right' }}>Maturity</th>
+            <th style={{ ...thStyle, textAlign: 'right' }}>Nominal</th>
+            <th style={{ ...thStyle, textAlign: 'right' }}>Market Value</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((p, i) => (
+            <tr key={i} style={{ background: i % 2 === 0 ? C.white : C.offWhite }}>
+              <td style={{ ...tdStyle, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={p.name}>{p.name}</td>
+              <td style={{ ...tdStyle, textAlign: 'right' }}>{p.coupon != null ? `${p.coupon.toFixed(2)}%` : '—'}</td>
+              <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 600 }}>{fmtDate(p.maturityDate)}</td>
+              <td style={{ ...tdStyle, textAlign: 'right' }}>{p.quantity != null ? p.quantity.toLocaleString('en-US') : '—'}</td>
+              <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 600 }}>{fmtUSD(p.marketValue)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+function additionalInfo(p: FactsheetPosition): string {
+  if (p.assetClass === 'Fixed Income' && p.maturityDate) return `Venc. ${fmtDate(p.maturityDate)}${p.coupon != null ? ` · ${p.coupon.toFixed(2)}%` : ''}`
+  if (p.fundFamily) return p.fundFamily
+  if (p.isin) return `ISIN ${p.isin}`
+  return p.securityType || '—'
+}
 
 function TopHoldingsSection({ data }: { data: FactsheetData }) {
-  const top10 = [...data.positions]
-    .sort((a, b) => b.marketValue - a.marketValue)
-    .slice(0, 10)
+  const top10 = [...data.positions].sort((a, b) => b.marketValue - a.marketValue).slice(0, 10)
 
   const thStyle: React.CSSProperties = {
     fontSize: 9, fontWeight: 700, color: C.gray500, textTransform: 'uppercase',
@@ -362,8 +532,8 @@ function TopHoldingsSection({ data }: { data: FactsheetData }) {
   }
 
   return (
-    <div style={{ padding: '28px 36px', fontFamily: 'Arial, sans-serif' }}>
-      <SectionTitle>Top 10 Holdings</SectionTitle>
+    <div>
+      <SubTitle>Top 10 Holdings</SubTitle>
       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
         <thead>
           <tr>
@@ -372,253 +542,218 @@ function TopHoldingsSection({ data }: { data: FactsheetData }) {
             <th style={thStyle}>Type</th>
             <th style={{ ...thStyle, textAlign: 'right' }}>Market Value</th>
             <th style={{ ...thStyle, textAlign: 'right' }}>% Port.</th>
-            <th style={{ ...thStyle, textAlign: 'right' }}>Unreal. G/L</th>
-            <th style={{ ...thStyle, textAlign: 'right' }}>Return</th>
+            <th style={thStyle}>Additional Info</th>
           </tr>
         </thead>
         <tbody>
-          {top10.map((p, i) => {
-            const gl = p.unrealizedGL
-            return (
-              <tr key={i} style={{ background: i % 2 === 0 ? C.white : C.offWhite }}>
-                <td style={{ ...tdStyle, color: C.gray500, fontWeight: 600 }}>{i + 1}</td>
-                <td style={tdStyle}>
-                  <div style={{ fontWeight: 600, color: C.gray900, fontSize: 10 }}>{p.name || p.symbol}</div>
-                  <div style={{ color: C.gray500, fontSize: 9 }}>{p.symbol}</div>
-                </td>
-                <td style={{ ...tdStyle, fontSize: 9 }}>
-                  <span style={{ background: C.lightGreen, color: C.darkGreen, borderRadius: 3, padding: '1px 5px', fontWeight: 600 }}>{p.assetClass}</span>
-                </td>
-                <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 600 }}>{fmtUSD(p.marketValue)}</td>
-                <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 600, color: C.midGreen }}>{p.weight.toFixed(1)}%</td>
-                <td style={{ ...tdStyle, textAlign: 'right', color: gl == null ? C.gray500 : gl >= 0 ? C.midGreen : C.red, fontWeight: gl != null ? 600 : 400 }}>
-                  {gl != null ? fmtUSD(gl) : '—'}
-                </td>
-                <td style={{ ...tdStyle, textAlign: 'right', color: p.returnPct == null ? C.gray500 : p.returnPct >= 0 ? C.midGreen : C.red, fontWeight: p.returnPct != null ? 600 : 400 }}>
-                  {fmtPct(p.returnPct)}
-                </td>
-              </tr>
-            )
-          })}
+          {top10.map((p, i) => (
+            <tr key={i} style={{ background: i % 2 === 0 ? C.white : C.offWhite }}>
+              <td style={{ ...tdStyle, color: C.gray500, fontWeight: 600 }}>{i + 1}</td>
+              <td style={tdStyle}>
+                <div style={{ fontWeight: 600, color: C.gray900, fontSize: 10 }}>{p.name || p.symbol}</div>
+              </td>
+              <td style={{ ...tdStyle, fontSize: 9 }}>
+                <span style={{ background: C.lightGreen, color: C.darkGreen, borderRadius: 3, padding: '1px 5px', fontWeight: 600 }}>{p.assetClass}</span>
+              </td>
+              <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 600 }}>{fmtUSD(p.marketValue)}</td>
+              <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 600, color: C.midGreen }}>{p.weight.toFixed(1)}%</td>
+              <td style={tdStyle}><InfoPill>{additionalInfo(p)}</InfoPill></td>
+            </tr>
+          ))}
         </tbody>
       </table>
     </div>
   )
 }
 
-// ── Section 4: Full Positions ─────────────────────────────────────────────────
+function UpcomingAndHoldingsPage({ data }: { data: FactsheetData }) {
+  return (
+    <div style={{ padding: '28px 36px', fontFamily: 'Arial, sans-serif' }}>
+      <SectionTitle>Upcoming Maturities & Top Holdings</SectionTitle>
+      <UpcomingMaturitiesSection data={data} />
+      <TopHoldingsSection data={data} />
+    </div>
+  )
+}
 
-function FullPositionsSection({ data }: { data: FactsheetData }) {
-  const sorted = [...data.positions].sort((a, b) => b.marketValue - a.marketValue)
+// ── Page 5+: Full Portfolio Positions, split by instrument type ─────────────
 
-  const thStyle: React.CSSProperties = {
-    fontSize: 8, fontWeight: 700, color: C.gray500, textTransform: 'uppercase',
-    letterSpacing: '0.04em', padding: '5px 6px', textAlign: 'left',
-    background: C.gray100, borderBottom: `2px solid ${C.gray200}`,
-  }
-  const tdStyle: React.CSSProperties = {
-    fontSize: 9, color: C.gray700, padding: '5px 6px',
-    borderBottom: `1px solid ${C.gray100}`,
-  }
+const th8: React.CSSProperties = { fontSize: 8, fontWeight: 700, color: C.gray500, textTransform: 'uppercase', letterSpacing: '0.03em', padding: '5px 6px', textAlign: 'left', background: C.gray100, borderBottom: `2px solid ${C.gray200}` }
+const td9: React.CSSProperties = { fontSize: 9, color: C.gray700, padding: '5px 6px', borderBottom: `1px solid ${C.gray100}` }
+
+function BondsTable({ rows }: { rows: FactsheetPosition[] }) {
+  if (!rows.length) return null
+  return (
+    <div style={{ marginBottom: 20 }}>
+      <SubTitle>Bonds</SubTitle>
+      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <thead>
+          <tr>
+            <th style={th8}>Name</th>
+            <th style={th8}>ISIN / CUSIP</th>
+            <th style={th8}>Ccy</th>
+            <th style={{ ...th8, textAlign: 'right' }}>Coupon</th>
+            <th style={{ ...th8, textAlign: 'right' }}>Maturity</th>
+            <th style={{ ...th8, textAlign: 'right' }}>Nominal</th>
+            <th style={{ ...th8, textAlign: 'right' }}>Price</th>
+            <th style={{ ...th8, textAlign: 'right' }}>Accrued Int.</th>
+            <th style={{ ...th8, textAlign: 'right' }}>Market Value</th>
+            <th style={{ ...th8, textAlign: 'right' }}>% Port.</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((p, i) => (
+            <tr key={i} style={{ background: i % 2 === 0 ? C.white : C.offWhite }}>
+              <td style={{ ...td9, maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={p.name}>{p.name}</td>
+              <td style={{ ...td9, fontSize: 8 }}>{p.isin || p.cusip || '—'}</td>
+              <td style={td9}>{p.currency}</td>
+              <td style={{ ...td9, textAlign: 'right' }}>{p.coupon != null ? `${p.coupon.toFixed(2)}%` : '—'}</td>
+              <td style={{ ...td9, textAlign: 'right' }}>{fmtDate(p.maturityDate)}</td>
+              <td style={{ ...td9, textAlign: 'right' }}>{p.quantity != null ? p.quantity.toLocaleString('en-US') : '—'}</td>
+              <td style={{ ...td9, textAlign: 'right' }}>{p.price != null ? p.price.toFixed(2) : '—'}</td>
+              <td style={{ ...td9, textAlign: 'right' }}>{p.accruedInterest != null ? fmtUSD2(p.accruedInterest) : '—'}</td>
+              <td style={{ ...td9, textAlign: 'right', fontWeight: 600 }}>{fmtUSD(p.marketValue)}</td>
+              <td style={{ ...td9, textAlign: 'right', color: C.midGreen }}>{p.weight.toFixed(1)}%</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+function FundsTable({ rows }: { rows: FactsheetPosition[] }) {
+  if (!rows.length) return null
+  return (
+    <div style={{ marginBottom: 20 }}>
+      <SubTitle>Funds</SubTitle>
+      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <thead>
+          <tr>
+            <th style={th8}>Fund</th>
+            <th style={th8}>Fund Family</th>
+            <th style={th8}>Ccy</th>
+            <th style={{ ...th8, textAlign: 'right' }}>Quantity</th>
+            <th style={{ ...th8, textAlign: 'right' }}>Price</th>
+            <th style={{ ...th8, textAlign: 'right' }}>Market Value</th>
+            <th style={{ ...th8, textAlign: 'right' }}>% Port.</th>
+            <th style={th8}>Dividend Policy</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((p, i) => (
+            <tr key={i} style={{ background: i % 2 === 0 ? C.white : C.offWhite }}>
+              <td style={{ ...td9, maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={p.name}>{p.name}</td>
+              <td style={{ ...td9, fontSize: 8 }}>{p.fundFamily || '—'}</td>
+              <td style={td9}>{p.currency}</td>
+              <td style={{ ...td9, textAlign: 'right' }}>{p.quantity != null ? p.quantity.toLocaleString('en-US') : '—'}</td>
+              <td style={{ ...td9, textAlign: 'right' }}>{p.price != null ? p.price.toFixed(2) : '—'}</td>
+              <td style={{ ...td9, textAlign: 'right', fontWeight: 600 }}>{fmtUSD(p.marketValue)}</td>
+              <td style={{ ...td9, textAlign: 'right', color: C.midGreen }}>{p.weight.toFixed(1)}%</td>
+              <td style={{ ...td9, fontSize: 8 }}>{p.dividendPolicy || '—'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+function EquityTable({ rows }: { rows: FactsheetPosition[] }) {
+  if (!rows.length) return null
+  return (
+    <div style={{ marginBottom: 20 }}>
+      <SubTitle>Equity / ETF</SubTitle>
+      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <thead>
+          <tr>
+            <th style={th8}>Ticker</th>
+            <th style={th8}>Name</th>
+            <th style={th8}>Ccy</th>
+            <th style={{ ...th8, textAlign: 'right' }}>Quantity</th>
+            <th style={{ ...th8, textAlign: 'right' }}>Price</th>
+            <th style={{ ...th8, textAlign: 'right' }}>Market Value</th>
+            <th style={{ ...th8, textAlign: 'right' }}>% Port.</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((p, i) => (
+            <tr key={i} style={{ background: i % 2 === 0 ? C.white : C.offWhite }}>
+              <td style={{ ...td9, fontWeight: 700, color: C.darkGreen }}>{p.symbol}</td>
+              <td style={{ ...td9, maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={p.name}>{p.name}</td>
+              <td style={td9}>{p.currency}</td>
+              <td style={{ ...td9, textAlign: 'right' }}>{p.quantity != null ? p.quantity.toLocaleString('en-US') : '—'}</td>
+              <td style={{ ...td9, textAlign: 'right' }}>{p.price != null ? p.price.toFixed(2) : '—'}</td>
+              <td style={{ ...td9, textAlign: 'right', fontWeight: 600 }}>{fmtUSD(p.marketValue)}</td>
+              <td style={{ ...td9, textAlign: 'right', color: C.midGreen }}>{p.weight.toFixed(1)}%</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+function CashTable({ rows }: { rows: FactsheetPosition[] }) {
+  if (!rows.length) return null
+  const byCurrency = new Map<string, number>()
+  for (const p of rows) byCurrency.set(p.currency, (byCurrency.get(p.currency) ?? 0) + p.marketValue)
+  return (
+    <div style={{ marginBottom: 20 }}>
+      <SubTitle>Cash</SubTitle>
+      <table style={{ width: '100%', borderCollapse: 'collapse', maxWidth: 320 }}>
+        <thead>
+          <tr>
+            <th style={th8}>Currency</th>
+            <th style={{ ...th8, textAlign: 'right' }}>Market Value</th>
+          </tr>
+        </thead>
+        <tbody>
+          {Array.from(byCurrency.entries()).map(([ccy, mv], i) => (
+            <tr key={ccy} style={{ background: i % 2 === 0 ? C.white : C.offWhite }}>
+              <td style={td9}>{ccy}</td>
+              <td style={{ ...td9, textAlign: 'right', fontWeight: 600 }}>{fmtUSD(mv)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+function FullPositionsPages({ data }: { data: FactsheetData }) {
+  const bonds  = data.positions.filter(p => p.assetClass === 'Fixed Income')
+  const funds  = data.positions.filter(p => ['Alternatives', 'Real Estate'].includes(p.assetClass) || (p.securityType || '').toLowerCase().includes('fund'))
+    .filter(p => !bonds.includes(p))
+  const equity = data.positions.filter(p => ['Equity', 'ETF'].includes(p.assetClass))
+  const cash   = data.positions.filter(p => p.assetClass === 'Cash')
+  // anything not captured above still needs to show up somewhere
+  const classified = new Set([...bonds, ...funds, ...equity, ...cash])
+  const other = data.positions.filter(p => !classified.has(p))
+
+  const totalGL = data.positions.reduce((s, p) => s + (p.unrealizedGL ?? 0), 0)
 
   return (
     <div style={{ padding: '28px 36px', fontFamily: 'Arial, sans-serif' }}>
       <SectionTitle>Full Portfolio Positions</SectionTitle>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 9 }}>
-        <thead>
-          <tr>
-            <th style={thStyle}>Symbol</th>
-            <th style={thStyle}>Name</th>
-            <th style={thStyle}>Type</th>
-            <th style={{ ...thStyle, textAlign: 'right' }}>Market Value</th>
-            <th style={{ ...thStyle, textAlign: 'right' }}>% Port.</th>
-            <th style={{ ...thStyle, textAlign: 'right' }}>Cost Basis</th>
-            <th style={{ ...thStyle, textAlign: 'right' }}>Unreal. G/L</th>
-            <th style={{ ...thStyle, textAlign: 'right' }}>Return</th>
-          </tr>
-        </thead>
-        <tbody>
-          {sorted.map((p, i) => {
-            const gl = p.unrealizedGL
-            return (
-              <tr key={i} style={{ background: i % 2 === 0 ? C.white : C.offWhite }}>
-                <td style={{ ...tdStyle, fontWeight: 700, color: C.darkGreen }}>{p.symbol}</td>
-                <td style={{ ...tdStyle, maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={p.name}>{p.name}</td>
-                <td style={{ ...tdStyle, fontSize: 8 }}>{p.securityType || p.assetClass}</td>
-                <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 600 }}>{fmtUSD(p.marketValue)}</td>
-                <td style={{ ...tdStyle, textAlign: 'right', color: C.midGreen }}>{p.weight.toFixed(1)}%</td>
-                <td style={{ ...tdStyle, textAlign: 'right' }}>{p.costBasis != null ? fmtUSD(p.costBasis) : '—'}</td>
-                <td style={{ ...tdStyle, textAlign: 'right', color: gl == null ? C.gray500 : gl >= 0 ? C.midGreen : C.red, fontWeight: gl != null ? 600 : 400 }}>
-                  {gl != null ? fmtUSD(gl) : '—'}
-                </td>
-                <td style={{ ...tdStyle, textAlign: 'right', color: p.returnPct == null ? C.gray500 : p.returnPct >= 0 ? C.midGreen : C.red, fontWeight: p.returnPct != null ? 600 : 400 }}>
-                  {fmtPct(p.returnPct)}
-                </td>
-              </tr>
-            )
-          })}
-        </tbody>
-        <tfoot>
-          <tr style={{ background: C.darkGreen }}>
-            <td colSpan={3} style={{ ...tdStyle, fontWeight: 700, color: C.white, background: C.darkGreen }}>TOTAL</td>
-            <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 700, color: C.white, background: C.darkGreen }}>
-              {fmtUSD(data.totalValue)}
-            </td>
-            <td style={{ ...tdStyle, textAlign: 'right', color: C.white, background: C.darkGreen }}>100.0%</td>
-            <td style={{ ...tdStyle, background: C.darkGreen }} />
-            <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 700, background: C.darkGreen,
-              color: sorted.reduce((s, p) => s + (p.unrealizedGL ?? 0), 0) >= 0 ? '#A5D6B7' : '#FCA5A5',
-            }}>
-              {fmtUSD(sorted.reduce((s, p) => s + (p.unrealizedGL ?? 0), 0))}
-            </td>
-            <td style={{ ...tdStyle, background: C.darkGreen }} />
-          </tr>
-        </tfoot>
-      </table>
-    </div>
-  )
-}
+      <BondsTable rows={[...bonds].sort((a, b) => b.marketValue - a.marketValue)} />
+      <FundsTable rows={[...funds, ...other].sort((a, b) => b.marketValue - a.marketValue)} />
+      <EquityTable rows={[...equity].sort((a, b) => b.marketValue - a.marketValue)} />
+      <CashTable rows={cash} />
 
-// ── Section 5: Performance ────────────────────────────────────────────────────
-
-function PerformanceSection({ data }: { data: FactsheetData }) {
-  const { performance, meta } = data
-  const hasHistory = performance.history && performance.history.length > 0
-
-  return (
-    <div style={{ padding: '16px 36px 28px', fontFamily: 'Arial, sans-serif' }}>
-      <SectionTitle>Performance</SectionTitle>
-
-      {(() => {
-        const cards = [
-          { label: 'YTD',       value: performance.ytdReturn,        sub: 'Año en curso'  },
-          { label: '1 Año',     value: performance.return1y,         sub: 'Anualizado'    },
-          { label: '3 Años',    value: performance.return3y,         sub: 'Anualizado'    },
-          { label: '5 Años',    value: performance.return5y,         sub: 'Anualizado'    },
-          { label: 'Acumulado', value: performance.inceptionReturn,  sub: 'Desde inicio'  },
-        ].filter(c => c.value != null)
-        if (!cards.length) return null
-        return (
-          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cards.length}, 1fr)`, gap: 10, marginBottom: 20 }}>
-            {cards.map(c => (
-              <KpiCard key={c.label} label={c.label} value={fmtPct(c.value)} sub={c.sub}
-                color={c.value! >= 0 ? C.midGreen : C.red} />
-            ))}
-          </div>
-        )
-      })()}
-
-      {hasHistory ? (
-        <div>
-          <div style={{ fontSize: 11, fontWeight: 600, color: C.gray700, marginBottom: 10 }}>Return History</div>
-          <ResponsiveContainer width="100%" height={200}>
-            <LineChart data={performance.history} margin={{ top: 4, right: 16, bottom: 0, left: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke={C.gray200} />
-              <XAxis dataKey="period" tick={{ fontSize: 9, fill: C.gray500 }} />
-              <YAxis tick={{ fontSize: 9, fill: C.gray500 }} tickFormatter={v => `${v}%`} />
-              <Tooltip formatter={(v: any) => [`${Number(v).toFixed(2)}%`, '']} />
-              <Legend wrapperStyle={{ fontSize: 10 }} />
-              <Line type="monotone" dataKey="portfolio" stroke={C.midGreen} strokeWidth={2} dot={false} name="Portfolio" />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      ) : (
-        <div style={{ background: C.lightGreen, borderRadius: 8, padding: '16px 20px', color: C.darkGreen, fontSize: 12, textAlign: 'center' }}>
-          Para mostrar el gráfico de performance histórica, ingresá los retornos mensuales en los campos de la izquierda.
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ── Section 6: Risk Analysis ──────────────────────────────────────────────────
-
-function RiskSection({ data }: { data: FactsheetData }) {
-  const { positions, riskScore, riskProfile, allocation } = data
-
-  const topRisk = [...positions].filter(p => p.riskScore != null).sort((a, b) => (b.riskScore ?? 0) * b.weight - (a.riskScore ?? 0) * a.weight).slice(0, 5)
-
-  const emPct   = allocation.byRegion.find(r => r.name === 'LatAm' || r.name === 'Emerging Markets')
-  const emTotal = (allocation.byRegion.filter(r => ['LatAm','Emerging Markets'].includes(r.name)).reduce((s,r) => s + r.pct, 0))
-  const hyPct   = allocation.byAssetClass.find(a => a.name === 'Fixed Income')?.pct ?? 0
-  const cashPct = allocation.byAssetClass.find(a => a.name === 'Cash')?.pct ?? 0
-
-  const scoreColor = (s: number) => s > 6 ? C.red : s > 3 ? C.amber : '#16A34A'
-
-  function ScoreMeter({ score }: { score: number | null }) {
-    if (score == null) return <div style={{ color: C.gray500, fontSize: 12 }}>—</div>
-    const pct = (score / 10) * 100
-    return (
-      <div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-          <span style={{ fontSize: 11, color: C.gray500, fontFamily: 'Arial, sans-serif' }}>Score Riesgo</span>
-          <span style={{ fontSize: 14, fontWeight: 700, color: scoreColor(score) }}>{score.toFixed(1)}/10</span>
-        </div>
-        <div style={{ height: 6, background: C.gray200, borderRadius: 3, overflow: 'hidden' }}>
-          <div style={{ height: '100%', width: `${pct}%`, background: scoreColor(score), borderRadius: 3 }} />
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 3 }}>
-          <span style={{ fontSize: 8, color: C.gray500 }}>Conservador</span>
-          <span style={{ fontSize: 8, color: C.gray500 }}>Moderado</span>
-          <span style={{ fontSize: 8, color: C.gray500 }}>Agresivo</span>
-        </div>
-      </div>
-    )
-  }
-
-  return (
-    <div style={{ padding: '28px 36px', fontFamily: 'Arial, sans-serif' }}>
-      <SectionTitle>Risk Analysis</SectionTitle>
-
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
-        {/* Risk score visual */}
-        <div style={{ background: C.white, border: `1px solid ${C.gray200}`, borderRadius: 8, padding: 16 }}>
-          <ScoreMeter score={riskScore} />
-          <div style={{ marginTop: 16 }}>
-            <div style={{ fontSize: 11, fontWeight: 600, color: C.gray700, marginBottom: 8 }}>Risk Indicators</div>
-            {[
-              { label: 'Liquidez (Cash)', value: cashPct, good: cashPct >= 5 },
-              { label: 'Exposición EM/LatAm', value: emTotal, good: emTotal < 30 },
-              { label: 'Concentración Top 3', value: [...positions].sort((a,b) => b.marketValue - a.marketValue).slice(0,3).reduce((s,p) => s + p.weight, 0), good: true },
-            ].map(item => (
-              <div key={item.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: `1px solid ${C.gray100}` }}>
-                <span style={{ fontSize: 10, color: C.gray700 }}>{item.label}</span>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ fontSize: 10, fontWeight: 600, color: C.gray900 }}>{item.value.toFixed(1)}%</span>
-                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: item.good ? '#16A34A' : C.amber }} />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Top risk positions */}
-        <div style={{ background: C.white, border: `1px solid ${C.gray200}`, borderRadius: 8, padding: 16 }}>
-          <div style={{ fontSize: 11, fontWeight: 600, color: C.gray700, marginBottom: 10 }}>Posiciones de Mayor Riesgo</div>
-          {topRisk.length === 0
-            ? <div style={{ color: C.gray500, fontSize: 11, textAlign: 'center', padding: 16 }}>Sin datos de riesgo</div>
-            : topRisk.map((p, i) => (
-              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: `1px solid ${C.gray100}` }}>
-                <div>
-                  <div style={{ fontSize: 10, fontWeight: 600, color: C.gray900 }}>{p.symbol}</div>
-                  <div style={{ fontSize: 9, color: C.gray500 }}>{p.weight.toFixed(1)}% del portafolio</div>
-                </div>
-                <span style={{ fontSize: 11, fontWeight: 700, color: scoreColor(p.riskScore!) }}>
-                  {p.riskScore!.toFixed(1)}
-                </span>
-              </div>
-            ))
-          }
-        </div>
+      <div style={{ background: C.darkGreen, borderRadius: 8, padding: '10px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
+        <span style={{ fontSize: 11, fontWeight: 700, color: C.white }}>TOTAL PORTFOLIO</span>
+        <span style={{ fontSize: 13, fontWeight: 700, color: C.white }}>{fmtUSD(data.totalValue)}</span>
+        <span style={{ fontSize: 11, fontWeight: 600, color: totalGL >= 0 ? '#A5D6B7' : '#FCA5A5' }}>{fmtUSD(totalGL)} unreal. G/L</span>
       </div>
     </div>
   )
 }
 
-// ── Section 7: Commentary ─────────────────────────────────────────────────────
+// ── Commentary ─────────────────────────────────────────────────────────────────
 
 function CommentarySection({ data }: { data: FactsheetData }) {
-  const { commentary, meta } = data
+  const { commentary } = data
   const blocks = [
     { title: 'Market Commentary', text: commentary.marketCommentary },
     { title: 'Outlook',          text: commentary.outlook },
@@ -646,14 +781,12 @@ function CommentarySection({ data }: { data: FactsheetData }) {
   )
 }
 
-// ── Section 8: Disclaimer ─────────────────────────────────────────────────────
+// ── Disclaimer ─────────────────────────────────────────────────────────────────
 
 function DisclaimerSection({ data }: { data: FactsheetData }) {
   return (
-    <div style={{ padding: '20px 36px 28px', fontFamily: 'Arial, sans-serif', borderTop: `1px solid ${C.gray200}` }}>
-      <div style={{ fontSize: 9, fontWeight: 700, color: C.gray500, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
-        Important Disclosures
-      </div>
+    <div style={{ padding: '28px 36px', fontFamily: 'Arial, sans-serif' }}>
+      <SectionTitle>Important Disclosures</SectionTitle>
       <p style={{ fontSize: 9, color: C.gray500, lineHeight: 1.5, margin: 0 }}>{data.disclaimer}</p>
       <div style={{ marginTop: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -670,24 +803,20 @@ function DisclaimerSection({ data }: { data: FactsheetData }) {
 
 // ── Page wrapper ──────────────────────────────────────────────────────────────
 
-function A4Page({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
+function A4Page({ children }: { children: React.ReactNode }) {
   return (
     <div style={{
       width: '210mm', minHeight: '297mm', background: C.white,
       margin: '0 auto 24px', boxShadow: '0 2px 20px rgba(0,0,0,0.12)',
       display: 'flex', flexDirection: 'column',
       pageBreakAfter: 'always', breakAfter: 'page',
-      ...style,
     }}>
-      {/* Page header (except cover) */}
-      {(style as any)?.['--no-header'] !== 'true' && (
-        <div style={{ background: C.darkGreen, padding: '8px 36px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ fontSize: 9, color: '#A5D6B7', letterSpacing: '0.1em', textTransform: 'uppercase', fontFamily: 'Arial, sans-serif', fontWeight: 600 }}>
-            ROBLE CAPITAL · PORTFOLIO FACTSHEET
-          </span>
-          <span style={{ fontSize: 9, color: '#A5D6B7', fontFamily: 'Arial, sans-serif' }}>Confidencial</span>
-        </div>
-      )}
+      <div style={{ background: C.darkGreen, padding: '8px 36px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span style={{ fontSize: 9, color: '#A5D6B7', letterSpacing: '0.1em', textTransform: 'uppercase', fontFamily: 'Arial, sans-serif', fontWeight: 600 }}>
+          ROBLE CAPITAL · PORTFOLIO FACTSHEET
+        </span>
+        <span style={{ fontSize: 9, color: '#A5D6B7', fontFamily: 'Arial, sans-serif' }}>Confidencial</span>
+      </div>
       <div style={{ flex: 1 }}>
         {children}
       </div>
@@ -695,11 +824,14 @@ function A4Page({ children, style }: { children: React.ReactNode; style?: React.
   )
 }
 
-// ── Main export ───────────────────────────────────────────────────────────────
+// ── Main export — dynamic: sections with nothing to show are simply skipped ──
 
 export default function FactsheetPreview({ data }: { data: FactsheetData }) {
   const hasCommentary = Object.values(data.commentary).some(v => v?.trim())
-  const manyPositions = data.positions.length > 15
+  const hasFixedIncome = data.positions.some(p => p.assetClass === 'Fixed Income')
+  const hasMaturities = data.positions.some(p => p.maturityDate)
+  const showPage3 = true // concentration always applies when there's ≥1 position
+  const hasPositions = data.positions.length > 0
 
   return (
     <>
@@ -718,29 +850,45 @@ export default function FactsheetPreview({ data }: { data: FactsheetData }) {
       `}</style>
 
       <div className="factsheet-wrapper" style={{ fontFamily: 'Arial, sans-serif' }}>
-        {/* P1: Cover */}
+        {/* P1: Cover / Account Snapshot */}
         <div style={{ width: '210mm', minHeight: '297mm', background: C.white, margin: '0 auto 24px', boxShadow: '0 2px 20px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', pageBreakAfter: 'always', breakAfter: 'page' }}>
           <CoverPage data={data} />
         </div>
 
-        {/* P2: Overview */}
+        {/* P2: Performance & Allocation */}
         <A4Page>
-          <OverviewSection data={data} />
+          <PerformanceAllocationPage data={data} />
         </A4Page>
 
-        {/* P3: Top Holdings */}
-        <A4Page>
-          <TopHoldingsSection data={data} />
-        </A4Page>
+        {/* P3: Portfolio Analysis — concentration always shown; Fixed Income /
+            Maturity sections self-omit when there's nothing to show */}
+        {hasPositions && (
+          <A4Page>
+            <PortfolioAnalysisPage data={data} />
+          </A4Page>
+        )}
 
-        {/* P5: Full Positions (may be long) */}
-        <A4Page>
-          <FullPositionsSection data={data} />
-        </A4Page>
+        {/* P4: Upcoming Maturities (only if any) + Top Holdings */}
+        {hasPositions && (
+          <A4Page>
+            <UpcomingAndHoldingsPage data={data} />
+          </A4Page>
+        )}
 
-        {/* P6: Commentary + Disclaimer */}
+        {/* P5+: Full Positions, split by instrument type */}
+        {hasPositions && (
+          <A4Page>
+            <FullPositionsPages data={data} />
+          </A4Page>
+        )}
+
+        {/* Last: Commentary (if any) + Disclosures */}
+        {hasCommentary && (
+          <A4Page>
+            <CommentarySection data={data} />
+          </A4Page>
+        )}
         <A4Page>
-          {hasCommentary && <CommentarySection data={data} />}
           <DisclaimerSection data={data} />
         </A4Page>
       </div>
