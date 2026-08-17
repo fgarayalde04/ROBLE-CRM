@@ -4,6 +4,11 @@ export type ResearchType =
   | 'morning_brief' | 'noticia_mercado' | 'bono' | 'fondo' | 'nueva_emision'
   | 'research' | 'macro' | 'regulacion' | 'novedad_interna'
 
+// El feed general no incluye morning_brief — ese tiene su propia pestaña.
+export const MANUAL_RESEARCH_TYPES: ResearchType[] = [
+  'noticia_mercado', 'bono', 'fondo', 'nueva_emision', 'research', 'macro', 'regulacion', 'novedad_interna',
+]
+
 export interface MorningBriefSection {
   text: string
   sources: { title: string; source: string; url: string }[]

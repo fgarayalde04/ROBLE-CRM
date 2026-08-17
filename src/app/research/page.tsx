@@ -1,7 +1,7 @@
 import { Suspense } from 'react'
 import { redirect } from 'next/navigation'
 import { getSession } from '@/lib/auth'
-import { listPosts, getLatestMorningBrief } from '@/lib/db/research'
+import { listPosts, getLatestMorningBrief, MANUAL_RESEARCH_TYPES } from '@/lib/db/research'
 import ResearchClient from './ResearchClient'
 
 export const dynamic = 'force-dynamic'
@@ -14,7 +14,7 @@ export default async function ResearchPage() {
   const canAuthor = session.role === 'admin' || session.role === 'ceo' || session.role === 'direccion'
 
   const [posts, latestBrief] = await Promise.all([
-    listPosts({ userId: session.id, limit: 100 }),
+    listPosts({ userId: session.id, types: MANUAL_RESEARCH_TYPES, limit: 100 }),
     getLatestMorningBrief(),
   ])
 

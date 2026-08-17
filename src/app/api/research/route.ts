@@ -1,11 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession, RESEARCH_AUTHOR_ROLES } from '@/lib/auth'
-import { listPosts, createPost, type ResearchType } from '@/lib/db/research'
+import { listPosts, createPost, MANUAL_RESEARCH_TYPES, type ResearchType } from '@/lib/db/research'
 import { uploadObject } from '@/lib/storage/s3'
 
-const MANUAL_TYPES: ResearchType[] = [
-  'noticia_mercado', 'bono', 'fondo', 'nueva_emision', 'research', 'macro', 'regulacion', 'novedad_interna',
-]
+const MANUAL_TYPES = MANUAL_RESEARCH_TYPES
 
 export async function GET(request: NextRequest) {
   const session = await getSession()
