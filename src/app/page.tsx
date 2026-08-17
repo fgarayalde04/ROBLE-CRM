@@ -702,7 +702,14 @@ export default async function PanelDelDiaPage({ searchParams }: PageProps) {
                       >
                         <p className="text-xs font-semibold text-[#2D3F52]">{n.title}</p>
                         <p className="text-xs text-gray-600 mt-0.5">{n.message}</p>
-                        <p className="text-[10px] text-gray-400 mt-1">{timeAgo(n.created_at)}</p>
+                        <div className="flex items-center gap-1.5 mt-1">
+                          <p className="text-[10px] text-gray-400">{timeAgo(n.created_at)}</p>
+                          {n.event_count > 1 && (
+                            <span className="text-[10px] font-semibold text-gray-400 bg-gray-100 px-1.5 rounded-full">
+                              +{n.event_count - 1} actualizaci{n.event_count - 1 === 1 ? 'ón' : 'ones'}
+                            </span>
+                          )}
+                        </div>
                       </Link>
                     </li>
                   )

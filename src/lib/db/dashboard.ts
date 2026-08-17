@@ -196,14 +196,31 @@ export async function getCompletedTaskIds(ids: string[]) {
   return rows.map((r) => r.id as string)
 }
 
+// Grouped by (entity_type, entity_id) — same order events collapse into one
+// row here too, matching the notification bell.
 export async function getUnreadNotifications(userId: string, userName: string, limit: number) {
   const { rows } = await pool.query(
-    `select id, title, message, entity_type, entity_id, notif_type, url, created_at
-     from notifications where (user_id = $1 or user_name = $2) and read_at is null
-     order by created_at desc limit $3`,
+    `with scoped as (
+       select *, coalesce(entity_type || ':' || entity_id, 'row:' || id::text) as group_key
+       from notifications where (user_id = $1 or user_name = $2) and read_at is null
+     )
+     select
+       (array_agg(id order by created_at desc))[1] as id,
+       (array_agg(title order by created_at desc))[1] as title,
+       (array_agg(message order by created_at desc))[1] as message,
+       (array_agg(entity_type order by created_at desc))[1] as entity_type,
+       (array_agg(entity_id order by created_at desc))[1] as entity_id,
+       (array_agg(notif_type order by created_at desc))[1] as notif_type,
+       (array_agg(url order by created_at desc))[1] as url,
+       max(created_at) as created_at,
+       count(*) as event_count
+     from scoped
+     group by group_key
+     order by max(created_at) desc
+     limit $3`,
     [userId, userName, limit]
   )
-  return rows
+  return rows.map((r) => ({ ...r, event_count: Number(r.event_count) }))
 }
 
 export async function getPendingBcuComplianceCount() {

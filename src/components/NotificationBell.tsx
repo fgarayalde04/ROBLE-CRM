@@ -13,6 +13,7 @@ interface NotificationRow {
   url: string | null
   read_at: string | null
   created_at: string
+  event_count: number
 }
 
 const POLL_MS = 45_000
@@ -143,7 +144,14 @@ export default function NotificationBell({ variant = 'dark', align = 'right' }: 
                             {n.title}
                           </p>
                           <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{n.message}</p>
-                          <p className="text-[10px] text-gray-400 mt-1">{timeAgo(n.created_at)}</p>
+                          <div className="flex items-center gap-1.5 mt-1">
+                            <p className="text-[10px] text-gray-400">{timeAgo(n.created_at)}</p>
+                            {n.event_count > 1 && (
+                              <span className="text-[10px] font-semibold text-gray-400 bg-gray-100 px-1.5 rounded-full">
+                                +{n.event_count - 1} actualizaci{n.event_count - 1 === 1 ? 'ón' : 'ones'}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </button>

@@ -52,6 +52,14 @@ export async function middleware(req: NextRequest) {
     }
   }
 
+  // External webhook call (Zapia → Roble), authenticated with a bearer secret.
+  if (pathname === '/api/research/zapia-webhook' && req.method === 'POST') {
+    const auth = req.headers.get('authorization')
+    if (auth && process.env.ZAPIA_WEBHOOK_SECRET && auth === `Bearer ${process.env.ZAPIA_WEBHOOK_SECRET}`) {
+      return NextResponse.next()
+    }
+  }
+
   const token = req.cookies.get('crm_session')?.value
   if (!token) {
     const loginUrl = req.nextUrl.clone()
