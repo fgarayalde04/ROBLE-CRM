@@ -378,6 +378,13 @@ export default function UsersManager({ initialUsers, pendingUsers: initialPendin
         body: JSON.stringify({ userId: selectedUser.id, see_all_folders: seeAllFolders, folders: allowedFolders }),
       })
 
+      // Modo Asesor forzado queda grabado en la sesión (token) del usuario al
+      // iniciar sesión — un cambio acá no tiene efecto hasta que esa persona
+      // cierre sesión y vuelva a entrar, así que hay que avisarle.
+      if (modoAsesor !== (selectedUser.modo_asesor ?? false)) {
+        alert('Cambio guardado. Para que tenga efecto, avisale a ' + selectedUser.name + ' que cierre sesión y vuelva a iniciarla — el cambio no se aplica en su sesión actual.')
+      }
+
       closeModal()
       router.refresh()
     } catch (err: any) {
@@ -871,6 +878,9 @@ export default function UsersManager({ initialUsers, pendingUsers: initialPendin
                       {modoAsesor
                         ? 'Solo puede acceder a Órdenes, Mail y Configuración'
                         : 'Acceso completo según permisos de rol'}
+                    </p>
+                    <p className="text-[10px] text-amber-600 mt-1">
+                      ⚠ Este cambio no toma efecto hasta que el usuario cierre sesión y vuelva a entrar.
                     </p>
                   </div>
                   <button
