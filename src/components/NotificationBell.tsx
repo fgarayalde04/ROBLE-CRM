@@ -84,8 +84,9 @@ export default function NotificationBell({ variant = 'dark', align = 'right' }: 
   async function handleItemClick(n: NotificationRow) {
     setOpen(false)
     if (!n.read_at) {
-      // Optimistic — don't wait for the network before navigating.
-      setItems((prev) => prev.map((i) => (i.id === n.id ? { ...i, read_at: new Date().toISOString() } : i)))
+      // Optimistic — once read, it drops out of the list entirely (server
+      // only returns unread ones), not just greyed out.
+      setItems((prev) => prev.filter((i) => i.id !== n.id))
       setUnreadCount((c) => Math.max(0, c - 1))
       fetch(`/api/notifications/${n.id}`, { method: 'PATCH' }).then(() => {
         setAppBadge(Math.max(0, unreadCount - 1))

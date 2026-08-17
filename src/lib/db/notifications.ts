@@ -53,13 +53,13 @@ export async function createNotification(input: NotificationInput): Promise<Noti
 
 // Matches by user_id OR user_name so pre-existing notifications (written before
 // user_id existed, e.g. task shares) keep showing up alongside new ones.
-// Each group's representative row is the most recent one in that group; the
-// group counts as unread if ANY row in it is unread.
+// Only unread ones — once a group is marked read it drops out of this list
+// entirely, so the bell doesn't pile up old read notifications forever.
 export async function listNotificationsForUser(userId: string, userName: string, limit = 30) {
   const { rows } = await pool.query(
     `with scoped as (
        select *, ${GROUP_KEY} as group_key
-       from notifications where user_id = $1 or user_name = $2
+       from notifications where (user_id = $1 or user_name = $2) and read_at is null
      )
      select
        (array_agg(id order by created_at desc))[1] as id,

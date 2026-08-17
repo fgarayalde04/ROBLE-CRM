@@ -3,8 +3,8 @@ import { generateMorningBriefFromWebhook } from '@/lib/research/generateMorningB
 import { notifyMorningBriefPublished } from '@/lib/notifications/researchEvents'
 
 // POST /api/research/zapia-webhook — Zapia (o cualquier fuente externa) envía
-// el resumen diario ya armado; acá se reestructura con IA y se publica como
-// Morning Brief. Autenticado con un secret compartido (no sesión de usuario).
+// el resumen diario ya armado (texto libre); se guarda tal cual como Morning
+// Brief, solo se extraen titulares. Autenticado con un secret compartido.
 export async function POST(request: NextRequest) {
   const auth = request.headers.get('authorization')
   const expected = process.env.ZAPIA_WEBHOOK_SECRET
