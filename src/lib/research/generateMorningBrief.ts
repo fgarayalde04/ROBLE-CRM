@@ -31,7 +31,7 @@ const NUMBERED_TITLE_RE = /\*\d+\)\s*([^*]+)\*/g
 
 function extractHeadlines(rawText: string, max = 5): string[] {
   const headlines: string[] = []
-  for (const match of rawText.matchAll(NUMBERED_TITLE_RE)) {
+  for (const match of Array.from(rawText.matchAll(NUMBERED_TITLE_RE))) {
     const title = match[1].trim().replace(/[:\s—-]+$/, '')
     if (!title) continue
     headlines.push(title)
