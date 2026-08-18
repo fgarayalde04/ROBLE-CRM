@@ -38,6 +38,17 @@ function todayStr() {
 }
 function uid() { return Math.random().toString(36).slice(2, 9) }
 
+// Formato de miles estilo UY: "10000" -> "10.000". Solo dígitos, sin decimales
+// (las cantidades/montos de estas órdenes siempre se cargan como enteros).
+function formatMiles(raw: string): string {
+  const digits = raw.replace(/\D/g, '')
+  if (!digits) return ''
+  return digits.replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+}
+function unformatMiles(formatted: string): string {
+  return formatted.replace(/\./g, '')
+}
+
 function newAcciones(id: string): AccionesBlock {
   return { type: 'acciones', id, nombre: '', ticker: '', cantidad: '', cantidadTipo: 'acciones', precio: 'mercado', precioLimite: '', moneda: 'USD', operacion: 'compra', fecha: todayStr(), observaciones: '', vigencia: 'DIA', comision: '' }
 }
@@ -140,6 +151,22 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   return <div><label className={labelCls}>{label}</label>{children}</div>
 }
 
+// Input numérico que muestra separador de miles ("10.000") mientras se
+// escribe, guardando internamente solo dígitos.
+function MilesInput({ value, onChange, placeholder, className }: {
+  value: string; onChange: (raw: string) => void; placeholder?: string; className?: string
+}) {
+  return (
+    <input
+      className={className}
+      inputMode="numeric"
+      placeholder={placeholder}
+      value={formatMiles(value)}
+      onChange={(e) => onChange(unformatMiles(e.target.value))}
+    />
+  )
+}
+
 function InternalSection({ children }: { children: React.ReactNode }) {
   return (
     <div className="mt-3 rounded-lg border border-dashed border-gray-200 bg-gray-50/60 px-3 pt-2.5 pb-3 space-y-3">
@@ -191,7 +218,7 @@ function AccionesForm({ block, index, onChange, onRemove }: { block: AccionesBlo
         <Field label="Ticker *"><input className={inputCls} placeholder="Ej: AAPL" value={block.ticker} onChange={upd('ticker')} /></Field>
         <Field label="Cantidad *">
           <div className="flex gap-2">
-            <input className={`${inputCls} flex-1 min-w-0`} type="number" placeholder="Ej: 100" value={block.cantidad} onChange={upd('cantidad')} />
+            <MilesInput className={`${inputCls} flex-1 min-w-0`} placeholder="Ej: 100" value={block.cantidad} onChange={(v) => onChange(block.id, 'cantidad', v)} />
             <select className="text-sm px-2.5 py-2 rounded-lg border border-gray-200 bg-white focus:outline-none shrink-0 w-20" value={block.cantidadTipo} onChange={upd('cantidadTipo')}>
               <option value="acciones">acc.</option><option value="monto">$</option>
             </select>
@@ -231,7 +258,7 @@ function FondosForm({ block, index, onChange, onRemove }: { block: FondosBlock; 
           <InstrumentSearch tipo="fondo" value={block.fondo} onSelect={handleSelectInstrument} onChange={(v) => onChange(block.id, 'fondo', v)} placeholder="Buscar fondo o escribir nombre…" className={inputCls} />
         </Field>
         <Field label="ISIN"><input className={inputCls} placeholder="Autocompletado al seleccionar fondo" value={block.cusipIsin} onChange={upd('cusipIsin')} /></Field>
-        <Field label="Monto *"><input className={inputCls} type="number" placeholder="Ej: 50000" value={block.monto} onChange={upd('monto')} /></Field>
+        <Field label="Monto *"><MilesInput className={inputCls} placeholder="Ej: 50.000" value={block.monto} onChange={(v) => onChange(block.id, 'monto', v)} /></Field>
         <Field label="Moneda"><select className={selectCls} value={block.moneda} onChange={upd('moneda')}><option value="USD">USD</option><option value="UYU">UYU</option><option value="EUR">EUR</option><option value="ARS">ARS</option></select></Field>
         <Field label="Fecha">
           <div className="flex gap-2">
@@ -269,7 +296,7 @@ function BonosForm({ block, index, onChange, onRemove }: { block: BonosBlock; in
         <Field label="CUSIP / ISIN"><input className={inputCls} placeholder="Autocompletado al seleccionar bono" value={block.cusipIsin} onChange={upd('cusipIsin')} /></Field>
         <Field label="Vencimiento (Maturity)"><input className={inputCls} placeholder="Ej: 15/03/2030" value={block.maturity} onChange={upd('maturity')} /></Field>
         <Field label="Cupón (%)"><input className={inputCls} type="number" placeholder="Ej: 6.50" value={block.cupon} onChange={upd('cupon')} /></Field>
-        <Field label="Cantidad (Valor Nominal) *"><input className={inputCls} type="number" placeholder="Ej: 100000" value={block.cantidad} onChange={upd('cantidad')} /></Field>
+        <Field label="Cantidad (Valor Nominal) *"><MilesInput className={inputCls} placeholder="Ej: 100.000" value={block.cantidad} onChange={(v) => onChange(block.id, 'cantidad', v)} /></Field>
         <Field label="Tipo de precio"><select className={selectCls} value={block.precio} onChange={upd('precio')}><option value="mercado">A mercado</option><option value="limite">Precio límite</option></select></Field>
         {block.precio === 'limite' && <Field label="Precio límite (% par)"><input className={inputCls} placeholder="Ej: 98.50" value={block.precioLimite} onChange={upd('precioLimite')} /></Field>}
         <Field label="Moneda"><select className={selectCls} value={block.moneda} onChange={upd('moneda')}><option value="USD">USD</option><option value="UYU">UYU</option><option value="EUR">EUR</option></select></Field>
@@ -302,6 +329,7 @@ export default function FormularioDirecto({ onBack, gmailConnected = false }: Pr
   const [emailMissing, setEmailMissing] = useState(false)
   const [availableEmails, setAvailableEmails] = useState<string[]>([])
   const [fecha, setFecha]               = useState(todayStr())
+  const [operaAsesor, setOperaAsesor]   = useState(false)
   const [ccEmails, setCcEmails]         = useState<string[]>([])
   const [ccInput, setCcInput]           = useState('')
   const [teamMembers, setTeamMembers]   = useState<TeamMember[]>([])
@@ -402,6 +430,7 @@ export default function FormularioDirecto({ onBack, gmailConnected = false }: Pr
           mail_preview:       emailBody,
           mail_asunto:        asunto,
           cc_emails:          ccEmails.length > 0 ? ccEmails : null,
+          opera_asesor:       operaAsesor,
         }),
       })
       const data = await res.json()
@@ -493,6 +522,7 @@ export default function FormularioDirecto({ onBack, gmailConnected = false }: Pr
           mail_asunto:        asunto,
           mail_cuerpo:        emailBody,
           cc_emails:          ccEmails.length > 0 ? ccEmails : null,
+          opera_asesor:       operaAsesor,
           directo:            true,
         }),
       })
@@ -526,6 +556,7 @@ export default function FormularioDirecto({ onBack, gmailConnected = false }: Pr
   function handleNuevaOrden() {
     setBlocks([]); setClientId(''); setClientName(''); setClientNumber('')
     setClientEmail(''); setEmailMissing(false); setFecha(todayStr())
+    setOperaAsesor(false)
     setCcEmails([]); setCcInput('')
     setPreview(null); setValidationErrors([]); setSent(false); setSentDirecto(false); setSolicitudId(null); setSubmitError(null)
   }
@@ -679,6 +710,22 @@ export default function FormularioDirecto({ onBack, gmailConnected = false }: Pr
                 </div>
               </div>
 
+              {/* Opera asesor */}
+              <div className="md:col-span-3">
+                <label className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg border border-gray-200 bg-gray-50/60 cursor-pointer w-fit">
+                  <input
+                    type="checkbox"
+                    checked={operaAsesor}
+                    onChange={(e) => setOperaAsesor(e.target.checked)}
+                    className="rounded border-gray-300 text-[#2D3F52] focus:ring-blue-200"
+                  />
+                  <span className="text-sm font-semibold text-gray-700">Opera asesor</span>
+                  <span className="text-[11px] text-gray-400">
+                    {operaAsesor ? '— la ingresa el asesor directo' : '— la ingresa Mesa'}
+                  </span>
+                </label>
+              </div>
+
               {/* CC interno */}
               <div className="md:col-span-3">
                 <label className={labelCls}>CC (copia interna)</label>
@@ -788,7 +835,7 @@ export default function FormularioDirecto({ onBack, gmailConnected = false }: Pr
               className="px-5 py-2.5 rounded-lg text-sm font-bold text-white disabled:opacity-40 disabled:cursor-not-allowed transition bg-[#2D3F52] whitespace-nowrap">
               Generar preview del email
             </button>
-            <button type="button" onClick={() => { setBlocks([]); setClientId(''); setClientName(''); setClientNumber(''); setClientEmail(''); setFecha(todayStr()); setCcEmails([]); setCcInput(''); setPreview(null); setValidationErrors([]) }}
+            <button type="button" onClick={() => { setBlocks([]); setClientId(''); setClientName(''); setClientNumber(''); setClientEmail(''); setFecha(todayStr()); setOperaAsesor(false); setCcEmails([]); setCcInput(''); setPreview(null); setValidationErrors([]) }}
               className="px-4 py-2.5 rounded-lg text-sm font-semibold border border-gray-200 text-gray-500 hover:bg-gray-50 transition whitespace-nowrap">
               Limpiar
             </button>

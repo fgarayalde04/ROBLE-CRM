@@ -41,6 +41,7 @@ interface Solicitud {
   vigencia?: string | null
   symbol?: string | null
   canal?: string | null
+  opera_asesor?: boolean | null
   cc_emails?: string[] | null
 }
 
@@ -249,6 +250,7 @@ function DetailPanel({
           sol.cupon      ? ['Cupón', sol.cupon + '%']       : null,
           ['Asesor', sol.asesor],
           sol.canal ? ['Canal', sol.canal === 'directo_asesor' ? 'Envío directo por asesor' : sol.canal === 'directo_mesa' ? 'Envío directo por Mesa' : 'Derivada a Mesa'] : null,
+          ['Opera', sol.opera_asesor ? 'Asesor' : 'Mesa'],
           sol.operador  ? ['Operador', sol.operador]        : null,
           sol.precio_ejecutado ? ['Precio ejec.', String(sol.precio_ejecutado)] : null,
           sol.valor_efectivo   ? ['Valor ef.', `${sol.moneda} ${Number(sol.valor_efectivo).toLocaleString('es-UY')}`] : null,
