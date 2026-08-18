@@ -293,7 +293,7 @@ function BonosForm({ block, index, onChange, onRemove }: { block: BonosBlock; in
 
 interface Props { onBack: () => void; gmailConnected?: boolean; userEmail?: string }
 
-export default function FormularioDirecto({ onBack }: Props) {
+export default function FormularioDirecto({ onBack, gmailConnected = false }: Props) {
   const [blocks, setBlocks]             = useState<OrderBlock[]>([])
   const [clientId, setClientId]         = useState('')
   const [clientName, setClientName]     = useState('')
@@ -310,7 +310,9 @@ export default function FormularioDirecto({ onBack }: Props) {
   const [preview, setPreview]           = useState<string | null>(null)
   const [validationErrors, setValidationErrors] = useState<string[]>([])
   const [sending, setSending]           = useState(false)
+  const [sendingDirecto, setSendingDirecto] = useState(false)
   const [sent, setSent]                 = useState(false)
+  const [sentDirecto, setSentDirecto]   = useState(false)
   const [solicitudId, setSolicitudId]   = useState<string | null>(null)
   const [submitError, setSubmitError]   = useState<string | null>(null)
 
@@ -435,11 +437,97 @@ export default function FormularioDirecto({ onBack }: Props) {
     } finally { setSending(false) }
   }
 
+  // Envío directo: el asesor manda el mail al cliente el mismo (con su Gmail
+  // conectado) y la orden queda registrada como ya enviada — sin pasar por
+  // la cola de revisión de Mesa. El asesor es quien luego la marca ejecutada.
+  async function handleEnviarCliente() {
+    const globalErrors: string[] = []
+    if (!clientName.trim()) globalErrors.push('Ingresá el nombre del cliente')
+    if (!clientEmail.trim()) globalErrors.push('Ingresá el email del cliente — es obligatorio para enviar directo')
+    if (blocks.length === 0) globalErrors.push('Agregá al menos un activo')
+    const blockErrors = validateBlocks(blocks)
+    const allErrors = [...globalErrors, ...blockErrors]
+    if (allErrors.length > 0) { setValidationErrors(allErrors); return }
+
+    const emailBody = preview ?? generateEmailText(blocks, clientName, clientNumber, fecha)
+    if (!preview) setPreview(emailBody)
+
+    setSendingDirecto(true); setSubmitError(null); setValidationErrors([])
+    try {
+      const sendRes = await fetch('/api/gmail/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: clientEmail,
+          cc: ccEmails.length > 0 ? ccEmails : undefined,
+          subject: asunto,
+          body: emailBody,
+        }),
+      })
+      if (!sendRes.ok) {
+        const j = await sendRes.json()
+        setSubmitError(j.error ?? 'Error al enviar el email al cliente')
+        return
+      }
+
+      const firstOp = blocks[0]
+      const tipoOp = firstOp.operacion as 'compra' | 'venta'
+      const firstNombre = firstOp.type === 'acciones' ? firstOp.nombre
+        : firstOp.type === 'fondos' ? firstOp.fondo
+        : firstOp.descripcion
+      const res = await fetch('/api/solicitudes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          client_id:          null,
+          client_name:        clientName,
+          client_number:      clientNumber || null,
+          client_email:       clientEmail,
+          fecha_operacion:    fecha,
+          tipo_operacion:     tipoOp,
+          instrumento_tipo:   firstOp.type,
+          instrumento_nombre: blocks.length === 1 ? firstNombre : `${blocks.length} activos`,
+          moneda:             firstOp.moneda ?? 'USD',
+          assets_json:        blocks,
+          mail_preview:       emailBody,
+          mail_asunto:        asunto,
+          mail_cuerpo:        emailBody,
+          cc_emails:          ccEmails.length > 0 ? ccEmails : null,
+          directo:            true,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setSubmitError((data.error ?? 'El email se envió, pero no se pudo registrar la orden') + ' — avisale a Mesa para que la carguen a mano.')
+        return
+      }
+      setSolicitudId(data.solicitud_id)
+      setSentDirecto(true)
+      setSent(true)
+      if (emailMissing && clientEmail) {
+        fetch('/api/authorized-emails', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ numero_cliente: clientNumber || null, nombre_cliente: clientName || null, email: clientEmail }),
+        }).catch(() => {})
+        if (clientId) {
+          fetch('/api/legajos/update-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ legajo_id: clientId, email: clientEmail }),
+          }).catch(() => {})
+        }
+      }
+    } catch (err: any) {
+      setSubmitError(err.message ?? 'Error de conexión')
+    } finally { setSendingDirecto(false) }
+  }
+
   function handleNuevaOrden() {
     setBlocks([]); setClientId(''); setClientName(''); setClientNumber('')
     setClientEmail(''); setEmailMissing(false); setFecha(todayStr())
     setCcEmails([]); setCcInput('')
-    setPreview(null); setValidationErrors([]); setSent(false); setSolicitudId(null); setSubmitError(null)
+    setPreview(null); setValidationErrors([]); setSent(false); setSentDirecto(false); setSolicitudId(null); setSubmitError(null)
   }
 
   // ── Success screen ──────────────────────────────────────────────────────────
@@ -452,10 +540,14 @@ export default function FormularioDirecto({ onBack }: Props) {
           </svg>
         </div>
         <div>
-          <p className="text-lg font-semibold text-gray-800">Orden enviada a revisión interna</p>
+          <p className="text-lg font-semibold text-gray-800">
+            {sentDirecto ? 'Orden enviada directamente al cliente' : 'Orden enviada a Mesa de Operaciones'}
+          </p>
           {solicitudId && <p className="text-xs font-mono text-gray-400 mt-1">N° {solicitudId}</p>}
           <p className="text-sm text-gray-500 mt-3 leading-relaxed">
-            El equipo de Mesa de Operaciones revisará la orden y enviará el correo al cliente una vez aprobada.
+            {sentDirecto
+              ? 'El mail ya se le envió al cliente. Cuando confirme la operación, marcá la orden como ejecutada desde el Blotter.'
+              : 'El equipo de Mesa de Operaciones revisará la orden y enviará el correo al cliente una vez aprobada.'}
           </p>
         </div>
         <div className="flex gap-3 justify-center pt-2">
@@ -712,9 +804,10 @@ export default function FormularioDirecto({ onBack }: Props) {
               <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
             <div>
-              <p className="text-xs font-semibold text-amber-800">Revisión interna requerida</p>
+              <p className="text-xs font-semibold text-amber-800">Dos formas de enviar</p>
               <p className="text-[11px] text-amber-700 mt-0.5 leading-relaxed">
-                El correo no se envía directamente al cliente. Mesa de Operaciones revisa la orden y lo envía una vez aprobado.
+                <strong>Enviar a mesa:</strong> Mesa de Operaciones revisa la orden y envía el correo al cliente.{' '}
+                <strong>Enviar a cliente:</strong> el correo sale ya mismo con tu Gmail, y vos llevás la orden hasta que quede ejecutada.
               </p>
             </div>
           </div>
@@ -762,15 +855,30 @@ export default function FormularioDirecto({ onBack }: Props) {
             )}
           </div>
 
-          {/* Enviar a revisión — siempre visible cuando hay activos */}
+          {/* Dos caminos: a Mesa (revisión) o directo al cliente */}
           {hasBlocks && (
-            <button type="button" onClick={handleEnviarRevision} disabled={sending}
-              className="w-full py-3 rounded-xl text-sm font-bold text-white bg-[#2D3F52] hover:bg-[#354A5E] disabled:opacity-50 flex items-center justify-center gap-2 transition shadow-sm">
-              {sending
-                ? <><svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>Enviando…</>
-                : <><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>Enviar a revisión interna</>
-              }
-            </button>
+            <div className="space-y-2">
+              <button type="button" onClick={handleEnviarRevision} disabled={sending || sendingDirecto}
+                className="w-full py-3 rounded-xl text-sm font-bold text-white bg-[#2D3F52] hover:bg-[#354A5E] disabled:opacity-50 flex items-center justify-center gap-2 transition shadow-sm">
+                {sending
+                  ? <><svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>Enviando…</>
+                  : <><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>Enviar a mesa</>
+                }
+              </button>
+              <button type="button" onClick={handleEnviarCliente} disabled={sending || sendingDirecto || !gmailConnected}
+                title={!gmailConnected ? 'Conectá tu cuenta de Gmail en Configuración para enviar directo al cliente' : undefined}
+                className="w-full py-3 rounded-xl text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition shadow-sm">
+                {sendingDirecto
+                  ? <><svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>Enviando…</>
+                  : <><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" /></svg>Enviar a cliente</>
+                }
+              </button>
+              {!gmailConnected && (
+                <p className="text-[11px] text-gray-400 text-center">
+                  Para enviar directo al cliente, conectá tu Gmail en Configuración.
+                </p>
+              )}
+            </div>
           )}
         </div>
       </div>

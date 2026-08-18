@@ -116,7 +116,10 @@ export async function PATCH(
 
   // ── en_ejecucion ───────────────────────────────────────────────────────────
   if (accion === 'en_ejecucion') {
-    if (!isMesa) return NextResponse.json({ error: 'Sin permiso' }, { status: 403 })
+    // Ordenes de envio directo: el asesor que las creo y envio el mail el
+    // mismo puede llevar el ciclo completo, sin pasar por Mesa.
+    const isOwnerDirecto = sol.canal === 'directo_asesor' && sol.asesor === session.name
+    if (!isMesa && !isOwnerDirecto) return NextResponse.json({ error: 'Sin permiso' }, { status: 403 })
     if (sol.estado !== 'mail_enviado')
       return NextResponse.json({ error: 'Requiere mail enviado primero' }, { status: 400 })
 
@@ -128,7 +131,8 @@ export async function PATCH(
 
   // ── ejecutar ───────────────────────────────────────────────────────────────
   if (accion === 'ejecutar') {
-    if (!isMesa) return NextResponse.json({ error: 'Sin permiso' }, { status: 403 })
+    const isOwnerDirecto = sol.canal === 'directo_asesor' && sol.asesor === session.name
+    if (!isMesa && !isOwnerDirecto) return NextResponse.json({ error: 'Sin permiso' }, { status: 403 })
     const precioEjecutado = body.precio_ejecutado != null ? Number(body.precio_ejecutado) : null
     const valorEfectivo   = body.valor_efectivo   != null ? Number(body.valor_efectivo)   : null
     const now = new Date().toISOString()

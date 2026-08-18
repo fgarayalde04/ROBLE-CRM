@@ -47,8 +47,8 @@ function ProgressBar({ estado }: { estado: string }) {
   )
 }
 
-function DetalleSolicitud({ sol, eventos, isMesa, onAction, onClose, onRefresh }: {
-  sol: Solicitud; eventos: Evento[]; isMesa: boolean
+function DetalleSolicitud({ sol, eventos, isMesa, userName, onAction, onClose, onRefresh }: {
+  sol: Solicitud; eventos: Evento[]; isMesa: boolean; userName?: string
   onAction: (accion: string, extra?: Record<string,unknown>) => Promise<void>
   onClose: () => void; onRefresh: () => void
 }) {
@@ -60,7 +60,10 @@ function DetalleSolicitud({ sol, eventos, isMesa, onAction, onClose, onRefresh }
   const [busy,   setBusy]   = useState(false)
 
   const cfg = (ESTADO_CFG[sol.estado] ?? ESTADO_CFG.mesa_operaciones) as { label:string; color:string; dot:string }
-  const canAct = isMesa && !sol._legacy && sol.estado !== 'cancelada' && sol.estado !== 'ejecutada'
+  // Ordenes de envio directo: el asesor dueño lleva el ciclo completo el mismo,
+  // sin pasar por Mesa — ve las mismas acciones que vería un operador.
+  const isOwnerDirecto = sol.canal === 'directo_asesor' && !!userName && sol.asesor === userName
+  const canAct = (isMesa || isOwnerDirecto) && !sol._legacy && sol.estado !== 'cancelada' && sol.estado !== 'ejecutada'
 
   async function act(accion: string, extra?: Record<string,unknown>) {
     setBusy(true); await onAction(accion, extra); setBusy(false)
@@ -652,6 +655,7 @@ export default function BlotterSolicitudes({ isMesa, userName }: { isMesa: boole
           sol={selectedRow}
           eventos={eventos}
           isMesa={isMesa}
+          userName={userName}
           onAction={handleAction}
           onClose={() => { setSelectedRow(null); setEventos([]) }}
           onRefresh={fetchRows}
