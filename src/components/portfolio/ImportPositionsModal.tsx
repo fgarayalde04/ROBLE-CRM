@@ -33,6 +33,14 @@ export default function ImportPositionsModal({ onClose, onImported }: {
   const [preview, setPreview] = useState<ParseResponse | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
+  // Cuenta nueva desde cero: los otros dos documentos (opcionales) se suben
+  // junto con las posiciones para no forzar 3 pasos separados.
+  const [cashFile, setCashFile] = useState<File | null>(null)
+  const [perfFile, setPerfFile] = useState<File | null>(null)
+  const cashFileRef = useRef<HTMLInputElement>(null)
+  const perfFileRef = useRef<HTMLInputElement>(null)
+  const [extraWarnings, setExtraWarnings] = useState<string[]>([])
+
   async function handleFile(file: File) {
     setUploading(true); setError('')
     try {
@@ -70,8 +78,29 @@ export default function ImportPositionsModal({ onClose, onImported }: {
         setStep('preview')
         return
       }
+
+      const accountNumber = preview.parsed.accountNumber!
+      const warnings: string[] = []
+      const uploads: Promise<void>[] = []
+      if (cashFile) {
+        uploads.push((async () => {
+          const fd = new FormData(); fd.append('file', cashFile)
+          const r = await fetch(`/api/portfolio/${encodeURIComponent(accountNumber)}/cashflows`, { method: 'POST', body: fd })
+          if (!r.ok) warnings.push('No se pudo importar el Excel de Cash Projections: ' + ((await r.json().catch(() => ({}))).error ?? 'error desconocido'))
+        })())
+      }
+      if (perfFile) {
+        uploads.push((async () => {
+          const fd = new FormData(); fd.append('file', perfFile)
+          const r = await fetch(`/api/portfolio/${encodeURIComponent(accountNumber)}/performance`, { method: 'POST', body: fd })
+          if (!r.ok) warnings.push('No se pudo importar el PDF de Performance: ' + ((await r.json().catch(() => ({}))).error ?? 'error desconocido'))
+        })())
+      }
+      if (uploads.length) await Promise.all(uploads)
+
+      setExtraWarnings(warnings)
       setStep('done')
-      onImported(preview.parsed.accountNumber!)
+      onImported(accountNumber)
     } catch (e: any) {
       setError(e.message)
       setStep('preview')
@@ -165,6 +194,28 @@ export default function ImportPositionsModal({ onClose, onImported }: {
                 </div>
               </div>
 
+              <div>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Documentos adicionales (opcional)</p>
+                <p className="text-[11px] text-gray-400 mb-2">Se importan junto con las posiciones — no hace falta subirlos por separado después.</p>
+                <div className="space-y-2">
+                  <button onClick={() => cashFileRef.current?.click()}
+                    className="w-full flex items-center justify-between px-3 py-2 border border-gray-200 rounded-lg text-xs hover:border-[#2E7D52] transition">
+                    <span className="text-gray-600">{cashFile ? cashFile.name : 'Incoming Cash Projections (Excel)'}</span>
+                    <span className="font-semibold text-[#2E7D52] shrink-0 ml-2">{cashFile ? 'Cambiar' : 'Elegir archivo'}</span>
+                  </button>
+                  <input ref={cashFileRef} type="file" accept=".xlsx,.xls" className="hidden"
+                    onChange={e => setCashFile(e.target.files?.[0] ?? null)} />
+
+                  <button onClick={() => perfFileRef.current?.click()}
+                    className="w-full flex items-center justify-between px-3 py-2 border border-gray-200 rounded-lg text-xs hover:border-[#2E7D52] transition">
+                    <span className="text-gray-600">{perfFile ? perfFile.name : 'Portfolio Performance (PDF)'}</span>
+                    <span className="font-semibold text-[#2E7D52] shrink-0 ml-2">{perfFile ? 'Cambiar' : 'Elegir archivo'}</span>
+                  </button>
+                  <input ref={perfFileRef} type="file" accept=".pdf" className="hidden"
+                    onChange={e => setPerfFile(e.target.files?.[0] ?? null)} />
+                </div>
+              </div>
+
               {error && <p className="text-xs text-red-600">{error}</p>}
             </div>
           )}
@@ -181,6 +232,11 @@ export default function ImportPositionsModal({ onClose, onImported }: {
                 </svg>
               </div>
               <p className="text-sm font-semibold text-gray-800">Importación completa</p>
+              {extraWarnings.length > 0 && (
+                <div className="mt-3 text-left bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5 mx-1">
+                  {extraWarnings.map((w, i) => <p key={i} className="text-[11px] text-amber-700">• {w}</p>)}
+                </div>
+              )}
             </div>
           )}
         </div>
