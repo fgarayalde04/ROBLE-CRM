@@ -1277,7 +1277,10 @@ export default function ProposalEditor({
           const ctx = pageCanvas.getContext('2d')!
           ctx.drawImage(canvas, 0, position, canvas.width, sliceH, 0, 0, canvas.width, sliceH)
           if (position > 0) pdf.addPage()
-          pdf.addImage(pageCanvas.toDataURL('image/jpeg', 0.97), 'JPEG', 0, 0, pdfW, pdfH)
+          // A short last slice must keep its own aspect ratio — stretching it
+          // to the full page height (like a complete page) distorts the text.
+          const destH = pdfW * (sliceH / canvas.width)
+          pdf.addImage(pageCanvas.toDataURL('image/jpeg', 0.97), 'JPEG', 0, 0, pdfW, destH)
           position += sliceH
         }
       }

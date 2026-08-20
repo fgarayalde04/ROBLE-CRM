@@ -127,7 +127,7 @@ const TH_STYLE: React.CSSProperties = {
   fontWeight: 700,
   fontSize: 9.5,
   textTransform: 'uppercase',
-  padding: '8px 7px',
+  padding: '6px 7px',
   textAlign: 'center',
   borderRight: '1px solid #2E4155',
   whiteSpace: 'nowrap',
@@ -136,7 +136,7 @@ const TH_STYLE: React.CSSProperties = {
 
 const TD_STYLE: React.CSSProperties = {
   fontSize: 10,
-  padding: '6px 7px',
+  padding: '4px 7px',
   textAlign: 'center',
   borderRight: '1px solid #E8ECF0',
   borderBottom: '1px solid #E8ECF0',
@@ -149,7 +149,7 @@ const FOOTER_TD: React.CSSProperties = {
   color: '#FFFFFF',
   fontWeight: 700,
   fontSize: 10.5,
-  padding: '7px 8px',
+  padding: '5px 8px',
   textAlign: 'right',
   borderRight: '1px solid #2E4155',
 }
@@ -189,25 +189,6 @@ export default function ProposalPDFTemplate({
     + equities.reduce((s, e) => s + (e.amount ?? 0), 0)
 
   const displayDate = date ?? new Date().toLocaleDateString('es-UY', { day: '2-digit', month: 'long', year: 'numeric' })
-
-  // Portfolio summary stats
-  const fundsPct    = funds.reduce((s, f) => s + (f.pct ?? 0), 0)
-  const bondsPct    = bonds.reduce((s, b) => s + (b.pct ?? 0), 0)
-  const equitiesPct = equities.reduce((s, e) => s + (e.pct ?? 0), 0)
-  const totalPct    = fundsPct + bondsPct + equitiesPct
-
-  const fundsAmt    = funds.reduce((s, f) => s + (f.amount ?? 0), 0)
-  const bondsAmt    = bonds.reduce((s, b) => s + (b.amount ?? 0), 0)
-  const equitiesAmt = equities.reduce((s, e) => s + (e.amount ?? 0), 0)
-
-  const yieldItems = [
-    ...funds.filter(f => f.ytm_indicative != null && f.pct > 0).map(f => ({ pct: f.pct, y: f.ytm_indicative! })),
-    ...bonds.filter(b => b.yield          != null && b.pct > 0).map(b => ({ pct: b.pct, y: b.yield! })),
-  ]
-  const yieldPctSum = yieldItems.reduce((s, i) => s + i.pct, 0)
-  const avgYield    = yieldPctSum > 0 ? yieldItems.reduce((s, i) => s + i.y * i.pct, 0) / yieldPctSum : null
-
-  const hasAssets = totalPct > 0
 
   // ── Grouping: if nobody tagged a broker/custodio, keep the classic flat layout ──
   const brokers = uniqueBrokers(funds, bonds, equities)
@@ -256,7 +237,7 @@ export default function ProposalPDFTemplate({
   function bondsTable(list: Bond[]) {
     if (list.length === 0) return null
     return (
-      <div style={{ marginTop: 14 }}>
+      <div style={{ marginTop: 10 }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr>
@@ -298,7 +279,7 @@ export default function ProposalPDFTemplate({
   function equitiesTable(list: Equity[]) {
     if (list.length === 0) return null
     return (
-      <div style={{ marginTop: 14 }}>
+      <div style={{ marginTop: 10 }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr>
@@ -348,25 +329,38 @@ export default function ProposalPDFTemplate({
         position: 'relative',
       }}
     >
-      {/* ── Header: Logo + Date ── */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
-        <div />
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/download.png"
-            alt="Roble Capital"
-            style={{ height: 48, objectFit: 'contain' }}
-          />
-          <span style={{ fontSize: 9, color: '#6b7280' }}>{displayDate}</span>
+      {/* ── Letterhead ── */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '3px solid #1B2E3C', paddingBottom: 8, marginBottom: 10 }}>
+        <div>
+          <div style={{ fontSize: 21, fontWeight: 800, color: '#1B2E3C', letterSpacing: '0.01em' }}>Propuesta de Inversión</div>
+          <div style={{ fontSize: 9.5, color: '#9ca3af', marginTop: 3, textTransform: 'uppercase', letterSpacing: '0.12em' }}>Investment Proposal · Documento confidencial</div>
         </div>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/download.png"
+          alt="Roble Capital"
+          style={{ height: 46, objectFit: 'contain' }}
+        />
       </div>
 
-      {/* ── Cliente ── */}
-      <div style={{ marginBottom: 16 }}>
-        <span style={{ fontSize: 14, fontWeight: 700, textDecoration: 'underline', color: '#1a1a1a' }}>
-          Cliente: {clientName ?? '—'}
-        </span>
+      {/* ── Info bar: Cliente / Asesor / Fecha / Monto ── */}
+      <div style={{ display: 'flex', border: '1px solid #E2E8F0', borderRadius: 8, overflow: 'hidden', marginBottom: 12 }}>
+        {[
+          ['Cliente', clientName ?? '—', 1.5],
+          ['Asesor', advisorName ?? '—', 1],
+          ['Fecha', displayDate, 1],
+          ['Monto total', `${currency} ${fmtAmt(totalAssigned || totalAmount)}`.replace(`${currency} $`, `${currency} `), 1],
+        ].map(([label, value, flex], i, arr) => (
+          <div key={label as string} style={{
+            flex: flex as number,
+            padding: '8px 16px 10px',
+            borderRight: i < arr.length - 1 ? '1px solid #E2E8F0' : 'none',
+            backgroundColor: '#F7F9FB',
+          }}>
+            <div style={{ fontSize: 8.5, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4, lineHeight: 1.4 }}>{label}</div>
+            <div style={{ fontSize: 12.5, fontWeight: 700, color: '#1B2E3C', lineHeight: 1.5 }}>{value}</div>
+          </div>
+        ))}
       </div>
 
       {grouped ? (
@@ -377,7 +371,7 @@ export default function ProposalPDFTemplate({
           const bEquities = equities.filter(e => (e.broker?.trim() || null) === broker)
           if (bFunds.length === 0 && bBonds.length === 0 && bEquities.length === 0) return null
           return (
-            <div key={broker ?? '__general'} style={{ marginBottom: 24, border: '1px solid #1B2E3C', borderRadius: 3 }}>
+            <div key={broker ?? '__general'} style={{ marginBottom: 12, border: '1px solid #1B2E3C', borderRadius: 3 }}>
               <div style={{
                 display: 'inline-block',
                 backgroundColor: '#FFFFFF',
@@ -397,7 +391,7 @@ export default function ProposalPDFTemplate({
               }}>
                 Portafolio {broker ?? 'General'}
               </div>
-              <div style={{ padding: '2px 14px 14px' }}>
+              <div style={{ padding: '2px 14px 10px' }}>
                 {fundsTable(bFunds)}
                 {bondsTable(bBonds)}
                 {equitiesTable(bEquities)}
@@ -436,87 +430,6 @@ export default function ProposalPDFTemplate({
         </div>
       )}
 
-      {/* ── Resumen del Portafolio ── */}
-      {hasAssets && (
-        <div data-pdf-keep-together="true" style={{
-          marginTop: 24,
-          backgroundColor: '#F7F9FB',
-          border: '1px solid #E2E8F0',
-          borderRadius: 8,
-          padding: '18px 22px',
-        }}>
-          {/* Title row */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-            <span style={{ fontSize: 12, fontWeight: 700, color: '#1B2E3C', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-              Distribución del Portafolio
-            </span>
-            <span style={{ fontSize: 9.5, color: '#6b7280' }}>
-              {currency} {totalAssigned.toLocaleString('en-US', { maximumFractionDigits: 0 })}
-            </span>
-          </div>
-
-          {/* Stacked bar */}
-          <div style={{ width: '100%', height: 14, borderRadius: 7, overflow: 'hidden', display: 'flex', marginBottom: 14, backgroundColor: '#E2E8F0' }}>
-            {fundsPct > 0 && (
-              <div style={{ width: `${(fundsPct / Math.max(totalPct, 100)) * 100}%`, backgroundColor: '#60a5fa', height: '100%' }} />
-            )}
-            {bondsPct > 0 && (
-              <div style={{ width: `${(bondsPct / Math.max(totalPct, 100)) * 100}%`, backgroundColor: '#fbbf24', height: '100%' }} />
-            )}
-            {equitiesPct > 0 && (
-              <div style={{ width: `${(equitiesPct / Math.max(totalPct, 100)) * 100}%`, backgroundColor: '#34d399', height: '100%' }} />
-            )}
-          </div>
-
-          {/* Breakdown + Yield */}
-          <div style={{ display: 'flex', alignItems: 'stretch', gap: 0 }}>
-            {/* Asset breakdown */}
-            <div style={{ flex: 1, display: 'flex', gap: 24 }}>
-              {[
-                { label: 'Fondos de Inversión', pct: fundsPct,    amt: fundsAmt,    color: '#60a5fa', show: fundsPct > 0 },
-                { label: 'Bonos',               pct: bondsPct,    amt: bondsAmt,    color: '#fbbf24', show: bondsPct > 0 },
-                { label: 'Acciones',             pct: equitiesPct, amt: equitiesAmt, color: '#34d399', show: equitiesPct > 0 },
-              ].filter(r => r.show).map(row => (
-                <div key={row.label} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <div style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: row.color, flexShrink: 0 }} />
-                  <div>
-                    <div style={{ fontSize: 9, color: '#6b7280', marginBottom: 1 }}>{row.label}</div>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: '#1B2E3C' }}>{row.pct.toFixed(1)}%</div>
-                    <div style={{ fontSize: 8.5, color: '#9ca3af', fontFamily: 'monospace' }}>
-                      {currency} {row.amt.toLocaleString('en-US', { maximumFractionDigits: 0 })}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Yield promedio — highlighted box */}
-            {avgYield != null && (
-              <div style={{
-                backgroundColor: '#1B2E3C',
-                borderRadius: 6,
-                padding: '10px 18px',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                minWidth: 130,
-              }}>
-                <span style={{ fontSize: 8.5, color: 'rgba(255,255,255,0.55)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 2 }}>
-                  Yield Promedio
-                </span>
-                <span style={{ fontSize: 22, fontWeight: 700, color: '#FFFFFF', fontFamily: 'monospace', lineHeight: 1.1 }}>
-                  {avgYield.toFixed(2)}%
-                </span>
-                <span style={{ fontSize: 8, color: 'rgba(255,255,255,0.4)', marginTop: 2 }}>
-                  ponderado por asignación
-                </span>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
       {/* ── Gestoras logos row ── */}
       {gestoras.length > 0 && (
         <div style={{
@@ -524,8 +437,8 @@ export default function ProposalPDFTemplate({
           alignItems: 'center',
           justifyContent: 'center',
           gap: 40,
-          marginTop: 28,
-          paddingTop: 20,
+          marginTop: 10,
+          paddingTop: 10,
           borderTop: '1px solid #e5e7eb',
           flexWrap: 'wrap',
         }}>
@@ -537,8 +450,8 @@ export default function ProposalPDFTemplate({
 
       {/* ── Disclaimer ── */}
       <div style={{
-        marginTop: 22,
-        paddingTop: 12,
+        marginTop: 10,
+        paddingTop: 8,
         borderTop: '1px solid #e5e7eb',
         fontSize: 7.5,
         fontFamily: 'Arial, Helvetica, sans-serif',
@@ -547,6 +460,19 @@ export default function ProposalPDFTemplate({
         textAlign: 'justify',
       }}>
         {disclaimer ?? DEFAULT_DISCLAIMER}
+      </div>
+
+      {/* ── Footer ── */}
+      <div style={{
+        marginTop: 8,
+        paddingTop: 6,
+        borderTop: '1px solid #E2E8F0',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+      }}>
+        <span style={{ fontSize: 8, fontWeight: 700, color: '#1B2E3C', letterSpacing: '0.04em' }}>ROBLE CAPITAL WEALTH MANAGEMENT</span>
+        <span style={{ fontSize: 7.5, color: '#9ca3af' }}>Documento confidencial · Preparado exclusivamente para {clientName ?? 'el destinatario'}</span>
       </div>
     </div>
   )
