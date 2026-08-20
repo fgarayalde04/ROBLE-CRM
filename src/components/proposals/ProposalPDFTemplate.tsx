@@ -438,7 +438,7 @@ export default function ProposalPDFTemplate({
 
       {/* ── Resumen del Portafolio ── */}
       {hasAssets && (
-        <div style={{
+        <div data-pdf-keep-together="true" style={{
           marginTop: 24,
           backgroundColor: '#F7F9FB',
           border: '1px solid #E2E8F0',
@@ -541,6 +541,7 @@ export default function ProposalPDFTemplate({
         paddingTop: 12,
         borderTop: '1px solid #e5e7eb',
         fontSize: 7.5,
+        fontFamily: 'Arial, Helvetica, sans-serif',
         color: '#6b7280',
         lineHeight: 1.55,
         textAlign: 'justify',

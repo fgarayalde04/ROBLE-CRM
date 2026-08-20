@@ -1229,8 +1229,17 @@ export default function ProposalEditor({
         import('html2canvas'),
         import('jspdf'),
       ])
+      const scale = 2
+      // Sections marked "keep together" (e.g. the Distribución del Portafolio
+      // chart) must never be sliced across a page boundary — capture their
+      // pixel bounds up front, in canvas coordinates, before slicing.
+      const containerTop = pdfRef.current.getBoundingClientRect().top
+      const keepTogether = Array.from(pdfRef.current.querySelectorAll('[data-pdf-keep-together]')).map(el => {
+        const r = (el as HTMLElement).getBoundingClientRect()
+        return { top: (r.top - containerTop) * scale, bottom: (r.bottom - containerTop) * scale }
+      })
       const canvas = await html2canvas(pdfRef.current, {
-        scale: 2,
+        scale,
         useCORS: true,
         backgroundColor: '#ffffff',
         logging: false,
@@ -1247,9 +1256,21 @@ export default function ProposalEditor({
         pdf.addImage(canvas.toDataURL('image/jpeg', 0.97), 'JPEG', 0, 0, pdfW, imgH)
       } else {
         // Multi-page
+        const maxSliceH = Math.round(canvas.width * pdfH / pdfW)
         let position = 0
         while (position < canvas.height) {
-          const sliceH = Math.min(canvas.height - position, Math.round(canvas.width * pdfH / pdfW))
+          let sliceH = Math.min(canvas.height - position, maxSliceH)
+          const pageEnd = position + sliceH
+          // If this slice would cut through a keep-together section (and the
+          // section itself fits within one page), end the page right before
+          // it so the whole section starts fresh on the next page instead.
+          for (const s of keepTogether) {
+            const sectionFits = (s.bottom - s.top) <= maxSliceH
+            const wouldBeCut = s.top < pageEnd && s.bottom > pageEnd
+            if (sectionFits && wouldBeCut && s.top > position) {
+              sliceH = s.top - position
+            }
+          }
           const pageCanvas = document.createElement('canvas')
           pageCanvas.width = canvas.width
           pageCanvas.height = sliceH

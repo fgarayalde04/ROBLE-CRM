@@ -8,6 +8,7 @@ import PositionsTab from './PositionsTab'
 import RendimientoTab from './RendimientoTab'
 import MovimientosTab from './MovimientosTab'
 import ImportHistoryModal from '@/components/portfolio/ImportHistoryModal'
+import AccountPdfReport from './AccountPdfReport'
 
 // ── Brand ──────────────────────────────────────────────────────────────────
 const C = {
@@ -116,6 +117,30 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
     return withMaturity[0] ?? null
   }, [positions])
 
+  const [downloadingPdf, setDownloadingPdf] = useState(false)
+
+  async function handleDownloadPDF() {
+    setDownloadingPdf(true)
+    try {
+      const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
+        import('html2canvas'),
+        import('jspdf'),
+      ])
+      const pages = Array.from(document.querySelectorAll('#account-pdf-report .pdf-page')) as HTMLElement[]
+      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+      for (let i = 0; i < pages.length; i++) {
+        const canvas = await html2canvas(pages[i], { scale: 2.5, useCORS: true, logging: false, backgroundColor: '#ffffff', windowWidth: pages[i].scrollWidth })
+        if (i > 0) pdf.addPage()
+        const imgData = canvas.toDataURL('image/jpeg', 0.97)
+        pdf.addImage(imgData, 'JPEG', 0, 0, 210, 297)
+      }
+      const clientName = (account?.clientName ?? accountNumber).replace(/\s+/g, '_')
+      pdf.save(`Portfolio_${clientName}_${accountNumber}.pdf`)
+    } finally {
+      setDownloadingPdf(false)
+    }
+  }
+
   if (loading) {
     return <div className="min-h-screen bg-gray-50 flex items-center justify-center text-sm text-gray-400">Cargando…</div>
   }
@@ -138,7 +163,11 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Header router={router} account={account} accountNumber={accountNumber} importRow={importRow} onImport={() => setShowImport(true)} onHistory={() => setShowHistory(true)} />
+      <Header router={router} account={account} accountNumber={accountNumber} importRow={importRow} onImport={() => setShowImport(true)} onHistory={() => setShowHistory(true)}
+        onDownloadPdf={handleDownloadPDF} downloadingPdf={downloadingPdf} />
+      <AccountPdfReport account={account} accountNumber={accountNumber} importRow={importRow} sortedByValue={sortedByValue}
+        assetAllocation={assetAllocation} concentration={concentration} liquidity={liquidity} largestPosition={largestPosition}
+        nextMaturity={nextMaturity} cashProjImport={cashProjImport} cashProjRows={cashProjRows} />
 
       {/* Tabs */}
       <div className="bg-white border-b border-gray-200 px-6">
@@ -179,13 +208,15 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
 
 // ── Header ─────────────────────────────────────────────────────────────────
 
-function Header({ router, account, accountNumber, importRow, onImport, onHistory }: {
+function Header({ router, account, accountNumber, importRow, onImport, onHistory, onDownloadPdf, downloadingPdf }: {
   router: ReturnType<typeof useRouter>
   account: PortfolioAccountInfo | null
   accountNumber: string
   importRow: PortfolioImportRow | null
   onImport: () => void
   onHistory: () => void
+  onDownloadPdf?: () => void
+  downloadingPdf?: boolean
 }) {
   return (
     <div className="bg-white border-b border-gray-200 px-6 py-4 sticky top-0 z-10">
@@ -205,9 +236,10 @@ function Header({ router, account, accountNumber, importRow, onImport, onHistory
             Historial de importaciones
           </button>
           {importRow && (
-            <a href={`/factsheet/pdf`} className="px-3 py-2 text-xs font-semibold text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 transition">
-              Generar PDF
-            </a>
+            <button onClick={onDownloadPdf} disabled={downloadingPdf}
+              className="px-3 py-2 text-xs font-semibold text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 transition disabled:opacity-50">
+              {downloadingPdf ? 'Generando…' : 'Descargar PDF'}
+            </button>
           )}
           <button onClick={onImport} className="px-4 py-2 text-sm font-bold text-white bg-[#2E7D52] rounded-lg hover:bg-[#256841] transition">
             Importar posiciones
