@@ -2,6 +2,7 @@
 import { useState, useMemo } from 'react'
 import type { PortfolioPositionRow } from '@/types/portfolio'
 import { fmtUSD2, fmtPct, fmtDate } from './PortfolioAccountClient'
+import { cleanDisplayName } from '@/lib/portfolio/theme'
 
 const ASSET_CLASS_ES: Record<string, string> = {
   'Equity': 'Renta Variable',
@@ -88,32 +89,54 @@ export default function PositionsTab({ positions, totalValue }: { positions: Por
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50">
+            <thead style={{ background: '#1B2E3C' }}>
               <tr>
                 {cols.map(c => (
                   <th key={c.key}
                     onClick={() => toggleSort(c.key)}
-                    className={`px-4 py-2.5 text-[11px] font-semibold text-gray-500 uppercase tracking-wide cursor-pointer select-none hover:text-gray-700 ${c.align === 'right' ? 'text-right' : 'text-left'}`}>
+                    className={`px-4 py-2.5 text-[11px] font-semibold text-white/90 uppercase tracking-wide cursor-pointer select-none hover:text-white ${c.align === 'right' ? 'text-right' : 'text-left'}`}>
                     {c.label}{sortKey === c.key ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''}
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {rows.map(p => (
-                <tr key={p.id} onClick={() => setSelected(p)} className="hover:bg-gray-50 cursor-pointer transition">
-                  <td className="px-4 py-2.5 text-gray-800 font-medium max-w-[240px] truncate">{p.name}</td>
-                  <td className="px-4 py-2.5 text-gray-500">{ASSET_CLASS_ES[p.asset_class] ?? p.asset_class}</td>
-                  <td className="px-4 py-2.5 text-right text-gray-700 font-mono">{p.quantity != null ? Number(p.quantity).toLocaleString('en-US') : '—'}</td>
-                  <td className="px-4 py-2.5 text-right text-gray-700 font-mono">{p.price != null ? fmtUSD2(Number(p.price)) : '—'}</td>
-                  <td className="px-4 py-2.5 text-right text-gray-900 font-semibold font-mono">{fmtUSD2(Number(p.market_value))}</td>
-                  <td className="px-4 py-2.5 text-right text-gray-500">{fmtPct(p.recalcWeight)}</td>
-                </tr>
-              ))}
+              {rows.map((p, i) => {
+                const clean = cleanDisplayName(p.name, p.isin, p.cusip, p.coupon, p.maturity_date)
+                return (
+                  <tr key={p.id} onClick={() => setSelected(p)} className={`cursor-pointer transition hover:bg-emerald-50/40 ${i % 2 === 1 ? 'bg-gray-50/60' : ''}`}>
+                    <td className="px-4 py-2.5 max-w-[260px]">
+                      <div className="text-gray-800 font-medium truncate">{clean.name}</div>
+                      {clean.detail && <div className="text-[10px] text-gray-400 truncate">{clean.detail}</div>}
+                    </td>
+                    <td className="px-4 py-2.5 text-gray-500">{ASSET_CLASS_ES[p.asset_class] ?? p.asset_class}</td>
+                    <td className="px-4 py-2.5 text-right text-gray-700 font-mono">{p.quantity != null ? Number(p.quantity).toLocaleString('en-US') : '—'}</td>
+                    <td className="px-4 py-2.5 text-right text-gray-700 font-mono">{p.price != null ? fmtUSD2(Number(p.price)) : '—'}</td>
+                    <td className="px-4 py-2.5 text-right font-semibold font-mono" style={{ color: '#1B3A2B' }}>{fmtUSD2(Number(p.market_value))}</td>
+                    <td className="px-4 py-2.5">
+                      <div className="flex items-center justify-end gap-2">
+                        <div className="w-12 h-1.5 bg-gray-100 rounded-full overflow-hidden hidden sm:block">
+                          <div className="h-full rounded-full" style={{ width: `${Math.min(p.recalcWeight, 100)}%`, background: '#2E7D52' }} />
+                        </div>
+                        <span className="text-gray-500 w-12 text-right shrink-0">{fmtPct(p.recalcWeight)}</span>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
               {rows.length === 0 && (
                 <tr><td colSpan={cols.length} className="px-4 py-10 text-center text-sm text-gray-400">Sin resultados</td></tr>
               )}
             </tbody>
+            {rows.length > 0 && (
+              <tfoot>
+                <tr style={{ background: '#1B2E3C' }}>
+                  <td colSpan={4} className="px-4 py-2.5 text-right text-xs font-bold text-white/80">TOTAL</td>
+                  <td className="px-4 py-2.5 text-right text-sm font-bold text-white">{fmtUSD2(rows.reduce((s, p) => s + Number(p.market_value), 0))}</td>
+                  <td className="px-4 py-2.5" />
+                </tr>
+              </tfoot>
+            )}
           </table>
         </div>
       </div>
@@ -124,7 +147,8 @@ export default function PositionsTab({ positions, totalValue }: { positions: Por
             <div className="flex items-start justify-between gap-3 mb-4">
               <div>
                 <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">{ASSET_CLASS_ES[selected.asset_class] ?? selected.asset_class}</p>
-                <h3 className="text-base font-bold text-gray-900 mt-0.5">{selected.name}</h3>
+                <h3 className="text-base font-bold text-gray-900 mt-0.5">{cleanDisplayName(selected.name, selected.isin, selected.cusip, selected.coupon, selected.maturity_date).name}</h3>
+                <p className="text-[11px] text-gray-400 mt-0.5 truncate">{selected.name}</p>
               </div>
               <button onClick={() => setSelected(null)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
             </div>

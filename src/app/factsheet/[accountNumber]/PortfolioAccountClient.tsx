@@ -1,23 +1,19 @@
 'use client'
 import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis } from 'recharts'
 import type { PortfolioPositionRow, PortfolioImportRow, PortfolioAccountInfo, PortfolioPerformanceRow, PortfolioCashProjectionRow, PortfolioCashProjectionsImportRow } from '@/types/portfolio'
 import ImportPositionsModal from '@/components/portfolio/ImportPositionsModal'
 import PositionsTab from './PositionsTab'
 import RendimientoTab from './RendimientoTab'
 import MovimientosTab from './MovimientosTab'
+import ResumenTab from './ResumenTab'
 import ImportHistoryModal from '@/components/portfolio/ImportHistoryModal'
 import AccountPdfReport from './AccountPdfReport'
+import { cleanDisplayName } from '@/lib/portfolio/theme'
 
 // ── Brand ──────────────────────────────────────────────────────────────────
-const C = {
-  darkGreen: '#1B3A2B', midGreen: '#2E7D52', lightGreen: '#E8F5E9',
-  gray100: '#F3F4F6', gray200: '#E5E7EB', gray400: '#9CA3AF', gray500: '#6B7280', gray900: '#111827',
-  red: '#DC2626',
-}
-const CHART_COLORS = ['#1B3A2B', '#2E7D52', '#4CAF72', '#81C995', '#A5D6B7', '#C8E6C9', '#6B7280']
-const ASSET_CLASS_ES: Record<string, string> = {
+export const CHART_COLORS = ['#1B3A2B', '#2E7D52', '#4CAF72', '#81C995', '#A5D6B7', '#C8E6C9', '#6B7280']
+export const ASSET_CLASS_ES: Record<string, string> = {
   'Equity': 'Renta Variable',
   'ETF': 'Renta Variable (ETF)',
   'Fixed Income': 'Fondos de Renta Fija / Crédito',
@@ -30,6 +26,16 @@ export const fmtUSD = (n: number) => new Intl.NumberFormat('en-US', { style: 'cu
 export const fmtUSD2 = (n: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(n)
 export const fmtPct = (n: number, decimals = 1) => `${n.toFixed(decimals)}%`
 export const fmtDate = (iso: string) => new Date(iso + 'T00:00:00').toLocaleDateString('es-UY', { day: '2-digit', month: 'short', year: 'numeric' })
+
+// ── Fixed Income sub-classification (security_type → client-facing bucket) ──
+function fixedIncomeBucket(securityType: string): string {
+  const t = securityType.toLowerCase()
+  if (/corporate/.test(t)) return 'Corporate Bonds'
+  if (/government|treasury|sovereign|municipal/.test(t)) return 'Sovereign Bonds'
+  if (/open.?end|closed.?end|mutual.?fund|interval.?fund/.test(t)) return 'Fixed Income Funds'
+  if (/note|structured/.test(t)) return 'Structured / Notes'
+  return 'Other'
+}
 
 type Tab = 'resumen' | 'posiciones' | 'rendimiento' | 'movimientos'
 
@@ -92,17 +98,47 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
       .sort((a, b) => b.value - a.value)
   }, [positions, totalValue])
 
-  const concentration = useMemo(() => {
-    const top = (n: number) => sortedByValue.slice(0, n).reduce((s, p) => s + Number(p.market_value), 0) / (totalValue || 1) * 100
-    return { top1: top(1), top3: top(3), top5: top(5), top10: top(10) }
-  }, [sortedByValue, totalValue])
-
   const liquidity = useMemo(() => {
     const value = positions.filter(p => p.asset_class === 'Cash').reduce((s, p) => s + Number(p.market_value), 0)
     return { value, pct: totalValue > 0 ? (value / totalValue) * 100 : 0 }
   }, [positions, totalValue])
 
-  const largestPosition = sortedByValue[0] ?? null
+  const fixedIncomeBreakdown = useMemo(() => {
+    const fi = positions.filter(p => p.asset_class === 'Fixed Income')
+    const map = new Map<string, number>()
+    for (const p of fi) {
+      const bucket = fixedIncomeBucket(p.security_type ?? '')
+      map.set(bucket, (map.get(bucket) ?? 0) + Number(p.market_value))
+    }
+    const fiTotal = fi.reduce((s, p) => s + Number(p.market_value), 0)
+    return Array.from(map.entries())
+      .map(([label, value]) => ({ label, value, pct: fiTotal > 0 ? (value / fiTotal) * 100 : 0 }))
+      .sort((a, b) => b.value - a.value)
+  }, [positions])
+
+  const currencyExposure = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const p of positions) map.set(p.currency, (map.get(p.currency) ?? 0) + Number(p.market_value))
+    return Array.from(map.entries())
+      .map(([label, value]) => ({ label, value, pct: totalValue > 0 ? (value / totalValue) * 100 : 0 }))
+      .sort((a, b) => b.value - a.value)
+  }, [positions, totalValue])
+
+  const cleanedNames = useMemo(() => {
+    const map = new Map<string, { name: string; detail: string | null }>()
+    for (const p of positions) map.set(p.id, cleanDisplayName(p.name, p.isin, p.cusip, p.coupon, p.maturity_date))
+    return map
+  }, [positions])
+
+  const projectedIncome12m = useMemo(() => {
+    const today = new Date()
+    const in12m = new Date(today); in12m.setFullYear(in12m.getFullYear() + 1)
+    return cashProjRows
+      .filter(r => { const d = new Date(r.pay_date + 'T00:00:00'); return d >= today && d <= in12m })
+      .reduce((s, r) => s + (r.estimated_amount != null ? Number(r.estimated_amount) : 0), 0)
+  }, [cashProjRows])
+
+  const nextPayment = cashProjRows[0] ?? null
 
   const maturityBuckets = useMemo(() => {
     const withMaturity = positions.filter(p => p.maturity_date)
@@ -169,8 +205,10 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
       <Header router={router} account={account} accountNumber={accountNumber} importRow={importRow} onImport={() => setShowImport(true)} onHistory={() => setShowHistory(true)}
         onDownloadPdf={handleDownloadPDF} downloadingPdf={downloadingPdf} />
       <AccountPdfReport account={account} accountNumber={accountNumber} importRow={importRow} sortedByValue={sortedByValue}
-        assetAllocation={assetAllocation} concentration={concentration} liquidity={liquidity} largestPosition={largestPosition}
-        nextMaturity={nextMaturity} cashProjImport={cashProjImport} cashProjRows={cashProjRows} />
+        assetAllocation={assetAllocation} fixedIncomeBreakdown={fixedIncomeBreakdown} currencyExposure={currencyExposure}
+        liquidity={liquidity} maturityBuckets={maturityBuckets} nextMaturity={nextMaturity}
+        cashProjImport={cashProjImport} cashProjRows={cashProjRows} projectedIncome12m={projectedIncome12m}
+        nextPayment={nextPayment} cleanedNames={cleanedNames} performance={performance} />
 
       {/* Tabs */}
       <div className="bg-white border-b border-gray-200 px-6">
@@ -190,9 +228,11 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
         {tab === 'resumen' && (
           <ResumenTab
             totalValue={totalValue} snapshotDate={importRow.snapshot_date} variation={variation}
-            positions={positions} assetAllocation={assetAllocation} concentration={concentration}
-            liquidity={liquidity} largestPosition={largestPosition} sortedByValue={sortedByValue}
+            positions={positions} assetAllocation={assetAllocation} fixedIncomeBreakdown={fixedIncomeBreakdown}
+            currencyExposure={currencyExposure} liquidity={liquidity} sortedByValue={sortedByValue}
             maturityBuckets={maturityBuckets} nextMaturity={nextMaturity}
+            cashProjImport={cashProjImport} projectedIncome12m={projectedIncome12m} nextPayment={nextPayment}
+            cleanedNames={cleanedNames}
             onSeeAll={() => setTab('posiciones')}
           />
         )}
@@ -255,157 +295,3 @@ function Header({ router, account, accountNumber, importRow, onImport, onHistory
   )
 }
 
-// ── Resumen tab ────────────────────────────────────────────────────────────
-
-function KpiCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
-  return (
-    <div className="bg-white rounded-xl border border-gray-200 p-4">
-      <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">{label}</p>
-      <p className="text-lg font-bold text-gray-900 mt-1 truncate">{value}</p>
-      {sub && <p className="text-[11px] text-gray-400 mt-0.5 truncate">{sub}</p>}
-    </div>
-  )
-}
-
-function ResumenTab({ totalValue, snapshotDate, variation, positions, assetAllocation, concentration, liquidity, largestPosition, sortedByValue, maturityBuckets, nextMaturity, onSeeAll }: {
-  totalValue: number
-  snapshotDate: string
-  variation: { abs: number; pct: number } | null
-  positions: PortfolioPositionRow[]
-  assetAllocation: { assetClass: string; label: string; value: number; pct: number }[]
-  concentration: { top1: number; top3: number; top5: number; top10: number }
-  liquidity: { value: number; pct: number }
-  largestPosition: PortfolioPositionRow | null
-  sortedByValue: PortfolioPositionRow[]
-  maturityBuckets: { year: number; value: number; count: number }[]
-  nextMaturity: PortfolioPositionRow | null
-  onSeeAll: () => void
-}) {
-  return (
-    <div className="space-y-5">
-      {/* Valor + KPIs */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-1 bg-white rounded-xl border border-gray-200 p-5">
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Valor del portafolio</p>
-          <p className="text-3xl font-bold text-gray-900 mt-1.5">{fmtUSD(totalValue)}</p>
-          <p className="text-xs text-gray-400 mt-1.5">Actualizado al {fmtDate(snapshotDate)}</p>
-          {variation && (
-            <div className="mt-3 pt-3 border-t border-gray-100">
-              <p className="text-[10px] text-gray-400 uppercase tracking-wide">Variación desde última actualización</p>
-              <p className={`text-sm font-bold mt-0.5 ${variation.abs >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                {variation.abs >= 0 ? '+' : ''}{fmtUSD(variation.abs)} ({variation.abs >= 0 ? '+' : ''}{variation.pct.toFixed(2)}%)
-              </p>
-              <p className="text-[10px] text-gray-400 mt-1 leading-relaxed">Variación de Market Value, no es rentabilidad — puede incluir depósitos, retiros u operaciones.</p>
-            </div>
-          )}
-        </div>
-        <div className="lg:col-span-2 grid grid-cols-2 gap-3">
-          <KpiCard label="Posiciones" value={String(positions.length)} />
-          <KpiCard label="Liquidez" value={fmtUSD(liquidity.value)} sub={fmtPct(liquidity.pct)} />
-          <KpiCard label="Mayor posición" value={largestPosition ? fmtPct(largestPosition.weight_pct != null ? Number(largestPosition.weight_pct) : 0) : '—'} sub={largestPosition?.name} />
-          <KpiCard label="Top 5" value={fmtPct(concentration.top5)} sub="del portafolio" />
-        </div>
-      </div>
-
-      {/* Asset allocation */}
-      <div className="bg-white rounded-xl border border-gray-200 p-5">
-        <p className="text-sm font-bold text-gray-900 mb-4">Distribución del portafolio</p>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 items-center">
-          <ResponsiveContainer width="100%" height={220}>
-            <PieChart>
-              <Pie data={assetAllocation} dataKey="value" nameKey="label" cx="50%" cy="50%" innerRadius={55} outerRadius={85} paddingAngle={2}>
-                {assetAllocation.map((a, i) => <Cell key={a.assetClass} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
-              </Pie>
-              <Tooltip formatter={(v: any) => fmtUSD(Number(v))} />
-            </PieChart>
-          </ResponsiveContainer>
-          <div className="space-y-2">
-            {assetAllocation.map((a, i) => (
-              <div key={a.assetClass} className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: CHART_COLORS[i % CHART_COLORS.length] }} />
-                  <span className="text-xs text-gray-700 truncate">{a.label}</span>
-                </div>
-                <div className="text-right shrink-0">
-                  <span className="text-xs font-semibold text-gray-900">{fmtUSD(a.value)}</span>
-                  <span className="text-[11px] text-gray-400 ml-1.5">{fmtPct(a.pct)}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        {/* Top holdings */}
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-sm font-bold text-gray-900">Principales posiciones</p>
-            <button onClick={onSeeAll} className="text-xs font-semibold text-[#2E7D52] hover:underline">Ver todas →</button>
-          </div>
-          <div className="space-y-3">
-            {sortedByValue.slice(0, 8).map(p => {
-              const pct = p.weight_pct != null ? Number(p.weight_pct) : 0
-              return (
-                <div key={p.id}>
-                  <div className="flex items-center justify-between gap-2 mb-1">
-                    <span className="text-xs text-gray-700 truncate">{p.name}</span>
-                    <span className="text-xs font-semibold text-gray-900 shrink-0">{fmtUSD(Number(p.market_value))} · {fmtPct(pct)}</span>
-                  </div>
-                  <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                    <div className="h-full bg-[#2E7D52] rounded-full" style={{ width: `${Math.min(pct, 100)}%` }} />
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-
-        {/* Concentración */}
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <p className="text-sm font-bold text-gray-900 mb-3">Concentración</p>
-          <div className="grid grid-cols-4 gap-2 mb-3">
-            {[['Top 1', concentration.top1], ['Top 3', concentration.top3], ['Top 5', concentration.top5], ['Top 10', concentration.top10]].map(([label, val]) => (
-              <div key={label as string} className="text-center">
-                <p className="text-base font-bold text-gray-900">{fmtPct(val as number)}</p>
-                <p className="text-[10px] text-gray-400">{label}</p>
-              </div>
-            ))}
-          </div>
-          <div className="flex h-2.5 rounded-full overflow-hidden bg-gray-100">
-            <div className="bg-[#1B3A2B]" style={{ width: `${Math.min(concentration.top1, 100)}%` }} />
-            <div className="bg-[#2E7D52]" style={{ width: `${Math.max(Math.min(concentration.top5, 100) - concentration.top1, 0)}%` }} />
-            <div className="bg-[#A5D6B7]" style={{ width: `${Math.max(Math.min(concentration.top10, 100) - concentration.top5, 0)}%` }} />
-          </div>
-        </div>
-      </div>
-
-      {/* Vencimientos */}
-      {maturityBuckets.length > 0 && (
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <p className="text-sm font-bold text-gray-900 mb-3">Vencimientos</p>
-          <ResponsiveContainer width="100%" height={140}>
-            <BarChart data={maturityBuckets} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
-              <XAxis dataKey="year" tick={{ fontSize: 11, fill: C.gray500 }} />
-              <YAxis tick={{ fontSize: 10, fill: C.gray500 }} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
-              <Tooltip formatter={(v: any, n: any, p: any) => [fmtUSD(Number(v)), `${p.payload.count} instrumento(s)`]} />
-              <Bar dataKey="value" fill={C.midGreen} radius={[3, 3, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-          {nextMaturity && (
-            <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between">
-              <div className="min-w-0">
-                <p className="text-[10px] text-gray-400 uppercase tracking-wide">Próximo vencimiento</p>
-                <p className="text-xs font-semibold text-gray-800 truncate">{nextMaturity.name}</p>
-              </div>
-              <div className="text-right shrink-0">
-                <p className="text-xs font-semibold text-gray-800">{fmtDate(nextMaturity.maturity_date as string)}</p>
-                <p className="text-[11px] text-gray-400">{fmtUSD(Number(nextMaturity.market_value))}</p>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
