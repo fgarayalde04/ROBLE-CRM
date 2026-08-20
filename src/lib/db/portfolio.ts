@@ -1,5 +1,7 @@
 import { pool } from './pool'
 import type { ParsedPortfolioImport } from '@/lib/portfolio/parser'
+import type { ParsedCashProjections } from '@/lib/portfolio/cashProjectionsParser'
+import type { ParsedPerformanceReport } from '@/lib/portfolio/performancePdfParser'
 
 export interface ResolvedAccount {
   accountNumber: string
@@ -163,6 +165,111 @@ export async function listAccounts(advisorFilter: string[] | null) {
     params
   )
   return rows.sort((a, b) => (a.client_name ?? a.account_number).localeCompare(b.client_name ?? b.account_number))
+}
+
+// ── Performance (Portfolio Performance PDF — real TWRR, never calculated) ──
+
+export async function createPerformanceImport(input: {
+  parsed: ParsedPerformanceReport
+  accountNumber: string
+  fileName: string
+  importedBy: string
+  importedById: string
+}) {
+  const p = input.parsed
+  const { rows } = await pool.query(
+    `insert into portfolio_performance_imports
+      (account_number, report_date, period_start, period_end, inception_date, ending_value,
+       return_selected, return_ytd, return_1y, return_3y, return_5y, return_since_inception,
+       benchmarks, file_name, imported_by, imported_by_id)
+     values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14,$15,$16)
+     on conflict (account_number, report_date) do update set
+       period_start = excluded.period_start, period_end = excluded.period_end,
+       inception_date = excluded.inception_date, ending_value = excluded.ending_value,
+       return_selected = excluded.return_selected, return_ytd = excluded.return_ytd,
+       return_1y = excluded.return_1y, return_3y = excluded.return_3y, return_5y = excluded.return_5y,
+       return_since_inception = excluded.return_since_inception, benchmarks = excluded.benchmarks,
+       file_name = excluded.file_name, imported_by = excluded.imported_by, imported_by_id = excluded.imported_by_id,
+       created_at = now()
+     returning *`,
+    [
+      input.accountNumber, p.reportDate, p.periodStart, p.periodEnd, p.inceptionDate, p.endingValue,
+      p.returns.selected, p.returns.ytd, p.returns.oneYear, p.returns.threeYear, p.returns.fiveYear, p.returns.sinceInception,
+      JSON.stringify(p.benchmarks), input.fileName, input.importedBy, input.importedById,
+    ]
+  )
+  return rows[0]
+}
+
+export async function getLatestPerformance(accountNumber: string) {
+  const { rows } = await pool.query(
+    `select * from portfolio_performance_imports where account_number = $1 order by report_date desc limit 1`,
+    [accountNumber]
+  )
+  return rows[0] ?? null
+}
+
+// ── Cash projections (Incoming Cash Projections Excel) ─────────────────────
+
+export async function createCashProjectionsImport(input: {
+  parsed: ParsedCashProjections
+  accountNumber: string
+  fileName: string
+  importedBy: string
+  importedById: string
+}) {
+  const client = await pool.connect()
+  try {
+    await client.query('begin')
+
+    // Re-importing the same account+date replaces the previous rows outright —
+    // this is enrichment data, not a versioned snapshot like positions.
+    await client.query(
+      `delete from portfolio_cash_projections_imports where account_number = $1 and as_of_date = $2`,
+      [input.accountNumber, input.parsed.asOfDate]
+    )
+
+    const { rows } = await client.query(
+      `insert into portfolio_cash_projections_imports (account_number, as_of_date, total_cash_flow, file_name, imported_by, imported_by_id)
+       values ($1,$2,$3,$4,$5,$6)
+       returning *`,
+      [input.accountNumber, input.parsed.asOfDate, input.parsed.totalCashFlow, input.fileName, input.importedBy, input.importedById]
+    )
+    const importRow = rows[0]
+
+    if (input.parsed.rows.length > 0) {
+      const cols = ['import_id', 'account_number', 'pay_date', 'security_identifier', 'distribution_type', 'cusip', 'description', 'quantity', 'coupon_pct', 'estimated_amount']
+      const values: unknown[] = []
+      const rowsSql = input.parsed.rows.map((r, idx) => {
+        const base = idx * cols.length
+        values.push(importRow.id, input.accountNumber, r.payDate, r.securityIdentifier, r.distributionType, r.cusip, r.description, r.quantity, r.couponPct, r.estimatedAmount)
+        return `(${cols.map((_, i) => `$${base + i + 1}`).join(',')})`
+      })
+      await client.query(`insert into portfolio_cash_projections (${cols.join(',')}) values ${rowsSql.join(',')}`, values)
+    }
+
+    await client.query('commit')
+    return importRow
+  } catch (err) {
+    await client.query('rollback')
+    throw err
+  } finally {
+    client.release()
+  }
+}
+
+export async function getLatestCashProjections(accountNumber: string) {
+  const { rows: imports } = await pool.query(
+    `select * from portfolio_cash_projections_imports where account_number = $1 order by as_of_date desc limit 1`,
+    [accountNumber]
+  )
+  const importRow = imports[0] ?? null
+  if (!importRow) return { importRow: null, rows: [] }
+  const { rows } = await pool.query(
+    `select * from portfolio_cash_projections where import_id = $1 order by pay_date asc`,
+    [importRow.id]
+  )
+  return { importRow, rows }
 }
 
 export async function listImportHistory(advisorFilter: string[] | null, accountNumber?: string | null) {
