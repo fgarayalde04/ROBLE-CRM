@@ -2,7 +2,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis } from 'recharts'
-import type { PortfolioPositionRow, PortfolioImportRow, PortfolioAccountInfo, PortfolioPerformanceRow, PortfolioCashProjectionRow, PortfolioCashProjectionsImportRow } from '@/types/portfolio'
+import type { PortfolioPositionRow, PortfolioImportRow, PortfolioAccountInfo, PortfolioCashProjectionRow, PortfolioCashProjectionsImportRow } from '@/types/portfolio'
 import ImportPositionsModal from '@/components/portfolio/ImportPositionsModal'
 import PositionsTab from './PositionsTab'
 import RendimientoTab from './RendimientoTab'
@@ -42,16 +42,14 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
   const [history, setHistory] = useState<{ snapshot_date: string; total_market_value: string }[]>([])
   const [showImport, setShowImport] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
-  const [performance, setPerformance] = useState<PortfolioPerformanceRow | null>(null)
   const [cashProjImport, setCashProjImport] = useState<PortfolioCashProjectionsImportRow | null>(null)
   const [cashProjRows, setCashProjRows] = useState<PortfolioCashProjectionRow[]>([])
 
   async function load() {
     setLoading(true)
-    const [detailRes, historyRes, perfRes, cashRes] = await Promise.all([
+    const [detailRes, historyRes, cashRes] = await Promise.all([
       fetch(`/api/portfolio/${encodeURIComponent(accountNumber)}`),
       fetch(`/api/portfolio/${encodeURIComponent(accountNumber)}/history`),
-      fetch(`/api/portfolio/${encodeURIComponent(accountNumber)}/performance`),
       fetch(`/api/portfolio/${encodeURIComponent(accountNumber)}/cashflows`),
     ])
     if (detailRes.ok) {
@@ -59,7 +57,6 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
       setAccount(d.account); setImportRow(d.import); setPositions(d.positions)
     }
     if (historyRes.ok) setHistory(await historyRes.json())
-    if (perfRes.ok) setPerformance((await perfRes.json()).performance)
     if (cashRes.ok) {
       const c = await cashRes.json()
       setCashProjImport(c.import); setCashProjRows(c.rows ?? [])
@@ -168,9 +165,7 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
           />
         )}
         {tab === 'posiciones' && <PositionsTab positions={positions} totalValue={totalValue} />}
-        {tab === 'rendimiento' && (
-          <RendimientoTab accountNumber={accountNumber} history={history} performance={performance} onPerformanceImported={load} />
-        )}
+        {tab === 'rendimiento' && <RendimientoTab accountNumber={accountNumber} history={history} />}
         {tab === 'movimientos' && (
           <MovimientosTab accountNumber={accountNumber} cashProjImport={cashProjImport} cashProjRows={cashProjRows} onCashProjImported={load} />
         )}

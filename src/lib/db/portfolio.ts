@@ -1,7 +1,6 @@
 import { pool } from './pool'
 import type { ParsedPortfolioImport } from '@/lib/portfolio/parser'
 import type { ParsedCashProjections } from '@/lib/portfolio/cashProjectionsParser'
-import type { ParsedPerformanceReport } from '@/lib/portfolio/performancePdfParser'
 
 export interface ResolvedAccount {
   accountNumber: string
@@ -165,48 +164,6 @@ export async function listAccounts(advisorFilter: string[] | null) {
     params
   )
   return rows.sort((a, b) => (a.client_name ?? a.account_number).localeCompare(b.client_name ?? b.account_number))
-}
-
-// ── Performance (Portfolio Performance PDF — real TWRR, never calculated) ──
-
-export async function createPerformanceImport(input: {
-  parsed: ParsedPerformanceReport
-  accountNumber: string
-  fileName: string
-  importedBy: string
-  importedById: string
-}) {
-  const p = input.parsed
-  const { rows } = await pool.query(
-    `insert into portfolio_performance_imports
-      (account_number, report_date, period_start, period_end, inception_date, ending_value,
-       return_selected, return_ytd, return_1y, return_3y, return_5y, return_since_inception,
-       benchmarks, file_name, imported_by, imported_by_id)
-     values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14,$15,$16)
-     on conflict (account_number, report_date) do update set
-       period_start = excluded.period_start, period_end = excluded.period_end,
-       inception_date = excluded.inception_date, ending_value = excluded.ending_value,
-       return_selected = excluded.return_selected, return_ytd = excluded.return_ytd,
-       return_1y = excluded.return_1y, return_3y = excluded.return_3y, return_5y = excluded.return_5y,
-       return_since_inception = excluded.return_since_inception, benchmarks = excluded.benchmarks,
-       file_name = excluded.file_name, imported_by = excluded.imported_by, imported_by_id = excluded.imported_by_id,
-       created_at = now()
-     returning *`,
-    [
-      input.accountNumber, p.reportDate, p.periodStart, p.periodEnd, p.inceptionDate, p.endingValue,
-      p.returns.selected, p.returns.ytd, p.returns.oneYear, p.returns.threeYear, p.returns.fiveYear, p.returns.sinceInception,
-      JSON.stringify(p.benchmarks), input.fileName, input.importedBy, input.importedById,
-    ]
-  )
-  return rows[0]
-}
-
-export async function getLatestPerformance(accountNumber: string) {
-  const { rows } = await pool.query(
-    `select * from portfolio_performance_imports where account_number = $1 order by report_date desc limit 1`,
-    [accountNumber]
-  )
-  return rows[0] ?? null
 }
 
 // ── Cash projections (Incoming Cash Projections Excel) ─────────────────────

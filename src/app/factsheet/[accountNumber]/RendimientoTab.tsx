@@ -2,8 +2,6 @@
 import { useState, useMemo } from 'react'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { fmtUSD, fmtDate } from './PortfolioAccountClient'
-import DocumentUploadButton from '@/components/portfolio/DocumentUploadButton'
-import type { PortfolioPerformanceRow } from '@/types/portfolio'
 
 type Period = '1M' | '3M' | '6M' | 'YTD' | '1Y' | 'ALL'
 const PERIODS: { key: Period; label: string }[] = [
@@ -35,12 +33,7 @@ function cutoffFor(period: Period): Date | null {
   }
 }
 
-export default function RendimientoTab({ accountNumber, history, performance, onPerformanceImported }: {
-  accountNumber: string
-  history: HistoryPoint[]
-  performance: PortfolioPerformanceRow | null
-  onPerformanceImported: () => void
-}) {
+export default function RendimientoTab({ accountNumber, history }: { accountNumber: string; history: HistoryPoint[] }) {
   const [period, setPeriod] = useState<Period>('ALL')
   const [fromDate, setFromDate] = useState('')
   const [toDate, setToDate] = useState('')
@@ -73,54 +66,6 @@ export default function RendimientoTab({ accountNumber, history, performance, on
 
   return (
     <div className="space-y-5">
-      <div className="bg-white rounded-xl border border-gray-200 p-5">
-        <div className="flex items-center justify-between mb-1">
-          <p className="text-sm font-bold text-gray-900">Performance reportada</p>
-          <DocumentUploadButton accountNumber={accountNumber} endpoint="performance" accept=".pdf"
-            label={performance ? 'Actualizar reporte de performance' : 'Importar reporte de performance (PDF)'} onImported={onPerformanceImported} />
-        </div>
-        {performance ? (
-          <>
-            <p className="text-[11px] text-gray-400 mb-4">
-              Rentabilidad real (TWRR) reportada por el custodio — no calculada por el sistema. Reporte al {fmtDate(performance.report_date)}
-              {performance.inception_date && <> · Desde {fmtDate(performance.inception_date)}</>}.
-            </p>
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-2">
-              {[
-                ['YTD', performance.return_ytd], ['1 Año', performance.return_1y], ['3 Años', performance.return_3y],
-                ['5 Años', performance.return_5y], ['Desde inicio', performance.return_since_inception],
-              ].map(([label, val]) => (
-                <div key={label as string} className="bg-[#F3F4F6] rounded-lg p-3 text-center">
-                  <p className="text-[10px] text-gray-400 uppercase tracking-wide">{label}</p>
-                  <p className={`text-base font-bold mt-0.5 ${val == null ? 'text-gray-300' : Number(val) >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                    {val == null ? '—' : `${Number(val) >= 0 ? '+' : ''}${Number(val).toFixed(2)}%`}
-                  </p>
-                </div>
-              ))}
-            </div>
-            {performance.benchmarks.length > 0 && (
-              <div className="mt-4 pt-4 border-t border-gray-100">
-                <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-2">Benchmarks (desde inicio)</p>
-                <div className="space-y-1">
-                  {performance.benchmarks.map(b => (
-                    <div key={b.name} className="flex items-center justify-between text-xs">
-                      <span className="text-gray-600 truncate">{b.name}</span>
-                      <span className={`font-mono shrink-0 ml-2 ${b.sinceInception != null && b.sinceInception >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                        {b.sinceInception != null ? `${b.sinceInception >= 0 ? '+' : ''}${b.sinceInception.toFixed(2)}%` : '—'}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </>
-        ) : (
-          <p className="text-xs text-gray-400">
-            Todavía no hay un reporte de performance importado. Subí el PDF de "Portfolio Performance" del custodio para ver la rentabilidad real (TWRR) de la cuenta.
-          </p>
-        )}
-      </div>
-
       {sorted.length < 2 ? (
         <div className="bg-white rounded-xl border border-gray-200 p-10 text-center">
           <div className="text-3xl mb-3">📈</div>

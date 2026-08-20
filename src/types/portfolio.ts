@@ -48,36 +48,6 @@ export interface PortfolioAccountInfo {
   entity: string | null
 }
 
-export interface PortfolioBenchmarkPerformance {
-  name: string
-  selected: number | null
-  ytd: number | null
-  oneYear: number | null
-  threeYear: number | null
-  fiveYear: number | null
-  sinceInception: number | null
-}
-
-export interface PortfolioPerformanceRow {
-  id: string
-  account_number: string
-  report_date: string
-  period_start: string | null
-  period_end: string | null
-  inception_date: string | null
-  ending_value: string | null
-  return_selected: string | null
-  return_ytd: string | null
-  return_1y: string | null
-  return_3y: string | null
-  return_5y: string | null
-  return_since_inception: string | null
-  benchmarks: PortfolioBenchmarkPerformance[]
-  file_name: string | null
-  imported_by: string
-  created_at: string
-}
-
 export interface PortfolioCashProjectionRow {
   id: string
   import_id: string
