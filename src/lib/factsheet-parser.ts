@@ -133,7 +133,7 @@ function matchCol(header: string): string | null {
   return null
 }
 
-function parseDateStr(v: unknown): string | null {
+export function parseDateStr(v: unknown): string | null {
   if (v == null || v === '') return null
   if (v instanceof Date) return isNaN(v.getTime()) ? null : v.toISOString().slice(0, 10)
   // Excel serial date (days since 1899-12-30) — sheet_to_json without
@@ -151,12 +151,12 @@ function parseDateStr(v: unknown): string | null {
   return isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10)
 }
 
-function parseStr(v: unknown): string | null {
+export function parseStr(v: unknown): string | null {
   const s = String(v ?? '').trim()
   return s ? s : null
 }
 
-function parseNum(v: unknown): number | null {
+export function parseNum(v: unknown): number | null {
   if (v == null || v === '' || v === '-') return null
   const s = String(v).replace(/[$,%\s()]/g, '').replace(',', '.')
   // Parentheses = negative

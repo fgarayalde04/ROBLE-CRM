@@ -41,7 +41,7 @@ const nav: NavSection[] = [
     items: [
       // HIDDEN: Fondos temporalmente oculto
       // { href: '/fondos',     label: 'Fondos',     subtitle: 'Biblioteca de factsheets',icon: FondosIcon,    permission: 'fondos' },
-      { href: '/factsheet',  label: 'Factsheet',  subtitle: 'Informe de portafolio',   icon: FactsheetIcon, permission: 'factsheet' },
+      { href: '/factsheet',  label: 'Portafolio',  subtitle: 'Posiciones y valor de cartera',   icon: FactsheetIcon, permission: 'factsheet' },
       { href: '/propuestas', label: 'Propuestas', subtitle: 'Propuestas de inversión', icon: ProposalIcon,  permission: 'proposals' },
     ],
   },
