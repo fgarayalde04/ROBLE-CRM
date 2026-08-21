@@ -1,10 +1,9 @@
 /**
- * Portfolio positions parser — reads the "Positions_<ACCOUNT>.xlsx" export
- * (Pershing NetX360 "Positions" report) and normalizes it into
+ * Portfolio positions parser — normalizes a positions export into
  * PortfolioPositionParsed[] + import-level metadata (account, as-of date,
- * base currency, total market value).
+ * base currency, total market value). Supports two source formats:
  *
- * Sheet shape (verified against a real export):
+ * 1. "Positions_<ACCOUNT>.xlsx" (Pershing NetX360 "Positions" report):
  *   Row 0: "Positions"
  *   Row 1: "Account: <ACCOUNT_NUMBER>"
  *   Row 2: "Quote Type: ..."
@@ -14,6 +13,11 @@
  *   Row 6: (blank)
  *   Row 7: header row
  *   Row 8+: one row per position, until a blank row / "Disclaimer" section.
+ *
+ * 2. "Unrealized Gain Loss_<CLIENT>.xlsx" (primary source going forward —
+ *   see parsePositionsFromUnrealizedFormat below): detected by its title
+ *   row and tax-lot-aggregated the same way as the dedicated Unrealized
+ *   Gain/Loss import.
  */
 import * as XLSX from 'xlsx'
 import { mapAssetClass, mapRegion, mapSector, parseDateStr, parseNum, parseStr } from '@/lib/factsheet-parser'
@@ -112,6 +116,134 @@ function extractSnapshotDate(metaLines: string[]): string | null {
   return null
 }
 
+// ── Alternate source: "Unrealized Gain Loss_<CLIENT>.xlsx" (Pershing) ───────
+// Went from a secondary/optional import to the primary positions source —
+// it carries real Quantity/Market Value/Cusip/Account per tax lot, so it can
+// stand in for the older "Positions_<ACCOUNT>.xlsx" export entirely. Rows
+// are tax-lot level (same "Multiple" subtotal-row aggregation used by the
+// dedicated Unrealized Gain/Loss import).
+const UGL_COL_ALIASES: Record<string, string[]> = {
+  securityType:  ['security type'],
+  description:   ['security description'],
+  account:       ['account'],
+  quantity:      ['quantity'],
+  marketValue:   ['market value'],
+  cusip:         ['cusip'],
+  tradeDate:     ['trade date'],
+  symbol:        ['symbol'],
+  lastPrice:     ['last price'],
+}
+
+function matchUglCol(header: string): string | null {
+  const h = normalizeHeader(header)
+  for (const [field, aliases] of Object.entries(UGL_COL_ALIASES)) {
+    if (aliases.some(a => normalizeHeader(a) === h)) return field
+  }
+  return null
+}
+
+function parsePositionsFromUnrealizedFormat(raw: unknown[][]): ParsedPortfolioImport {
+  const warnings: string[] = []
+
+  let headerIdx = -1
+  for (let i = 0; i < Math.min(25, raw.length); i++) {
+    const recognized = (raw[i] as unknown[]).filter(c => matchUglCol(String(c))).length
+    if (recognized >= 5) { headerIdx = i; break }
+  }
+  if (headerIdx === -1) {
+    return { accountNumber: null, snapshotDate: null, baseCurrency: 'USD', totalMarketValue: 0, positions: [], warnings: ['No se encontró una fila de encabezados reconocible'] }
+  }
+
+  const metaLines = (raw.slice(0, headerIdx) as unknown[][]).map(r => r.map(c => String(c ?? '')).join(' ').trim()).filter(Boolean)
+  const snapshotDate = extractSnapshotDate(metaLines)
+  if (!snapshotDate) warnings.push('No se pudo detectar la fecha ("As Of") en el archivo')
+
+  const headers = (raw[headerIdx] as unknown[]).map(h => String(h))
+  const colMap: Record<number, string> = {}
+  headers.forEach((h, i) => {
+    const f = matchUglCol(h)
+    if (f && !(i in colMap)) colMap[i] = f
+  })
+  const get = (row: unknown[], field: string): unknown => {
+    const idx = Object.entries(colMap).find(([, f]) => f === field)?.[0]
+    return idx != null ? row[Number(idx)] : undefined
+  }
+
+  interface LotRow {
+    securityType: string; description: string; symbol: string | null
+    quantity: number; marketValue: number; lastPrice: number | null
+    isSubtotal: boolean
+  }
+  const lotsByCusip = new Map<string, LotRow[]>()
+  let accountNumber: string | null = null
+
+  for (let i = headerIdx + 1; i < raw.length; i++) {
+    const row = raw[i] as unknown[]
+    const cusip = parseStr(get(row, 'cusip'))
+    const description = parseStr(get(row, 'description'))
+    if (!cusip || !description) continue
+
+    if (!accountNumber) {
+      const account = parseStr(get(row, 'account'))
+      if (account) accountNumber = account.trim().toUpperCase()
+    }
+
+    const lot: LotRow = {
+      securityType: parseStr(get(row, 'securityType')) ?? '',
+      description,
+      symbol:       parseStr(get(row, 'symbol')),
+      quantity:     parseNum(get(row, 'quantity')) ?? 0,
+      marketValue:  parseNum(get(row, 'marketValue')) ?? 0,
+      lastPrice:    parseNum(get(row, 'lastPrice')),
+      isSubtotal:   parseStr(get(row, 'tradeDate'))?.toLowerCase() === 'multiple',
+    }
+    const list = lotsByCusip.get(cusip)
+    if (list) list.push(lot); else lotsByCusip.set(cusip, [lot])
+  }
+
+  const positions: PortfolioPositionParsed[] = []
+  for (const [cusip, lots] of Array.from(lotsByCusip)) {
+    const subtotal = lots.find(l => l.isSubtotal)
+    const used = subtotal ? [subtotal] : lots
+    const first = used[0]
+    const quantity = used.reduce((s, l) => s + l.quantity, 0)
+    const marketValue = used.reduce((s, l) => s + l.marketValue, 0)
+
+    if (marketValue < 0) warnings.push(`"${first.description.trim()}" — Market Value negativo (${marketValue}), se importó igual`)
+
+    positions.push({
+      symbol:       first.symbol,
+      name:         first.description.trim(),
+      securityType: first.securityType,
+      assetClass:   mapAssetClass(first.securityType, first.description),
+      region:       mapRegion(first.description, first.symbol ?? ''),
+      sector:       mapSector(first.securityType, first.description),
+      currency:     'USD',
+      quantity,
+      price:        first.lastPrice,
+      marketValue,
+      weight:       0, // recalculated below from real totals
+      isin:            null,
+      cusip,
+      maturityDate:    null,
+      coupon:          null,
+      accruedInterest: null,
+      fundFamily:      null,
+      dividendPolicy:  null,
+    })
+  }
+
+  const totalMarketValue = positions.reduce((s, p) => s + p.marketValue, 0)
+  if (totalMarketValue > 0) {
+    for (const p of positions) p.weight = parseFloat(((p.marketValue / totalMarketValue) * 100).toFixed(4))
+  }
+
+  if (!accountNumber) warnings.push('No se pudo detectar el número de cuenta en el archivo')
+  if (!positions.length) warnings.push('No se encontraron posiciones en el archivo')
+
+  return { accountNumber, snapshotDate, baseCurrency: 'USD', totalMarketValue, positions, warnings }
+}
+
 export function parsePortfolioExcel(buffer: ArrayBuffer): ParsedPortfolioImport {
   const warnings: string[] = []
 
@@ -121,6 +253,11 @@ export function parsePortfolioExcel(buffer: ArrayBuffer): ParsedPortfolioImport 
 
   if (!raw || raw.length < 3) {
     return { accountNumber: null, snapshotDate: null, baseCurrency: 'USD', totalMarketValue: 0, positions: [], warnings: ['Archivo vacío o sin datos'] }
+  }
+
+  const firstCell = String(raw[0]?.[0] ?? '').trim().toLowerCase()
+  if (firstCell === 'unrealized gain loss') {
+    return parsePositionsFromUnrealizedFormat(raw)
   }
 
   // Find header row — first row with ≥ 4 recognizable columns.
