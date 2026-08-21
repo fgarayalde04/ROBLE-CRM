@@ -236,7 +236,7 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
             Importar posiciones
           </button>
         </div>
-        {showImport && <ImportPositionsModal onClose={() => setShowImport(false)} onImported={() => { setShowImport(false); load() }} />}
+        {showImport && <ImportPositionsModal accountNumber={accountNumber} onClose={() => setShowImport(false)} onImported={() => { setShowImport(false); load() }} />}
       </div>
     )
   }
@@ -293,7 +293,7 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
         )}
       </div>
 
-      {showImport && <ImportPositionsModal onClose={() => setShowImport(false)} onImported={() => { setShowImport(false); load() }} />}
+      {showImport && <ImportPositionsModal accountNumber={accountNumber} onClose={() => setShowImport(false)} onImported={() => { setShowImport(false); load() }} />}
       {showHistory && <ImportHistoryModal accountNumber={accountNumber} onClose={() => setShowHistory(false)} />}
     </div>
   )

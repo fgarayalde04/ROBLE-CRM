@@ -11,6 +11,7 @@ export async function POST(req: NextRequest) {
 
   const form = await req.formData()
   const file = form.get('file') as File | null
+  const accountNumberHint = (form.get('accountNumber') as string | null)?.trim().toUpperCase() || null
   if (!file) return NextResponse.json({ error: 'Falta el archivo' }, { status: 400 })
 
   const buffer = await file.arrayBuffer()
@@ -21,12 +22,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'No se pudo leer el archivo: ' + err.message }, { status: 400 })
   }
 
-  if (!parsed.accountNumber) {
-    return NextResponse.json({ error: 'No se pudo detectar el número de cuenta en el archivo', warnings: parsed.warnings }, { status: 400 })
+  // El número de cuenta no siempre está en el archivo (depende del formato del
+  // export) — si no se detecta, se usa el de contexto (cuenta ya abierta) o
+  // se deja en null para que se pueda completar a mano en la preview.
+  if (!parsed.accountNumber && accountNumberHint) {
+    parsed.accountNumber = accountNumberHint
   }
 
-  const account = await resolveAccount(parsed.accountNumber)
-  const existing = parsed.snapshotDate
+  const account = parsed.accountNumber ? await resolveAccount(parsed.accountNumber) : null
+  const existing = parsed.accountNumber && parsed.snapshotDate
     ? await findImportByAccountAndDate(parsed.accountNumber, parsed.snapshotDate)
     : null
 
