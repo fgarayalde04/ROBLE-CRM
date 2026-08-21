@@ -36,6 +36,16 @@ type OrderBlock = AccionesBlock | FondosBlock | BonosBlock
 function todayStr() {
   return new Date().toLocaleDateString('es-UY', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
+// El campo de fecha se edita como texto libre en formato DD/MM/YYYY (es-UY) —
+// hay que convertirlo a ISO antes de mandarlo a la API, porque Postgres no
+// interpreta "21/08/2026" como fecha (busca mes 21 y tira "out of range").
+function fechaToIso(fecha: string): string | null {
+  const m = fecha.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
+  if (!m) return null
+  const [, d, mo, y] = m
+  const date = new Date(Date.UTC(Number(y), Number(mo) - 1, Number(d)))
+  return isNaN(date.getTime()) ? null : date.toISOString().slice(0, 10)
+}
 function uid() { return Math.random().toString(36).slice(2, 9) }
 
 // Formato de miles estilo UY: "10000" -> "10.000". Solo dígitos, sin decimales
@@ -421,7 +431,7 @@ export default function FormularioDirecto({ onBack, gmailConnected = false }: Pr
           client_name:        clientName,
           client_number:      clientNumber || null,
           client_email:       clientEmail  || null,
-          fecha_operacion:    fecha,
+          fecha_operacion:    fechaToIso(fecha) ?? fecha,
           tipo_operacion:     tipoOp,
           instrumento_tipo:   firstOp.type,
           instrumento_nombre: blocks.length === 1 ? firstNombre : `${blocks.length} activos`,
@@ -512,7 +522,7 @@ export default function FormularioDirecto({ onBack, gmailConnected = false }: Pr
           client_name:        clientName,
           client_number:      clientNumber || null,
           client_email:       clientEmail,
-          fecha_operacion:    fecha,
+          fecha_operacion:    fechaToIso(fecha) ?? fecha,
           tipo_operacion:     tipoOp,
           instrumento_tipo:   firstOp.type,
           instrumento_nombre: blocks.length === 1 ? firstNombre : `${blocks.length} activos`,
