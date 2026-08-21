@@ -37,8 +37,10 @@ export default function ImportPositionsModal({ onClose, onImported }: {
   // junto con las posiciones para no forzar 3 pasos separados.
   const [cashFile, setCashFile] = useState<File | null>(null)
   const [perfFile, setPerfFile] = useState<File | null>(null)
+  const [glFile, setGlFile] = useState<File | null>(null)
   const cashFileRef = useRef<HTMLInputElement>(null)
   const perfFileRef = useRef<HTMLInputElement>(null)
+  const glFileRef = useRef<HTMLInputElement>(null)
   const [extraWarnings, setExtraWarnings] = useState<string[]>([])
 
   async function handleFile(file: File) {
@@ -94,6 +96,13 @@ export default function ImportPositionsModal({ onClose, onImported }: {
           const fd = new FormData(); fd.append('file', perfFile)
           const r = await fetch(`/api/portfolio/${encodeURIComponent(accountNumber)}/performance`, { method: 'POST', body: fd })
           if (!r.ok) warnings.push('No se pudo importar el PDF de Performance: ' + ((await r.json().catch(() => ({}))).error ?? 'error desconocido'))
+        })())
+      }
+      if (glFile) {
+        uploads.push((async () => {
+          const fd = new FormData(); fd.append('file', glFile)
+          const r = await fetch(`/api/portfolio/${encodeURIComponent(accountNumber)}/unrealizedgl`, { method: 'POST', body: fd })
+          if (!r.ok) warnings.push('No se pudo importar el Excel de Unrealized Gain/Loss: ' + ((await r.json().catch(() => ({}))).error ?? 'error desconocido'))
         })())
       }
       if (uploads.length) await Promise.all(uploads)
@@ -213,6 +222,14 @@ export default function ImportPositionsModal({ onClose, onImported }: {
                   </button>
                   <input ref={perfFileRef} type="file" accept=".pdf" className="hidden"
                     onChange={e => setPerfFile(e.target.files?.[0] ?? null)} />
+
+                  <button onClick={() => glFileRef.current?.click()}
+                    className="w-full flex items-center justify-between px-3 py-2 border border-gray-200 rounded-lg text-xs hover:border-[#2E7D52] transition">
+                    <span className="text-gray-600">{glFile ? glFile.name : 'Unrealized Gain Loss (Excel)'}</span>
+                    <span className="font-semibold text-[#2E7D52] shrink-0 ml-2">{glFile ? 'Cambiar' : 'Elegir archivo'}</span>
+                  </button>
+                  <input ref={glFileRef} type="file" accept=".xlsx,.xls" className="hidden"
+                    onChange={e => setGlFile(e.target.files?.[0] ?? null)} />
                 </div>
               </div>
 

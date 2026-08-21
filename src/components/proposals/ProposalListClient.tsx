@@ -122,7 +122,6 @@ function CreateModal({ onClose, onCreate }: { onClose: () => void; onCreate: (id
   const [search, setSearch]     = useState('')
   const [selected, setSelected] = useState<Client | null>(null)
   const [showDrop, setShowDrop] = useState(false)
-  const [amount, setAmount]     = useState('')
   const [currency, setCurrency] = useState('USD')
   const [title, setTitle]       = useState('')
   const [loading, setLoading]   = useState(false)
@@ -149,7 +148,6 @@ function CreateModal({ onClose, onCreate }: { onClose: () => void; onCreate: (id
   }, [search, searchClients])
 
   const handleCreate = async () => {
-    if (!amount || parseFloat(amount.replace(/,/g, '')) <= 0) { setErr('Ingresá un monto válido'); return }
     setLoading(true); setErr('')
     try {
       const res = await fetch('/api/proposals', {
@@ -157,7 +155,7 @@ function CreateModal({ onClose, onCreate }: { onClose: () => void; onCreate: (id
         body: JSON.stringify({
           client_id:    selected?.id    ?? null,
           client_name:  selected ? `${selected.first_name} ${selected.last_name}` : null,
-          total_amount: parseFloat(amount.replace(/,/g, '')),
+          total_amount: 0,
           currency, title,
         }),
       })
@@ -213,15 +211,12 @@ function CreateModal({ onClose, onCreate }: { onClose: () => void; onCreate: (id
               className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#16A34A]/30" />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1.5">Monto total *</label>
-            <div className="flex gap-2">
-              <select value={currency} onChange={e => setCurrency(e.target.value)}
-                className="border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none w-24">
-                <option>USD</option><option>EUR</option><option>UYU</option>
-              </select>
-              <input type="text" placeholder="500,000" value={amount} onChange={e => setAmount(e.target.value)}
-                className="flex-1 border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none font-mono" />
-            </div>
+            <label className="block text-xs font-medium text-gray-600 mb-1.5">Moneda</label>
+            <select value={currency} onChange={e => setCurrency(e.target.value)}
+              className="border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none w-24">
+              <option>USD</option><option>EUR</option><option>UYU</option>
+            </select>
+            <p className="text-[10px] text-gray-400 mt-1">El monto total se calcula automáticamente a medida que cargás activos</p>
           </div>
           {err && <p className="text-xs text-red-500">{err}</p>}
         </div>

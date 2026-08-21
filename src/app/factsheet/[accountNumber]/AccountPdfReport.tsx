@@ -1,4 +1,4 @@
-import type { PortfolioPositionRow, PortfolioImportRow, PortfolioAccountInfo, PortfolioCashProjectionRow, PortfolioCashProjectionsImportRow, PortfolioPerformanceRow } from '@/types/portfolio'
+import type { PortfolioPositionRow, PortfolioImportRow, PortfolioAccountInfo, PortfolioCashProjectionRow, PortfolioCashProjectionsImportRow, PortfolioPerformanceRow, PortfolioUnrealizedGainLossRow, PortfolioUnrealizedGainLossImportRow } from '@/types/portfolio'
 import { fmtUSD, fmtUSD2, fmtPct, fmtDate } from './PortfolioAccountClient'
 import DonutChart from '@/components/portfolio/DonutChart'
 import { COLORS, DONUT_COLORS, monthLabel } from '@/lib/portfolio/theme'
@@ -91,10 +91,39 @@ function CssBarChart({ data, color }: { data: { label: string; value: number }[]
   )
 }
 
+function DivergingBarChart({ data }: { data: { name: string; gainLoss: number }[] }) {
+  const maxAbs = Math.max(...data.map(d => Math.abs(d.gainLoss)), 1)
+  return (
+    <div>
+      {data.map(d => {
+        const isGain = d.gainLoss >= 0
+        const widthPct = Math.max((Math.abs(d.gainLoss) / maxAbs) * 38, 1.5)
+        return (
+          <div key={d.name} style={{ display: 'flex', alignItems: 'center', gap: '2mm', fontSize: 6.8, lineHeight: 1.6, marginBottom: '1.6mm', fontFamily: 'Arial, sans-serif' }}>
+            <span style={{ width: '45mm', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: COLORS.ink, flexShrink: 0 }}>{d.name}</span>
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', height: '3mm' }}>
+              <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-end' }}>
+                {!isGain && <div style={{ height: '2mm', width: `${widthPct}%`, background: COLORS.loss, borderRadius: '0.5mm 0 0 0.5mm' }} />}
+              </div>
+              <div style={{ width: 1, height: '3mm', background: COLORS.border, flexShrink: 0 }} />
+              <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-start' }}>
+                {isGain && <div style={{ height: '2mm', width: `${widthPct}%`, background: COLORS.gain, borderRadius: '0 0.5mm 0.5mm 0' }} />}
+              </div>
+            </div>
+            <span style={{ width: '22mm', textAlign: 'right', fontWeight: 700, color: isGain ? COLORS.gain : COLORS.loss, flexShrink: 0 }}>
+              {isGain ? '+' : ''}{fmtUSD(d.gainLoss)}
+            </span>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 export default function AccountPdfReport({
   account, accountNumber, importRow, sortedByValue, assetAllocation, fixedIncomeBreakdown, currencyExposure,
   liquidity, maturityBuckets, nextMaturity, cashProjImport, cashProjRows, projectedIncome12m, nextPayment,
-  cleanedNames, performance,
+  cleanedNames, performance, unrealizedGLImport, unrealizedGLTotals, glByCusip, gainLossByInvestment,
 }: {
   account: PortfolioAccountInfo | null
   accountNumber: string
@@ -112,6 +141,10 @@ export default function AccountPdfReport({
   nextPayment: PortfolioCashProjectionRow | null
   cleanedNames: Map<string, { name: string; detail: string | null }>
   performance: PortfolioPerformanceRow | null
+  unrealizedGLImport: PortfolioUnrealizedGainLossImportRow | null
+  unrealizedGLTotals: { costBasis: number; gainLoss: number; pct: number; matched: number; total: number } | null
+  glByCusip: Map<string, PortfolioUnrealizedGainLossRow>
+  gainLossByInvestment: { id: string; name: string; gainLoss: number; gainLossPct: number }[]
 }) {
   const totalValue = Number(importRow.total_market_value)
   const clientName = account?.clientName ?? accountNumber
@@ -128,6 +161,9 @@ export default function AccountPdfReport({
   })()
 
   const hasMaturityCols = sortedByValue.some(p => p.maturity_date)
+  const hasGL = glByCusip.size > 0
+  const totalCostBasis = sortedByValue.reduce((s, p) => s + (p.cusip && glByCusip.get(p.cusip) ? Number(glByCusip.get(p.cusip)!.cost_basis) : 0), 0)
+  const totalGainLoss = sortedByValue.reduce((s, p) => s + (p.cusip && glByCusip.get(p.cusip) ? Number(glByCusip.get(p.cusip)!.gain_loss) : 0), 0)
 
   return (
     <div id="account-pdf-report" style={{ position: 'fixed', left: -10000, top: 0 }}>
@@ -142,14 +178,16 @@ export default function AccountPdfReport({
 
         <div style={{ display: 'flex', gap: '3mm', marginBottom: '4mm' }}>
           {[
-            ['Posiciones', String(sortedByValue.length), null],
-            ['Liquidez', fmtUSD(liquidity.value), fmtPct(liquidity.pct)],
-            ['Unrealized Gain/Loss', 'No disponible', 'Sin costo base en el archivo'],
-            ['Income próx. 12 meses', cashProjImport ? fmtUSD(projectedIncome12m) : '—', null],
-          ].map(([label, val, sub]) => (
-            <div key={label} style={{ flex: 1, border: `1px solid ${COLORS.border}`, borderRadius: 8, padding: '2.5mm 3mm' }}>
+            ['Posiciones', String(sortedByValue.length), null, COLORS.ink],
+            ['Liquidez', fmtUSD(liquidity.value), fmtPct(liquidity.pct), COLORS.ink],
+            unrealizedGLTotals
+              ? ['Unrealized Gain/Loss', `${unrealizedGLTotals.gainLoss >= 0 ? '+' : ''}${fmtUSD(unrealizedGLTotals.gainLoss)}`, `${unrealizedGLTotals.gainLoss >= 0 ? '+' : ''}${unrealizedGLTotals.pct.toFixed(2)}%`, unrealizedGLTotals.gainLoss >= 0 ? COLORS.gain : COLORS.loss]
+              : ['Unrealized Gain/Loss', 'No disponible', 'Sin costo base en el archivo', COLORS.mutedSlate],
+            ['Income próx. 12 meses', cashProjImport ? fmtUSD(projectedIncome12m) : '—', null, COLORS.ink],
+          ].map(([label, val, sub, color]) => (
+            <div key={label as string} style={{ flex: 1, border: `1px solid ${COLORS.border}`, borderRadius: 8, padding: '2.5mm 3mm' }}>
               <div style={{ fontSize: 6.8, color: COLORS.mutedSlate, textTransform: 'uppercase', letterSpacing: 0.5 }}>{label}</div>
-              <div style={{ fontSize: 11.5, fontWeight: 700, color: COLORS.ink, marginTop: '1mm' }}>{val}</div>
+              <div style={{ fontSize: 11.5, fontWeight: 700, color: color as string, marginTop: '1mm' }}>{val}</div>
               {sub && <div style={{ fontSize: 6.3, color: COLORS.mutedSlate, marginTop: '0.5mm' }}>{sub}</div>}
             </div>
           ))}
@@ -180,6 +218,13 @@ export default function AccountPdfReport({
             )
           })}
         </div>
+
+        {unrealizedGLImport && gainLossByInvestment.length > 0 && (
+          <div style={{ border: `1px solid ${COLORS.border}`, borderRadius: 8, padding: '3mm 4mm', marginBottom: '3mm' }}>
+            <div style={{ fontSize: 9, fontWeight: 700, color: COLORS.ink, marginBottom: '2mm' }}>Unrealized Gain/Loss by Investment</div>
+            <DivergingBarChart data={gainLossByInvestment.slice(0, 10)} />
+          </div>
+        )}
 
         {performance && (
           <div style={{ border: `1px solid ${COLORS.border}`, borderRadius: 8, padding: '3mm 4mm' }}>
@@ -214,6 +259,12 @@ export default function AccountPdfReport({
               <th style={{ textAlign: 'right', padding: '2mm 1.5mm', color: '#fff', fontWeight: 700 }}>Price</th>
               <th style={{ textAlign: 'right', padding: '2mm 1.5mm', color: '#fff', fontWeight: 700 }}>Market Value</th>
               <th style={{ textAlign: 'right', padding: '2mm 1.5mm', color: '#fff', fontWeight: 700 }}>Portfolio %</th>
+              {hasGL && (
+                <>
+                  <th style={{ textAlign: 'right', padding: '2mm 1.5mm', color: '#fff', fontWeight: 700 }}>Cost Basis</th>
+                  <th style={{ textAlign: 'right', padding: '2mm 1.5mm', color: '#fff', fontWeight: 700 }}>Unrealized G/L</th>
+                </>
+              )}
               {hasMaturityCols && <th style={{ textAlign: 'right', padding: '2mm 1.5mm', color: '#fff', fontWeight: 700 }}>Maturity</th>}
             </tr>
           </thead>
@@ -221,6 +272,7 @@ export default function AccountPdfReport({
             {sortedByValue.map((p, i) => {
               const pct = p.weight_pct != null ? Number(p.weight_pct) : 0
               const clean = cleanedNames.get(p.id)
+              const gl = p.cusip ? glByCusip.get(p.cusip) : undefined
               return (
                 <tr key={p.id} style={{ background: i % 2 === 0 ? '#fff' : COLORS.bgSofter }}>
                   <td style={{ padding: '2.2mm 1.5mm', maxWidth: '58mm' }}>
@@ -232,6 +284,14 @@ export default function AccountPdfReport({
                   <td style={{ padding: '2.2mm 1.5mm', textAlign: 'right', color: COLORS.slate }}>{p.price != null ? fmtUSD2(Number(p.price)) : '—'}</td>
                   <td style={{ padding: '2.2mm 1.5mm', textAlign: 'right', fontWeight: 700, color: COLORS.ink }}>{fmtUSD2(Number(p.market_value))}</td>
                   <td style={{ padding: '2.2mm 1.5mm', textAlign: 'right', color: COLORS.slate }}>{fmtPct(pct)}</td>
+                  {hasGL && (
+                    <>
+                      <td style={{ padding: '2.2mm 1.5mm', textAlign: 'right', color: COLORS.slate }}>{gl ? fmtUSD2(Number(gl.cost_basis)) : '—'}</td>
+                      <td style={{ padding: '2.2mm 1.5mm', textAlign: 'right', fontWeight: 700, color: gl ? (Number(gl.gain_loss) >= 0 ? COLORS.gain : COLORS.loss) : COLORS.mutedSlate }}>
+                        {gl ? `${Number(gl.gain_loss) >= 0 ? '+' : ''}${fmtUSD2(Number(gl.gain_loss))}` : '—'}
+                      </td>
+                    </>
+                  )}
                   {hasMaturityCols && <td style={{ padding: '2.2mm 1.5mm', textAlign: 'right', color: COLORS.slate }}>{p.maturity_date ? fmtDate(p.maturity_date) : '—'}</td>}
                 </tr>
               )
@@ -242,6 +302,12 @@ export default function AccountPdfReport({
               <td colSpan={4} style={{ padding: '2mm 1.5mm', color: '#fff', fontWeight: 700, textAlign: 'right' }}>TOTAL</td>
               <td style={{ padding: '2mm 1.5mm', color: '#fff', fontWeight: 700, textAlign: 'right' }}>{fmtUSD2(totalValue)}</td>
               <td style={{ padding: '2mm 1.5mm' }} />
+              {hasGL && (
+                <>
+                  <td style={{ padding: '2mm 1.5mm', color: '#fff', fontWeight: 700, textAlign: 'right' }}>{fmtUSD2(totalCostBasis)}</td>
+                  <td style={{ padding: '2mm 1.5mm', color: '#fff', fontWeight: 700, textAlign: 'right' }}>{totalGainLoss >= 0 ? '+' : ''}{fmtUSD2(totalGainLoss)}</td>
+                </>
+              )}
               {hasMaturityCols && <td style={{ padding: '2mm 1.5mm' }} />}
             </tr>
           </tfoot>

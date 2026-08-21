@@ -522,17 +522,6 @@ interface Equity {
   broker: string | null
 }
 
-// ─── Calculator ───────────────────────────────────────────────────────────────
-
-function calcAmounts<T extends { pct: number }>(items: T[], total: number): (T & { amount: number })[] {
-  return items.map(i => ({ ...i, amount: Math.round(total * (i.pct ?? 0)) / 100 }))
-}
-
-function totalPct(funds: Fund[], bonds: Bond[], equities: Equity[]): number {
-  const sum = (arr: { pct: number }[]) => arr.reduce((s, i) => s + (i.pct ?? 0), 0)
-  return sum(funds) + sum(bonds) + sum(equities)
-}
-
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function fmtPct(n: number | null) {
@@ -734,23 +723,16 @@ function FundsTable({
   const [showFactsheet, setShowFactsheet] = useState(false)
 
   const updateField = useCallback(async (fund: Fund, field: keyof Fund, raw: string) => {
-    const isNumeric = ['pct','return_ytd','return_1y','return_3y','return_5y','ytm_indicative','duration_years'].includes(field)
-    const value = isNumeric ? (raw === '' ? null : parseFloat(raw)) : (raw === '' ? null : raw)
-    const updated = funds.map(f => {
-      if (f.id !== fund.id) return f
-      const next = { ...f, [field]: value } as Fund
-      if (field === 'pct') next.amount = Math.round(total * (value as number ?? 0) / 100)
-      return next
-    })
+    const isNumeric = ['amount','return_ytd','return_1y','return_3y','return_5y','ytm_indicative','duration_years'].includes(field)
+    const value = isNumeric ? (raw === '' ? null : parseFloat(raw.replace(/,/g, ''))) : (raw === '' ? null : raw)
+    const updated = funds.map(f => f.id === fund.id ? { ...f, [field]: value } as Fund : f)
     onUpdate(updated)
     setSaving(fund.id)
-    const patchBody: Record<string, unknown> = { fund_id: fund.id, [field]: value }
-    if (field === 'pct') patchBody.amount = Math.round(total * (value as number ?? 0) / 100)
     await fetch(`/api/proposals/${proposalId}/funds`, {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patchBody),
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fund_id: fund.id, [field]: value }),
     })
     setSaving(null)
-  }, [funds, total, proposalId, onUpdate])
+  }, [funds, proposalId, onUpdate])
 
   const setOperacion = useCallback(async (fund: Fund, operacion: Operacion) => {
     onUpdate(funds.map(f => f.id === fund.id ? { ...f, operacion } : f))
@@ -882,11 +864,14 @@ function FundsTable({
                     <td className={`${TD} text-right`}>
                       <EditCell value={f.duration_years} onChange={v => updateField(f, 'duration_years', v)} placeholder="—" numeric className="text-right text-xs" />
                     </td>
-                    <td className={`${TD} text-right font-semibold`}>
-                      <EditCell value={f.pct} onChange={v => updateField(f, 'pct', v)} placeholder="0" numeric className="text-right text-sm font-bold text-[#1B2E3C]" />
+                    <td className={`${TD} text-right text-xs text-gray-400 tabular-nums`}>
+                      {total > 0 && f.amount > 0 ? `${((f.amount / total) * 100).toFixed(1)}%` : '—'}
                     </td>
-                    <td className={`${TD} text-right font-semibold font-mono tabular-nums text-[#1B2E3C]`}>
-                      {f.pct > 0 ? fmtMoney(Math.round(total * f.pct / 100), currency) : '—'}
+                    <td className={`${TD} text-right font-semibold`}>
+                      <div className="flex items-center justify-end gap-1">
+                        <span className="text-[10px] text-gray-400">{currency}</span>
+                        <EditCell value={f.amount} onChange={v => updateField(f, 'amount', v)} placeholder="0" numeric mono className="text-right text-sm font-bold font-mono tabular-nums text-[#1B2E3C]" />
+                      </div>
                     </td>
                     <td className="border-b border-gray-100 pr-2 py-2.5">
                       <button onClick={() => deleteFund(f.id)} className="opacity-0 group-hover:opacity-100 w-6 h-6 flex items-center justify-center rounded text-gray-300 hover:text-red-500 hover:bg-red-50 transition-all">
@@ -925,22 +910,14 @@ function BondsTable({
   const [adding, setAdding] = useState(false)
 
   const updateField = useCallback(async (bond: Bond, field: keyof Bond, raw: string) => {
-    const numFields = ['pct','coupon','yield','duration','price']
-    const value = numFields.includes(field) ? (raw === '' ? null : parseFloat(raw)) : (raw === '' ? null : raw)
-    const updated = bonds.map(b => {
-      if (b.id !== bond.id) return b
-      const next = { ...b, [field]: value } as Bond
-      if (field === 'pct') next.amount = Math.round(total * (value as number ?? 0) / 100)
-      return next
-    })
+    const numFields = ['amount','coupon','yield','duration','price']
+    const value = numFields.includes(field) ? (raw === '' ? null : parseFloat(raw.replace(/,/g, ''))) : (raw === '' ? null : raw)
+    const updated = bonds.map(b => b.id === bond.id ? { ...b, [field]: value } as Bond : b)
     onUpdate(updated)
-
-    const body: Record<string, unknown> = { bond_id: bond.id, [field]: value }
-    if (field === 'pct') body.amount = Math.round(total * (value as number ?? 0) / 100)
     await fetch(`/api/proposals/${proposalId}/bonds`, {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bond_id: bond.id, [field]: value }),
     })
-  }, [bonds, total, proposalId, onUpdate])
+  }, [bonds, proposalId, onUpdate])
 
   const setOperacion = useCallback(async (bond: Bond, operacion: Operacion) => {
     onUpdate(bonds.map(b => b.id === bond.id ? { ...b, operacion } : b))
@@ -1015,13 +992,14 @@ function BondsTable({
                     <td className="px-3 py-2.5 text-right"><EditCell value={b.yield}    onChange={v => updateField(b, 'yield',    v)} numeric placeholder="—" className={`text-right text-xs ${pctColor(b.yield)}`} /></td>
                     <td className="px-3 py-2.5 text-right"><EditCell value={b.duration} onChange={v => updateField(b, 'duration', v)} numeric placeholder="—" className="text-right text-xs" /></td>
                     <td className="px-3 py-2.5"><EditCell value={b.rating}        onChange={v => updateField(b, 'rating',        v)} placeholder="—" /></td>
-                    <td className="px-3 py-2.5 text-right">
-                      <EditCell value={b.pct} onChange={v => updateField(b, 'pct', v)} numeric placeholder="0" className="text-right text-sm font-semibold text-[#2D3F52]" />
+                    <td className="px-3 py-2.5 text-right text-xs text-gray-400 tabular-nums">
+                      {total > 0 && b.amount > 0 ? `${((b.amount / total) * 100).toFixed(1)}%` : '—'}
                     </td>
                     <td className="px-3 py-2.5 text-right">
-                      <span className="text-xs font-medium text-gray-700 font-mono tabular-nums">
-                        {b.pct > 0 ? fmtMoney(Math.round(total * b.pct / 100), currency) : '—'}
-                      </span>
+                      <div className="flex items-center justify-end gap-1">
+                        <span className="text-[10px] text-gray-400">{currency}</span>
+                        <EditCell value={b.amount} onChange={v => updateField(b, 'amount', v)} numeric mono placeholder="0" className="text-right text-sm font-semibold font-mono tabular-nums text-[#2D3F52]" />
+                      </div>
                     </td>
                     <td className="pr-2 py-2.5">
                       <button onClick={() => deleteBond(b.id)} className="opacity-0 group-hover:opacity-100 w-6 h-6 flex items-center justify-center rounded text-gray-300 hover:text-red-500 hover:bg-red-50 transition-all">
@@ -1050,21 +1028,14 @@ function EquitiesTable({
   const [lookingUp, setLookingUp] = useState<string | null>(null) // equity id being looked up
 
   const patchEquity = useCallback(async (id: string, fields: Partial<Equity>) => {
-    const body: Record<string, unknown> = { equity_id: id, ...fields }
-    if ('pct' in fields) body.amount = Math.round(total * ((fields.pct as number) ?? 0) / 100)
     await fetch(`/api/proposals/${proposalId}/equities`, {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ equity_id: id, ...fields }),
     })
-  }, [total, proposalId])
+  }, [proposalId])
 
   const updateField = useCallback(async (eq: Equity, field: keyof Equity, raw: string) => {
-    const value = field === 'pct' ? (raw === '' ? 0 : parseFloat(raw)) : (raw === '' ? null : raw)
-    const updated = equities.map(e => {
-      if (e.id !== eq.id) return e
-      const next = { ...e, [field]: value } as Equity
-      if (field === 'pct') next.amount = Math.round(total * (value as number) / 100)
-      return next
-    })
+    const value = field === 'amount' ? (raw === '' ? 0 : parseFloat(raw.replace(/,/g, ''))) : (raw === '' ? null : raw)
+    const updated = equities.map(e => e.id === eq.id ? { ...e, [field]: value } as Equity : e)
     onUpdate(updated)
     await patchEquity(eq.id, { [field]: value } as Partial<Equity>)
 
@@ -1087,7 +1058,7 @@ function EquitiesTable({
       } catch { /* ignore */ }
       setLookingUp(null)
     }
-  }, [equities, total, proposalId, onUpdate, patchEquity])
+  }, [equities, proposalId, onUpdate, patchEquity])
 
   const setOperacion = useCallback(async (eq: Equity, operacion: Operacion) => {
     onUpdate(equities.map(e => e.id === eq.id ? { ...e, operacion } : e))
@@ -1163,13 +1134,14 @@ function EquitiesTable({
                     <td className="px-3 py-2.5"><EditCell value={e.sector}       onChange={v => updateField(e, 'sector',       v)} placeholder="Sector" /></td>
                     <td className="px-3 py-2.5"><EditCell value={e.country}      onChange={v => updateField(e, 'country',      v)} placeholder="País" /></td>
                     <td className="px-3 py-2.5"><EditCell value={e.currency}     onChange={v => updateField(e, 'currency',     v)} placeholder="USD" /></td>
-                    <td className="px-3 py-2.5 text-right">
-                      <EditCell value={e.pct} onChange={v => updateField(e, 'pct', v)} numeric placeholder="0" className="text-right text-sm font-semibold text-[#2D3F52]" />
+                    <td className="px-3 py-2.5 text-right text-xs text-gray-400 tabular-nums">
+                      {total > 0 && e.amount > 0 ? `${((e.amount / total) * 100).toFixed(1)}%` : '—'}
                     </td>
                     <td className="px-3 py-2.5 text-right">
-                      <span className="text-xs font-medium text-gray-700 font-mono tabular-nums">
-                        {e.pct > 0 ? fmtMoney(Math.round(total * e.pct / 100), currency) : '—'}
-                      </span>
+                      <div className="flex items-center justify-end gap-1">
+                        <span className="text-[10px] text-gray-400">{currency}</span>
+                        <EditCell value={e.amount} onChange={v => updateField(e, 'amount', v)} numeric mono placeholder="0" className="text-right text-sm font-semibold font-mono tabular-nums text-[#2D3F52]" />
+                      </div>
                     </td>
                     <td className="pr-2 py-2.5">
                       <button onClick={() => deleteEquity(e.id)} className="opacity-0 group-hover:opacity-100 w-6 h-6 flex items-center justify-center rounded text-gray-300 hover:text-red-500 hover:bg-red-50 transition-all">
@@ -1305,6 +1277,21 @@ export default function ProposalEditor({
     })
   }, [proposal.id])
 
+  // Monto total: nunca se define de antemano — se recalcula solo, sumando lo
+  // que se va cargando en fondos/bonos/acciones, cada vez que algo cambia.
+  useEffect(() => {
+    const sum = funds.reduce((s, f) => s + (f.amount ?? 0), 0)
+      + bonds.reduce((s, b) => s + (b.amount ?? 0), 0)
+      + equities.reduce((s, e) => s + (e.amount ?? 0), 0)
+    setProposal(p => {
+      if (p.total_amount === sum) return p
+      fetch(`/api/proposals/${proposal.id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ total_amount: sum }),
+      })
+      return { ...p, total_amount: sum }
+    })
+  }, [funds, bonds, equities, proposal.id])
+
   const changeStatus = async (status: string) => {
     setSavingStatus(true)
     setStatusMenu(false)
@@ -1407,20 +1394,8 @@ export default function ProposalEditor({
                 </div>
                 <div>
                   <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest mb-1">Monto</p>
-                  <div className="flex items-center gap-1">
-                    <span className="text-sm font-bold text-[#2D3F52]">{currency}</span>
-                    <EditCell
-                      value={proposal.total_amount}
-                      onChange={v => {
-                        const n = parseFloat(v.replace(/,/g, ''))
-                        if (!isNaN(n) && n > 0) patchProposal({ total_amount: n })
-                      }}
-                      placeholder="0"
-                      numeric
-                      mono
-                      className="text-sm font-bold text-[#2D3F52]"
-                    />
-                  </div>
+                  <p className="text-sm font-bold font-mono tabular-nums text-[#2D3F52]">{currency} {proposal.total_amount.toLocaleString('en-US')}</p>
+                  <p className="text-[9px] text-gray-400 mt-0.5">Suma de los activos cargados</p>
                 </div>
                 <div>
                   <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest mb-1">Fecha</p>

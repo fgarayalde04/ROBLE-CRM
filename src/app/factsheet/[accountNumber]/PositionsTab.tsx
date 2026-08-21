@@ -1,6 +1,6 @@
 'use client'
 import { useState, useMemo } from 'react'
-import type { PortfolioPositionRow } from '@/types/portfolio'
+import type { PortfolioPositionRow, PortfolioUnrealizedGainLossRow } from '@/types/portfolio'
 import { fmtUSD2, fmtPct, fmtDate } from './PortfolioAccountClient'
 import { cleanDisplayName } from '@/lib/portfolio/theme'
 
@@ -25,7 +25,8 @@ function DetailRow({ label, value }: { label: string; value: string | null | und
   )
 }
 
-export default function PositionsTab({ positions, totalValue }: { positions: PortfolioPositionRow[]; totalValue: number }) {
+export default function PositionsTab({ positions, totalValue, glByCusip }: { positions: PortfolioPositionRow[]; totalValue: number; glByCusip: Map<string, PortfolioUnrealizedGainLossRow> }) {
+  const hasGL = glByCusip.size > 0
   const [q, setQ] = useState('')
   const [assetFilter, setAssetFilter] = useState('')
   const [sortKey, setSortKey] = useState<SortKey>('market_value')
@@ -98,11 +99,18 @@ export default function PositionsTab({ positions, totalValue }: { positions: Por
                     {c.label}{sortKey === c.key ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''}
                   </th>
                 ))}
+                {hasGL && (
+                  <>
+                    <th className="px-4 py-2.5 text-[11px] font-semibold text-white/90 uppercase tracking-wide text-right">Cost Basis</th>
+                    <th className="px-4 py-2.5 text-[11px] font-semibold text-white/90 uppercase tracking-wide text-right">Unrealized G/L</th>
+                  </>
+                )}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
               {rows.map((p, i) => {
                 const clean = cleanDisplayName(p.name, p.isin, p.cusip, p.coupon, p.maturity_date)
+                const gl = p.cusip ? glByCusip.get(p.cusip) : undefined
                 return (
                   <tr key={p.id} onClick={() => setSelected(p)} className={`cursor-pointer transition hover:bg-emerald-50/40 ${i % 2 === 1 ? 'bg-gray-50/60' : ''}`}>
                     <td className="px-4 py-2.5 max-w-[260px]">
@@ -121,11 +129,19 @@ export default function PositionsTab({ positions, totalValue }: { positions: Por
                         <span className="text-gray-500 w-12 text-right shrink-0">{fmtPct(p.recalcWeight)}</span>
                       </div>
                     </td>
+                    {hasGL && (
+                      <>
+                        <td className="px-4 py-2.5 text-right text-gray-700 font-mono">{gl ? fmtUSD2(Number(gl.cost_basis)) : '—'}</td>
+                        <td className={`px-4 py-2.5 text-right font-mono font-semibold ${gl ? (Number(gl.gain_loss) >= 0 ? 'text-emerald-600' : 'text-red-600') : 'text-gray-400'}`}>
+                          {gl ? `${Number(gl.gain_loss) >= 0 ? '+' : ''}${fmtUSD2(Number(gl.gain_loss))} (${Number(gl.gain_loss_pct) >= 0 ? '+' : ''}${Number(gl.gain_loss_pct).toFixed(2)}%)` : '—'}
+                        </td>
+                      </>
+                    )}
                   </tr>
                 )
               })}
               {rows.length === 0 && (
-                <tr><td colSpan={cols.length} className="px-4 py-10 text-center text-sm text-gray-400">Sin resultados</td></tr>
+                <tr><td colSpan={cols.length + (hasGL ? 2 : 0)} className="px-4 py-10 text-center text-sm text-gray-400">Sin resultados</td></tr>
               )}
             </tbody>
             {rows.length > 0 && (
@@ -134,6 +150,19 @@ export default function PositionsTab({ positions, totalValue }: { positions: Por
                   <td colSpan={4} className="px-4 py-2.5 text-right text-xs font-bold text-white/80">TOTAL</td>
                   <td className="px-4 py-2.5 text-right text-sm font-bold text-white">{fmtUSD2(rows.reduce((s, p) => s + Number(p.market_value), 0))}</td>
                   <td className="px-4 py-2.5" />
+                  {hasGL && (
+                    <>
+                      <td className="px-4 py-2.5 text-right text-sm font-bold text-white">
+                        {fmtUSD2(rows.reduce((s, p) => s + (p.cusip && glByCusip.get(p.cusip) ? Number(glByCusip.get(p.cusip)!.cost_basis) : 0), 0))}
+                      </td>
+                      <td className="px-4 py-2.5 text-right text-sm font-bold text-white">
+                        {(() => {
+                          const total = rows.reduce((s, p) => s + (p.cusip && glByCusip.get(p.cusip) ? Number(glByCusip.get(p.cusip)!.gain_loss) : 0), 0)
+                          return `${total >= 0 ? '+' : ''}${fmtUSD2(total)}`
+                        })()}
+                      </td>
+                    </>
+                  )}
                 </tr>
               </tfoot>
             )}
@@ -163,6 +192,25 @@ export default function PositionsTab({ positions, totalValue }: { positions: Por
                 <p className="text-lg font-bold text-gray-900">{fmtPct(totalValue > 0 ? (Number(selected.market_value) / totalValue) * 100 : 0)}</p>
               </div>
             </div>
+
+            {selected.cusip && glByCusip.get(selected.cusip) && (() => {
+              const gl = glByCusip.get(selected.cusip!)!
+              const isGain = Number(gl.gain_loss) >= 0
+              return (
+                <div className={`rounded-lg p-3 mb-4 flex items-center justify-between ${isGain ? 'bg-emerald-50' : 'bg-red-50'}`}>
+                  <div>
+                    <p className="text-[10px] text-gray-400 uppercase tracking-wide">Cost Basis</p>
+                    <p className="text-sm font-bold text-gray-900">{fmtUSD2(Number(gl.cost_basis))}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[10px] text-gray-400 uppercase tracking-wide">Unrealized Gain/Loss</p>
+                    <p className={`text-sm font-bold ${isGain ? 'text-emerald-600' : 'text-red-600'}`}>
+                      {isGain ? '+' : ''}{fmtUSD2(Number(gl.gain_loss))} ({isGain ? '+' : ''}{Number(gl.gain_loss_pct).toFixed(2)}%)
+                    </p>
+                  </div>
+                </div>
+              )
+            })()}
 
             <div>
               <DetailRow label="Símbolo" value={selected.symbol} />

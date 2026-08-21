@@ -101,3 +101,27 @@ export interface PortfolioCashProjectionsImportRow {
   imported_by: string
   created_at: string
 }
+
+export interface PortfolioUnrealizedGainLossRow {
+  id: string
+  import_id: string
+  account_number: string
+  cusip: string
+  security_identifier: string | null
+  description: string
+  quantity: string | null
+  cost_basis: string
+  market_value: string
+  gain_loss: string
+  gain_loss_pct: string
+}
+
+export interface PortfolioUnrealizedGainLossImportRow {
+  id: string
+  account_number: string
+  as_of_date: string
+  net_gain_loss: string | null
+  file_name: string | null
+  imported_by: string
+  created_at: string
+}

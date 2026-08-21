@@ -1,13 +1,14 @@
 'use client'
 import { useRef, useState } from 'react'
 
-// Single-file upload button used for the two enrichment document types
-// (Cash Projections Excel, Performance PDF) — unlike positions, these don't
-// need a preview/confirm step: they're supplementary data tied to whatever
-// account page you're already on, not a new snapshot to review first.
+// Single-file upload button used for the enrichment document types (Cash
+// Projections Excel, Performance PDF, Unrealized Gain/Loss Excel) — unlike
+// positions, these don't need a preview/confirm step: they're supplementary
+// data tied to whatever account page you're already on, not a new snapshot
+// to review first.
 export default function DocumentUploadButton({ accountNumber, endpoint, accept, label, onImported }: {
   accountNumber: string
-  endpoint: 'performance' | 'cashflows'
+  endpoint: 'performance' | 'cashflows' | 'unrealizedgl'
   accept: string
   label: string
   onImported: () => void

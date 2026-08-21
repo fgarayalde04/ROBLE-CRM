@@ -2,6 +2,7 @@ import { pool } from './pool'
 import type { ParsedPortfolioImport } from '@/lib/portfolio/parser'
 import type { ParsedCashProjections } from '@/lib/portfolio/cashProjectionsParser'
 import type { ParsedPerformanceReport } from '@/lib/portfolio/performancePdfParser'
+import type { ParsedUnrealizedGainLoss } from '@/lib/portfolio/unrealizedGainLossParser'
 
 export interface ResolvedAccount {
   accountNumber: string
@@ -267,6 +268,69 @@ export async function getLatestCashProjections(accountNumber: string) {
   if (!importRow) return { importRow: null, rows: [] }
   const { rows } = await pool.query(
     `select * from portfolio_cash_projections where import_id = $1 order by pay_date asc`,
+    [importRow.id]
+  )
+  return { importRow, rows }
+}
+
+// ── Unrealized Gain/Loss (real Cost Basis — never calculated by us) ────────
+
+export async function createUnrealizedGainLossImport(input: {
+  parsed: ParsedUnrealizedGainLoss
+  accountNumber: string
+  fileName: string
+  importedBy: string
+  importedById: string
+}) {
+  const client = await pool.connect()
+  try {
+    await client.query('begin')
+
+    // Enrichment data, not a versioned snapshot — re-importing the same
+    // account+date replaces the previous rows outright.
+    await client.query(
+      `delete from portfolio_unrealized_gainloss_imports where account_number = $1 and as_of_date = $2`,
+      [input.accountNumber, input.parsed.asOfDate]
+    )
+
+    const { rows } = await client.query(
+      `insert into portfolio_unrealized_gainloss_imports (account_number, as_of_date, net_gain_loss, file_name, imported_by, imported_by_id)
+       values ($1,$2,$3,$4,$5,$6)
+       returning *`,
+      [input.accountNumber, input.parsed.asOfDate, input.parsed.netGainLoss, input.fileName, input.importedBy, input.importedById]
+    )
+    const importRow = rows[0]
+
+    if (input.parsed.rows.length > 0) {
+      const cols = ['import_id', 'account_number', 'cusip', 'security_identifier', 'description', 'quantity', 'cost_basis', 'market_value', 'gain_loss', 'gain_loss_pct']
+      const values: unknown[] = []
+      const rowsSql = input.parsed.rows.map((r, idx) => {
+        const base = idx * cols.length
+        values.push(importRow.id, input.accountNumber, r.cusip, r.securityIdentifier, r.description, r.quantity, r.costBasis, r.marketValue, r.gainLoss, r.gainLossPct)
+        return `(${cols.map((_, i) => `$${base + i + 1}`).join(',')})`
+      })
+      await client.query(`insert into portfolio_unrealized_gainloss (${cols.join(',')}) values ${rowsSql.join(',')}`, values)
+    }
+
+    await client.query('commit')
+    return importRow
+  } catch (err) {
+    await client.query('rollback')
+    throw err
+  } finally {
+    client.release()
+  }
+}
+
+export async function getLatestUnrealizedGainLoss(accountNumber: string) {
+  const { rows: imports } = await pool.query(
+    `select * from portfolio_unrealized_gainloss_imports where account_number = $1 order by as_of_date desc limit 1`,
+    [accountNumber]
+  )
+  const importRow = imports[0] ?? null
+  if (!importRow) return { importRow: null, rows: [] }
+  const { rows } = await pool.query(
+    `select * from portfolio_unrealized_gainloss where import_id = $1 order by gain_loss desc`,
     [importRow.id]
   )
   return { importRow, rows }

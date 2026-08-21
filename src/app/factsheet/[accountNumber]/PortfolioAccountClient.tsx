@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import type { PortfolioPositionRow, PortfolioImportRow, PortfolioAccountInfo, PortfolioPerformanceRow, PortfolioCashProjectionRow, PortfolioCashProjectionsImportRow } from '@/types/portfolio'
+import type { PortfolioPositionRow, PortfolioImportRow, PortfolioAccountInfo, PortfolioPerformanceRow, PortfolioCashProjectionRow, PortfolioCashProjectionsImportRow, PortfolioUnrealizedGainLossRow, PortfolioUnrealizedGainLossImportRow } from '@/types/portfolio'
 import ImportPositionsModal from '@/components/portfolio/ImportPositionsModal'
 import PositionsTab from './PositionsTab'
 import RendimientoTab from './RendimientoTab'
@@ -52,14 +52,17 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
   const [performance, setPerformance] = useState<PortfolioPerformanceRow | null>(null)
   const [cashProjImport, setCashProjImport] = useState<PortfolioCashProjectionsImportRow | null>(null)
   const [cashProjRows, setCashProjRows] = useState<PortfolioCashProjectionRow[]>([])
+  const [unrealizedGLImport, setUnrealizedGLImport] = useState<PortfolioUnrealizedGainLossImportRow | null>(null)
+  const [unrealizedGLRows, setUnrealizedGLRows] = useState<PortfolioUnrealizedGainLossRow[]>([])
 
   async function load() {
     setLoading(true)
-    const [detailRes, historyRes, perfRes, cashRes] = await Promise.all([
+    const [detailRes, historyRes, perfRes, cashRes, glRes] = await Promise.all([
       fetch(`/api/portfolio/${encodeURIComponent(accountNumber)}`),
       fetch(`/api/portfolio/${encodeURIComponent(accountNumber)}/history`),
       fetch(`/api/portfolio/${encodeURIComponent(accountNumber)}/performance`),
       fetch(`/api/portfolio/${encodeURIComponent(accountNumber)}/cashflows`),
+      fetch(`/api/portfolio/${encodeURIComponent(accountNumber)}/unrealizedgl`),
     ])
     if (detailRes.ok) {
       const d = await detailRes.json()
@@ -70,6 +73,10 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
     if (cashRes.ok) {
       const c = await cashRes.json()
       setCashProjImport(c.import); setCashProjRows(c.rows ?? [])
+    }
+    if (glRes.ok) {
+      const g = await glRes.json()
+      setUnrealizedGLImport(g.import); setUnrealizedGLRows(g.rows ?? [])
     }
     setLoading(false)
   }
@@ -140,6 +147,40 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
 
   const nextPayment = cashProjRows[0] ?? null
 
+  // ── Unrealized Gain/Loss — real Cost Basis, matched to positions by CUSIP.
+  // Never estimated: a position without a match in the uploaded file simply
+  // has no gain/loss shown for it.
+  const glByCusip = useMemo(() => {
+    const map = new Map<string, PortfolioUnrealizedGainLossRow>()
+    for (const r of unrealizedGLRows) map.set(r.cusip, r)
+    return map
+  }, [unrealizedGLRows])
+
+  const unrealizedGLTotals = useMemo(() => {
+    if (!unrealizedGLImport) return null
+    let costBasis = 0, gainLoss = 0, matched = 0
+    for (const p of positions) {
+      const gl = p.cusip ? glByCusip.get(p.cusip) : undefined
+      if (!gl) continue
+      matched++
+      costBasis += Number(gl.cost_basis)
+      gainLoss += Number(gl.gain_loss)
+    }
+    return { costBasis, gainLoss, pct: costBasis > 0 ? (gainLoss / costBasis) * 100 : 0, matched, total: positions.length }
+  }, [positions, glByCusip, unrealizedGLImport])
+
+  const gainLossByInvestment = useMemo(() => {
+    return positions
+      .map(p => {
+        const gl = p.cusip ? glByCusip.get(p.cusip) : undefined
+        if (!gl) return null
+        const clean = cleanDisplayName(p.name, p.isin, p.cusip, p.coupon, p.maturity_date)
+        return { id: p.id, name: clean.name, gainLoss: Number(gl.gain_loss), gainLossPct: Number(gl.gain_loss_pct) }
+      })
+      .filter((x): x is { id: string; name: string; gainLoss: number; gainLossPct: number } => x != null)
+      .sort((a, b) => Math.abs(b.gainLoss) - Math.abs(a.gainLoss))
+  }, [positions, glByCusip])
+
   const maturityBuckets = useMemo(() => {
     const withMaturity = positions.filter(p => p.maturity_date)
     const map = new Map<number, { value: number; count: number }>()
@@ -208,7 +249,9 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
         assetAllocation={assetAllocation} fixedIncomeBreakdown={fixedIncomeBreakdown} currencyExposure={currencyExposure}
         liquidity={liquidity} maturityBuckets={maturityBuckets} nextMaturity={nextMaturity}
         cashProjImport={cashProjImport} cashProjRows={cashProjRows} projectedIncome12m={projectedIncome12m}
-        nextPayment={nextPayment} cleanedNames={cleanedNames} performance={performance} />
+        nextPayment={nextPayment} cleanedNames={cleanedNames} performance={performance}
+        unrealizedGLImport={unrealizedGLImport} unrealizedGLTotals={unrealizedGLTotals} glByCusip={glByCusip}
+        gainLossByInvestment={gainLossByInvestment} />
 
       {/* Tabs */}
       <div className="bg-white border-b border-gray-200 px-6">
@@ -227,16 +270,21 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
       <div className="max-w-6xl mx-auto p-6">
         {tab === 'resumen' && (
           <ResumenTab
+            accountNumber={accountNumber}
             totalValue={totalValue} snapshotDate={importRow.snapshot_date} variation={variation}
             positions={positions} assetAllocation={assetAllocation} fixedIncomeBreakdown={fixedIncomeBreakdown}
             currencyExposure={currencyExposure} liquidity={liquidity} sortedByValue={sortedByValue}
             maturityBuckets={maturityBuckets} nextMaturity={nextMaturity}
             cashProjImport={cashProjImport} projectedIncome12m={projectedIncome12m} nextPayment={nextPayment}
             cleanedNames={cleanedNames}
+            unrealizedGLImport={unrealizedGLImport} unrealizedGLTotals={unrealizedGLTotals}
+            gainLossByInvestment={gainLossByInvestment} onUnrealizedGLImported={load}
             onSeeAll={() => setTab('posiciones')}
           />
         )}
-        {tab === 'posiciones' && <PositionsTab positions={positions} totalValue={totalValue} />}
+        {tab === 'posiciones' && (
+          <PositionsTab positions={positions} totalValue={totalValue} glByCusip={glByCusip} />
+        )}
         {tab === 'rendimiento' && (
           <RendimientoTab accountNumber={accountNumber} history={history} performance={performance} onPerformanceImported={load} />
         )}

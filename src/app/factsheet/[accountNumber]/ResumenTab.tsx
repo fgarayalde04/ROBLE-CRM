@@ -1,8 +1,9 @@
 'use client'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
-import type { PortfolioPositionRow, PortfolioCashProjectionRow, PortfolioCashProjectionsImportRow } from '@/types/portfolio'
+import type { PortfolioPositionRow, PortfolioCashProjectionRow, PortfolioCashProjectionsImportRow, PortfolioUnrealizedGainLossImportRow } from '@/types/portfolio'
 import { fmtUSD, fmtPct, fmtDate } from './PortfolioAccountClient'
 import DonutChart from '@/components/portfolio/DonutChart'
+import DocumentUploadButton from '@/components/portfolio/DocumentUploadButton'
 import { COLORS, DONUT_COLORS } from '@/lib/portfolio/theme'
 
 function SectionCard({ title, subtitle, children, className = '' }: { title?: string; subtitle?: string; children: React.ReactNode; className?: string }) {
@@ -47,10 +48,11 @@ function DonutCard({ title, data }: { title: string; data: { label: string; valu
 }
 
 export default function ResumenTab({
-  totalValue, snapshotDate, variation, assetAllocation, fixedIncomeBreakdown, currencyExposure,
+  accountNumber, totalValue, snapshotDate, variation, assetAllocation, fixedIncomeBreakdown, currencyExposure,
   liquidity, sortedByValue, maturityBuckets, nextMaturity, cashProjImport, projectedIncome12m, nextPayment,
-  cleanedNames, onSeeAll,
+  cleanedNames, unrealizedGLImport, unrealizedGLTotals, gainLossByInvestment, onUnrealizedGLImported, onSeeAll,
 }: {
+  accountNumber: string
   totalValue: number
   snapshotDate: string
   variation: { abs: number; pct: number } | null
@@ -66,6 +68,10 @@ export default function ResumenTab({
   projectedIncome12m: number
   nextPayment: PortfolioCashProjectionRow | null
   cleanedNames: Map<string, { name: string; detail: string | null }>
+  unrealizedGLImport: PortfolioUnrealizedGainLossImportRow | null
+  unrealizedGLTotals: { costBasis: number; gainLoss: number; pct: number; matched: number; total: number } | null
+  gainLossByInvestment: { id: string; name: string; gainLoss: number; gainLossPct: number }[]
+  onUnrealizedGLImported: () => void
   onSeeAll: () => void
 }) {
   const topHoldings = sortedByValue.slice(0, 6)
@@ -102,8 +108,22 @@ export default function ResumenTab({
         </SectionCard>
         <SectionCard>
           <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Unrealized Gain/Loss</p>
-          <p className="text-sm font-semibold text-gray-400 mt-1.5 leading-snug">No disponible</p>
-          <p className="text-[10px] text-gray-400 mt-0.5">El archivo de posiciones no incluye costo base</p>
+          {unrealizedGLTotals ? (
+            <>
+              <p className={`text-xl font-bold mt-1 ${unrealizedGLTotals.gainLoss >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                {unrealizedGLTotals.gainLoss >= 0 ? '+' : ''}{fmtUSD(unrealizedGLTotals.gainLoss)}
+              </p>
+              <p className={`text-[11px] mt-0.5 ${unrealizedGLTotals.gainLoss >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                {unrealizedGLTotals.gainLoss >= 0 ? '+' : ''}{unrealizedGLTotals.pct.toFixed(2)}%
+                {unrealizedGLTotals.matched < unrealizedGLTotals.total && <span className="text-gray-400"> · {unrealizedGLTotals.matched}/{unrealizedGLTotals.total} posiciones</span>}
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="text-sm font-semibold text-gray-400 mt-1.5 leading-snug">No disponible</p>
+              <p className="text-[10px] text-gray-400 mt-0.5">El archivo de posiciones no incluye costo base</p>
+            </>
+          )}
         </SectionCard>
         <SectionCard>
           <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Income próx. 12 meses</p>
@@ -143,6 +163,51 @@ export default function ResumenTab({
             )
           })}
         </div>
+      </SectionCard>
+
+      {/* ── Unrealized Gain/Loss by Investment ── */}
+      <SectionCard>
+        <div className="flex items-center justify-between mb-1">
+          <p className="text-sm font-bold text-gray-900">Unrealized Gain/Loss by Investment</p>
+          <DocumentUploadButton accountNumber={accountNumber} endpoint="unrealizedgl" accept=".xlsx,.xls"
+            label={unrealizedGLImport ? 'Actualizar' : 'Importar (Excel)'} onImported={onUnrealizedGLImported} />
+        </div>
+        {unrealizedGLImport ? (
+          gainLossByInvestment.length > 0 ? (
+            <div className="space-y-2.5 mt-3">
+              {(() => {
+                const maxAbs = Math.max(...gainLossByInvestment.map(g => Math.abs(g.gainLoss)), 1)
+                return gainLossByInvestment.map(g => {
+                  const isGain = g.gainLoss >= 0
+                  const widthPct = Math.max((Math.abs(g.gainLoss) / maxAbs) * 50, 1.5)
+                  return (
+                    <div key={g.id} className="flex items-center gap-2 text-xs">
+                      <span className="w-40 shrink-0 truncate text-gray-700">{g.name}</span>
+                      <div className="flex-1 flex items-center h-4">
+                        <div className="flex-1 flex justify-end">
+                          {!isGain && <div className="h-2.5 rounded-l" style={{ width: `${widthPct * 2}%`, background: COLORS.loss }} />}
+                        </div>
+                        <div className="w-px h-4 bg-gray-200 shrink-0" />
+                        <div className="flex-1 flex justify-start">
+                          {isGain && <div className="h-2.5 rounded-r" style={{ width: `${widthPct * 2}%`, background: COLORS.gain }} />}
+                        </div>
+                      </div>
+                      <span className={`w-28 shrink-0 text-right font-semibold ${isGain ? 'text-emerald-600' : 'text-red-600'}`}>
+                        {isGain ? '+' : ''}{fmtUSD(g.gainLoss)}
+                      </span>
+                    </div>
+                  )
+                })
+              })()}
+            </div>
+          ) : (
+            <p className="text-xs text-gray-400 mt-2">Ninguna posición actual coincide (por CUSIP) con el archivo importado.</p>
+          )
+        ) : (
+          <p className="text-xs text-gray-400 mt-2">
+            Todavía no hay costo base importado. Subí el Excel de "Unrealized Gain Loss" del custodio para ver la ganancia o pérdida real de cada posición.
+          </p>
+        )}
       </SectionCard>
 
       {/* ── Portfolio Income ── */}
