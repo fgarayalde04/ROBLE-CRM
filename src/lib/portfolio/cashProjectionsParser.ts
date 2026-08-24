@@ -115,7 +115,6 @@ export function parseCashProjectionsExcel(buffer: ArrayBuffer): ParsedCashProjec
   const totalCashFlow  = extractTotalCashFlow(metaLines)
 
   if (!accountNumber) warnings.push('No se pudo detectar el número de cuenta en el archivo')
-  if (!asOfDate)      warnings.push('No se pudo detectar la fecha ("As of") en el archivo')
 
   const headers = (raw[headerIdx] as unknown[]).map(h => String(h))
   const colMap: Record<number, string> = {}

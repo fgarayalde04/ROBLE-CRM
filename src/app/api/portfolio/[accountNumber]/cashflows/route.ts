@@ -50,8 +50,10 @@ export async function POST(
     return NextResponse.json({ error: 'No se pudo leer el archivo: ' + err.message }, { status: 400 })
   }
 
+  // El archivo no siempre trae una fila "As of" — no es un dato imprescindible,
+  // así que si falta se usa la fecha de hoy en vez de bloquear la importación.
   if (!parsed.asOfDate) {
-    return NextResponse.json({ error: 'No se pudo detectar la fecha ("As of") en el archivo', warnings: parsed.warnings }, { status: 400 })
+    parsed.asOfDate = new Date().toISOString().slice(0, 10)
   }
 
   const warnings = [...parsed.warnings]
