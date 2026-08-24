@@ -98,6 +98,14 @@ function extractAccountNumber(metaLines: string[]): string | null {
   return null
 }
 
+// Purchase-date list is stored pre-formatted (not ISO) since a position can
+// carry several dates joined together, which downstream `fmtDate()` callers
+// can't parse as a single Date.
+function formatDateEs(iso: string): string {
+  const [y, m, d] = iso.split('-')
+  return `${d}/${m}/${y}`
+}
+
 function extractBaseCurrency(metaLines: string[]): string {
   for (const line of metaLines) {
     const m = line.match(/base\s*currency\s*:?\s*([A-Za-z]{3})/i)
@@ -215,6 +223,13 @@ function parsePositionsFromUnrealizedFormat(raw: unknown[][]): ParsedPortfolioIm
 
     if (marketValue < 0) warnings.push(`"${first.description.trim()}" — Market Value negativo (${marketValue}), se importó igual`)
 
+    // Purchase date(s): the "Multiple" subtotal row itself has no date, so
+    // when it's present the real dates come from the individual lot rows
+    // underneath it — collected here for display even though those rows
+    // aren't used for the financial totals above (avoids double-counting).
+    const lotDates = Array.from(new Set(lots.filter(l => !l.isSubtotal && l.purchaseDate).map(l => l.purchaseDate as string))).sort()
+    const purchaseDate = lotDates.length === 0 ? null : lotDates.map(formatDateEs).join(', ')
+
     positions.push({
       symbol:       first.symbol,
       name:         first.description.trim(),
@@ -230,7 +245,7 @@ function parsePositionsFromUnrealizedFormat(raw: unknown[][]): ParsedPortfolioIm
       isin:            null,
       cusip,
       maturityDate:    null,
-      purchaseDate:    first.purchaseDate,
+      purchaseDate,
       coupon:          null,
       accruedInterest: null,
       fundFamily:      null,

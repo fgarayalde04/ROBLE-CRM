@@ -222,7 +222,7 @@ export default function PositionsTab({ positions, totalValue, glByCusip }: { pos
               <DetailRow label="Precio" value={selected.price != null ? fmtUSD2(Number(selected.price)) : null} />
               <DetailRow label="ISIN" value={selected.isin} />
               <DetailRow label="CUSIP" value={selected.cusip} />
-              <DetailRow label="Fecha de compra" value={selected.purchase_date ? fmtDate(selected.purchase_date) : null} />
+              <DetailRow label="Fecha de compra" value={selected.purchase_date} />
               <DetailRow label="Vencimiento" value={selected.maturity_date ? fmtDate(selected.maturity_date) : null} />
               <DetailRow label="Cupón" value={selected.coupon != null ? `${Number(selected.coupon).toFixed(2)}%` : null} />
               <DetailRow label="Interés devengado" value={selected.accrued_interest != null ? fmtUSD2(Number(selected.accrued_interest)) : null} />
