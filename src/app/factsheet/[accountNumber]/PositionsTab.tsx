@@ -101,7 +101,7 @@ export default function PositionsTab({ positions, totalValue, glByCusip }: { pos
                 ))}
                 {hasGL && (
                   <>
-                    <th className="px-4 py-2.5 text-[11px] font-semibold text-white/90 uppercase tracking-wide text-right">Cost Basis</th>
+                    <th className="px-4 py-2.5 text-[11px] font-semibold text-white/90 uppercase tracking-wide text-right">Costo Total</th>
                     <th className="px-4 py-2.5 text-[11px] font-semibold text-white/90 uppercase tracking-wide text-right">Unrealized G/L</th>
                   </>
                 )}
@@ -116,6 +116,7 @@ export default function PositionsTab({ positions, totalValue, glByCusip }: { pos
                     <td className="px-4 py-2.5 max-w-[260px]">
                       <div className="text-gray-800 font-medium truncate">{clean.name}</div>
                       {clean.detail && <div className="text-[10px] text-gray-400 truncate">{clean.detail}</div>}
+                      {p.purchase_date && <div className="text-[10px] text-gray-400 truncate">Compra: {p.purchase_date}</div>}
                     </td>
                     <td className="px-4 py-2.5 text-gray-500">{ASSET_CLASS_ES[p.asset_class] ?? p.asset_class}</td>
                     <td className="px-4 py-2.5 text-right text-gray-700 font-mono">{p.quantity != null ? Number(p.quantity).toLocaleString('en-US') : '—'}</td>
@@ -157,8 +158,10 @@ export default function PositionsTab({ positions, totalValue, glByCusip }: { pos
                       </td>
                       <td className="px-4 py-2.5 text-right text-sm font-bold text-white">
                         {(() => {
+                          const totalCost = rows.reduce((s, p) => s + (p.cusip && glByCusip.get(p.cusip) ? Number(glByCusip.get(p.cusip)!.cost_basis) : 0), 0)
                           const total = rows.reduce((s, p) => s + (p.cusip && glByCusip.get(p.cusip) ? Number(glByCusip.get(p.cusip)!.gain_loss) : 0), 0)
-                          return `${total >= 0 ? '+' : ''}${fmtUSD2(total)}`
+                          const pct = totalCost > 0 ? (total / totalCost) * 100 : 0
+                          return `${total >= 0 ? '+' : ''}${fmtUSD2(total)} (${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%)`
                         })()}
                       </td>
                     </>
@@ -199,7 +202,7 @@ export default function PositionsTab({ positions, totalValue, glByCusip }: { pos
               return (
                 <div className={`rounded-lg p-3 mb-4 flex items-center justify-between ${isGain ? 'bg-emerald-50' : 'bg-red-50'}`}>
                   <div>
-                    <p className="text-[10px] text-gray-400 uppercase tracking-wide">Cost Basis</p>
+                    <p className="text-[10px] text-gray-400 uppercase tracking-wide">Costo Total</p>
                     <p className="text-sm font-bold text-gray-900">{fmtUSD2(Number(gl.cost_basis))}</p>
                   </div>
                   <div className="text-right">
