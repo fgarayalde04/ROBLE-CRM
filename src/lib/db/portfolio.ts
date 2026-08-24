@@ -9,6 +9,7 @@ export interface ResolvedAccount {
   accountNumber: string
   clientNumber:  string | null
   clientName:    string | null
+  accountName:   string | null   // manual fallback name (monitoring_base_accounts.account_name) — used when there's no matched client
   advisor:       string | null
   entity:        string | null
   custodian:     string | null
@@ -19,7 +20,7 @@ export interface ResolvedAccount {
 // there (not yet in master data) still import fine — just without a resolved name.
 export async function resolveAccount(accountNumber: string): Promise<ResolvedAccount> {
   const { rows } = await pool.query(
-    `select mba.id, mba.account_number, mba.client_code as client_number, mba.entity, mba.custodian,
+    `select mba.id, mba.account_number, mba.client_code as client_number, mba.entity, mba.custodian, mba.account_name,
             trim(coalesce(c.first_name,'') || ' ' || coalesce(c.last_name,'')) as client_name,
             c.advisor
      from monitoring_base_accounts mba
@@ -34,12 +35,13 @@ export async function resolveAccount(accountNumber: string): Promise<ResolvedAcc
       accountNumber,
       clientNumber: rows[0].client_number ?? null,
       clientName:   rows[0].client_name?.trim() || null,
+      accountName:  rows[0].account_name ?? null,
       advisor:      rows[0].advisor ?? null,
       entity:       rows[0].entity ?? null,
       custodian:    rows[0].custodian ?? null,
     }
   }
-  return { id: null, accountNumber, clientNumber: null, clientName: null, advisor: null, entity: null, custodian: null }
+  return { id: null, accountNumber, clientNumber: null, clientName: null, accountName: null, advisor: null, entity: null, custodian: null }
 }
 
 export async function findImportByAccountAndDate(accountNumber: string, snapshotDate: string) {
@@ -181,13 +183,17 @@ export async function listAccounts(advisorFilter: string[] | null) {
   let where = ''
   if (advisorFilter) {
     params.push(advisorFilter)
-    where = `where advisor = ANY($${params.length})`
+    where = `where pi.advisor = ANY($${params.length})`
   }
+  // Falls back to the manually-entered account_name (monitoring_base_accounts)
+  // when the import has no resolved client_name — same fallback as the
+  // account detail page, so a name typed in there shows up here too.
   const { rows } = await pool.query(
-    `select distinct on (account_number) *
-     from portfolio_imports
+    `select distinct on (pi.account_number) pi.*, coalesce(pi.client_name, mba.account_name) as client_name
+     from portfolio_imports pi
+     left join monitoring_base_accounts mba on mba.account_number = pi.account_number
      ${where}
-     order by account_number, snapshot_date desc`,
+     order by pi.account_number, pi.snapshot_date desc`,
     params
   )
   return rows.sort((a, b) => (a.client_name ?? a.account_number).localeCompare(b.client_name ?? b.account_number))

@@ -91,6 +91,14 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
     })
   }
 
+  async function handleAccountNameChange(accountName: string) {
+    if (!account?.id) return
+    setAccount(a => a ? { ...a, accountName } : a)
+    await fetch(`/api/monitoring/accounts/${account.id}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ account_name: accountName }),
+    })
+  }
+
   const totalValue = importRow ? Number(importRow.total_market_value) : 0
 
   const previousSnapshot = useMemo(() => {
@@ -231,7 +239,7 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
           const r = (el as HTMLElement).getBoundingClientRect()
           return { top: (r.top - containerTop), bottom: (r.bottom - containerTop) }
         })
-        const canvas = await html2canvas(pageEl, { scale: 2.5, useCORS: true, logging: false, backgroundColor: '#ffffff', windowWidth: pageEl.scrollWidth })
+        const canvas = await html2canvas(pageEl, { scale: 3, useCORS: true, logging: false, backgroundColor: '#ffffff', windowWidth: pageEl.scrollWidth })
         const scale = canvas.width / pageEl.scrollWidth
         const imgRatio = canvas.height / canvas.width
         const imgH = pdfW * imgRatio
@@ -280,7 +288,7 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
   if (!importRow) {
     return (
       <div className="min-h-screen bg-gray-50">
-        <Header router={router} account={account} accountNumber={accountNumber} importRow={null} onImport={() => setShowImport(true)} onHistory={() => setShowHistory(true)} onCustodianChange={handleCustodianChange} />
+        <Header router={router} account={account} accountNumber={accountNumber} importRow={null} onImport={() => setShowImport(true)} onHistory={() => setShowHistory(true)} onCustodianChange={handleCustodianChange} onAccountNameChange={handleAccountNameChange} />
         <div className="max-w-3xl mx-auto p-6 text-center py-16">
           <div className="text-4xl mb-3">📊</div>
           <p className="text-sm font-semibold text-gray-600">Todavía no hay posiciones importadas para esta cuenta</p>
@@ -296,7 +304,7 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
   return (
     <div className="min-h-screen bg-gray-50">
       <Header router={router} account={account} accountNumber={accountNumber} importRow={importRow} onImport={() => setShowImport(true)} onHistory={() => setShowHistory(true)}
-        onDownloadPdf={handleDownloadPDF} downloadingPdf={downloadingPdf} onCustodianChange={handleCustodianChange} />
+        onDownloadPdf={handleDownloadPDF} downloadingPdf={downloadingPdf} onCustodianChange={handleCustodianChange} onAccountNameChange={handleAccountNameChange} />
       <AccountPdfReport account={account} accountNumber={accountNumber} importRow={importRow} sortedByValue={sortedByValue}
         assetAllocation={assetAllocation} fixedIncomeBreakdown={fixedIncomeBreakdown} currencyExposure={currencyExposure}
         liquidity={liquidity} maturityBuckets={maturityBuckets} nextMaturity={nextMaturity}
@@ -352,7 +360,7 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
 
 // ── Header ─────────────────────────────────────────────────────────────────
 
-function Header({ router, account, accountNumber, importRow, onImport, onHistory, onDownloadPdf, downloadingPdf, onCustodianChange }: {
+function Header({ router, account, accountNumber, importRow, onImport, onHistory, onDownloadPdf, downloadingPdf, onCustodianChange, onAccountNameChange }: {
   router: ReturnType<typeof useRouter>
   account: PortfolioAccountInfo | null
   accountNumber: string
@@ -362,13 +370,37 @@ function Header({ router, account, accountNumber, importRow, onImport, onHistory
   onDownloadPdf?: () => void
   downloadingPdf?: boolean
   onCustodianChange?: (custodian: string) => void
+  onAccountNameChange?: (name: string) => void
 }) {
+  const [editingName, setEditingName] = useState(false)
+  const [nameDraft, setNameDraft] = useState('')
+
   return (
     <div className="bg-white border-b border-gray-200 px-6 py-4 sticky top-0 z-10">
       <div className="max-w-6xl mx-auto flex items-center justify-between gap-4">
         <div className="min-w-0">
           <button onClick={() => router.push('/factsheet')} className="text-xs text-gray-400 hover:text-gray-600 transition mb-1">← Portafolio</button>
-          <h1 className="text-lg font-bold text-gray-900 truncate">{account?.clientName ?? accountNumber}</h1>
+          {account?.clientName ? (
+            <h1 className="text-lg font-bold text-gray-900 truncate">{account.clientName}</h1>
+          ) : editingName ? (
+            <input
+              autoFocus
+              value={nameDraft}
+              onChange={e => setNameDraft(e.target.value)}
+              onBlur={() => { setEditingName(false); onAccountNameChange?.(nameDraft.trim()) }}
+              onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
+              placeholder="Nombre del cliente"
+              className="text-lg font-bold text-gray-900 border-b border-gray-300 focus:outline-none focus:border-[#2E7D52] bg-transparent w-full max-w-xs"
+            />
+          ) : (
+            <h1
+              onClick={() => { if (account?.id) { setNameDraft(account.accountName ?? ''); setEditingName(true) } }}
+              className={`text-lg font-bold truncate ${account?.id ? 'text-gray-900 cursor-pointer hover:underline decoration-dashed underline-offset-4' : 'text-gray-900'}`}
+              title={account?.id ? 'Click para completar el nombre del cliente' : undefined}
+            >
+              {account?.accountName ?? accountNumber}
+            </h1>
+          )}
           <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-gray-400 mt-0.5">
             <span>{accountNumber}</span>
             {account?.clientNumber && <span>· Cliente #{account.clientNumber}</span>}

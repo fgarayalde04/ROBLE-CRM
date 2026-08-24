@@ -1210,7 +1210,7 @@ export default function ProposalEditor({
         import('html2canvas'),
         import('jspdf'),
       ])
-      const scale = 2
+      const scale = 3
       // Sections marked "keep together" (e.g. the Distribución del Portafolio
       // chart) must never be sliced across a page boundary — capture their
       // pixel bounds up front, in canvas coordinates, before slicing.

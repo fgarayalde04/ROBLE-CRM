@@ -46,6 +46,7 @@ export interface PortfolioAccountInfo {
   accountNumber: string
   clientNumber: string | null
   clientName: string | null
+  accountName: string | null
   advisor: string | null
   entity: string | null
   custodian: string | null

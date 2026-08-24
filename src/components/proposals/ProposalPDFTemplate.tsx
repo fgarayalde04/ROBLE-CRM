@@ -482,8 +482,9 @@ export default function ProposalPDFTemplate({
         </div>
       )}
 
-      {/* ── Disclaimer ── */}
-      <div style={{
+      {/* ── Disclaimer — siempre presente, marcado para que el paginado del PDF
+          nunca lo corte a la mitad ── */}
+      <div data-pdf-keep-together style={{
         marginTop: 10,
         paddingTop: 8,
         borderTop: '1px solid #e5e7eb',
