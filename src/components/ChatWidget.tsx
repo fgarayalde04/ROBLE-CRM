@@ -79,6 +79,16 @@ export default function ChatWidget({ user }: { user: SessionUser }) {
   const { chatOpen, setChatOpen } = useChatContext()
   const { advisorMode, initialized } = useAdvisorModeCtx()
   const [open, setOpen] = useState(false)
+  // Below md, the chat becomes a full-screen view instead of a small floating
+  // card — the fixed 520px card left almost no room for the keyboard/composer
+  // on a phone, and iOS zooms the page on focus if the input is under 16px.
+  const [isMobile, setIsMobile] = useState(false)
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [])
 
   // Sync external open trigger from BottomNav
   useEffect(() => {
@@ -370,15 +380,17 @@ export default function ChatWidget({ user }: { user: SessionUser }) {
       {/* ── Chat panel ── */}
       {open && (
         <div
-          className="fixed right-4 z-50 w-[calc(100vw-32px)] md:w-[720px] bg-white rounded-2xl shadow-2xl border border-gray-200 flex overflow-hidden"
-          style={{
-            bottom: initialized && advisorMode ? '72px' : '80px',
-            height: 'min(520px, calc(100vh - 130px))',
-          }}
+          className={`fixed z-50 bg-white shadow-2xl border-gray-200 flex overflow-hidden ${
+            isMobile ? 'inset-0 w-full' : 'right-4 w-[calc(100vw-32px)] md:w-[720px] rounded-2xl border'
+          }`}
+          style={isMobile
+            ? { height: '100dvh' }
+            : { bottom: initialized && advisorMode ? '72px' : '80px', height: 'min(520px, calc(100vh - 130px))' }
+          }
         >
 
           {/* ── LEFT: Conversation list ── */}
-          <div className="w-56 border-r border-gray-100 flex flex-col shrink-0">
+          <div className={`${isMobile && activeConvId ? 'hidden' : 'flex'} w-full md:w-56 border-r border-gray-100 flex-col shrink-0`}>
             {/* Header */}
             <div className="px-3 py-3 border-b border-gray-100 flex items-center justify-between gap-1.5">
               <span className="text-sm font-semibold text-[#2D3F52] flex-1">Mensajes</span>
@@ -453,7 +465,7 @@ export default function ChatWidget({ user }: { user: SessionUser }) {
           </div>
 
           {/* ── RIGHT: Message thread ── */}
-          <div className="flex-1 flex flex-col min-w-0">
+          <div className={`${isMobile && !activeConvId ? 'hidden' : 'flex'} flex-1 flex-col min-w-0`}>
             {!activeConvId ? (
               <div className="flex-1 flex flex-col items-center justify-center text-center px-6">
                 <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mb-3">
@@ -468,6 +480,13 @@ export default function ChatWidget({ user }: { user: SessionUser }) {
               <>
                 {/* Thread header */}
                 <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-2.5">
+                  {isMobile && (
+                    <button onClick={() => setActiveConvId(null)} title="Volver a conversaciones" className="text-gray-400 hover:text-gray-600 transition-colors shrink-0 -ml-1">
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+                      </svg>
+                    </button>
+                  )}
                   <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold text-white shrink-0 ${
                     activeConv?.type === 'group' ? 'bg-[#16A34A]' : 'bg-[#2D3F52]'
                   }`}>
@@ -491,7 +510,7 @@ export default function ChatWidget({ user }: { user: SessionUser }) {
                       </svg>
                     </button>
                   )}
-                  <button onClick={() => setActiveConvId(null)} className="text-gray-400 hover:text-gray-600 transition-colors shrink-0">
+                  <button onClick={() => isMobile ? setOpen(false) : setActiveConvId(null)} title={isMobile ? 'Cerrar chat' : 'Cerrar conversación'} className="text-gray-400 hover:text-gray-600 transition-colors shrink-0">
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                     </svg>
@@ -546,7 +565,7 @@ export default function ChatWidget({ user }: { user: SessionUser }) {
                 </div>
 
                 {/* Composer */}
-                <div className="px-3 py-2.5 border-t border-gray-100">
+                <div className="px-3 py-2.5 border-t border-gray-100" style={isMobile ? { paddingBottom: 'calc(0.625rem + env(safe-area-inset-bottom))' } : undefined}>
                   {/* Attached task preview */}
                   {attachedTask && (
                     <div className="mb-2 flex items-center gap-2 px-2.5 py-1.5 bg-blue-50 border border-blue-100 rounded-lg">
@@ -625,7 +644,7 @@ export default function ChatWidget({ user }: { user: SessionUser }) {
                       onChange={(e) => setComposerText(e.target.value)}
                       onKeyDown={handleComposerKey}
                       placeholder="Escribí un mensaje... (Enter para enviar)"
-                      className="flex-1 resize-none text-sm border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#2D3F52]/20 focus:border-[#2D3F52]/30 placeholder-gray-400 text-gray-800 max-h-24 overflow-y-auto"
+                      className="flex-1 resize-none text-base md:text-sm border border-gray-200 rounded-xl px-3 py-2.5 md:py-2 focus:outline-none focus:ring-2 focus:ring-[#2D3F52]/20 focus:border-[#2D3F52]/30 placeholder-gray-400 text-gray-800 max-h-24 overflow-y-auto"
                       style={{ lineHeight: '1.4' }}
                     />
 
