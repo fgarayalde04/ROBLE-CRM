@@ -1,4 +1,4 @@
-import type { PortfolioPositionRow, PortfolioImportRow, PortfolioAccountInfo, PortfolioCashProjectionRow, PortfolioCashProjectionsImportRow, PortfolioPerformanceRow, PortfolioUnrealizedGainLossRow, PortfolioUnrealizedGainLossImportRow } from '@/types/portfolio'
+import type { PortfolioPositionRow, PortfolioImportRow, PortfolioAccountInfo, PortfolioCashProjectionRow, PortfolioCashProjectionsImportRow, PortfolioPerformanceRow, PortfolioUnrealizedGainLossRow } from '@/types/portfolio'
 import { fmtUSD, fmtUSD2, fmtPct, fmtDate } from './PortfolioAccountClient'
 import DonutChart from '@/components/portfolio/DonutChart'
 import { COLORS, DONUT_COLORS, monthLabel } from '@/lib/portfolio/theme'
@@ -98,39 +98,10 @@ function CssBarChart({ data, color }: { data: { label: string; value: number }[]
   )
 }
 
-function DivergingBarChart({ data }: { data: { name: string; gainLoss: number }[] }) {
-  const maxAbs = Math.max(...data.map(d => Math.abs(d.gainLoss)), 1)
-  return (
-    <div>
-      {data.map(d => {
-        const isGain = d.gainLoss >= 0
-        const widthPct = Math.max((Math.abs(d.gainLoss) / maxAbs) * 38, 1.5)
-        return (
-          <div key={d.name} style={{ display: 'flex', alignItems: 'center', gap: '2mm', minHeight: '4mm', fontSize: 6.8, lineHeight: 1.4, marginBottom: '2.4mm', fontFamily: 'Arial, sans-serif' }}>
-            <span style={{ width: '45mm', color: COLORS.ink, flexShrink: 0 }}>{truncateName(d.name, 30)}</span>
-            <div style={{ flex: 1, display: 'flex', alignItems: 'center', height: '3mm' }}>
-              <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-end' }}>
-                {!isGain && <div style={{ height: '2mm', width: `${widthPct}%`, background: COLORS.loss, borderRadius: '0.5mm 0 0 0.5mm' }} />}
-              </div>
-              <div style={{ width: 1, height: '3mm', background: COLORS.border, flexShrink: 0 }} />
-              <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-start' }}>
-                {isGain && <div style={{ height: '2mm', width: `${widthPct}%`, background: COLORS.gain, borderRadius: '0 0.5mm 0.5mm 0' }} />}
-              </div>
-            </div>
-            <span style={{ width: '22mm', textAlign: 'right', fontWeight: 700, color: isGain ? COLORS.gain : COLORS.loss, flexShrink: 0 }}>
-              {isGain ? '+' : ''}{fmtUSD(d.gainLoss)}
-            </span>
-          </div>
-        )
-      })}
-    </div>
-  )
-}
-
 export default function AccountPdfReport({
   account, accountNumber, importRow, sortedByValue, assetAllocation, fixedIncomeBreakdown, currencyExposure,
   liquidity, maturityBuckets, nextMaturity, cashProjImport, cashProjRows, projectedIncome12m, nextPayment,
-  cleanedNames, performance, unrealizedGLImport, unrealizedGLTotals, glByCusip, gainLossByInvestment,
+  cleanedNames, performance, unrealizedGLTotals, glByCusip,
 }: {
   account: PortfolioAccountInfo | null
   accountNumber: string
@@ -148,10 +119,8 @@ export default function AccountPdfReport({
   nextPayment: PortfolioCashProjectionRow | null
   cleanedNames: Map<string, { name: string; detail: string | null }>
   performance: PortfolioPerformanceRow | null
-  unrealizedGLImport: PortfolioUnrealizedGainLossImportRow | null
   unrealizedGLTotals: { costBasis: number; gainLoss: number; pct: number; matched: number; total: number } | null
   glByCusip: Map<string, PortfolioUnrealizedGainLossRow>
-  gainLossByInvestment: { id: string; name: string; gainLoss: number; gainLossPct: number }[]
 }) {
   const totalValue = Number(importRow.total_market_value)
   const clientName = account?.clientName ?? accountNumber
@@ -244,13 +213,6 @@ export default function AccountPdfReport({
             )
           })}
         </div>
-
-        {unrealizedGLImport && gainLossByInvestment.length > 0 && (
-          <div data-pdf-keep-together style={{ border: `1px solid ${COLORS.border}`, borderRadius: 8, padding: '3mm 4mm', marginBottom: '3mm' }}>
-            <div style={{ fontSize: 9, fontWeight: 700, color: COLORS.ink, marginBottom: '2mm' }}>Unrealized Gain/Loss by Investment</div>
-            <DivergingBarChart data={gainLossByInvestment.slice(0, 10)} />
-          </div>
-        )}
 
         <PdfFooter clientName={clientName} />
       </div>

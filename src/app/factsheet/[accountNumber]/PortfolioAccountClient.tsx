@@ -302,8 +302,7 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
         liquidity={liquidity} maturityBuckets={maturityBuckets} nextMaturity={nextMaturity}
         cashProjImport={cashProjImport} cashProjRows={cashProjRows} projectedIncome12m={projectedIncome12m}
         nextPayment={nextPayment} cleanedNames={cleanedNames} performance={performance}
-        unrealizedGLImport={unrealizedGLImport} unrealizedGLTotals={unrealizedGLTotals} glByCusip={glByCusip}
-        gainLossByInvestment={gainLossByInvestment} />
+        unrealizedGLTotals={unrealizedGLTotals} glByCusip={glByCusip} />
 
       {/* Tabs */}
       <div className="bg-white border-b border-gray-200 px-6">
