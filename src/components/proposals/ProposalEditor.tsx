@@ -461,6 +461,7 @@ interface Proposal {
   client_name: string | null
   advisor_name: string | null
   total_amount: number
+  total_ventas: number
   currency: string
   title: string | null
   status: string
@@ -595,9 +596,9 @@ function EditCell({
 // ─── Allocation Panel ─────────────────────────────────────────────────────────
 
 function AllocationPanel({
-  total, currency, funds, bonds, equities,
+  total, ventas, currency, funds, bonds, equities,
 }: {
-  total: number; currency: string; funds: Fund[]; bonds: Bond[]; equities: Equity[]
+  total: number; ventas: number; currency: string; funds: Fund[]; bonds: Bond[]; equities: Equity[]
 }) {
   const sumFunds    = funds.reduce((s, f) => s + (f.pct ?? 0), 0)
   const sumBonds    = bonds.reduce((s, b) => s + (b.pct ?? 0), 0)
@@ -625,8 +626,14 @@ function AllocationPanel({
   return (
     <div className="bg-white border border-[#E2E8F0] rounded-xl p-5 space-y-4 sticky top-4">
       <div>
-        <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest mb-1">Monto total</p>
+        <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest mb-1">Compras</p>
         <p className="text-2xl font-bold text-[#2D3F52] font-mono tabular-nums">{fmtMoney(total, currency)}</p>
+        {ventas > 0 && (
+          <>
+            <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest mb-1 mt-2">Ventas</p>
+            <p className="text-base font-bold text-gray-500 font-mono tabular-nums">{fmtMoney(ventas, currency)}</p>
+          </>
+        )}
       </div>
 
       <div className="space-y-3">
@@ -758,7 +765,8 @@ function FundsTable({
   }
 
   const totalFundsPct = funds.reduce((s, f) => s + (f.pct ?? 0), 0)
-  const totalFundsAmt = funds.reduce((s, f) => s + (f.amount ?? 0), 0)
+  const totalFundsCompras = funds.filter(f => f.operacion !== 'venta').reduce((s, f) => s + (f.amount ?? 0), 0)
+  const totalFundsVentas  = funds.filter(f => f.operacion === 'venta').reduce((s, f) => s + (f.amount ?? 0), 0)
 
   return (
     <div>
@@ -887,7 +895,8 @@ function FundsTable({
                   <td colSpan={10} className="px-3 py-2.5 text-[9px] text-white/40 uppercase tracking-widest">Total fondos</td>
                   <td className="px-3 py-2.5 text-right text-sm font-bold text-white">{totalFundsPct.toFixed(1)}%</td>
                   <td className="px-3 py-2.5 text-right text-sm font-bold text-white font-mono tabular-nums">
-                    {fmtMoney(totalFundsAmt, currency)}
+                    Compras {fmtMoney(totalFundsCompras, currency)}
+                    {totalFundsVentas > 0 && <><br />Ventas {fmtMoney(totalFundsVentas, currency)}</>}
                   </td>
                   <td />
                 </tr>
@@ -1265,6 +1274,7 @@ export default function ProposalEditor({
   }
 
   const total    = proposal.total_amount ?? 0
+  const ventas   = proposal.total_ventas ?? 0
   const currency = proposal.currency ?? 'USD'
   const st       = STATUS_MAP[proposal.status] ?? STATUS_MAP.draft
 
@@ -1279,16 +1289,18 @@ export default function ProposalEditor({
 
   // Monto total: nunca se define de antemano — se recalcula solo, sumando lo
   // que se va cargando en fondos/bonos/acciones, cada vez que algo cambia.
+  // Compras y ventas se suman por separado — sumarlas juntas infla el total
+  // (ej: comprar $300 y vender $300 no es "$600 de inversión").
   useEffect(() => {
-    const sum = funds.reduce((s, f) => s + (f.amount ?? 0), 0)
-      + bonds.reduce((s, b) => s + (b.amount ?? 0), 0)
-      + equities.reduce((s, e) => s + (e.amount ?? 0), 0)
+    const items = [...funds, ...bonds, ...equities]
+    const compras = items.filter(i => i.operacion !== 'venta').reduce((s, i) => s + (i.amount ?? 0), 0)
+    const ventas  = items.filter(i => i.operacion === 'venta').reduce((s, i) => s + (i.amount ?? 0), 0)
     setProposal(p => {
-      if (p.total_amount === sum) return p
+      if (p.total_amount === compras && p.total_ventas === ventas) return p
       fetch(`/api/proposals/${proposal.id}`, {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ total_amount: sum }),
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ total_amount: compras, total_ventas: ventas }),
       })
-      return { ...p, total_amount: sum }
+      return { ...p, total_amount: compras, total_ventas: ventas }
     })
   }, [funds, bonds, equities, proposal.id])
 
@@ -1313,7 +1325,8 @@ export default function ProposalEditor({
             <div className="min-w-0">
               <p className="text-sm font-semibold text-[#2D3F52] truncate">{proposal.title ?? 'Sin título'}</p>
               <p className="text-[10px] text-gray-400 truncate">
-                {proposal.client_name ?? 'Sin cliente'} · {currency} {total.toLocaleString('en-US')}
+                {proposal.client_name ?? 'Sin cliente'} · Compras {currency} {total.toLocaleString('en-US')}
+                {ventas > 0 && <> · Ventas {currency} {ventas.toLocaleString('en-US')}</>}
               </p>
             </div>
           </div>
@@ -1394,8 +1407,9 @@ export default function ProposalEditor({
                 </div>
                 <div>
                   <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest mb-1">Monto</p>
-                  <p className="text-sm font-bold font-mono tabular-nums text-[#2D3F52]">{currency} {proposal.total_amount.toLocaleString('en-US')}</p>
-                  <p className="text-[9px] text-gray-400 mt-0.5">Suma de los activos cargados</p>
+                  <p className="text-sm font-bold font-mono tabular-nums text-[#2D3F52]">Compras {currency} {total.toLocaleString('en-US')}</p>
+                  {ventas > 0 && <p className="text-sm font-bold font-mono tabular-nums text-gray-500">Ventas {currency} {ventas.toLocaleString('en-US')}</p>}
+                  <p className="text-[9px] text-gray-400 mt-0.5">Suma de los activos cargados, compras y ventas por separado</p>
                 </div>
                 <div>
                   <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest mb-1">Fecha</p>
@@ -1447,6 +1461,7 @@ export default function ProposalEditor({
           {/* ── Right: allocation panel ── */}
           <AllocationPanel
             total={total}
+            ventas={ventas}
             currency={currency}
             funds={funds}
             bonds={bonds}

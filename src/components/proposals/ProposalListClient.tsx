@@ -9,6 +9,7 @@ interface Proposal {
   client_name: string | null
   advisor_name: string | null
   total_amount: number
+  total_ventas: number | null
   currency: string
   title: string | null
   status: string
@@ -371,9 +372,14 @@ export default function ProposalListClient({
 
                     {/* Monto */}
                     <td className="px-4 py-3.5 text-right">
-                      <span className="text-sm font-semibold text-[#2D3F52] font-mono tabular-nums">
+                      <div className="text-sm font-semibold text-[#2D3F52] font-mono tabular-nums">
                         {fmtMoney(p.total_amount, p.currency)}
-                      </span>
+                      </div>
+                      {!!p.total_ventas && (
+                        <div className="text-[10px] text-gray-400 font-mono tabular-nums">
+                          Ventas {fmtMoney(p.total_ventas, p.currency)}
+                        </div>
+                      )}
                     </td>
 
                     {/* Estado */}

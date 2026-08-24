@@ -184,15 +184,29 @@ export default function ProposalPDFTemplate({
   date,
 }: ProposalPDFTemplateProps) {
   const gestoras = getGestoras(funds)
-  const totalAssigned = funds.reduce((s, f) => s + (f.amount ?? 0), 0)
-    + bonds.reduce((s, b) => s + (b.amount ?? 0), 0)
-    + equities.reduce((s, e) => s + (e.amount ?? 0), 0)
+  // Compras y ventas se muestran siempre por separado — sumarlas juntas
+  // infla el total (ej: comprar $300 y vender $300 no es "$600").
+  const allItems = [...funds, ...bonds, ...equities]
+  const totalCompras = allItems.filter(i => i.operacion !== 'venta').reduce((s, i) => s + (i.amount ?? 0), 0)
+  const totalVentas  = allItems.filter(i => i.operacion === 'venta').reduce((s, i) => s + (i.amount ?? 0), 0)
+  const totalAssigned = totalCompras || totalAmount
 
   const displayDate = date ?? new Date().toLocaleDateString('es-UY', { day: '2-digit', month: 'long', year: 'numeric' })
 
   // ── Grouping: if nobody tagged a broker/custodio, keep the classic flat layout ──
   const brokers = uniqueBrokers(funds, bonds, equities)
   const grouped = brokers.length > 1 || (brokers.length === 1 && brokers[0] !== null)
+
+  function opCompras(list: { operacion: Operacion; amount: number | null }[]) {
+    return list.filter(i => i.operacion !== 'venta').reduce((s, i) => s + (i.amount ?? 0), 0)
+  }
+  function opVentas(list: { operacion: Operacion; amount: number | null }[]) {
+    return list.filter(i => i.operacion === 'venta').reduce((s, i) => s + (i.amount ?? 0), 0)
+  }
+  function opSubtotalLabel(list: { operacion: Operacion; amount: number | null }[]) {
+    const v = opVentas(list)
+    return v > 0 ? `Ventas: ${fmtAmt(v)}` : ''
+  }
 
   function fundsTable(list: Fund[]) {
     if (list.length === 0) return null
@@ -226,8 +240,10 @@ export default function ProposalPDFTemplate({
         </tbody>
         <tfoot>
           <tr>
-            <td colSpan={7} style={{ ...FOOTER_TD, textAlign: 'left', fontSize: 9, opacity: 0.6, borderRight: 'none' }} />
-            <td style={{ ...FOOTER_TD, textAlign: 'right', borderRight: 'none' }}>{fmtAmt(list.reduce((s, f) => s + (f.amount ?? 0), 0))}</td>
+            <td colSpan={7} style={{ ...FOOTER_TD, textAlign: 'left', fontSize: 9, opacity: 0.6, borderRight: 'none' }}>
+              {opSubtotalLabel(list)}
+            </td>
+            <td style={{ ...FOOTER_TD, textAlign: 'right', borderRight: 'none' }}>{fmtAmt(opCompras(list))}</td>
           </tr>
         </tfoot>
       </table>
@@ -267,8 +283,10 @@ export default function ProposalPDFTemplate({
           </tbody>
           <tfoot>
             <tr>
-              <td colSpan={7} style={{ ...FOOTER_TD, fontSize: 9, opacity: 0.6, borderRight: 'none' }} />
-              <td style={{ ...FOOTER_TD, textAlign: 'right', borderRight: 'none' }}>{fmtAmt(list.reduce((s, b) => s + (b.amount ?? 0), 0))}</td>
+              <td colSpan={7} style={{ ...FOOTER_TD, fontSize: 9, opacity: 0.6, borderRight: 'none' }}>
+                {opSubtotalLabel(list)}
+              </td>
+              <td style={{ ...FOOTER_TD, textAlign: 'right', borderRight: 'none' }}>{fmtAmt(opCompras(list))}</td>
             </tr>
           </tfoot>
         </table>
@@ -307,8 +325,10 @@ export default function ProposalPDFTemplate({
           </tbody>
           <tfoot>
             <tr>
-              <td colSpan={6} style={{ ...FOOTER_TD, fontSize: 9, opacity: 0.6, borderRight: 'none' }} />
-              <td style={{ ...FOOTER_TD, textAlign: 'right', borderRight: 'none' }}>{fmtAmt(list.reduce((s, e) => s + (e.amount ?? 0), 0))}</td>
+              <td colSpan={6} style={{ ...FOOTER_TD, fontSize: 9, opacity: 0.6, borderRight: 'none' }}>
+                {opSubtotalLabel(list)}
+              </td>
+              <td style={{ ...FOOTER_TD, textAlign: 'right', borderRight: 'none' }}>{fmtAmt(opCompras(list))}</td>
             </tr>
           </tfoot>
         </table>
@@ -349,7 +369,7 @@ export default function ProposalPDFTemplate({
           ['Cliente', clientName ?? '—', 1.5],
           ['Asesor', advisorName ?? '—', 1],
           ['Fecha', displayDate, 1],
-          ['Monto total', `${currency} ${fmtAmt(totalAssigned || totalAmount)}`.replace(`${currency} $`, `${currency} `), 1],
+          ['Compras', `${currency} ${fmtAmt(totalAssigned)}`.replace(`${currency} $`, `${currency} `), 1],
         ].map(([label, value, flex], i, arr) => (
           <div key={label as string} style={{
             flex: flex as number,
@@ -361,6 +381,12 @@ export default function ProposalPDFTemplate({
             <div style={{ fontSize: 12.5, fontWeight: 700, color: '#1B2E3C', lineHeight: 1.5 }}>{value}</div>
           </div>
         ))}
+        {totalVentas > 0 && (
+          <div style={{ flex: 1, padding: '8px 16px 10px', backgroundColor: '#F7F9FB' }}>
+            <div style={{ fontSize: 8.5, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4, lineHeight: 1.4 }}>Ventas</div>
+            <div style={{ fontSize: 12.5, fontWeight: 700, color: '#1B2E3C', lineHeight: 1.5 }}>{`${currency} ${fmtAmt(totalVentas)}`.replace(`${currency} $`, `${currency} `)}</div>
+          </div>
+        )}
       </div>
 
       {grouped ? (
@@ -420,12 +446,20 @@ export default function ProposalPDFTemplate({
 
       {/* ── Grand total (if multiple sections) ── */}
       {(bonds.length > 0 || equities.length > 0) && funds.length > 0 && (
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 4 }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 4 }}>
+          {totalVentas > 0 && (
+            <div style={{
+              backgroundColor: '#6b7280', color: '#fff', fontWeight: 700, fontSize: 12,
+              padding: '7px 16px', borderRadius: 4,
+            }}>
+              VENTAS: {fmtAmt(totalVentas)}
+            </div>
+          )}
           <div style={{
             backgroundColor: '#1B2E3C', color: '#fff', fontWeight: 700, fontSize: 12,
             padding: '7px 16px', borderRadius: 4,
           }}>
-            TOTAL: {fmtAmt(totalAssigned)}
+            COMPRAS: {fmtAmt(totalAssigned)}
           </div>
         </div>
       )}
