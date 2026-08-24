@@ -286,7 +286,7 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
           }
         }
       }
-      const clientName = (account?.clientName ?? accountNumber).replace(/\s+/g, '_')
+      const clientName = (account?.clientName || account?.accountName || accountNumber).replace(/\s+/g, '_')
       pdf.save(`Portfolio_${clientName}_${accountNumber}.pdf`)
     } finally {
       setDownloadingPdf(false)

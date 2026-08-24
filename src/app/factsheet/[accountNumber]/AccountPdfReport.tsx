@@ -34,7 +34,7 @@ function PdfLetterhead({ title, accountNumber, account, importRow }: { title: st
       </div>
       <div style={{ display: 'flex', border: `1px solid ${COLORS.border}`, borderRadius: 6, overflow: 'hidden' }}>
         {[
-          ['Cliente', account?.clientName ?? accountNumber],
+          ['Cliente', account?.clientName || account?.accountName || accountNumber],
           ['Custodio', account?.custodian ?? '—'],
           ['Actualizado', fmtDate(importRow.snapshot_date)],
           ['Fecha del reporte', today],
@@ -123,7 +123,7 @@ export default function AccountPdfReport({
   glByCusip: Map<string, PortfolioUnrealizedGainLossRow>
 }) {
   const totalValue = Number(importRow.total_market_value)
-  const clientName = account?.clientName ?? accountNumber
+  const clientName = account?.clientName || account?.accountName || accountNumber
   const topHoldings = sortedByValue.slice(0, 6)
   const maxHoldingValue = topHoldings[0] ? Number(topHoldings[0].market_value) : 1
 
