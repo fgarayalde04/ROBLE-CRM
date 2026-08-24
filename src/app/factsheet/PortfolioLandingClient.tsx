@@ -24,6 +24,21 @@ export default function PortfolioLandingClient() {
   const [loading, setLoading] = useState(true)
   const [q, setQ] = useState('')
   const [showImport, setShowImport] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false)
+
+  async function handleDelete(accountNumber: string) {
+    setDeleting(true)
+    try {
+      const res = await fetch(`/api/portfolio/${encodeURIComponent(accountNumber)}`, { method: 'DELETE' })
+      if (res.ok) {
+        setAccounts(a => a.filter(x => x.account_number !== accountNumber))
+      }
+    } finally {
+      setDeleting(false)
+      setConfirmDelete(null)
+    }
+  }
 
   async function load() {
     setLoading(true)
@@ -85,22 +100,52 @@ export default function PortfolioLandingClient() {
         ) : (
           <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100 overflow-hidden">
             {filtered.map(a => (
-              <button
-                key={a.account_number}
-                onClick={() => router.push(`/factsheet/${encodeURIComponent(a.account_number)}`)}
-                className="w-full flex items-center justify-between gap-4 px-5 py-4 hover:bg-gray-50 transition text-left"
-              >
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-gray-900 truncate">{a.client_name ?? a.account_number}</p>
-                  <p className="text-xs text-gray-400 mt-0.5">
-                    {a.account_number}{a.client_number ? ` · Cliente #${a.client_number}` : ''} · {a.position_count} posiciones
-                  </p>
-                </div>
-                <div className="text-right shrink-0">
-                  <p className="text-sm font-bold text-gray-900">{fmtUSD(Number(a.total_market_value))}</p>
-                  <p className="text-[11px] text-gray-400 mt-0.5">Actualizado {fmtDate(a.snapshot_date)}</p>
-                </div>
-              </button>
+              <div key={a.account_number} className="w-full flex items-center justify-between gap-4 px-5 py-4 hover:bg-gray-50 transition">
+                <button
+                  onClick={() => router.push(`/factsheet/${encodeURIComponent(a.account_number)}`)}
+                  className="flex-1 min-w-0 flex items-center justify-between gap-4 text-left"
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-gray-900 truncate">{a.client_name ?? a.account_number}</p>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      {a.account_number}{a.client_number ? ` · Cliente #${a.client_number}` : ''} · {a.position_count} posiciones
+                    </p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-sm font-bold text-gray-900">{fmtUSD(Number(a.total_market_value))}</p>
+                    <p className="text-[11px] text-gray-400 mt-0.5">Actualizado {fmtDate(a.snapshot_date)}</p>
+                  </div>
+                </button>
+
+                {confirmDelete === a.account_number ? (
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <span className="text-[11px] text-gray-500">¿Eliminar?</span>
+                    <button
+                      onClick={() => handleDelete(a.account_number)}
+                      disabled={deleting}
+                      className="text-[11px] font-medium px-2 py-1 bg-red-600 text-white rounded hover:bg-red-700 transition-colors disabled:opacity-50"
+                    >
+                      {deleting ? '...' : 'Sí'}
+                    </button>
+                    <button
+                      onClick={() => setConfirmDelete(null)}
+                      className="text-[11px] px-2 py-1 border border-gray-200 rounded text-gray-500 hover:bg-gray-50 transition-colors"
+                    >
+                      No
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setConfirmDelete(a.account_number)}
+                    title="Eliminar portafolio"
+                    className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors shrink-0"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                    </svg>
+                  </button>
+                )}
+              </div>
             ))}
           </div>
         )}

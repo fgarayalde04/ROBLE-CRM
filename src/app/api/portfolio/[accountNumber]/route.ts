@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
-import { resolveAccount, getLatestImport, getImportByDate, getPositions } from '@/lib/db/portfolio'
+import { resolveAccount, getLatestImport, getImportByDate, getPositions, deletePortfolioAccount } from '@/lib/db/portfolio'
 
 // GET /api/portfolio/[accountNumber] — latest snapshot (or ?date=YYYY-MM-DD)
 // with its positions, plus resolved account/client info.
@@ -31,4 +31,20 @@ export async function GET(
 
   const positions = await getPositions(importRow.id)
   return NextResponse.json({ account, import: importRow, positions })
+}
+
+// DELETE /api/portfolio/[accountNumber] — wipes every portfolio import for
+// this account (positions, cash projections, performance, unrealized G/L).
+// Irreversible. Admin-only.
+export async function DELETE(
+  _req: NextRequest,
+  { params }: { params: { accountNumber: string } }
+) {
+  const session = await getSession()
+  if (!session) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+  if (session.role !== 'admin') return NextResponse.json({ error: 'Solo admins pueden eliminar un portafolio' }, { status: 403 })
+
+  const accountNumber = decodeURIComponent(params.accountNumber)
+  await deletePortfolioAccount(accountNumber)
+  return NextResponse.json({ ok: true })
 }

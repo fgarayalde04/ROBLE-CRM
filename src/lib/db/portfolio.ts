@@ -115,6 +115,27 @@ export async function deleteImport(importId: string) {
   await pool.query(`delete from portfolio_imports where id = $1`, [importId])
 }
 
+// Wipes every portfolio import (positions, cash projections, performance,
+// unrealized gain/loss — all snapshot dates, not just the latest) for an
+// account. Child rows cascade via FK. Irreversible — used by the "eliminar
+// portafolio" action on the accounts landing page.
+export async function deletePortfolioAccount(accountNumber: string) {
+  const client = await pool.connect()
+  try {
+    await client.query('begin')
+    await client.query(`delete from portfolio_imports where account_number = $1`, [accountNumber])
+    await client.query(`delete from portfolio_cash_projections_imports where account_number = $1`, [accountNumber])
+    await client.query(`delete from portfolio_unrealized_gainloss_imports where account_number = $1`, [accountNumber])
+    await client.query(`delete from portfolio_performance_imports where account_number = $1`, [accountNumber])
+    await client.query('commit')
+  } catch (err) {
+    await client.query('rollback')
+    throw err
+  } finally {
+    client.release()
+  }
+}
+
 export async function getImport(importId: string) {
   const { rows } = await pool.query(`select * from portfolio_imports where id = $1`, [importId])
   return rows[0] ?? null
