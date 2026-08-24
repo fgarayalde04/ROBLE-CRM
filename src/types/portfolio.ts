@@ -118,6 +118,7 @@ export interface PortfolioUnrealizedGainLossRow {
   market_value: string
   gain_loss: string
   gain_loss_pct: string
+  purchase_date: string | null
 }
 
 export interface PortfolioUnrealizedGainLossImportRow {

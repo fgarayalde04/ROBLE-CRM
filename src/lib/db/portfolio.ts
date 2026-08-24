@@ -333,11 +333,11 @@ export async function createUnrealizedGainLossImport(input: {
     const importRow = rows[0]
 
     if (input.parsed.rows.length > 0) {
-      const cols = ['import_id', 'account_number', 'cusip', 'security_identifier', 'description', 'quantity', 'cost_basis', 'market_value', 'gain_loss', 'gain_loss_pct']
+      const cols = ['import_id', 'account_number', 'cusip', 'security_identifier', 'description', 'quantity', 'cost_basis', 'market_value', 'gain_loss', 'gain_loss_pct', 'purchase_date']
       const values: unknown[] = []
       const rowsSql = input.parsed.rows.map((r, idx) => {
         const base = idx * cols.length
-        values.push(importRow.id, input.accountNumber, r.cusip, r.securityIdentifier, r.description, r.quantity, r.costBasis, r.marketValue, r.gainLoss, r.gainLossPct)
+        values.push(importRow.id, input.accountNumber, r.cusip, r.securityIdentifier, r.description, r.quantity, r.costBasis, r.marketValue, r.gainLoss, r.gainLossPct, r.purchaseDate)
         return `(${cols.map((_, i) => `$${base + i + 1}`).join(',')})`
       })
       await client.query(`insert into portfolio_unrealized_gainloss (${cols.join(',')}) values ${rowsSql.join(',')}`, values)

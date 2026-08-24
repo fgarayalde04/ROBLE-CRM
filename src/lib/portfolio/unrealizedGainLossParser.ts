@@ -17,7 +17,7 @@
  *   (falls back to Security Identifier) into one row per security.
  */
 import * as XLSX from 'xlsx'
-import { parseNum, parseStr } from '@/lib/factsheet-parser'
+import { parseDateStr, parseNum, parseStr } from '@/lib/factsheet-parser'
 
 export interface UnrealizedGainLossRow {
   cusip: string
@@ -28,6 +28,7 @@ export interface UnrealizedGainLossRow {
   marketValue: number
   gainLoss: number
   gainLossPct: number
+  purchaseDate: string | null   // null when the position spans multiple lots bought on different dates
 }
 
 export interface ParsedUnrealizedGainLoss {
@@ -88,6 +89,14 @@ function extractNetGainLoss(metaLines: string[]): number | null {
   return null
 }
 
+// Purchase-date list is stored pre-formatted (not ISO) since a position can
+// carry several dates joined together, which downstream `fmtDate()` callers
+// can't parse as a single Date.
+function formatDateEs(iso: string): string {
+  const [y, m, d] = iso.split('-')
+  return `${d}/${m}/${y}`
+}
+
 export function parseUnrealizedGainLossExcel(buffer: ArrayBuffer): ParsedUnrealizedGainLoss {
   const warnings: string[] = []
 
@@ -130,7 +139,7 @@ export function parseUnrealizedGainLossExcel(buffer: ArrayBuffer): ParsedUnreali
   // one lot, the export already includes its own subtotal row (Trade Date =
   // "Multiple") — use that row alone rather than summing it together with
   // the individual lots underneath it, which would double-count.
-  interface LotRow { securityIdentifier: string | null; description: string; quantity: number; costBasis: number; marketValue: number; gainLoss: number; isSubtotal: boolean }
+  interface LotRow { securityIdentifier: string | null; description: string; quantity: number; costBasis: number; marketValue: number; gainLoss: number; purchaseDate: string | null; isSubtotal: boolean }
   const lotsByCusip = new Map<string, LotRow[]>()
 
   for (let i = headerIdx + 1; i < raw.length; i++) {
@@ -139,6 +148,7 @@ export function parseUnrealizedGainLossExcel(buffer: ArrayBuffer): ParsedUnreali
     const description = parseStr(get(row, 'description'))
     if (!cusip || !description) continue
 
+    const tradeDateRaw = get(row, 'tradeDate')
     const lot: LotRow = {
       securityIdentifier: parseStr(get(row, 'securityIdentifier')),
       description,
@@ -146,16 +156,21 @@ export function parseUnrealizedGainLossExcel(buffer: ArrayBuffer): ParsedUnreali
       costBasis: parseNum(get(row, 'costBasis')) ?? 0,
       marketValue: parseNum(get(row, 'marketValue')) ?? 0,
       gainLoss: parseNum(get(row, 'gainLoss')) ?? 0,
-      isSubtotal: parseStr(get(row, 'tradeDate'))?.toLowerCase() === 'multiple',
+      purchaseDate: parseDateStr(tradeDateRaw),
+      isSubtotal: parseStr(tradeDateRaw)?.toLowerCase() === 'multiple',
     }
     const list = lotsByCusip.get(cusip)
     if (list) list.push(lot); else lotsByCusip.set(cusip, [lot])
   }
 
-  const byCusip = new Map<string, { securityIdentifier: string | null; description: string; quantity: number; costBasis: number; marketValue: number; gainLoss: number }>()
+  const byCusip = new Map<string, { securityIdentifier: string | null; description: string; quantity: number; costBasis: number; marketValue: number; gainLoss: number; purchaseDate: string | null }>()
   for (const [cusip, lots] of Array.from(lotsByCusip)) {
     const subtotal = lots.find(l => l.isSubtotal)
     const used = subtotal ? [subtotal] : lots
+    // Same treatment as the positions parser: the "Multiple" subtotal row
+    // itself has no date, so when present the real dates come from the
+    // individual lot rows underneath it.
+    const lotDates = Array.from(new Set(lots.filter(l => !l.isSubtotal && l.purchaseDate).map(l => l.purchaseDate as string))).sort()
     byCusip.set(cusip, {
       securityIdentifier: used[0].securityIdentifier,
       description: used[0].description,
@@ -163,6 +178,7 @@ export function parseUnrealizedGainLossExcel(buffer: ArrayBuffer): ParsedUnreali
       costBasis: used.reduce((s, l) => s + l.costBasis, 0),
       marketValue: used.reduce((s, l) => s + l.marketValue, 0),
       gainLoss: used.reduce((s, l) => s + l.gainLoss, 0),
+      purchaseDate: lotDates.length === 0 ? null : lotDates.map(formatDateEs).join(', '),
     })
   }
 
@@ -175,6 +191,7 @@ export function parseUnrealizedGainLossExcel(buffer: ArrayBuffer): ParsedUnreali
     marketValue: parseFloat(agg.marketValue.toFixed(2)),
     gainLoss: parseFloat(agg.gainLoss.toFixed(2)),
     gainLossPct: agg.costBasis > 0 ? parseFloat(((agg.gainLoss / agg.costBasis) * 100).toFixed(2)) : 0,
+    purchaseDate: agg.purchaseDate,
   }))
 
   if (!rows.length) warnings.push('No se encontraron posiciones en el archivo')

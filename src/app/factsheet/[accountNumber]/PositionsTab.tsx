@@ -116,7 +116,7 @@ export default function PositionsTab({ positions, totalValue, glByCusip }: { pos
                     <td className="px-4 py-2.5 max-w-[260px]">
                       <div className="text-gray-800 font-medium truncate">{clean.name}</div>
                       {clean.detail && <div className="text-[10px] text-gray-400 truncate">{clean.detail}</div>}
-                      {p.purchase_date && <div className="text-[10px] text-gray-400 truncate">Compra: {p.purchase_date}</div>}
+                      {(p.purchase_date || gl?.purchase_date) && <div className="text-[10px] text-gray-400 truncate">Compra: {p.purchase_date ?? gl?.purchase_date}</div>}
                     </td>
                     <td className="px-4 py-2.5 text-gray-500">{ASSET_CLASS_ES[p.asset_class] ?? p.asset_class}</td>
                     <td className="px-4 py-2.5 text-right text-gray-700 font-mono">{p.quantity != null ? Number(p.quantity).toLocaleString('en-US') : '—'}</td>
@@ -225,7 +225,7 @@ export default function PositionsTab({ positions, totalValue, glByCusip }: { pos
               <DetailRow label="Precio" value={selected.price != null ? fmtUSD2(Number(selected.price)) : null} />
               <DetailRow label="ISIN" value={selected.isin} />
               <DetailRow label="CUSIP" value={selected.cusip} />
-              <DetailRow label="Fecha de compra" value={selected.purchase_date} />
+              <DetailRow label="Fecha de compra" value={selected.purchase_date ?? (selected.cusip ? glByCusip.get(selected.cusip)?.purchase_date : null) ?? null} />
               <DetailRow label="Vencimiento" value={selected.maturity_date ? fmtDate(selected.maturity_date) : null} />
               <DetailRow label="Cupón" value={selected.coupon != null ? `${Number(selected.coupon).toFixed(2)}%` : null} />
               <DetailRow label="Interés devengado" value={selected.accrued_interest != null ? fmtUSD2(Number(selected.accrued_interest)) : null} />

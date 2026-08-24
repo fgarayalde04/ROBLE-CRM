@@ -248,7 +248,7 @@ export default function AccountPdfReport({
                   <td style={{ padding: '2.2mm 1.5mm', maxWidth: '58mm' }}>
                     <div style={{ color: COLORS.ink, fontWeight: 600, lineHeight: 1.6, fontFamily: 'Arial, sans-serif' }}>{truncateName(clean?.name ?? p.name, 46)}</div>
                     {clean?.detail && <div style={{ fontSize: 6, lineHeight: 1.6, color: COLORS.mutedSlate, fontFamily: 'Arial, sans-serif' }}>{clean.detail}</div>}
-                    {p.purchase_date && <div style={{ fontSize: 6, lineHeight: 1.6, color: COLORS.mutedSlate, fontFamily: 'Arial, sans-serif' }}>Compra: {p.purchase_date}</div>}
+                    {(p.purchase_date || gl?.purchase_date) && <div style={{ fontSize: 6, lineHeight: 1.6, color: COLORS.mutedSlate, fontFamily: 'Arial, sans-serif' }}>Compra: {p.purchase_date ?? gl?.purchase_date}</div>}
                   </td>
                   <td style={{ padding: '2.2mm 1.5mm', color: COLORS.slate }}>{p.asset_class}</td>
                   <td style={{ padding: '2.2mm 1.5mm', textAlign: 'right', color: COLORS.slate }}>{p.quantity != null ? Number(p.quantity).toLocaleString('en-US') : '—'}</td>
