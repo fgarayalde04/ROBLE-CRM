@@ -12,6 +12,14 @@ import { COLORS, DONUT_COLORS, monthLabel } from '@/lib/portfolio/theme'
 
 const PAGE_STYLE: React.CSSProperties = { width: '210mm', minHeight: '297mm', background: '#fff', padding: '13mm', fontFamily: 'Arial, sans-serif', boxSizing: 'border-box', position: 'relative' }
 
+// Long names are truncated here in JS rather than via CSS
+// (overflow:hidden + text-overflow:ellipsis) — html2canvas doesn't always
+// size a flex item's cross-axis to its text content correctly, which can
+// clip the bottom of the glyphs instead of just cutting the string short.
+function truncateName(s: string, maxChars: number): string {
+  return s.length > maxChars ? s.slice(0, maxChars - 1).trimEnd() + '…' : s
+}
+
 function PdfLetterhead({ title, accountNumber, account, importRow }: { title: string; accountNumber: string; account: PortfolioAccountInfo | null; importRow: PortfolioImportRow }) {
   const today = new Date().toLocaleDateString('es-UY', { day: '2-digit', month: 'long', year: 'numeric' })
   return (
@@ -65,7 +73,7 @@ function PdfDonut({ title, data }: { title: string; data: { label: string; value
           <div key={d.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', minHeight: '4mm', fontSize: 6.8, lineHeight: 1.4, padding: '1mm 0', fontFamily: 'Arial, sans-serif' }}>
             <span style={{ display: 'flex', alignItems: 'center', gap: '1mm', color: COLORS.slate, minWidth: 0 }}>
               <span style={{ width: 5, height: 5, borderRadius: 5, background: DONUT_COLORS[i % DONUT_COLORS.length], display: 'inline-block', flexShrink: 0 }} />
-              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.label}</span>
+              <span>{truncateName(d.label, 26)}</span>
             </span>
             <span style={{ fontWeight: 700, color: COLORS.ink, flexShrink: 0, marginLeft: '2mm' }}>{fmtPct(d.pct)}</span>
           </div>
@@ -99,7 +107,7 @@ function DivergingBarChart({ data }: { data: { name: string; gainLoss: number }[
         const widthPct = Math.max((Math.abs(d.gainLoss) / maxAbs) * 38, 1.5)
         return (
           <div key={d.name} style={{ display: 'flex', alignItems: 'center', gap: '2mm', minHeight: '4mm', fontSize: 6.8, lineHeight: 1.4, marginBottom: '2.4mm', fontFamily: 'Arial, sans-serif' }}>
-            <span style={{ width: '45mm', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: COLORS.ink, flexShrink: 0 }}>{d.name}</span>
+            <span style={{ width: '45mm', color: COLORS.ink, flexShrink: 0 }}>{truncateName(d.name, 30)}</span>
             <div style={{ flex: 1, display: 'flex', alignItems: 'center', height: '3mm' }}>
               <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-end' }}>
                 {!isGain && <div style={{ height: '2mm', width: `${widthPct}%`, background: COLORS.loss, borderRadius: '0.5mm 0 0 0.5mm' }} />}
@@ -226,7 +234,7 @@ export default function AccountPdfReport({
             return (
               <div key={p.id} style={{ marginBottom: '4mm' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', minHeight: '4mm', fontSize: 7.5, lineHeight: 1.4, marginBottom: '1.2mm', fontFamily: 'Arial, sans-serif' }}>
-                  <span style={{ color: COLORS.ink, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '110mm' }}>{clean?.name ?? p.name}</span>
+                  <span style={{ color: COLORS.ink, fontWeight: 600 }}>{truncateName(clean?.name ?? p.name, 78)}</span>
                   <span style={{ color: COLORS.ink, fontWeight: 700, flexShrink: 0, marginLeft: '2mm' }}>{fmtUSD(mv)} · {fmtPct(pct)}</span>
                 </div>
                 <div style={{ height: '2mm', background: COLORS.bgSofter, borderRadius: '1mm', overflow: 'hidden' }}>
@@ -276,7 +284,7 @@ export default function AccountPdfReport({
               return (
                 <tr key={p.id} style={{ background: i % 2 === 0 ? '#fff' : COLORS.bgSofter }}>
                   <td style={{ padding: '2.2mm 1.5mm', maxWidth: '58mm' }}>
-                    <div style={{ color: COLORS.ink, fontWeight: 600, lineHeight: 1.6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'Arial, sans-serif' }}>{clean?.name ?? p.name}</div>
+                    <div style={{ color: COLORS.ink, fontWeight: 600, lineHeight: 1.6, fontFamily: 'Arial, sans-serif' }}>{truncateName(clean?.name ?? p.name, 46)}</div>
                     {clean?.detail && <div style={{ fontSize: 6, lineHeight: 1.6, color: COLORS.mutedSlate, fontFamily: 'Arial, sans-serif' }}>{clean.detail}</div>}
                     {p.purchase_date && <div style={{ fontSize: 6, lineHeight: 1.6, color: COLORS.mutedSlate, fontFamily: 'Arial, sans-serif' }}>Compra: {p.purchase_date}</div>}
                   </td>
@@ -360,7 +368,7 @@ export default function AccountPdfReport({
                 {cashProjRows.slice(0, 14).map(r => (
                   <tr key={r.id} style={{ borderBottom: `1px solid ${COLORS.bgSofter}` }}>
                     <td style={{ padding: '1.4mm 1.5mm', color: COLORS.ink }}>{fmtDate(r.pay_date)}</td>
-                    <td style={{ padding: '1.4mm 1.5mm', color: COLORS.slate, maxWidth: '80mm', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cleanedNames.get(r.id)?.name ?? r.description}</td>
+                    <td style={{ padding: '1.4mm 1.5mm', color: COLORS.slate, maxWidth: '80mm' }}>{truncateName(cleanedNames.get(r.id)?.name ?? r.description, 60)}</td>
                     <td style={{ padding: '1.4mm 1.5mm', color: COLORS.slate }}>{r.distribution_type ?? '—'}</td>
                     <td style={{ padding: '1.4mm 1.5mm', textAlign: 'right', fontWeight: 700, color: COLORS.ink }}>{r.estimated_amount != null ? fmtUSD2(Number(r.estimated_amount)) : '—'}</td>
                   </tr>
