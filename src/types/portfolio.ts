@@ -17,6 +17,7 @@ export interface PortfolioPositionRow {
   isin: string | null
   cusip: string | null
   maturity_date: string | null
+  purchase_date: string | null
   coupon: string | null
   accrued_interest: string | null
   fund_family: string | null
@@ -41,11 +42,13 @@ export interface PortfolioImportRow {
 }
 
 export interface PortfolioAccountInfo {
+  id: string | null
   accountNumber: string
   clientNumber: string | null
   clientName: string | null
   advisor: string | null
   entity: string | null
+  custodian: string | null
 }
 
 export interface PortfolioBenchmarkPerformance {

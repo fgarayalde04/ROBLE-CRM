@@ -37,6 +37,7 @@ export interface PortfolioPositionParsed {
   isin:            string | null
   cusip:           string | null
   maturityDate:    string | null
+  purchaseDate:    string | null   // null when the position spans multiple lots bought on different dates
   coupon:          number | null
   accruedInterest: number | null
   fundFamily:      string | null
@@ -172,6 +173,7 @@ function parsePositionsFromUnrealizedFormat(raw: unknown[][]): ParsedPortfolioIm
   interface LotRow {
     securityType: string; description: string; symbol: string | null
     quantity: number; marketValue: number; lastPrice: number | null
+    purchaseDate: string | null   // null for the "Multiple" subtotal row (several lots, no single date)
     isSubtotal: boolean
   }
   const lotsByCusip = new Map<string, LotRow[]>()
@@ -188,6 +190,7 @@ function parsePositionsFromUnrealizedFormat(raw: unknown[][]): ParsedPortfolioIm
       if (account) accountNumber = account.trim().toUpperCase()
     }
 
+    const tradeDateRaw = get(row, 'tradeDate')
     const lot: LotRow = {
       securityType: parseStr(get(row, 'securityType')) ?? '',
       description,
@@ -195,7 +198,8 @@ function parsePositionsFromUnrealizedFormat(raw: unknown[][]): ParsedPortfolioIm
       quantity:     parseNum(get(row, 'quantity')) ?? 0,
       marketValue:  parseNum(get(row, 'marketValue')) ?? 0,
       lastPrice:    parseNum(get(row, 'lastPrice')),
-      isSubtotal:   parseStr(get(row, 'tradeDate'))?.toLowerCase() === 'multiple',
+      purchaseDate: parseDateStr(tradeDateRaw),
+      isSubtotal:   parseStr(tradeDateRaw)?.toLowerCase() === 'multiple',
     }
     const list = lotsByCusip.get(cusip)
     if (list) list.push(lot); else lotsByCusip.set(cusip, [lot])
@@ -226,6 +230,7 @@ function parsePositionsFromUnrealizedFormat(raw: unknown[][]): ParsedPortfolioIm
       isin:            null,
       cusip,
       maturityDate:    null,
+      purchaseDate:    first.purchaseDate,
       coupon:          null,
       accruedInterest: null,
       fundFamily:      null,
@@ -342,6 +347,7 @@ export function parsePortfolioExcel(buffer: ArrayBuffer): ParsedPortfolioImport 
       weight:       0, // recalculated below from real totals
       isin, cusip,
       maturityDate:    parseDateStr(get(row, 'maturityDate')),
+      purchaseDate:    null, // not present in this export format
       coupon:          parseNum(get(row, 'coupon')),
       accruedInterest: parseNum(get(row, 'accruedInterest')),
       fundFamily:      parseStr(get(row, 'fundFamily')),

@@ -5,11 +5,13 @@ import type { ParsedPerformanceReport } from '@/lib/portfolio/performancePdfPars
 import type { ParsedUnrealizedGainLoss } from '@/lib/portfolio/unrealizedGainLossParser'
 
 export interface ResolvedAccount {
+  id:            string | null
   accountNumber: string
   clientNumber:  string | null
   clientName:    string | null
   advisor:       string | null
   entity:        string | null
+  custodian:     string | null
 }
 
 // Resolves an account number (e.g. "ROJ902303") against monitoring_base_accounts
@@ -17,7 +19,7 @@ export interface ResolvedAccount {
 // there (not yet in master data) still import fine — just without a resolved name.
 export async function resolveAccount(accountNumber: string): Promise<ResolvedAccount> {
   const { rows } = await pool.query(
-    `select mba.account_number, mba.client_code as client_number, mba.entity,
+    `select mba.id, mba.account_number, mba.client_code as client_number, mba.entity, mba.custodian,
             trim(coalesce(c.first_name,'') || ' ' || coalesce(c.last_name,'')) as client_name,
             c.advisor
      from monitoring_base_accounts mba
@@ -28,14 +30,16 @@ export async function resolveAccount(accountNumber: string): Promise<ResolvedAcc
   )
   if (rows[0]) {
     return {
+      id:           rows[0].id ?? null,
       accountNumber,
       clientNumber: rows[0].client_number ?? null,
       clientName:   rows[0].client_name?.trim() || null,
       advisor:      rows[0].advisor ?? null,
       entity:       rows[0].entity ?? null,
+      custodian:    rows[0].custodian ?? null,
     }
   }
-  return { accountNumber, clientNumber: null, clientName: null, advisor: null, entity: null }
+  return { id: null, accountNumber, clientNumber: null, clientName: null, advisor: null, entity: null, custodian: null }
 }
 
 export async function findImportByAccountAndDate(accountNumber: string, snapshotDate: string) {
@@ -78,14 +82,14 @@ export async function createImport(input: {
     if (input.parsed.positions.length > 0) {
       const cols = ['import_id','account_number','snapshot_date','symbol','name','security_type',
         'asset_class','region','sector','currency','quantity','price','market_value','weight_pct',
-        'isin','cusip','maturity_date','coupon','accrued_interest','fund_family','dividend_policy']
+        'isin','cusip','maturity_date','purchase_date','coupon','accrued_interest','fund_family','dividend_policy']
       const values: unknown[] = []
       const rowsSql = input.parsed.positions.map((p, idx) => {
         const base = idx * cols.length
         values.push(
           importRow.id, input.accountNumber, input.parsed.snapshotDate, p.symbol, p.name, p.securityType,
           p.assetClass, p.region, p.sector, p.currency, p.quantity, p.price, p.marketValue, p.weight,
-          p.isin, p.cusip, p.maturityDate, p.coupon, p.accruedInterest, p.fundFamily, p.dividendPolicy
+          p.isin, p.cusip, p.maturityDate, p.purchaseDate, p.coupon, p.accruedInterest, p.fundFamily, p.dividendPolicy
         )
         return `(${cols.map((_, i) => `$${base + i + 1}`).join(',')})`
       })

@@ -83,6 +83,14 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
 
   useEffect(() => { load() }, [accountNumber])
 
+  async function handleCustodianChange(custodian: string) {
+    if (!account?.id) return
+    setAccount(a => a ? { ...a, custodian } : a)
+    await fetch(`/api/monitoring/accounts/${account.id}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ custodian }),
+    })
+  }
+
   const totalValue = importRow ? Number(importRow.total_market_value) : 0
 
   const previousSnapshot = useMemo(() => {
@@ -208,11 +216,55 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
       ])
       const pages = Array.from(document.querySelectorAll('#account-pdf-report .pdf-page')) as HTMLElement[]
       const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+      const pdfW = pdf.internal.pageSize.getWidth()
+      const pdfH = pdf.internal.pageSize.getHeight()
+      let firstPdfPage = true
       for (let i = 0; i < pages.length; i++) {
-        const canvas = await html2canvas(pages[i], { scale: 2.5, useCORS: true, logging: false, backgroundColor: '#ffffff', windowWidth: pages[i].scrollWidth })
-        if (i > 0) pdf.addPage()
-        const imgData = canvas.toDataURL('image/jpeg', 0.97)
-        pdf.addImage(imgData, 'JPEG', 0, 0, 210, 297)
+        const pageEl = pages[i]
+        // Section boxes are marked data-pdf-keep-together so a slice
+        // boundary never cuts through the middle of one — each logical
+        // "page" div can legitimately grow past 297mm (more holdings, more
+        // sections) and needs to spill onto extra physical PDF pages rather
+        // than being squashed to fit a fixed height.
+        const containerTop = pageEl.getBoundingClientRect().top
+        const keepTogether = Array.from(pageEl.querySelectorAll('[data-pdf-keep-together]')).map(el => {
+          const r = (el as HTMLElement).getBoundingClientRect()
+          return { top: (r.top - containerTop), bottom: (r.bottom - containerTop) }
+        })
+        const canvas = await html2canvas(pageEl, { scale: 2.5, useCORS: true, logging: false, backgroundColor: '#ffffff', windowWidth: pageEl.scrollWidth })
+        const scale = canvas.width / pageEl.scrollWidth
+        const imgRatio = canvas.height / canvas.width
+        const imgH = pdfW * imgRatio
+        if (imgH <= pdfH) {
+          if (!firstPdfPage) pdf.addPage()
+          firstPdfPage = false
+          pdf.addImage(canvas.toDataURL('image/jpeg', 0.97), 'JPEG', 0, 0, pdfW, imgH)
+        } else {
+          const maxSliceH = Math.round(canvas.width * pdfH / pdfW)
+          let position = 0
+          while (position < canvas.height) {
+            let sliceH = Math.min(canvas.height - position, maxSliceH)
+            const pageEnd = position + sliceH
+            for (const s of keepTogether) {
+              const sTop = s.top * scale, sBottom = s.bottom * scale
+              const sectionFits = (sBottom - sTop) <= maxSliceH
+              const wouldBeCut = sTop < pageEnd && sBottom > pageEnd
+              if (sectionFits && wouldBeCut && sTop > position) {
+                sliceH = sTop - position
+              }
+            }
+            const pageCanvas = document.createElement('canvas')
+            pageCanvas.width = canvas.width
+            pageCanvas.height = sliceH
+            const ctx = pageCanvas.getContext('2d')!
+            ctx.drawImage(canvas, 0, position, canvas.width, sliceH, 0, 0, canvas.width, sliceH)
+            if (!firstPdfPage) pdf.addPage()
+            firstPdfPage = false
+            const destH = pdfW * (sliceH / canvas.width)
+            pdf.addImage(pageCanvas.toDataURL('image/jpeg', 0.97), 'JPEG', 0, 0, pdfW, destH)
+            position += sliceH
+          }
+        }
       }
       const clientName = (account?.clientName ?? accountNumber).replace(/\s+/g, '_')
       pdf.save(`Portfolio_${clientName}_${accountNumber}.pdf`)
@@ -228,7 +280,7 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
   if (!importRow) {
     return (
       <div className="min-h-screen bg-gray-50">
-        <Header router={router} account={account} accountNumber={accountNumber} importRow={null} onImport={() => setShowImport(true)} onHistory={() => setShowHistory(true)} />
+        <Header router={router} account={account} accountNumber={accountNumber} importRow={null} onImport={() => setShowImport(true)} onHistory={() => setShowHistory(true)} onCustodianChange={handleCustodianChange} />
         <div className="max-w-3xl mx-auto p-6 text-center py-16">
           <div className="text-4xl mb-3">📊</div>
           <p className="text-sm font-semibold text-gray-600">Todavía no hay posiciones importadas para esta cuenta</p>
@@ -244,7 +296,7 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
   return (
     <div className="min-h-screen bg-gray-50">
       <Header router={router} account={account} accountNumber={accountNumber} importRow={importRow} onImport={() => setShowImport(true)} onHistory={() => setShowHistory(true)}
-        onDownloadPdf={handleDownloadPDF} downloadingPdf={downloadingPdf} />
+        onDownloadPdf={handleDownloadPDF} downloadingPdf={downloadingPdf} onCustodianChange={handleCustodianChange} />
       <AccountPdfReport account={account} accountNumber={accountNumber} importRow={importRow} sortedByValue={sortedByValue}
         assetAllocation={assetAllocation} fixedIncomeBreakdown={fixedIncomeBreakdown} currencyExposure={currencyExposure}
         liquidity={liquidity} maturityBuckets={maturityBuckets} nextMaturity={nextMaturity}
@@ -301,7 +353,7 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
 
 // ── Header ─────────────────────────────────────────────────────────────────
 
-function Header({ router, account, accountNumber, importRow, onImport, onHistory, onDownloadPdf, downloadingPdf }: {
+function Header({ router, account, accountNumber, importRow, onImport, onHistory, onDownloadPdf, downloadingPdf, onCustodianChange }: {
   router: ReturnType<typeof useRouter>
   account: PortfolioAccountInfo | null
   accountNumber: string
@@ -310,6 +362,7 @@ function Header({ router, account, accountNumber, importRow, onImport, onHistory
   onHistory: () => void
   onDownloadPdf?: () => void
   downloadingPdf?: boolean
+  onCustodianChange?: (custodian: string) => void
 }) {
   return (
     <div className="bg-white border-b border-gray-200 px-6 py-4 sticky top-0 z-10">
@@ -322,6 +375,20 @@ function Header({ router, account, accountNumber, importRow, onImport, onHistory
             {account?.clientNumber && <span>· Cliente #{account.clientNumber}</span>}
             {account?.entity && <span>· {account.entity === 'roble' ? 'Roble Capital' : account.entity}</span>}
             {importRow && <span>· Actualizado al {fmtDate(importRow.snapshot_date)}</span>}
+            {account?.id && (
+              <span className="flex items-center gap-1">
+                · Custodio:
+                <select
+                  value={account.custodian ?? ''}
+                  onChange={e => onCustodianChange?.(e.target.value)}
+                  className="text-xs text-gray-500 border border-gray-200 rounded px-1 py-0.5 bg-white focus:outline-none"
+                >
+                  <option value="">— sin definir —</option>
+                  <option value="Pershing">Pershing</option>
+                  <option value="Morgan Stanley">Morgan Stanley</option>
+                </select>
+              </span>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">

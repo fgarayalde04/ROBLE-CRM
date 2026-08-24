@@ -27,8 +27,7 @@ function PdfLetterhead({ title, accountNumber, account, importRow }: { title: st
       <div style={{ display: 'flex', border: `1px solid ${COLORS.border}`, borderRadius: 6, overflow: 'hidden' }}>
         {[
           ['Cliente', account?.clientName ?? accountNumber],
-          ['Cuenta', accountNumber],
-          ['Custodio', account?.entity === 'roble' ? 'Roble Capital' : (account?.entity ?? '—')],
+          ['Custodio', account?.custodian ?? '—'],
           ['Actualizado', fmtDate(importRow.snapshot_date)],
           ['Fecha del reporte', today],
         ].map(([label, val], i, arr) => (
@@ -161,9 +160,11 @@ export default function AccountPdfReport({
   })()
 
   const hasMaturityCols = sortedByValue.some(p => p.maturity_date)
+  const hasPurchaseDateCol = sortedByValue.some(p => p.purchase_date)
   const hasGL = glByCusip.size > 0
   const totalCostBasis = sortedByValue.reduce((s, p) => s + (p.cusip && glByCusip.get(p.cusip) ? Number(glByCusip.get(p.cusip)!.cost_basis) : 0), 0)
   const totalGainLoss = sortedByValue.reduce((s, p) => s + (p.cusip && glByCusip.get(p.cusip) ? Number(glByCusip.get(p.cusip)!.gain_loss) : 0), 0)
+  const totalGainLossPct = totalCostBasis > 0 ? (totalGainLoss / totalCostBasis) * 100 : 0
 
   return (
     <div id="account-pdf-report" style={{ position: 'fixed', left: -10000, top: 0 }}>
@@ -176,7 +177,7 @@ export default function AccountPdfReport({
           <div style={{ fontSize: 26, fontWeight: 800, marginTop: '1mm' }}>{fmtUSD(totalValue)}</div>
         </div>
 
-        <div style={{ display: 'flex', gap: '3mm', marginBottom: '4mm' }}>
+        <div data-pdf-keep-together style={{ display: 'flex', gap: '3mm', marginBottom: '4mm' }}>
           {[
             ['Posiciones', String(sortedByValue.length), null, COLORS.ink],
             ['Liquidez', fmtUSD(liquidity.value), fmtPct(liquidity.pct), COLORS.ink],
@@ -193,13 +194,13 @@ export default function AccountPdfReport({
           ))}
         </div>
 
-        <div style={{ display: 'flex', gap: '3mm', marginBottom: '4mm' }}>
+        <div data-pdf-keep-together style={{ display: 'flex', gap: '3mm', marginBottom: '4mm' }}>
           <PdfDonut title="Asset Allocation" data={assetAllocation.map(a => ({ label: a.label, value: a.value, pct: a.pct }))} />
           {fixedIncomeBreakdown.length > 0 && <PdfDonut title="Fixed Income Allocation" data={fixedIncomeBreakdown} />}
           <PdfDonut title="Currency Exposure" data={currencyExposure} />
         </div>
 
-        <div style={{ border: `1px solid ${COLORS.border}`, borderRadius: 8, padding: '3mm 4mm', marginBottom: '3mm' }}>
+        <div data-pdf-keep-together style={{ border: `1px solid ${COLORS.border}`, borderRadius: 8, padding: '3mm 4mm', marginBottom: '3mm' }}>
           <div style={{ fontSize: 9, fontWeight: 700, color: COLORS.ink, marginBottom: '2.5mm' }}>Principales inversiones</div>
           {topHoldings.map(p => {
             const pct = p.weight_pct != null ? Number(p.weight_pct) : 0
@@ -220,14 +221,14 @@ export default function AccountPdfReport({
         </div>
 
         {unrealizedGLImport && gainLossByInvestment.length > 0 && (
-          <div style={{ border: `1px solid ${COLORS.border}`, borderRadius: 8, padding: '3mm 4mm', marginBottom: '3mm' }}>
+          <div data-pdf-keep-together style={{ border: `1px solid ${COLORS.border}`, borderRadius: 8, padding: '3mm 4mm', marginBottom: '3mm' }}>
             <div style={{ fontSize: 9, fontWeight: 700, color: COLORS.ink, marginBottom: '2mm' }}>Unrealized Gain/Loss by Investment</div>
             <DivergingBarChart data={gainLossByInvestment.slice(0, 10)} />
           </div>
         )}
 
         {performance && (
-          <div style={{ border: `1px solid ${COLORS.border}`, borderRadius: 8, padding: '3mm 4mm' }}>
+          <div data-pdf-keep-together style={{ border: `1px solid ${COLORS.border}`, borderRadius: 8, padding: '3mm 4mm' }}>
             <div style={{ fontSize: 9, fontWeight: 700, color: COLORS.ink, marginBottom: '1mm' }}>Performance reportada por el custodio (TWRR)</div>
             <div style={{ display: 'flex', gap: '4mm', fontSize: 8 }}>
               {[
@@ -263,8 +264,10 @@ export default function AccountPdfReport({
                 <>
                   <th style={{ textAlign: 'right', padding: '2mm 1.5mm', color: '#fff', fontWeight: 700 }}>Cost Basis</th>
                   <th style={{ textAlign: 'right', padding: '2mm 1.5mm', color: '#fff', fontWeight: 700 }}>Unrealized G/L</th>
+                  <th style={{ textAlign: 'right', padding: '2mm 1.5mm', color: '#fff', fontWeight: 700 }}>G/L %</th>
                 </>
               )}
+              {hasPurchaseDateCol && <th style={{ textAlign: 'right', padding: '2mm 1.5mm', color: '#fff', fontWeight: 700 }}>Purchase Date</th>}
               {hasMaturityCols && <th style={{ textAlign: 'right', padding: '2mm 1.5mm', color: '#fff', fontWeight: 700 }}>Maturity</th>}
             </tr>
           </thead>
@@ -290,8 +293,12 @@ export default function AccountPdfReport({
                       <td style={{ padding: '2.2mm 1.5mm', textAlign: 'right', fontWeight: 700, color: gl ? (Number(gl.gain_loss) >= 0 ? COLORS.gain : COLORS.loss) : COLORS.mutedSlate }}>
                         {gl ? `${Number(gl.gain_loss) >= 0 ? '+' : ''}${fmtUSD2(Number(gl.gain_loss))}` : '—'}
                       </td>
+                      <td style={{ padding: '2.2mm 1.5mm', textAlign: 'right', fontWeight: 700, color: gl ? (Number(gl.gain_loss_pct) >= 0 ? COLORS.gain : COLORS.loss) : COLORS.mutedSlate }}>
+                        {gl ? `${Number(gl.gain_loss_pct) >= 0 ? '+' : ''}${Number(gl.gain_loss_pct).toFixed(2)}%` : '—'}
+                      </td>
                     </>
                   )}
+                  {hasPurchaseDateCol && <td style={{ padding: '2.2mm 1.5mm', textAlign: 'right', color: COLORS.slate }}>{p.purchase_date ? fmtDate(p.purchase_date) : '—'}</td>}
                   {hasMaturityCols && <td style={{ padding: '2.2mm 1.5mm', textAlign: 'right', color: COLORS.slate }}>{p.maturity_date ? fmtDate(p.maturity_date) : '—'}</td>}
                 </tr>
               )
@@ -306,8 +313,10 @@ export default function AccountPdfReport({
                 <>
                   <td style={{ padding: '2mm 1.5mm', color: '#fff', fontWeight: 700, textAlign: 'right' }}>{fmtUSD2(totalCostBasis)}</td>
                   <td style={{ padding: '2mm 1.5mm', color: '#fff', fontWeight: 700, textAlign: 'right' }}>{totalGainLoss >= 0 ? '+' : ''}{fmtUSD2(totalGainLoss)}</td>
+                  <td style={{ padding: '2mm 1.5mm', color: '#fff', fontWeight: 700, textAlign: 'right' }}>{totalGainLossPct >= 0 ? '+' : ''}{totalGainLossPct.toFixed(2)}%</td>
                 </>
               )}
+              {hasPurchaseDateCol && <td style={{ padding: '2mm 1.5mm' }} />}
               {hasMaturityCols && <td style={{ padding: '2mm 1.5mm' }} />}
             </tr>
           </tfoot>
@@ -320,7 +329,7 @@ export default function AccountPdfReport({
         <div className="pdf-page" style={PAGE_STYLE}>
           <PdfLetterhead title="Income & Cash Flow" accountNumber={accountNumber} account={account} importRow={importRow} />
 
-          <div style={{ display: 'flex', gap: '3mm', marginBottom: '4mm' }}>
+          <div data-pdf-keep-together style={{ display: 'flex', gap: '3mm', marginBottom: '4mm' }}>
             <div style={{ flex: 1, border: `1px solid ${COLORS.border}`, borderRadius: 8, padding: '3mm' }}>
               <div style={{ fontSize: 7, color: COLORS.mutedSlate, textTransform: 'uppercase' }}>Projected Income — próximos 12 meses</div>
               <div style={{ fontSize: 15, fontWeight: 800, color: COLORS.darkGreen, marginTop: '1mm' }}>{fmtUSD(projectedIncome12m)}</div>
@@ -336,7 +345,7 @@ export default function AccountPdfReport({
           </div>
 
           {monthlyIncome.length > 1 && (
-            <div style={{ border: `1px solid ${COLORS.border}`, borderRadius: 8, padding: '3mm 4mm', marginBottom: '4mm' }}>
+            <div data-pdf-keep-together style={{ border: `1px solid ${COLORS.border}`, borderRadius: 8, padding: '3mm 4mm', marginBottom: '4mm' }}>
               <div style={{ fontSize: 9, fontWeight: 700, color: COLORS.ink, marginBottom: '1mm' }}>Expected Portfolio Income</div>
               <CssBarChart data={monthlyIncome} color={COLORS.midGreen} />
             </div>
@@ -367,7 +376,7 @@ export default function AccountPdfReport({
           </div>
 
           {maturityBuckets.length > 0 && (
-            <div style={{ border: `1px solid ${COLORS.border}`, borderRadius: 8, padding: '3mm 4mm' }}>
+            <div data-pdf-keep-together style={{ border: `1px solid ${COLORS.border}`, borderRadius: 8, padding: '3mm 4mm' }}>
               <div style={{ fontSize: 9, fontWeight: 700, color: COLORS.ink, marginBottom: '1mm' }}>Bond Maturity Schedule</div>
               <CssBarChart data={maturityBuckets.map(b => ({ label: String(b.year), value: b.value }))} color={COLORS.darkGreen} />
               {nextMaturity && (
