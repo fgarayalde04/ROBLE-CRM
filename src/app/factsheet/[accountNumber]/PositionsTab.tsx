@@ -25,7 +25,7 @@ function DetailRow({ label, value }: { label: string; value: string | null | und
   )
 }
 
-export default function PositionsTab({ positions, totalValue, glByCusip }: { positions: PortfolioPositionRow[]; totalValue: number; glByCusip: Map<string, PortfolioUnrealizedGainLossRow> }) {
+export default function PositionsTab({ positions, totalValue, glByCusip, onImport }: { positions: PortfolioPositionRow[]; totalValue: number; glByCusip: Map<string, PortfolioUnrealizedGainLossRow>; onImport?: () => void }) {
   const hasGL = glByCusip.size > 0
   const [q, setQ] = useState('')
   const [assetFilter, setAssetFilter] = useState('')
@@ -85,6 +85,14 @@ export default function PositionsTab({ positions, totalValue, glByCusip }: { pos
           <option value="">Todas las clases</option>
           {assetClasses.map(ac => <option key={ac} value={ac}>{ASSET_CLASS_ES[ac] ?? ac}</option>)}
         </select>
+        {onImport && (
+          <button
+            onClick={onImport}
+            className="text-sm font-semibold text-white bg-[#2E7D52] hover:bg-[#256841] rounded-lg px-4 py-2 transition-colors shrink-0"
+          >
+            Actualizar posiciones (Excel)
+          </button>
+        )}
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
