@@ -376,6 +376,7 @@ export function parsePortfolioExcel(buffer: ArrayBuffer): ParsedPortfolioImport 
   }
 
   if (!positions.length) warnings.push('No se encontraron posiciones en el archivo')
+  if (positions.length) warnings.push('Este formato ("Positions") no trae fecha de compra por posición — subí el Excel de "Unrealized Gain Loss" si la necesitás.')
 
   return { accountNumber, snapshotDate, baseCurrency, totalMarketValue, positions, warnings }
 }

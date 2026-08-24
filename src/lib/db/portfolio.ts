@@ -35,7 +35,7 @@ export async function resolveAccount(accountNumber: string): Promise<ResolvedAcc
       accountNumber,
       clientNumber: rows[0].client_number ?? null,
       clientName:   rows[0].client_name?.trim() || null,
-      accountName:  rows[0].account_name ?? null,
+      accountName:  rows[0].account_name?.trim() || null,
       advisor:      rows[0].advisor ?? null,
       entity:       rows[0].entity ?? null,
       custodian:    rows[0].custodian ?? null,
@@ -189,7 +189,7 @@ export async function listAccounts(advisorFilter: string[] | null) {
   // when the import has no resolved client_name — same fallback as the
   // account detail page, so a name typed in there shows up here too.
   const { rows } = await pool.query(
-    `select distinct on (pi.account_number) pi.*, coalesce(pi.client_name, mba.account_name) as client_name
+    `select distinct on (pi.account_number) pi.*, coalesce(nullif(pi.client_name, ''), nullif(mba.account_name, '')) as client_name
      from portfolio_imports pi
      left join monitoring_base_accounts mba on mba.account_number = pi.account_number
      ${where}

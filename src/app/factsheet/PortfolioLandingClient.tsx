@@ -106,7 +106,7 @@ export default function PortfolioLandingClient() {
                   className="flex-1 min-w-0 flex items-center justify-between gap-4 text-left"
                 >
                   <div className="min-w-0">
-                    <p className="text-sm font-semibold text-gray-900 truncate">{a.client_name ?? a.account_number}</p>
+                    <p className="text-sm font-semibold text-gray-900 truncate">{a.client_name || a.account_number}</p>
                     <p className="text-xs text-gray-400 mt-0.5">
                       {a.account_number}{a.client_number ? ` · Cliente #${a.client_number}` : ''} · {a.position_count} posiciones
                     </p>

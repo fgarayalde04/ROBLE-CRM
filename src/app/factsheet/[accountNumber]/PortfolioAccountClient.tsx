@@ -395,22 +395,38 @@ function Header({ router, account, accountNumber, importRow, onImport, onHistory
           {account?.clientName ? (
             <h1 className="text-lg font-bold text-gray-900 truncate">{account.clientName}</h1>
           ) : editingName ? (
-            <input
-              autoFocus
-              value={nameDraft}
-              onChange={e => setNameDraft(e.target.value)}
-              onBlur={() => { setEditingName(false); onAccountNameChange?.(nameDraft.trim()) }}
-              onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
-              placeholder="Nombre del cliente"
-              className="text-lg font-bold text-gray-900 border-b border-gray-300 focus:outline-none focus:border-[#2E7D52] bg-transparent w-full max-w-xs"
-            />
+            <div className="flex items-center gap-1.5">
+              <input
+                autoFocus
+                value={nameDraft}
+                onChange={e => setNameDraft(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') { setEditingName(false); if (nameDraft.trim()) onAccountNameChange?.(nameDraft.trim()) }
+                  if (e.key === 'Escape') setEditingName(false)
+                }}
+                placeholder="Nombre del cliente"
+                className="text-lg font-bold text-gray-900 border-b border-gray-300 focus:outline-none focus:border-[#2E7D52] bg-transparent w-full max-w-xs"
+              />
+              <button
+                onClick={() => { setEditingName(false); if (nameDraft.trim()) onAccountNameChange?.(nameDraft.trim()) }}
+                className="text-xs font-semibold text-white bg-[#2E7D52] hover:bg-[#256841] rounded px-2 py-1 shrink-0"
+              >
+                Guardar
+              </button>
+              <button
+                onClick={() => setEditingName(false)}
+                className="text-xs text-gray-400 hover:text-gray-600 px-1 shrink-0"
+              >
+                Cancelar
+              </button>
+            </div>
           ) : (
             <h1
               onClick={() => { if (account) { setNameDraft(account.accountName ?? ''); setEditingName(true) } }}
               className={`text-lg font-bold truncate ${account ? 'text-gray-900 cursor-pointer hover:underline decoration-dashed underline-offset-4' : 'text-gray-900'}`}
               title={account ? 'Click para completar el nombre del cliente' : undefined}
             >
-              {account?.accountName ?? accountNumber}
+              {account?.accountName || accountNumber}
             </h1>
           )}
           <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-gray-400 mt-0.5">
