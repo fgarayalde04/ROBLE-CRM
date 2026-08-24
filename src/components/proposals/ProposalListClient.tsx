@@ -155,7 +155,7 @@ function CreateModal({ onClose, onCreate }: { onClose: () => void; onCreate: (id
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           client_id:    selected?.id    ?? null,
-          client_name:  selected ? `${selected.first_name} ${selected.last_name}` : null,
+          client_name:  selected ? `${selected.first_name} ${selected.last_name}` : (search.trim() || null),
           total_amount: 0,
           currency, title,
         }),

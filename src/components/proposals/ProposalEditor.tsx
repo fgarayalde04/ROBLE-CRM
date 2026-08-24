@@ -72,6 +72,12 @@ function ClientSearch({
     setQuery('')
   }
 
+  const handleUseProspect = () => {
+    onSelect(null, query.trim())
+    setOpen(false)
+    setQuery('')
+  }
+
   const handleClear = (e: React.MouseEvent) => {
     e.stopPropagation()
     onSelect(null, null)
@@ -109,7 +115,7 @@ function ClientSearch({
           <button onClick={handleClear} className="text-gray-300 hover:text-red-400 text-xs flex-shrink-0">×</button>
         )}
       </div>
-      {results.length > 0 && (
+      {(results.length > 0 || (query.length >= 1 && !loading)) && (
         <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-50 overflow-hidden w-64">
           {results.map(c => (
             <button key={c.id} onClick={() => handleSelect(c)}
@@ -118,11 +124,13 @@ function ClientSearch({
               {c.client_number && <span className="text-gray-400 font-mono text-[10px]">{c.client_number}</span>}
             </button>
           ))}
-        </div>
-      )}
-      {results.length === 0 && query.length >= 1 && !loading && (
-        <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-50 px-3 py-2 w-64">
-          <p className="text-xs text-gray-400">Sin resultados para "{query}"</p>
+          {results.length === 0 && <p className="text-xs text-gray-400 px-3 pt-2">Sin resultados para "{query}"</p>}
+          {query.length >= 1 && (
+            <button onClick={handleUseProspect}
+              className={`w-full text-left px-3 py-2 text-xs hover:bg-gray-50 transition-colors text-[#2E7D52] font-medium ${results.length > 0 ? 'border-t border-gray-100' : ''}`}>
+              Usar "{query}" (prospecto, sin vincular)
+            </button>
+          )}
         </div>
       )}
     </div>
@@ -600,27 +608,31 @@ function AllocationPanel({
 }: {
   total: number; ventas: number; currency: string; funds: Fund[]; bonds: Bond[]; equities: Equity[]
 }) {
-  const sumFunds    = funds.reduce((s, f) => s + (f.pct ?? 0), 0)
-  const sumBonds    = bonds.reduce((s, b) => s + (b.pct ?? 0), 0)
-  const sumEquities = equities.reduce((s, e) => s + (e.pct ?? 0), 0)
+  // % y montos se derivan de los importes de compra de cada item — el campo
+  // pct de cada fila quedó solo para lectura en las tablas y ya no se
+  // actualiza, así que sumarlo acá directamente daba números viejos/vacíos.
+  // Ventas se excluyen (mismo criterio que el resto de la propuesta).
+  const amtFunds    = funds.filter(f => f.operacion !== 'venta').reduce((s, f) => s + (f.amount ?? 0), 0)
+  const amtBonds    = bonds.filter(b => b.operacion !== 'venta').reduce((s, b) => s + (b.amount ?? 0), 0)
+  const amtEquities = equities.filter(e => e.operacion !== 'venta').reduce((s, e) => s + (e.amount ?? 0), 0)
+
+  const sumFunds    = total > 0 ? (amtFunds    / total) * 100 : 0
+  const sumBonds    = total > 0 ? (amtBonds    / total) * 100 : 0
+  const sumEquities = total > 0 ? (amtEquities / total) * 100 : 0
   const sumTotal    = sumFunds + sumBonds + sumEquities
   const remaining   = 100 - sumTotal
   const isValid     = Math.abs(remaining) < 0.01
 
-  const amtFunds    = Math.round(total * sumFunds    / 100)
-  const amtBonds    = Math.round(total * sumBonds    / 100)
-  const amtEquities = Math.round(total * sumEquities / 100)
-
   const barColor = isValid ? 'bg-emerald-500' : sumTotal > 100 ? 'bg-red-500' : 'bg-amber-500'
 
-  // Yield promedio ponderado por % de asignación
-  const yieldItems: { pct: number; yield: number }[] = [
-    ...funds.filter(f => f.ytm_indicative != null && f.pct > 0).map(f => ({ pct: f.pct, yield: f.ytm_indicative! })),
-    ...bonds.filter(b => b.yield         != null && b.pct > 0).map(b => ({ pct: b.pct, yield: b.yield! })),
+  // Yield promedio ponderado por monto invertido (compras)
+  const yieldItems: { amount: number; yield: number }[] = [
+    ...funds.filter(f => f.operacion !== 'venta' && f.ytm_indicative != null && f.amount > 0).map(f => ({ amount: f.amount, yield: f.ytm_indicative! })),
+    ...bonds.filter(b => b.operacion !== 'venta' && b.yield         != null && b.amount > 0).map(b => ({ amount: b.amount, yield: b.yield! })),
   ]
-  const yieldPctSum = yieldItems.reduce((s, i) => s + i.pct, 0)
-  const avgYield    = yieldPctSum > 0
-    ? yieldItems.reduce((s, i) => s + i.yield * i.pct, 0) / yieldPctSum
+  const yieldAmtSum = yieldItems.reduce((s, i) => s + i.amount, 0)
+  const avgYield    = yieldAmtSum > 0
+    ? yieldItems.reduce((s, i) => s + i.yield * i.amount, 0) / yieldAmtSum
     : null
 
   return (
