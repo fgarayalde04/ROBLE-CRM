@@ -83,20 +83,32 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
 
   useEffect(() => { load() }, [accountNumber])
 
+  // Cuentas que llegaron solo por import de Portfolio (nunca cargadas en
+  // Monitoreo) no tienen fila en monitoring_base_accounts todavía — account.id
+  // es null. En ese caso se crea la fila (upsert por account_number+entity)
+  // en vez de intentar un PATCH que no tiene a qué apuntar.
+  async function patchOrCreateAccount(updates: Record<string, unknown>) {
+    if (account?.id) {
+      await fetch(`/api/monitoring/accounts/${account.id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updates),
+      })
+    } else {
+      await fetch('/api/monitoring/accounts', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ entity: 'roble', accounts: [{ account_number: accountNumber, ...updates }] }),
+      })
+      load()
+    }
+  }
+
   async function handleCustodianChange(custodian: string) {
-    if (!account?.id) return
     setAccount(a => a ? { ...a, custodian } : a)
-    await fetch(`/api/monitoring/accounts/${account.id}`, {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ custodian }),
-    })
+    await patchOrCreateAccount({ custodian })
   }
 
   async function handleAccountNameChange(accountName: string) {
-    if (!account?.id) return
     setAccount(a => a ? { ...a, accountName } : a)
-    await fetch(`/api/monitoring/accounts/${account.id}`, {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ account_name: accountName }),
-    })
+    await patchOrCreateAccount({ account_name: accountName })
   }
 
   const totalValue = importRow ? Number(importRow.total_market_value) : 0
@@ -394,9 +406,9 @@ function Header({ router, account, accountNumber, importRow, onImport, onHistory
             />
           ) : (
             <h1
-              onClick={() => { if (account?.id) { setNameDraft(account.accountName ?? ''); setEditingName(true) } }}
-              className={`text-lg font-bold truncate ${account?.id ? 'text-gray-900 cursor-pointer hover:underline decoration-dashed underline-offset-4' : 'text-gray-900'}`}
-              title={account?.id ? 'Click para completar el nombre del cliente' : undefined}
+              onClick={() => { if (account) { setNameDraft(account.accountName ?? ''); setEditingName(true) } }}
+              className={`text-lg font-bold truncate ${account ? 'text-gray-900 cursor-pointer hover:underline decoration-dashed underline-offset-4' : 'text-gray-900'}`}
+              title={account ? 'Click para completar el nombre del cliente' : undefined}
             >
               {account?.accountName ?? accountNumber}
             </h1>
@@ -406,7 +418,7 @@ function Header({ router, account, accountNumber, importRow, onImport, onHistory
             {account?.clientNumber && <span>· Cliente #{account.clientNumber}</span>}
             {account?.entity && <span>· {account.entity === 'roble' ? 'Roble Capital' : account.entity}</span>}
             {importRow && <span>· Actualizado al {fmtDate(importRow.snapshot_date)}</span>}
-            {account?.id && (
+            {account && (
               <span className="flex items-center gap-1">
                 · Custodio:
                 <select
