@@ -62,6 +62,20 @@ export async function listSolicitudes(filters: ListSolicitudesFilters) {
   return { data: rows, total: parseInt(countRows[0].count, 10) }
 }
 
+// Órdenes propias que ya se enviaron pero todavía no se ejecutaron ni
+// cancelaron — para mostrar en "Mi trabajo" del dashboard.
+export async function getMyPendingSolicitudes(asesor: string, limit: number) {
+  const { rows } = await pool.query(
+    `select id, solicitud_id, estado, tipo_operacion, instrumento_nombre, monto, cantidad, client_name, created_at
+     from solicitudes
+     where asesor = $1 and estado not in ('ejecutada', 'cancelada')
+     order by created_at desc
+     limit $2`,
+    [asesor, limit]
+  )
+  return rows
+}
+
 export async function createSolicitud(insert: Record<string, any>) {
   const entries = Object.entries(insert).filter(([, v]) => v !== undefined)
   const cols = entries.map(([k]) => `"${k}"`)

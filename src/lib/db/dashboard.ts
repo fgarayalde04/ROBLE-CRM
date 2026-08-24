@@ -173,15 +173,14 @@ export async function getUpcomingDeadlinesForDashboard(isWideRole: boolean, user
   return rows.map(shapeClient)
 }
 
-export async function getRecentActivityForDashboard(isWideRole: boolean, userName: string, limit: number) {
-  const where: string[] = []
-  const params: any[] = []
+export async function getRecentActivityForDashboard(isWideRole: boolean, userName: string, limit: number, sinceDate: string) {
+  const where: string[] = [`created_at >= $1`]
+  const params: any[] = [sinceDate]
   if (!isWideRole) { params.push(userName); where.push(`user_name = $${params.length}`) }
   params.push(limit)
-  const whereClause = where.length > 0 ? `where ${where.join(' and ')}` : ''
   const { rows } = await pool.query(
     `select id, description, user_name, entity_type, entity_id, created_at
-     from activity_log ${whereClause} order by created_at desc limit $${params.length}`,
+     from activity_log where ${where.join(' and ')} order by created_at desc limit $${params.length}`,
     params
   )
   return rows

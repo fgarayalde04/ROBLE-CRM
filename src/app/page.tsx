@@ -11,6 +11,7 @@ import {
   getRecentActivityForDashboard, getCompletedTaskIds, getUnreadNotifications, getPendingBcuComplianceCount,
 } from '@/lib/db/dashboard'
 import { getLatestMorningBrief } from '@/lib/db/research'
+import { getMyPendingSolicitudes } from '@/lib/db/solicitudes'
 
 export const metadata: Metadata = { title: 'Panel del día | Roble Capital CRM' }
 export const dynamic = 'force-dynamic'
@@ -118,6 +119,7 @@ export default async function PanelDelDiaPage({ searchParams }: PageProps) {
     unreadNotifications,
     pendingBcuCount,
     latestMorningBrief,
+    myPendingSolicitudes,
   ] = await Promise.all([
     userName ? getOpenTasksByResponsible(userName, 20) : Promise.resolve([]),
     userName ? getOpenTasksByCreator(userName, 20) : Promise.resolve([]),
@@ -142,8 +144,8 @@ export default async function PanelDelDiaPage({ searchParams }: PageProps) {
     // Vencimientos próximos
     getUpcomingDeadlinesForDashboard(isWideRole, userName, today, sevenDaysLater, 6),
 
-    // Actividad reciente
-    getRecentActivityForDashboard(isWideRole, userName, 25),
+    // Actividad reciente — solo la de hoy
+    getRecentActivityForDashboard(isWideRole, userName, 25, today),
 
     // Notificaciones sin leer
     userName ? getUnreadNotifications(session?.id ?? '', userName, 5) : Promise.resolve([]),
@@ -153,6 +155,9 @@ export default async function PanelDelDiaPage({ searchParams }: PageProps) {
 
     // Morning Brief más reciente
     getLatestMorningBrief(),
+
+    // Órdenes propias enviadas y todavía pendientes de ejecución
+    userName ? getMyPendingSolicitudes(userName, 8) : Promise.resolve([]),
   ])
 
   const allMyTasksCombined = uniqueById([
@@ -311,6 +316,33 @@ export default async function PanelDelDiaPage({ searchParams }: PageProps) {
             title="Mi trabajo"
             subtitle={`${effectiveTaskView === 'shared' ? 'Compartidas conmigo' : effectiveTaskView === 'created' ? 'Creadas por mí' : effectiveTaskView === 'overdue' ? 'Tareas vencidas' : 'Mis tareas + compartidas'} · ${isWideRole ? 'Todas las aperturas' : 'Mis aperturas'}`}
           >
+            {(myPendingSolicitudes as any[]).length > 0 && (
+              <div className="px-4 pt-3 pb-2 border-b border-gray-100">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Órdenes pendientes</span>
+                  <Link href="/solicitudes" className="text-[11px] text-blue-500 hover:underline">Ver todas</Link>
+                </div>
+                <ul className="space-y-1.5">
+                  {(myPendingSolicitudes as any[]).map((s: any) => (
+                    <li key={s.id} className="flex items-center justify-between gap-2 px-2.5 py-2 bg-amber-50/70 border border-amber-100 rounded-lg">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-medium text-gray-800 truncate">
+                          {s.tipo_operacion ? s.tipo_operacion.charAt(0).toUpperCase() + s.tipo_operacion.slice(1) : 'Orden'}
+                          {s.instrumento_nombre ? ` · ${s.instrumento_nombre}` : ''}
+                        </p>
+                        <p className="text-[10px] text-gray-500 truncate">
+                          {s.client_name}
+                          {s.monto ? ` · ${Number(s.monto).toLocaleString('en-US')}` : ''}
+                        </p>
+                      </div>
+                      <span className="text-[9px] font-bold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded shrink-0 uppercase tracking-wide">
+                        Pendiente
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-0 divide-y md:divide-y-0 md:divide-x divide-gray-100">
 
               {/* Tareas personales */}
