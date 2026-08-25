@@ -3,7 +3,9 @@ import { getSession } from '@/lib/auth'
 import { resolveAccount, getLatestImport, getImportByDate, getPositions, deletePortfolioAccount } from '@/lib/db/portfolio'
 
 // GET /api/portfolio/[accountNumber] — latest snapshot (or ?date=YYYY-MM-DD)
-// with its positions, plus resolved account/client info.
+// with its positions, plus resolved account/client info. Optional
+// ?custodian=Pershing|Morgan Stanley scopes to that custodian's own snapshot
+// — omitted (today's only caller) behaves exactly as before.
 export async function GET(
   req: NextRequest,
   { params }: { params: { accountNumber: string } }
@@ -13,6 +15,7 @@ export async function GET(
 
   const accountNumber = decodeURIComponent(params.accountNumber)
   const date = req.nextUrl.searchParams.get('date')
+  const custodian = req.nextUrl.searchParams.get('custodian') || undefined
 
   const account = await resolveAccount(accountNumber)
 
@@ -22,8 +25,8 @@ export async function GET(
   }
 
   const importRow = date
-    ? await getImportByDate(accountNumber, date)
-    : await getLatestImport(accountNumber)
+    ? await getImportByDate(accountNumber, date, custodian)
+    : await getLatestImport(accountNumber, custodian)
 
   if (!importRow) {
     return NextResponse.json({ account, import: null, positions: [] })

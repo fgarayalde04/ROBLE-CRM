@@ -1,8 +1,9 @@
 'use client'
 import { useState, useEffect, useMemo } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import type { PortfolioPositionRow, PortfolioImportRow, PortfolioAccountInfo, PortfolioPerformanceRow, PortfolioCashProjectionRow, PortfolioCashProjectionsImportRow, PortfolioUnrealizedGainLossRow, PortfolioUnrealizedGainLossImportRow } from '@/types/portfolio'
 import ImportPositionsModal from '@/components/portfolio/ImportPositionsModal'
+import NewReportModal from '@/components/portfolio/NewReportModal'
 import PositionsTab from './PositionsTab'
 import RendimientoTab from './RendimientoTab'
 import MovimientosTab from './MovimientosTab'
@@ -10,37 +11,32 @@ import ResumenTab from './ResumenTab'
 import ImportHistoryModal from '@/components/portfolio/ImportHistoryModal'
 import AccountPdfReport from './AccountPdfReport'
 import { cleanDisplayName } from '@/lib/portfolio/theme'
+import {
+  ASSET_CLASS_ES,
+  computeAssetAllocation, computeLiquidity, computeFixedIncomeBreakdown, computeCurrencyExposure,
+  computeUnrealizedGLTotals, computeMaturityBuckets, computeNextMaturity, computeProjectedIncome12m,
+} from '@/lib/portfolio/engine'
 
 // ── Brand ──────────────────────────────────────────────────────────────────
 export const CHART_COLORS = ['#1B3A2B', '#2E7D52', '#4CAF72', '#81C995', '#A5D6B7', '#C8E6C9', '#6B7280']
-export const ASSET_CLASS_ES: Record<string, string> = {
-  'Equity': 'Renta Variable',
-  'ETF': 'Renta Variable (ETF)',
-  'Fixed Income': 'Fondos de Renta Fija / Crédito',
-  'Alternatives': 'Otros',
-  'Real Estate': 'Otros',
-  'Cash': 'Money Market / Liquidez',
-}
+export { ASSET_CLASS_ES }
 
 export const fmtUSD = (n: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n)
 export const fmtUSD2 = (n: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(n)
 export const fmtPct = (n: number, decimals = 1) => `${n.toFixed(decimals)}%`
 export const fmtDate = (iso: string) => new Date(iso + 'T00:00:00').toLocaleDateString('es-UY', { day: '2-digit', month: 'short', year: 'numeric' })
 
-// ── Fixed Income sub-classification (security_type → client-facing bucket) ──
-function fixedIncomeBucket(securityType: string): string {
-  const t = securityType.toLowerCase()
-  if (/corporate/.test(t)) return 'Corporate Bonds'
-  if (/government|treasury|sovereign|municipal/.test(t)) return 'Sovereign Bonds'
-  if (/open.?end|closed.?end|mutual.?fund|interval.?fund/.test(t)) return 'Fixed Income Funds'
-  if (/note|structured/.test(t)) return 'Structured / Notes'
-  return 'Other'
-}
-
 type Tab = 'resumen' | 'posiciones' | 'rendimiento' | 'movimientos'
 
 export default function PortfolioAccountClient({ accountNumber }: { accountNumber: string }) {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  // null = single-custodian account, today's behavior unchanged. A specific
+  // custodian name scopes every fetch to that custodian's own data. The
+  // literal 'consolidado' switches to the merged Pershing+Morgan view.
+  const custodianParam = searchParams.get('custodian')
+  const isConsolidated = custodianParam === 'consolidado'
+
   const [tab, setTab] = useState<Tab>('resumen')
   const [loading, setLoading] = useState(true)
   const [account, setAccount] = useState<PortfolioAccountInfo | null>(null)
@@ -49,20 +45,61 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
   const [history, setHistory] = useState<{ snapshot_date: string; total_market_value: string }[]>([])
   const [showImport, setShowImport] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
+  const [showAddMorgan, setShowAddMorgan] = useState(false)
   const [performance, setPerformance] = useState<PortfolioPerformanceRow | null>(null)
   const [cashProjImport, setCashProjImport] = useState<PortfolioCashProjectionsImportRow | null>(null)
   const [cashProjRows, setCashProjRows] = useState<PortfolioCashProjectionRow[]>([])
   const [unrealizedGLImport, setUnrealizedGLImport] = useState<PortfolioUnrealizedGainLossImportRow | null>(null)
   const [unrealizedGLRows, setUnrealizedGLRows] = useState<PortfolioUnrealizedGainLossRow[]>([])
+  const [custodians, setCustodians] = useState<{ custodian: string; latestSnapshotDate: string; totalMarketValue: number }[]>([])
+  const [consolidatedPositions, setConsolidatedPositions] = useState<Record<string, unknown>[] | null>(null)
+  const [consolidatedGLByCusip, setConsolidatedGLByCusip] = useState<Map<string, PortfolioUnrealizedGainLossRow> | null>(null)
+  const [custodianBreakdown, setCustodianBreakdown] = useState<{ label: string; value: number; pct: number }[]>([])
+  const [consolidatedWarnings, setConsolidatedWarnings] = useState<string[]>([])
 
   async function load() {
     setLoading(true)
+
+    const custodiansRes = await fetch(`/api/portfolio/${encodeURIComponent(accountNumber)}/custodians`)
+    if (custodiansRes.ok) setCustodians((await custodiansRes.json()).custodians)
+
+    if (isConsolidated) {
+      const res = await fetch(`/api/portfolio/${encodeURIComponent(accountNumber)}/consolidated`)
+      if (res.ok) {
+        const d = await res.json()
+        setAccount(d.account)
+        setPositions(d.positions as PortfolioPositionRow[])
+        setConsolidatedPositions(d.positions)
+        setConsolidatedGLByCusip(new Map(d.glByCusip))
+        setCashProjRows(d.cashProjRows ?? [])
+        setCustodianBreakdown(d.custodianBreakdown ?? [])
+        setConsolidatedWarnings(d.warnings ?? [])
+        setImportRow({
+          id: 'consolidated', account_number: accountNumber, client_number: d.account?.clientNumber ?? null,
+          client_name: d.account?.clientName ?? null, advisor: d.account?.advisor ?? null,
+          snapshot_date: d.pershingImport.snapshot_date, base_currency: 'USD',
+          total_market_value: String(d.totalMarketValue), position_count: d.positions.length,
+          file_name: null, warnings: [], imported_by: '', imported_by_id: null, created_at: new Date().toISOString(),
+        })
+        setUnrealizedGLImport({ id: 'consolidated', account_number: accountNumber, as_of_date: d.pershingImport.snapshot_date, net_gain_loss: null, file_name: null, imported_by: '', created_at: new Date().toISOString() })
+        setPerformance(null)
+        setHistory([])
+        setCashProjImport(null)
+      } else {
+        setAccount(null); setImportRow(null); setPositions([])
+      }
+      setLoading(false)
+      return
+    }
+
+    setConsolidatedPositions(null); setConsolidatedGLByCusip(null); setCustodianBreakdown([]); setConsolidatedWarnings([])
+    const custodianQS = custodianParam ? `?custodian=${encodeURIComponent(custodianParam)}` : ''
     const [detailRes, historyRes, perfRes, cashRes, glRes] = await Promise.all([
-      fetch(`/api/portfolio/${encodeURIComponent(accountNumber)}`),
+      fetch(`/api/portfolio/${encodeURIComponent(accountNumber)}${custodianQS}`),
       fetch(`/api/portfolio/${encodeURIComponent(accountNumber)}/history`),
-      fetch(`/api/portfolio/${encodeURIComponent(accountNumber)}/performance`),
-      fetch(`/api/portfolio/${encodeURIComponent(accountNumber)}/cashflows`),
-      fetch(`/api/portfolio/${encodeURIComponent(accountNumber)}/unrealizedgl`),
+      fetch(`/api/portfolio/${encodeURIComponent(accountNumber)}/performance${custodianQS}`),
+      fetch(`/api/portfolio/${encodeURIComponent(accountNumber)}/cashflows${custodianQS}`),
+      fetch(`/api/portfolio/${encodeURIComponent(accountNumber)}/unrealizedgl${custodianQS}`),
     ])
     if (detailRes.ok) {
       const d = await detailRes.json()
@@ -81,7 +118,7 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
     setLoading(false)
   }
 
-  useEffect(() => { load() }, [accountNumber])
+  useEffect(() => { load() }, [accountNumber, custodianParam])
 
   // Cuentas que llegaron solo por import de Portfolio (nunca cargadas en
   // Monitoreo) no tienen fila en monitoring_base_accounts todavía — account.id
@@ -125,39 +162,13 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
 
   const sortedByValue = useMemo(() => [...positions].sort((a, b) => Number(b.market_value) - Number(a.market_value)), [positions])
 
-  const assetAllocation = useMemo(() => {
-    const map = new Map<string, number>()
-    for (const p of positions) map.set(p.asset_class, (map.get(p.asset_class) ?? 0) + Number(p.market_value))
-    return Array.from(map.entries())
-      .map(([assetClass, value]) => ({ assetClass, label: ASSET_CLASS_ES[assetClass] ?? assetClass, value, pct: totalValue > 0 ? (value / totalValue) * 100 : 0 }))
-      .sort((a, b) => b.value - a.value)
-  }, [positions, totalValue])
+  const assetAllocation = useMemo(() => computeAssetAllocation(positions, totalValue), [positions, totalValue])
 
-  const liquidity = useMemo(() => {
-    const value = positions.filter(p => p.asset_class === 'Cash').reduce((s, p) => s + Number(p.market_value), 0)
-    return { value, pct: totalValue > 0 ? (value / totalValue) * 100 : 0 }
-  }, [positions, totalValue])
+  const liquidity = useMemo(() => computeLiquidity(positions, totalValue), [positions, totalValue])
 
-  const fixedIncomeBreakdown = useMemo(() => {
-    const fi = positions.filter(p => p.asset_class === 'Fixed Income')
-    const map = new Map<string, number>()
-    for (const p of fi) {
-      const bucket = fixedIncomeBucket(p.security_type ?? '')
-      map.set(bucket, (map.get(bucket) ?? 0) + Number(p.market_value))
-    }
-    const fiTotal = fi.reduce((s, p) => s + Number(p.market_value), 0)
-    return Array.from(map.entries())
-      .map(([label, value]) => ({ label, value, pct: fiTotal > 0 ? (value / fiTotal) * 100 : 0 }))
-      .sort((a, b) => b.value - a.value)
-  }, [positions])
+  const fixedIncomeBreakdown = useMemo(() => computeFixedIncomeBreakdown(positions), [positions])
 
-  const currencyExposure = useMemo(() => {
-    const map = new Map<string, number>()
-    for (const p of positions) map.set(p.currency, (map.get(p.currency) ?? 0) + Number(p.market_value))
-    return Array.from(map.entries())
-      .map(([label, value]) => ({ label, value, pct: totalValue > 0 ? (value / totalValue) * 100 : 0 }))
-      .sort((a, b) => b.value - a.value)
-  }, [positions, totalValue])
+  const currencyExposure = useMemo(() => computeCurrencyExposure(positions, totalValue), [positions, totalValue])
 
   const cleanedNames = useMemo(() => {
     const map = new Map<string, { name: string; detail: string | null }>()
@@ -165,37 +176,26 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
     return map
   }, [positions])
 
-  const projectedIncome12m = useMemo(() => {
-    const today = new Date()
-    const in12m = new Date(today); in12m.setFullYear(in12m.getFullYear() + 1)
-    return cashProjRows
-      .filter(r => { const d = new Date(r.pay_date + 'T00:00:00'); return d >= today && d <= in12m })
-      .reduce((s, r) => s + (r.estimated_amount != null ? Number(r.estimated_amount) : 0), 0)
-  }, [cashProjRows])
+  const projectedIncome12m = useMemo(() => computeProjectedIncome12m(cashProjRows), [cashProjRows])
 
   const nextPayment = cashProjRows[0] ?? null
 
   // ── Unrealized Gain/Loss — real Cost Basis, matched to positions by CUSIP.
   // Never estimated: a position without a match in the uploaded file simply
-  // has no gain/loss shown for it.
+  // has no gain/loss shown for it. In consolidated mode this is already
+  // pre-merged (summed cost basis / gain-loss, percentage recomputed from
+  // the summed values) by the Consolidation Engine server-side.
   const glByCusip = useMemo(() => {
+    if (consolidatedGLByCusip) return consolidatedGLByCusip
     const map = new Map<string, PortfolioUnrealizedGainLossRow>()
     for (const r of unrealizedGLRows) map.set(r.cusip, r)
     return map
-  }, [unrealizedGLRows])
+  }, [unrealizedGLRows, consolidatedGLByCusip])
 
-  const unrealizedGLTotals = useMemo(() => {
-    if (!unrealizedGLImport) return null
-    let costBasis = 0, gainLoss = 0, matched = 0
-    for (const p of positions) {
-      const gl = p.cusip ? glByCusip.get(p.cusip) : undefined
-      if (!gl) continue
-      matched++
-      costBasis += Number(gl.cost_basis)
-      gainLoss += Number(gl.gain_loss)
-    }
-    return { costBasis, gainLoss, pct: costBasis > 0 ? (gainLoss / costBasis) * 100 : 0, matched, total: positions.length }
-  }, [positions, glByCusip, unrealizedGLImport])
+  const unrealizedGLTotals = useMemo(
+    () => computeUnrealizedGLTotals(positions, glByCusip, unrealizedGLImport != null),
+    [positions, glByCusip, unrealizedGLImport]
+  )
 
   const gainLossByInvestment = useMemo(() => {
     return positions
@@ -209,21 +209,19 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
       .sort((a, b) => Math.abs(b.gainLoss) - Math.abs(a.gainLoss))
   }, [positions, glByCusip])
 
-  const maturityBuckets = useMemo(() => {
-    const withMaturity = positions.filter(p => p.maturity_date)
-    const map = new Map<number, { value: number; count: number }>()
-    for (const p of withMaturity) {
-      const year = new Date(p.maturity_date as string).getUTCFullYear()
-      const cur = map.get(year) ?? { value: 0, count: 0 }
-      map.set(year, { value: cur.value + Number(p.market_value), count: cur.count + 1 })
-    }
-    return Array.from(map.entries()).map(([year, d]) => ({ year, ...d })).sort((a, b) => a.year - b.year)
-  }, [positions])
+  const maturityBuckets = useMemo(() => computeMaturityBuckets(positions), [positions])
 
-  const nextMaturity = useMemo(() => {
-    const withMaturity = positions.filter(p => p.maturity_date).sort((a, b) => (a.maturity_date as string).localeCompare(b.maturity_date as string))
-    return withMaturity[0] ?? null
-  }, [positions])
+  const nextMaturity = useMemo(() => computeNextMaturity(positions), [positions])
+
+  // Only meaningful in consolidated mode — maps each merged position's id to
+  // its display label ("Pershing" / "Morgan Stanley" / "Pershing + Morgan")
+  // for the Holdings table's Custodian column.
+  const custodianByPositionId = useMemo(() => {
+    if (!consolidatedPositions) return null
+    const map = new Map<string, string>()
+    for (const p of consolidatedPositions) map.set(p.id as string, p.custodian as string)
+    return map
+  }, [consolidatedPositions])
 
   const [downloadingPdf, setDownloadingPdf] = useState(false)
 
@@ -316,13 +314,41 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
   return (
     <div className="min-h-screen bg-gray-50">
       <Header router={router} account={account} accountNumber={accountNumber} importRow={importRow} onImport={() => setShowImport(true)} onHistory={() => setShowHistory(true)}
-        onDownloadPdf={handleDownloadPDF} downloadingPdf={downloadingPdf} onCustodianChange={handleCustodianChange} onAccountNameChange={handleAccountNameChange} />
+        onDownloadPdf={handleDownloadPDF} downloadingPdf={downloadingPdf} onCustodianChange={handleCustodianChange} onAccountNameChange={handleAccountNameChange}
+        onAddMorgan={!isConsolidated && custodians.length === 1 && custodians[0]?.custodian === 'Pershing' ? () => setShowAddMorgan(true) : undefined} />
+
+      {custodians.length > 1 && (
+        <div className="bg-white border-b border-gray-100 px-6">
+          <div className="max-w-6xl mx-auto flex items-center gap-1 py-2">
+            <span className="text-[11px] text-gray-400 mr-1">Custodio:</span>
+            {[...custodians.map(c => c.custodian), 'consolidado'].map(c => {
+              const active = (custodianParam ?? custodians[0]?.custodian) === c || (c === 'consolidado' && isConsolidated)
+              return (
+                <button key={c}
+                  onClick={() => router.push(`/factsheet/${encodeURIComponent(accountNumber)}${c === custodians[0]?.custodian && custodians.length <= 1 ? '' : `?custodian=${encodeURIComponent(c)}`}`)}
+                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition ${active ? 'bg-[#1B3A2B] text-white' : 'text-gray-500 hover:bg-gray-100'}`}>
+                  {c === 'consolidado' ? 'Consolidado' : c}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
+      {isConsolidated && consolidatedWarnings.length > 0 && (
+        <div className="max-w-6xl mx-auto px-6 pt-3">
+          {consolidatedWarnings.map((w, i) => (
+            <p key={i} className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-1">⚠ {w}</p>
+          ))}
+        </div>
+      )}
+
       <AccountPdfReport account={account} accountNumber={accountNumber} importRow={importRow} sortedByValue={sortedByValue}
         assetAllocation={assetAllocation} fixedIncomeBreakdown={fixedIncomeBreakdown} currencyExposure={currencyExposure}
         liquidity={liquidity} maturityBuckets={maturityBuckets} nextMaturity={nextMaturity}
         cashProjImport={cashProjImport} cashProjRows={cashProjRows} projectedIncome12m={projectedIncome12m}
         nextPayment={nextPayment} cleanedNames={cleanedNames} performance={performance}
-        unrealizedGLTotals={unrealizedGLTotals} glByCusip={glByCusip} />
+        unrealizedGLTotals={unrealizedGLTotals} glByCusip={glByCusip}
+        isConsolidated={isConsolidated} custodianByPositionId={custodianByPositionId} custodianBreakdown={custodianBreakdown} />
 
       {/* Tabs */}
       <div className="bg-white border-b border-gray-200 px-6">
@@ -354,7 +380,7 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
           />
         )}
         {tab === 'posiciones' && (
-          <PositionsTab positions={positions} totalValue={totalValue} glByCusip={glByCusip} onImport={() => setShowImport(true)} />
+          <PositionsTab positions={positions} totalValue={totalValue} glByCusip={glByCusip} onImport={() => setShowImport(true)} onReclassified={load} />
         )}
         {tab === 'rendimiento' && (
           <RendimientoTab accountNumber={accountNumber} history={history} performance={performance} onPerformanceImported={load} />
@@ -366,13 +392,20 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
 
       {showImport && <ImportPositionsModal accountNumber={accountNumber} onClose={() => setShowImport(false)} onImported={() => { setShowImport(false); load() }} />}
       {showHistory && <ImportHistoryModal accountNumber={accountNumber} onClose={() => setShowHistory(false)} />}
+      {showAddMorgan && (
+        <NewReportModal
+          initialMode="morgan" initialAccountNumber={accountNumber}
+          onClose={() => setShowAddMorgan(false)}
+          onImported={() => { setShowAddMorgan(false); router.push(`/factsheet/${encodeURIComponent(accountNumber)}?custodian=consolidado`) }}
+        />
+      )}
     </div>
   )
 }
 
 // ── Header ─────────────────────────────────────────────────────────────────
 
-function Header({ router, account, accountNumber, importRow, onImport, onHistory, onDownloadPdf, downloadingPdf, onCustodianChange, onAccountNameChange }: {
+function Header({ router, account, accountNumber, importRow, onImport, onHistory, onDownloadPdf, downloadingPdf, onCustodianChange, onAccountNameChange, onAddMorgan }: {
   router: ReturnType<typeof useRouter>
   account: PortfolioAccountInfo | null
   accountNumber: string
@@ -383,6 +416,7 @@ function Header({ router, account, accountNumber, importRow, onImport, onHistory
   downloadingPdf?: boolean
   onCustodianChange?: (custodian: string) => void
   onAccountNameChange?: (name: string) => void
+  onAddMorgan?: () => void
 }) {
   const [editingName, setEditingName] = useState(false)
   const [nameDraft, setNameDraft] = useState('')
@@ -458,6 +492,11 @@ function Header({ router, account, accountNumber, importRow, onImport, onHistory
             <button onClick={onDownloadPdf} disabled={downloadingPdf}
               className="px-3 py-2 text-xs font-semibold text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 transition disabled:opacity-50">
               {downloadingPdf ? 'Generando…' : 'Descargar PDF'}
+            </button>
+          )}
+          {onAddMorgan && (
+            <button onClick={onAddMorgan} className="px-3 py-2 text-xs font-semibold text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 transition">
+              + Agregar Morgan Stanley
             </button>
           )}
           <button onClick={onImport} className="px-4 py-2 text-sm font-bold text-white bg-[#2E7D52] rounded-lg hover:bg-[#256841] transition">

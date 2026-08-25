@@ -44,10 +44,10 @@ export async function resolveAccount(accountNumber: string): Promise<ResolvedAcc
   return { id: null, accountNumber, clientNumber: null, clientName: null, accountName: null, advisor: null, entity: null, custodian: null }
 }
 
-export async function findImportByAccountAndDate(accountNumber: string, snapshotDate: string) {
+export async function findImportByAccountAndDate(accountNumber: string, snapshotDate: string, custodian: string = 'Pershing') {
   const { rows } = await pool.query(
-    `select * from portfolio_imports where account_number = $1 and snapshot_date = $2`,
-    [accountNumber, snapshotDate]
+    `select * from portfolio_imports where account_number = $1 and snapshot_date = $2 and custodian = $3`,
+    [accountNumber, snapshotDate, custodian]
   )
   return rows[0] ?? null
 }
@@ -61,6 +61,7 @@ export async function createImport(input: {
   fileName: string
   importedBy: string
   importedById: string
+  custodian?: string
 }) {
   const client = await pool.connect()
   try {
@@ -69,14 +70,14 @@ export async function createImport(input: {
     const { rows } = await client.query(
       `insert into portfolio_imports
         (account_number, client_number, client_name, advisor, snapshot_date, base_currency,
-         total_market_value, position_count, file_name, warnings, imported_by, imported_by_id)
-       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11,$12)
+         total_market_value, position_count, file_name, warnings, imported_by, imported_by_id, custodian)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11,$12,$13)
        returning *`,
       [
         input.accountNumber, input.clientNumber, input.clientName, input.advisor,
         input.parsed.snapshotDate, input.parsed.baseCurrency, input.parsed.totalMarketValue,
         input.parsed.positions.length, input.fileName, JSON.stringify(input.parsed.warnings),
-        input.importedBy, input.importedById,
+        input.importedBy, input.importedById, input.custodian ?? 'Pershing',
       ]
     )
     const importRow = rows[0]
@@ -121,14 +122,16 @@ export async function deleteImport(importId: string) {
 // unrealized gain/loss — all snapshot dates, not just the latest) for an
 // account. Child rows cascade via FK. Irreversible — used by the "eliminar
 // portafolio" action on the accounts landing page.
-export async function deletePortfolioAccount(accountNumber: string) {
+export async function deletePortfolioAccount(accountNumber: string, custodian?: string) {
   const client = await pool.connect()
   try {
     await client.query('begin')
-    await client.query(`delete from portfolio_imports where account_number = $1`, [accountNumber])
-    await client.query(`delete from portfolio_cash_projections_imports where account_number = $1`, [accountNumber])
-    await client.query(`delete from portfolio_unrealized_gainloss_imports where account_number = $1`, [accountNumber])
-    await client.query(`delete from portfolio_performance_imports where account_number = $1`, [accountNumber])
+    const params = custodian ? [accountNumber, custodian] : [accountNumber]
+    const custodianClause = custodian ? `and custodian = $2` : ''
+    await client.query(`delete from portfolio_imports where account_number = $1 ${custodianClause}`, params)
+    await client.query(`delete from portfolio_cash_projections_imports where account_number = $1 ${custodianClause}`, params)
+    await client.query(`delete from portfolio_unrealized_gainloss_imports where account_number = $1 ${custodianClause}`, params)
+    await client.query(`delete from portfolio_performance_imports where account_number = $1 ${custodianClause}`, params)
     await client.query('commit')
   } catch (err) {
     await client.query('rollback')
@@ -138,23 +141,44 @@ export async function deletePortfolioAccount(accountNumber: string) {
   }
 }
 
+// One row per custodian ever imported for this account — powers the
+// custodian switcher UI and "does this account already have Morgan Stanley
+// data" checks. Latest snapshot date is the max across the import table
+// (positions) only, matching what listAccounts()/getLatestImport() treat as
+// "the" snapshot for a custodian.
+export async function listCustodiansForAccount(accountNumber: string): Promise<{ custodian: string; latestSnapshotDate: string; totalMarketValue: number }[]> {
+  const { rows } = await pool.query(
+    `select distinct on (custodian) custodian, snapshot_date, total_market_value
+     from portfolio_imports where account_number = $1
+     order by custodian, snapshot_date desc`,
+    [accountNumber]
+  )
+  return rows.map(r => ({ custodian: r.custodian, latestSnapshotDate: r.snapshot_date, totalMarketValue: Number(r.total_market_value) }))
+}
+
 export async function getImport(importId: string) {
   const { rows } = await pool.query(`select * from portfolio_imports where id = $1`, [importId])
   return rows[0] ?? null
 }
 
-export async function getLatestImport(accountNumber: string) {
+export async function getLatestImport(accountNumber: string, custodian?: string) {
+  const params: unknown[] = [accountNumber]
+  let custodianClause = ''
+  if (custodian) { params.push(custodian); custodianClause = `and custodian = $2` }
   const { rows } = await pool.query(
-    `select * from portfolio_imports where account_number = $1 order by snapshot_date desc limit 1`,
-    [accountNumber]
+    `select * from portfolio_imports where account_number = $1 ${custodianClause} order by snapshot_date desc limit 1`,
+    params
   )
   return rows[0] ?? null
 }
 
-export async function getImportByDate(accountNumber: string, snapshotDate: string) {
+export async function getImportByDate(accountNumber: string, snapshotDate: string, custodian?: string) {
+  const params: unknown[] = [accountNumber, snapshotDate]
+  let custodianClause = ''
+  if (custodian) { params.push(custodian); custodianClause = `and custodian = $3` }
   const { rows } = await pool.query(
-    `select * from portfolio_imports where account_number = $1 and snapshot_date = $2`,
-    [accountNumber, snapshotDate]
+    `select * from portfolio_imports where account_number = $1 and snapshot_date = $2 ${custodianClause}`,
+    params
   )
   return rows[0] ?? null
 }
@@ -178,6 +202,11 @@ export async function listSnapshotDates(accountNumber: string) {
 
 // One row per account — most recent import only — for the Portafolio landing
 // page. Scoped by advisor the same way src/app/clients does (allowed_folders).
+// When an account has ≥2 custodians, total_market_value is the sum of each
+// custodian's own latest reported total (never a re-sum of positions) — for
+// an account with a single custodian (today's only case) that sum is
+// mathematically identical to that one row's own total, so this is a
+// zero-behavior-change superset of the previous DISTINCT ON query.
 export async function listAccounts(advisorFilter: string[] | null) {
   const params: unknown[] = []
   let where = ''
@@ -189,14 +218,32 @@ export async function listAccounts(advisorFilter: string[] | null) {
   // when the import has no resolved client_name — same fallback as the
   // account detail page, so a name typed in there shows up here too.
   const { rows } = await pool.query(
-    `select distinct on (pi.account_number) pi.*, coalesce(nullif(pi.client_name, ''), nullif(mba.account_name, '')) as client_name
-     from portfolio_imports pi
-     left join monitoring_base_accounts mba on mba.account_number = pi.account_number
-     ${where}
-     order by pi.account_number, pi.snapshot_date desc`,
+    `with latest_per_custodian as (
+       select distinct on (pi.account_number, pi.custodian) pi.*,
+              coalesce(nullif(pi.client_name, ''), nullif(mba.account_name, '')) as resolved_client_name
+       from portfolio_imports pi
+       left join monitoring_base_accounts mba on mba.account_number = pi.account_number
+       ${where}
+       order by pi.account_number, pi.custodian, pi.snapshot_date desc
+     ),
+     overall_latest as (
+       select distinct on (account_number) *
+       from latest_per_custodian
+       order by account_number, snapshot_date desc
+     ),
+     totals as (
+       select account_number, sum(total_market_value) as combined_total, count(*) as custodian_count
+       from latest_per_custodian
+       group by account_number
+     )
+     select ol.*, ol.resolved_client_name as client_name, t.combined_total, t.custodian_count
+     from overall_latest ol
+     join totals t on t.account_number = ol.account_number`,
     params
   )
-  return rows.sort((a, b) => (a.client_name ?? a.account_number).localeCompare(b.client_name ?? b.account_number))
+  return rows
+    .map(r => ({ ...r, total_market_value: r.combined_total }))
+    .sort((a, b) => (a.client_name ?? a.account_number).localeCompare(b.client_name ?? b.account_number))
 }
 
 // ── Performance (Portfolio Performance PDF — real TWRR, never calculated) ──
@@ -207,15 +254,16 @@ export async function createPerformanceImport(input: {
   fileName: string
   importedBy: string
   importedById: string
+  custodian?: string
 }) {
   const p = input.parsed
   const { rows } = await pool.query(
     `insert into portfolio_performance_imports
       (account_number, report_date, period_start, period_end, inception_date, ending_value,
        return_selected, return_ytd, return_1y, return_3y, return_5y, return_since_inception,
-       benchmarks, file_name, imported_by, imported_by_id)
-     values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14,$15,$16)
-     on conflict (account_number, report_date) do update set
+       benchmarks, file_name, imported_by, imported_by_id, custodian)
+     values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14,$15,$16,$17)
+     on conflict (account_number, report_date, custodian) do update set
        period_start = excluded.period_start, period_end = excluded.period_end,
        inception_date = excluded.inception_date, ending_value = excluded.ending_value,
        return_selected = excluded.return_selected, return_ytd = excluded.return_ytd,
@@ -227,16 +275,19 @@ export async function createPerformanceImport(input: {
     [
       input.accountNumber, p.reportDate, p.periodStart, p.periodEnd, p.inceptionDate, p.endingValue,
       p.returns.selected, p.returns.ytd, p.returns.oneYear, p.returns.threeYear, p.returns.fiveYear, p.returns.sinceInception,
-      JSON.stringify(p.benchmarks), input.fileName, input.importedBy, input.importedById,
+      JSON.stringify(p.benchmarks), input.fileName, input.importedBy, input.importedById, input.custodian ?? 'Pershing',
     ]
   )
   return rows[0]
 }
 
-export async function getLatestPerformance(accountNumber: string) {
+export async function getLatestPerformance(accountNumber: string, custodian?: string) {
+  const params: unknown[] = [accountNumber]
+  let custodianClause = ''
+  if (custodian) { params.push(custodian); custodianClause = `and custodian = $2` }
   const { rows } = await pool.query(
-    `select * from portfolio_performance_imports where account_number = $1 order by report_date desc limit 1`,
-    [accountNumber]
+    `select * from portfolio_performance_imports where account_number = $1 ${custodianClause} order by report_date desc limit 1`,
+    params
   )
   return rows[0] ?? null
 }
@@ -249,23 +300,27 @@ export async function createCashProjectionsImport(input: {
   fileName: string
   importedBy: string
   importedById: string
+  custodian?: string
 }) {
+  const custodian = input.custodian ?? 'Pershing'
   const client = await pool.connect()
   try {
     await client.query('begin')
 
-    // Re-importing the same account+date replaces the previous rows outright —
-    // this is enrichment data, not a versioned snapshot like positions.
+    // Re-importing the same account+date+custodian replaces the previous rows
+    // outright — this is enrichment data, not a versioned snapshot like
+    // positions. Scoped by custodian too, so importing Morgan Stanley's
+    // projections never deletes Pershing's for the same account/date.
     await client.query(
-      `delete from portfolio_cash_projections_imports where account_number = $1 and as_of_date = $2`,
-      [input.accountNumber, input.parsed.asOfDate]
+      `delete from portfolio_cash_projections_imports where account_number = $1 and as_of_date = $2 and custodian = $3`,
+      [input.accountNumber, input.parsed.asOfDate, custodian]
     )
 
     const { rows } = await client.query(
-      `insert into portfolio_cash_projections_imports (account_number, as_of_date, total_cash_flow, file_name, imported_by, imported_by_id)
-       values ($1,$2,$3,$4,$5,$6)
+      `insert into portfolio_cash_projections_imports (account_number, as_of_date, total_cash_flow, file_name, imported_by, imported_by_id, custodian)
+       values ($1,$2,$3,$4,$5,$6,$7)
        returning *`,
-      [input.accountNumber, input.parsed.asOfDate, input.parsed.totalCashFlow, input.fileName, input.importedBy, input.importedById]
+      [input.accountNumber, input.parsed.asOfDate, input.parsed.totalCashFlow, input.fileName, input.importedBy, input.importedById, custodian]
     )
     const importRow = rows[0]
 
@@ -290,10 +345,13 @@ export async function createCashProjectionsImport(input: {
   }
 }
 
-export async function getLatestCashProjections(accountNumber: string) {
+export async function getLatestCashProjections(accountNumber: string, custodian?: string) {
+  const params: unknown[] = [accountNumber]
+  let custodianClause = ''
+  if (custodian) { params.push(custodian); custodianClause = `and custodian = $2` }
   const { rows: imports } = await pool.query(
-    `select * from portfolio_cash_projections_imports where account_number = $1 order by as_of_date desc limit 1`,
-    [accountNumber]
+    `select * from portfolio_cash_projections_imports where account_number = $1 ${custodianClause} order by as_of_date desc limit 1`,
+    params
   )
   const importRow = imports[0] ?? null
   if (!importRow) return { importRow: null, rows: [] }
@@ -312,23 +370,27 @@ export async function createUnrealizedGainLossImport(input: {
   fileName: string
   importedBy: string
   importedById: string
+  custodian?: string
 }) {
+  const custodian = input.custodian ?? 'Pershing'
   const client = await pool.connect()
   try {
     await client.query('begin')
 
     // Enrichment data, not a versioned snapshot — re-importing the same
-    // account+date replaces the previous rows outright.
+    // account+date+custodian replaces the previous rows outright. Scoped by
+    // custodian too, so importing Morgan Stanley's G/L never deletes
+    // Pershing's for the same account/date.
     await client.query(
-      `delete from portfolio_unrealized_gainloss_imports where account_number = $1 and as_of_date = $2`,
-      [input.accountNumber, input.parsed.asOfDate]
+      `delete from portfolio_unrealized_gainloss_imports where account_number = $1 and as_of_date = $2 and custodian = $3`,
+      [input.accountNumber, input.parsed.asOfDate, custodian]
     )
 
     const { rows } = await client.query(
-      `insert into portfolio_unrealized_gainloss_imports (account_number, as_of_date, net_gain_loss, file_name, imported_by, imported_by_id)
-       values ($1,$2,$3,$4,$5,$6)
+      `insert into portfolio_unrealized_gainloss_imports (account_number, as_of_date, net_gain_loss, file_name, imported_by, imported_by_id, custodian)
+       values ($1,$2,$3,$4,$5,$6,$7)
        returning *`,
-      [input.accountNumber, input.parsed.asOfDate, input.parsed.netGainLoss, input.fileName, input.importedBy, input.importedById]
+      [input.accountNumber, input.parsed.asOfDate, input.parsed.netGainLoss, input.fileName, input.importedBy, input.importedById, custodian]
     )
     const importRow = rows[0]
 
@@ -353,10 +415,13 @@ export async function createUnrealizedGainLossImport(input: {
   }
 }
 
-export async function getLatestUnrealizedGainLoss(accountNumber: string) {
+export async function getLatestUnrealizedGainLoss(accountNumber: string, custodian?: string) {
+  const params: unknown[] = [accountNumber]
+  let custodianClause = ''
+  if (custodian) { params.push(custodian); custodianClause = `and custodian = $2` }
   const { rows: imports } = await pool.query(
-    `select * from portfolio_unrealized_gainloss_imports where account_number = $1 order by as_of_date desc limit 1`,
-    [accountNumber]
+    `select * from portfolio_unrealized_gainloss_imports where account_number = $1 ${custodianClause} order by as_of_date desc limit 1`,
+    params
   )
   const importRow = imports[0] ?? null
   if (!importRow) return { importRow: null, rows: [] }

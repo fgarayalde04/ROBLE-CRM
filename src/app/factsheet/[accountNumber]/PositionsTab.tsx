@@ -25,13 +25,28 @@ function DetailRow({ label, value }: { label: string; value: string | null | und
   )
 }
 
-export default function PositionsTab({ positions, totalValue, glByCusip, onImport }: { positions: PortfolioPositionRow[]; totalValue: number; glByCusip: Map<string, PortfolioUnrealizedGainLossRow>; onImport?: () => void }) {
+const RECLASSIFY_OPTIONS = ['Cash', 'Fixed Income', 'Fund', 'Equity', 'ETF', 'Alternatives', 'Real Estate']
+
+export default function PositionsTab({ positions, totalValue, glByCusip, onImport, onReclassified }: { positions: PortfolioPositionRow[]; totalValue: number; glByCusip: Map<string, PortfolioUnrealizedGainLossRow>; onImport?: () => void; onReclassified?: () => void }) {
   const hasGL = glByCusip.size > 0
   const [q, setQ] = useState('')
   const [assetFilter, setAssetFilter] = useState('')
   const [sortKey, setSortKey] = useState<SortKey>('market_value')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [selected, setSelected] = useState<PortfolioPositionRow | null>(null)
+  const [reclassifying, setReclassifying] = useState(false)
+
+  async function handleReclassify(positionId: string, assetClass: string) {
+    setReclassifying(true)
+    try {
+      await fetch(`/api/portfolio/positions/${positionId}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ asset_class: assetClass }),
+      })
+      onReclassified?.()
+    } finally {
+      setReclassifying(false)
+    }
+  }
 
   const assetClasses = useMemo(() => Array.from(new Set(positions.map(p => p.asset_class))).sort(), [positions])
 
@@ -192,6 +207,21 @@ export default function PositionsTab({ positions, totalValue, glByCusip, onImpor
               </div>
               <button onClick={() => setSelected(null)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
             </div>
+
+            {selected.asset_class === 'Sin clasificar' && (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
+                <p className="text-[11px] font-semibold text-amber-800 mb-1.5">No se pudo clasificar automáticamente — elegí la clase correcta</p>
+                <select
+                  disabled={reclassifying}
+                  defaultValue=""
+                  onChange={e => { if (e.target.value) { handleReclassify(selected.id, e.target.value); setSelected(null) } }}
+                  className="w-full text-xs border border-amber-300 rounded-lg px-2 py-1.5 bg-white focus:outline-none"
+                >
+                  <option value="" disabled>Elegir clase de activo…</option>
+                  {RECLASSIFY_OPTIONS.map(o => <option key={o} value={o}>{ASSET_CLASS_ES[o] ?? o}</option>)}
+                </select>
+              </div>
+            )}
 
             <div className="bg-[#F3F4F6] rounded-lg p-3 mb-4 flex items-center justify-between">
               <div>

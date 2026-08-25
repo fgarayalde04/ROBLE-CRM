@@ -3,7 +3,9 @@ import { getSession } from '@/lib/auth'
 import { parseCashProjectionsExcel } from '@/lib/portfolio/cashProjectionsParser'
 import { resolveAccount, createCashProjectionsImport, getLatestCashProjections } from '@/lib/db/portfolio'
 
-// GET /api/portfolio/[accountNumber]/cashflows — latest projected cash flows (Incoming Cash Projections Excel).
+// GET /api/portfolio/[accountNumber]/cashflows — latest projected cash flows
+// (Incoming Cash Projections Excel). Optional ?custodian= scopes to that
+// custodian's own data — omitted behaves exactly as before.
 export async function GET(
   req: NextRequest,
   { params }: { params: { accountNumber: string } }
@@ -12,13 +14,14 @@ export async function GET(
   if (!session) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
   const accountNumber = decodeURIComponent(params.accountNumber)
+  const custodian = req.nextUrl.searchParams.get('custodian') || undefined
   const account = await resolveAccount(accountNumber)
   const folderFilter = session.allowed_folders ?? null
   if (folderFilter && (!account.advisor || !folderFilter.includes(account.advisor))) {
     return NextResponse.json({ error: 'Sin permiso' }, { status: 403 })
   }
 
-  const { importRow, rows } = await getLatestCashProjections(accountNumber)
+  const { importRow, rows } = await getLatestCashProjections(accountNumber, custodian)
   return NextResponse.json({ import: importRow, rows })
 }
 

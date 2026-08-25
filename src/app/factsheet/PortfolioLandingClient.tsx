@@ -2,6 +2,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import ImportPositionsModal from '@/components/portfolio/ImportPositionsModal'
+import NewReportModal from '@/components/portfolio/NewReportModal'
 
 interface AccountRow {
   id: string
@@ -24,6 +25,7 @@ export default function PortfolioLandingClient() {
   const [loading, setLoading] = useState(true)
   const [q, setQ] = useState('')
   const [showImport, setShowImport] = useState(false)
+  const [showNewReport, setShowNewReport] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
 
@@ -70,10 +72,16 @@ export default function PortfolioLandingClient() {
             <h1 className="text-lg font-bold text-gray-900">Portafolio</h1>
             <p className="text-xs text-gray-400 mt-0.5">Posiciones y valor de cartera por cuenta</p>
           </div>
-          <button onClick={() => setShowImport(true)}
-            className="px-4 py-2 text-sm font-bold text-white bg-[#2E7D52] rounded-lg hover:bg-[#256841] transition shrink-0">
-            + Importar posiciones
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            <button onClick={() => setShowNewReport(true)}
+              className="px-4 py-2 text-sm font-bold text-white bg-[#2E7D52] rounded-lg hover:bg-[#256841] transition">
+              Nuevo Reporte
+            </button>
+            <button onClick={() => setShowImport(true)}
+              className="px-3 py-2 text-xs font-semibold text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 transition">
+              + Importar posiciones
+            </button>
+          </div>
         </div>
       </div>
 
@@ -155,6 +163,16 @@ export default function PortfolioLandingClient() {
         <ImportPositionsModal
           onClose={() => setShowImport(false)}
           onImported={(accountNumber) => { setShowImport(false); router.push(`/factsheet/${encodeURIComponent(accountNumber)}`) }}
+        />
+      )}
+      {showNewReport && (
+        <NewReportModal
+          onClose={() => setShowNewReport(false)}
+          onImported={(accountNumber, custodianMode) => {
+            setShowNewReport(false)
+            const suffix = custodianMode === 'morgan' ? '?custodian=Morgan Stanley' : custodianMode === 'consolidado' ? '?custodian=consolidado' : ''
+            router.push(`/factsheet/${encodeURIComponent(accountNumber)}${suffix}`)
+          }}
         />
       )}
     </div>

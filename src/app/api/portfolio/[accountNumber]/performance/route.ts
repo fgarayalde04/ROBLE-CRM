@@ -3,7 +3,9 @@ import { getSession } from '@/lib/auth'
 import { parsePerformancePdf } from '@/lib/portfolio/performancePdfParser'
 import { resolveAccount, createPerformanceImport, getLatestPerformance } from '@/lib/db/portfolio'
 
-// GET /api/portfolio/[accountNumber]/performance — latest reported performance (Pershing PDF).
+// GET /api/portfolio/[accountNumber]/performance — latest reported
+// performance (Pershing PDF). Optional ?custodian= scopes to that
+// custodian's own data — omitted behaves exactly as before.
 export async function GET(
   req: NextRequest,
   { params }: { params: { accountNumber: string } }
@@ -12,13 +14,14 @@ export async function GET(
   if (!session) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
   const accountNumber = decodeURIComponent(params.accountNumber)
+  const custodian = req.nextUrl.searchParams.get('custodian') || undefined
   const account = await resolveAccount(accountNumber)
   const folderFilter = session.allowed_folders ?? null
   if (folderFilter && (!account.advisor || !folderFilter.includes(account.advisor))) {
     return NextResponse.json({ error: 'Sin permiso' }, { status: 403 })
   }
 
-  const performance = await getLatestPerformance(accountNumber)
+  const performance = await getLatestPerformance(accountNumber, custodian)
   return NextResponse.json({ performance })
 }
 

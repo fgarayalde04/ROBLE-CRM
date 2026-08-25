@@ -20,7 +20,7 @@ function truncateName(s: string, maxChars: number): string {
   return s.length > maxChars ? s.slice(0, maxChars - 1).trimEnd() + '…' : s
 }
 
-function PdfLetterhead({ title, accountNumber, account, importRow }: { title: string; accountNumber: string; account: PortfolioAccountInfo | null; importRow: PortfolioImportRow }) {
+function PdfLetterhead({ title, accountNumber, account, importRow, custodianLabel }: { title: string; accountNumber: string; account: PortfolioAccountInfo | null; importRow: PortfolioImportRow; custodianLabel?: string }) {
   const today = new Date().toLocaleDateString('es-UY', { day: '2-digit', month: 'long', year: 'numeric' })
   return (
     <div style={{ marginBottom: '5mm' }}>
@@ -35,7 +35,7 @@ function PdfLetterhead({ title, accountNumber, account, importRow }: { title: st
       <div style={{ display: 'flex', border: `1px solid ${COLORS.border}`, borderRadius: 6, overflow: 'hidden' }}>
         {[
           ['Cliente', account?.clientName || account?.accountName || accountNumber],
-          ['Custodio', account?.custodian ?? '—'],
+          ['Custodio', custodianLabel ?? account?.custodian ?? '—'],
           ['Actualizado', fmtDate(importRow.snapshot_date)],
           ['Fecha del reporte', today],
         ].map(([label, val], i, arr) => (
@@ -102,6 +102,7 @@ export default function AccountPdfReport({
   account, accountNumber, importRow, sortedByValue, assetAllocation, fixedIncomeBreakdown, currencyExposure,
   liquidity, maturityBuckets, nextMaturity, cashProjImport, cashProjRows, projectedIncome12m, nextPayment,
   cleanedNames, performance, unrealizedGLTotals, glByCusip,
+  isConsolidated, custodianByPositionId, custodianBreakdown,
 }: {
   account: PortfolioAccountInfo | null
   accountNumber: string
@@ -121,9 +122,13 @@ export default function AccountPdfReport({
   performance: PortfolioPerformanceRow | null
   unrealizedGLTotals: { costBasis: number; gainLoss: number; pct: number; matched: number; total: number } | null
   glByCusip: Map<string, PortfolioUnrealizedGainLossRow>
+  isConsolidated?: boolean
+  custodianByPositionId?: Map<string, string> | null
+  custodianBreakdown?: { label: string; value: number; pct: number }[]
 }) {
   const totalValue = Number(importRow.total_market_value)
   const clientName = account?.clientName || account?.accountName || accountNumber
+  const custodianLabel = isConsolidated ? 'Pershing + Morgan Stanley' : undefined
   const topHoldings = sortedByValue.slice(0, 6)
   const maxHoldingValue = topHoldings[0] ? Number(topHoldings[0].market_value) : 1
 
@@ -146,7 +151,7 @@ export default function AccountPdfReport({
     <div id="account-pdf-report" style={{ position: 'fixed', left: -10000, top: 0 }}>
       {/* ── Page 1: Overview ── */}
       <div className="pdf-page" style={PAGE_STYLE}>
-        <PdfLetterhead title="Portfolio Report" accountNumber={accountNumber} account={account} importRow={importRow} />
+        <PdfLetterhead title="Portfolio Report" accountNumber={accountNumber} account={account} importRow={importRow} custodianLabel={custodianLabel} />
 
         {performance && (
           <div data-pdf-keep-together style={{ border: `1px solid ${COLORS.border}`, borderRadius: 8, padding: '3mm 4mm', marginBottom: '4mm' }}>
@@ -214,12 +219,31 @@ export default function AccountPdfReport({
           })}
         </div>
 
+        {custodianBreakdown && custodianBreakdown.length > 0 && (
+          <div data-pdf-keep-together style={{ border: `1px solid ${COLORS.border}`, borderRadius: 8, padding: '3mm 4mm', marginBottom: '3mm' }}>
+            <div style={{ fontSize: 8, fontWeight: 700, color: COLORS.ink, marginBottom: '2mm' }}>Portfolio por Custodio</div>
+            <div style={{ display: 'flex', gap: '4mm' }}>
+              {custodianBreakdown.map(c => (
+                <div key={c.label} style={{ flex: 1 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 7, marginBottom: '1mm' }}>
+                    <span style={{ color: COLORS.slate }}>{c.label}</span>
+                    <span style={{ fontWeight: 700, color: COLORS.ink }}>{fmtUSD(c.value)} · {fmtPct(c.pct)}</span>
+                  </div>
+                  <div style={{ height: '2mm', background: COLORS.bgSofter, borderRadius: '1mm', overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: `${Math.max(c.pct, 2)}%`, background: `linear-gradient(90deg, ${COLORS.darkGreen}, ${COLORS.midGreen})` }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         <PdfFooter clientName={clientName} />
       </div>
 
       {/* ── Page 2: Holdings ── */}
       <div className="pdf-page" style={PAGE_STYLE}>
-        <PdfLetterhead title="Portfolio Holdings" accountNumber={accountNumber} account={account} importRow={importRow} />
+        <PdfLetterhead title="Portfolio Holdings" accountNumber={accountNumber} account={account} importRow={importRow} custodianLabel={custodianLabel} />
         <table style={{ width: '100%', fontSize: 7.3, borderCollapse: 'collapse' }}>
           <thead>
             <tr style={{ background: COLORS.charcoal }}>
@@ -236,11 +260,15 @@ export default function AccountPdfReport({
                 </>
               )}
               {hasMaturityCols && <th style={{ textAlign: 'right', padding: '2mm 1.5mm', color: '#fff', fontWeight: 700 }}>Maturity</th>}
+              {isConsolidated && <th style={{ textAlign: 'left', padding: '2mm 1.5mm', color: '#fff', fontWeight: 700 }}>Custodian</th>}
             </tr>
           </thead>
           <tbody>
             {sortedByValue.map((p, i) => {
-              const pct = p.weight_pct != null ? Number(p.weight_pct) : 0
+              // In consolidated mode weight_pct was computed against each
+              // custodian's own total, not the combined one — always
+              // recalculate live here instead of trusting the stored value.
+              const pct = isConsolidated ? (totalValue > 0 ? (Number(p.market_value) / totalValue) * 100 : 0) : (p.weight_pct != null ? Number(p.weight_pct) : 0)
               const clean = cleanedNames.get(p.id)
               const gl = p.cusip ? glByCusip.get(p.cusip) : undefined
               return (
@@ -264,6 +292,7 @@ export default function AccountPdfReport({
                     </>
                   )}
                   {hasMaturityCols && <td style={{ padding: '2.2mm 1.5mm', textAlign: 'right', color: COLORS.slate }}>{p.maturity_date ? fmtDate(p.maturity_date) : '—'}</td>}
+                  {isConsolidated && <td style={{ padding: '2.2mm 1.5mm', color: COLORS.slate }}>{custodianByPositionId?.get(p.id) ?? '—'}</td>}
                 </tr>
               )
             })}
@@ -282,6 +311,7 @@ export default function AccountPdfReport({
                 </>
               )}
               {hasMaturityCols && <td style={{ padding: '2mm 1.5mm' }} />}
+              {isConsolidated && <td style={{ padding: '2mm 1.5mm' }} />}
             </tr>
           </tfoot>
         </table>
@@ -291,7 +321,7 @@ export default function AccountPdfReport({
       {/* ── Page 3: Income & Cash Flow (only if cash projections were imported) ── */}
       {cashProjImport && cashProjRows.length > 0 && (
         <div className="pdf-page" style={PAGE_STYLE}>
-          <PdfLetterhead title="Income & Cash Flow" accountNumber={accountNumber} account={account} importRow={importRow} />
+          <PdfLetterhead title="Income & Cash Flow" accountNumber={accountNumber} account={account} importRow={importRow} custodianLabel={custodianLabel} />
 
           <div data-pdf-keep-together style={{ display: 'flex', gap: '3mm', marginBottom: '4mm' }}>
             <div style={{ flex: 1, border: `1px solid ${COLORS.border}`, borderRadius: 8, padding: '3mm' }}>
