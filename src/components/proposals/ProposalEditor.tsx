@@ -934,13 +934,15 @@ function BondsTable({
   const updateField = useCallback(async (bond: Bond, field: keyof Bond, raw: string) => {
     const numFields = ['amount','coupon','yield','duration','price','quantity']
     const value = numFields.includes(field) ? (raw === '' ? null : parseFloat(raw.replace(/,/g, ''))) : (raw === '' ? null : raw)
-    // Valor Nominal (amount) siempre es Precio × Cantidad para bonos — se
-    // recalcula y persiste solo, nunca se tipea directamente.
+    // Valor Nominal (amount) siempre es Cantidad × 1000 × (Precio/100) para
+    // bonos — el precio cotiza como % de la par (ej: 102.95 = 1,0295) y la
+    // cantidad está en unidades de USD 1000 de nominal. Se recalcula y
+    // persiste solo, nunca se tipea directamente.
     const patch: Partial<Bond> = { [field]: value }
     if (field === 'price' || field === 'quantity') {
       const price = field === 'price' ? (value as number | null) : bond.price
       const quantity = field === 'quantity' ? (value as number | null) : bond.quantity
-      patch.amount = price != null && quantity != null ? price * quantity : 0
+      patch.amount = price != null && quantity != null ? quantity * 1000 * (price / 100) : 0
     }
     const updated = bonds.map(b => b.id === bond.id ? { ...b, ...patch } as Bond : b)
     onUpdate(updated)
