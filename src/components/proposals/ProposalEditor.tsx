@@ -1003,8 +1003,8 @@ function BondsTable({
             <table className="w-full text-sm min-w-[1180px]">
               <thead>
                 <tr className="border-b border-gray-100 bg-gray-50/60">
-                  {['Portafolio','Operación','Emisor','ISIN','Precio','Cantidad','Moneda','Vencimiento','Cupón %','Yield %','Dur. (a)','Rating','%','Valor Nominal',''].map(h => (
-                    <th key={h} className={`px-3 py-2.5 text-[9px] font-semibold text-gray-400 uppercase tracking-wider ${h === '' ? 'w-8' : h === 'Valor Nominal' || h === '%' || h === 'Precio' || h === 'Cantidad' ? 'text-right' : h === 'Operación' ? 'text-center' : 'text-left'}`}>{h}</th>
+                  {['Portafolio','Operación','Emisor','ISIN','Precio (Ind.)','Cantidad','Moneda','Vencimiento','Cupón %','Yield (Ind.) %','Dur. (a)','Rating','%','Valor Nominal',''].map(h => (
+                    <th key={h} className={`px-3 py-2.5 text-[9px] font-semibold text-gray-400 uppercase tracking-wider ${h === '' ? 'w-8' : h === 'Valor Nominal' || h === '%' || h === 'Precio (Ind.)' || h === 'Cantidad' ? 'text-right' : h === 'Operación' ? 'text-center' : 'text-left'}`}>{h}</th>
                   ))}
                 </tr>
               </thead>
