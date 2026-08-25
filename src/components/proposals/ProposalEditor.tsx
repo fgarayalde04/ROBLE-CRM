@@ -4,6 +4,11 @@ import { useState, useCallback, useRef, useEffect, useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
+import {
+  type CouponFrequency, type DayCountConvention,
+  COUPON_FREQUENCIES, DAY_COUNT_CONVENTIONS, DEFAULT_COUPON_FREQUENCY, DEFAULT_DAY_COUNT_CONVENTION,
+  calculateBondAccrual,
+} from '@/lib/proposals/bondCalculations'
 
 // ─── FactsheetData (mirrors lib/factsheet-extractor) ─────────────────────────
 
@@ -476,6 +481,7 @@ interface Proposal {
   notes: string | null
   disclaimer: string | null
   created_at: string
+  settlement_date: string | null
 }
 
 type Operacion = 'compra' | 'venta'
@@ -517,6 +523,8 @@ interface Bond {
   amount: number
   operacion: Operacion
   broker: string | null
+  frequency: CouponFrequency | null
+  day_count_convention: DayCountConvention | null
 }
 
 interface Equity {
@@ -605,9 +613,9 @@ function EditCell({
 // ─── Allocation Panel ─────────────────────────────────────────────────────────
 
 function AllocationPanel({
-  total, ventas, currency, funds, bonds, equities,
+  total, ventas, currency, funds, bonds, equities, settlementDate,
 }: {
-  total: number; ventas: number; currency: string; funds: Fund[]; bonds: Bond[]; equities: Equity[]
+  total: number; ventas: number; currency: string; funds: Fund[]; bonds: Bond[]; equities: Equity[]; settlementDate: string | null
 }) {
   // % y montos se derivan de los importes de compra de cada item — el campo
   // pct de cada fila quedó solo para lectura en las tablas y ya no se
@@ -635,6 +643,12 @@ function AllocationPanel({
   const avgYield    = yieldAmtSum > 0
     ? yieldItems.reduce((s, i) => s + i.yield * i.amount, 0) / yieldAmtSum
     : null
+
+  // Cupón corrido y desembolso estimado — solo compras, mismo criterio que
+  // el resto del panel.
+  const bondAccruals = bonds.filter(b => b.operacion !== 'venta').map(b => calculateBondAccrual(b, settlementDate))
+  const totalAccruedInterest = bondAccruals.reduce((s, a) => s + a.accruedInterest, 0)
+  const totalEstimatedCash   = bondAccruals.reduce((s, a) => s + a.estimatedCashRequired, 0)
 
   return (
     <div className="bg-white border border-[#E2E8F0] rounded-xl p-5 space-y-4 sticky top-4">
@@ -705,6 +719,20 @@ function AllocationPanel({
           </span>
         </div>
       </div>
+
+      {/* Cupón corrido / desembolso estimado (solo si hay bonos con cupón devengado) */}
+      {totalAccruedInterest > 0 && (
+        <div className="border-t border-gray-100 pt-3">
+          <div className="flex items-center justify-between">
+            <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest">Cupón Corrido Total</p>
+            <span className="text-sm font-bold tabular-nums font-mono text-amber-700">{fmtMoney(totalAccruedInterest, currency)}</span>
+          </div>
+          <div className="flex items-center justify-between mt-1">
+            <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest">Desembolso Total Estimado</p>
+            <span className="text-sm font-bold tabular-nums font-mono text-[#2D3F52]">{fmtMoney(totalEstimatedCash, currency)}</span>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -925,9 +953,9 @@ function FundsTable({
 // ─── Bonds Table ──────────────────────────────────────────────────────────────
 
 function BondsTable({
-  proposalId, total, currency, bonds, onUpdate,
+  proposalId, total, currency, bonds, onUpdate, settlementDate,
 }: {
-  proposalId: string; total: number; currency: string; bonds: Bond[]; onUpdate: (b: Bond[]) => void
+  proposalId: string; total: number; currency: string; bonds: Bond[]; onUpdate: (b: Bond[]) => void; settlementDate: string | null
 }) {
   const [adding, setAdding] = useState(false)
 
@@ -962,7 +990,7 @@ function BondsTable({
     setAdding(true)
     const res = await fetch(`/api/proposals/${proposalId}/bonds`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pct: 0, amount: 0, operacion: 'compra' }),
+      body: JSON.stringify({ pct: 0, amount: 0, operacion: 'compra', frequency: DEFAULT_COUPON_FREQUENCY, day_count_convention: DEFAULT_DAY_COUNT_CONVENTION }),
     })
     const data = await res.json()
     if (res.ok) onUpdate([...bonds, data])
@@ -1002,16 +1030,18 @@ function BondsTable({
       ) : (
         <div className="bg-white border border-[#E2E8F0] rounded-xl overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[1180px]">
+            <table className="w-full text-sm min-w-[1560px]">
               <thead>
                 <tr className="border-b border-gray-100 bg-gray-50/60">
-                  {['Portafolio','Operación','Emisor','ISIN','Precio (Ind.)','Cantidad','Moneda','Vencimiento','Cupón %','Yield (Ind.) %','Dur. (a)','Rating','%','Valor Nominal',''].map(h => (
-                    <th key={h} className={`px-3 py-2.5 text-[9px] font-semibold text-gray-400 uppercase tracking-wider ${h === '' ? 'w-8' : h === 'Valor Nominal' || h === '%' || h === 'Precio (Ind.)' || h === 'Cantidad' ? 'text-right' : h === 'Operación' ? 'text-center' : 'text-left'}`}>{h}</th>
+                  {['Portafolio','Operación','Emisor','ISIN','Precio (Ind.)','Cantidad','Moneda','Vencimiento','Cupón %','Yield (Ind.) %','Dur. (a)','Rating','Frecuencia','Día/360','%','Nominal','Valor de Compra','Cupón Corrido','Desembolso Estimado',''].map(h => (
+                    <th key={h} className={`px-3 py-2.5 text-[9px] font-semibold text-gray-400 uppercase tracking-wider ${h === '' ? 'w-8' : ['Nominal','Valor de Compra','Cupón Corrido','Desembolso Estimado','%','Precio (Ind.)','Cantidad'].includes(h) ? 'text-right' : h === 'Operación' ? 'text-center' : 'text-left'}`}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {bonds.map(b => (
+                {bonds.map(b => {
+                  const accrual = calculateBondAccrual(b, settlementDate)
+                  return (
                   <tr key={b.id} className="hover:bg-gray-50/50 transition-colors group">
                     <td className="px-3 py-2.5"><EditCell value={b.broker} onChange={v => updateField(b, 'broker', v)} placeholder="Custodio" className="text-[11px]" /></td>
                     <td className="px-3 py-2.5 text-center"><OperacionToggle value={b.operacion} onChange={v => setOperacion(b, v)} /></td>
@@ -1025,16 +1055,56 @@ function BondsTable({
                     <td className="px-3 py-2.5 text-right"><EditCell value={b.yield}    onChange={v => updateField(b, 'yield',    v)} numeric placeholder="—" className={`text-right text-xs ${pctColor(b.yield)}`} /></td>
                     <td className="px-3 py-2.5 text-right"><EditCell value={b.duration} onChange={v => updateField(b, 'duration', v)} numeric placeholder="—" className="text-right text-xs" /></td>
                     <td className="px-3 py-2.5"><EditCell value={b.rating}        onChange={v => updateField(b, 'rating',        v)} placeholder="—" /></td>
+                    <td className="px-3 py-2.5">
+                      <select
+                        value={b.frequency ?? DEFAULT_COUPON_FREQUENCY}
+                        onChange={e => updateField(b, 'frequency', e.target.value)}
+                        className="text-[11px] text-gray-600 border border-gray-200 rounded px-1 py-1 bg-white focus:outline-none focus:border-[#16A34A]/50 w-full"
+                      >
+                        {COUPON_FREQUENCIES.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
+                      </select>
+                    </td>
+                    <td className="px-3 py-2.5">
+                      <select
+                        value={b.day_count_convention ?? DEFAULT_DAY_COUNT_CONVENTION}
+                        onChange={e => updateField(b, 'day_count_convention', e.target.value)}
+                        className="text-[11px] text-gray-600 border border-gray-200 rounded px-1 py-1 bg-white focus:outline-none focus:border-[#16A34A]/50 w-full"
+                      >
+                        {DAY_COUNT_CONVENTIONS.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+                      </select>
+                    </td>
                     <td className="px-3 py-2.5 text-right text-xs text-gray-400 tabular-nums">
                       {total > 0 && b.amount > 0 ? `${((b.amount / total) * 100).toFixed(1)}%` : '—'}
                     </td>
                     <td className="px-3 py-2.5 text-right">
+                      <span className="text-xs text-gray-500 font-mono tabular-nums" title="Cantidad × 1000">
+                        {accrual.nominal > 0 ? accrual.nominal.toLocaleString('en-US', { maximumFractionDigits: 2 }) : '0'}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2.5 text-right">
                       <div className="flex items-center justify-end gap-1">
                         <span className="text-[10px] text-gray-400">{currency}</span>
-                        <span className="text-sm font-semibold font-mono tabular-nums text-[#2D3F52]" title="Precio × Cantidad">
+                        <span className="text-sm font-semibold font-mono tabular-nums text-[#2D3F52]" title="Nominal × Precio/100">
                           {b.amount > 0 ? b.amount.toLocaleString('en-US', { maximumFractionDigits: 2 }) : '0'}
                         </span>
                       </div>
+                    </td>
+                    <td className="px-3 py-2.5 text-right">
+                      {accrual.accruedInterest > 0 ? (
+                        <span
+                          className="font-mono tabular-nums font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded"
+                          title={`${accrual.accruedDays} días desde ${accrual.lastCouponDate} (próximo cupón: ${accrual.nextCouponDate})`}
+                        >
+                          {currency} {accrual.accruedInterest.toLocaleString('en-US', { maximumFractionDigits: 2 })}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-gray-300">—</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2.5 text-right">
+                      <span className="text-sm font-bold font-mono tabular-nums text-[#2D3F52]">
+                        {currency} {accrual.estimatedCashRequired.toLocaleString('en-US', { maximumFractionDigits: 2 })}
+                      </span>
                     </td>
                     <td className="pr-2 py-2.5">
                       <button onClick={() => deleteBond(b.id)} className="opacity-0 group-hover:opacity-100 w-6 h-6 flex items-center justify-center rounded text-gray-300 hover:text-red-500 hover:bg-red-50 transition-all">
@@ -1042,7 +1112,8 @@ function BondsTable({
                       </button>
                     </td>
                   </tr>
-                ))}
+                  )
+                })}
               </tbody>
             </table>
           </div>
@@ -1414,7 +1485,7 @@ export default function ProposalEditor({
 
             {/* Header info */}
             <div className="bg-white border border-[#E2E8F0] rounded-xl p-5">
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
                 <div>
                   <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest mb-1">Cliente</p>
                   <ClientSearch
@@ -1441,6 +1512,16 @@ export default function ProposalEditor({
                   <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest mb-1">Fecha</p>
                   <p className="text-sm text-gray-600">{new Date(proposal.created_at).toLocaleDateString('es-UY', { day: '2-digit', month: 'long', year: 'numeric' })}</p>
                 </div>
+                <div>
+                  <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest mb-1">Fecha de Liquidación</p>
+                  <input
+                    type="date"
+                    value={proposal.settlement_date ?? ''}
+                    onChange={e => patchProposal({ settlement_date: e.target.value })}
+                    className="text-sm text-gray-700 border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:border-[#16A34A]/50"
+                  />
+                  <p className="text-[9px] text-gray-400 mt-0.5">Usada para calcular el cupón corrido de los bonos</p>
+                </div>
               </div>
             </div>
 
@@ -1460,6 +1541,7 @@ export default function ProposalEditor({
               currency={currency}
               bonds={bonds}
               onUpdate={setBonds}
+              settlementDate={proposal.settlement_date}
             />
 
             {/* Equities */}
@@ -1492,6 +1574,7 @@ export default function ProposalEditor({
             funds={funds}
             bonds={bonds}
             equities={equities}
+            settlementDate={proposal.settlement_date}
           />
         </div>
       </div>
@@ -1548,6 +1631,7 @@ export default function ProposalEditor({
                     bonds={bonds}
                     equities={equities}
                     disclaimer={proposal.disclaimer}
+                    settlementDate={proposal.settlement_date}
                   />
                 </div>
               </div>

@@ -30,6 +30,8 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       amount:        body.amount        ?? 0,
       operacion:     body.operacion     ?? 'compra',
       broker:        body.broker        ?? null,
+      frequency:            body.frequency            ?? 'semiannual',
+      day_count_convention: body.day_count_convention  ?? 'actual/360',
     })
     return NextResponse.json(data)
   } catch (err: any) {
@@ -44,7 +46,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
     const { bond_id, ...fields } = await req.json()
     const allowed: Record<string, unknown> = {}
-    for (const c of ['isin','issuer','bond_type','price','quantity','currency','maturity_date','coupon','yield','duration','rating','pct','amount','operacion','broker']) {
+    for (const c of ['isin','issuer','bond_type','price','quantity','currency','maturity_date','coupon','yield','duration','rating','pct','amount','operacion','broker','frequency','day_count_convention']) {
       if (fields[c] !== undefined) allowed[c] = fields[c]
     }
 

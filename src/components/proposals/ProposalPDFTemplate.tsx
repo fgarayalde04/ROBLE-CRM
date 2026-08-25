@@ -1,6 +1,7 @@
 'use client'
 
 import Image from 'next/image'
+import { type CouponFrequency, type DayCountConvention, calculateBondAccrual } from '@/lib/proposals/bondCalculations'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -29,6 +30,7 @@ interface Bond {
   issuer: string | null
   bond_type: string | null
   price: number | null
+  quantity: number | null
   maturity_date: string | null
   coupon: number | null
   yield: number | null
@@ -39,6 +41,8 @@ interface Bond {
   currency: string
   operacion: Operacion
   broker: string | null
+  frequency: CouponFrequency | null
+  day_count_convention: DayCountConvention | null
 }
 
 interface Equity {
@@ -64,6 +68,7 @@ interface ProposalPDFTemplateProps {
   equities: Equity[]
   disclaimer?: string | null
   date?: string
+  settlementDate?: string | null
 }
 
 // ─── Number formatter — Latin American style: $19.307,00 ─────────────────────
@@ -182,6 +187,7 @@ export default function ProposalPDFTemplate({
   equities,
   disclaimer,
   date,
+  settlementDate,
 }: ProposalPDFTemplateProps) {
   const gestoras = getGestoras(funds)
   // Compras y ventas se muestran siempre por separado — sumarlas juntas
@@ -190,6 +196,12 @@ export default function ProposalPDFTemplate({
   const totalCompras = allItems.filter(i => i.operacion !== 'venta').reduce((s, i) => s + (i.amount ?? 0), 0)
   const totalVentas  = allItems.filter(i => i.operacion === 'venta').reduce((s, i) => s + (i.amount ?? 0), 0)
   const totalAssigned = totalCompras || totalAmount
+
+  // Cupón corrido / desembolso estimado — solo bonos en compra, mismo
+  // criterio que el resto del PDF.
+  const bondAccruals = bonds.filter(b => b.operacion !== 'venta').map(b => calculateBondAccrual(b, settlementDate ?? null))
+  const totalAccruedInterest = bondAccruals.reduce((s, a) => s + a.accruedInterest, 0)
+  const totalEstimatedCash   = bondAccruals.reduce((s, a) => s + a.estimatedCashRequired, 0)
 
   const displayDate = date ?? new Date().toLocaleDateString('es-UY', { day: '2-digit', month: 'long', year: 'numeric' })
 
@@ -252,6 +264,9 @@ export default function ProposalPDFTemplate({
 
   function bondsTable(list: Bond[]) {
     if (list.length === 0) return null
+    const accrualsByRow = new Map(list.map(b => [b.id, calculateBondAccrual(b, settlementDate ?? null)]))
+    const listAccruedInterest = list.filter(b => b.operacion !== 'venta').reduce((s, b) => s + (accrualsByRow.get(b.id)?.accruedInterest ?? 0), 0)
+    const listEstimatedCash   = list.filter(b => b.operacion !== 'venta').reduce((s, b) => s + (accrualsByRow.get(b.id)?.estimatedCashRequired ?? 0), 0)
     return (
       <div style={{ marginTop: 10 }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -264,11 +279,15 @@ export default function ProposalPDFTemplate({
               <th style={{ ...TH_STYLE, width: 55 }}>CUPÓN</th>
               <th style={{ ...TH_STYLE, width: 65 }}>RENDIMIENTO</th>
               <th style={{ ...TH_STYLE, width: 65 }}>PRECIO (IND)</th>
-              <th style={{ ...TH_STYLE, width: 90, borderRight: 'none' }}>INVERSIÓN</th>
+              <th style={{ ...TH_STYLE, width: 80 }}>VALOR COMPRA</th>
+              <th style={{ ...TH_STYLE, width: 80 }}>CUPÓN CORRIDO</th>
+              <th style={{ ...TH_STYLE, width: 90, borderRight: 'none' }}>DESEMBOLSO EST.</th>
             </tr>
           </thead>
           <tbody>
-            {list.map((b, i) => (
+            {list.map((b, i) => {
+              const accrual = accrualsByRow.get(b.id)!
+              return (
               <tr key={b.id} style={{ backgroundColor: i % 2 === 0 ? '#FFFFFF' : '#F7F9FB' }}>
                 <td style={TD_STYLE}>{b.currency}</td>
                 <td style={TD_STYLE}><OperacionBadge value={b.operacion} /></td>
@@ -277,16 +296,21 @@ export default function ProposalPDFTemplate({
                 <td style={TD_STYLE}>{b.coupon != null ? fmtNum(b.coupon, 3).replace(/\.?0+$/, '') : '—'}</td>
                 <td style={TD_STYLE}>{b.yield != null ? `${fmtNum(b.yield)}%` : '—'}</td>
                 <td style={TD_STYLE}>{b.price != null ? fmtNum(b.price, 3) : '—'}</td>
-                <td style={{ ...TD_STYLE, textAlign: 'right', fontWeight: 600, borderRight: 'none' }}>{fmtAmt(b.amount)}</td>
+                <td style={{ ...TD_STYLE, textAlign: 'right', fontWeight: 600 }}>{fmtAmt(b.amount)}</td>
+                <td style={{ ...TD_STYLE, textAlign: 'right', fontWeight: 700, backgroundColor: '#FEF3C7' }}>{accrual.accruedInterest > 0 ? fmtAmt(accrual.accruedInterest) : '—'}</td>
+                <td style={{ ...TD_STYLE, textAlign: 'right', fontWeight: 700, borderRight: 'none' }}>{fmtAmt(accrual.estimatedCashRequired)}</td>
               </tr>
-            ))}
+              )
+            })}
           </tbody>
           <tfoot>
             <tr>
               <td colSpan={7} style={{ ...FOOTER_TD, fontSize: 9, opacity: 0.6, borderRight: 'none' }}>
                 {opSubtotalLabel(list)}
               </td>
-              <td style={{ ...FOOTER_TD, textAlign: 'right', borderRight: 'none' }}>{fmtAmt(opCompras(list))}</td>
+              <td style={{ ...FOOTER_TD, textAlign: 'right' }}>{fmtAmt(opCompras(list))}</td>
+              <td style={{ ...FOOTER_TD, textAlign: 'right' }}>{listAccruedInterest > 0 ? fmtAmt(listAccruedInterest) : '—'}</td>
+              <td style={{ ...FOOTER_TD, textAlign: 'right', borderRight: 'none' }}>{fmtAmt(listEstimatedCash)}</td>
             </tr>
           </tfoot>
         </table>
@@ -387,6 +411,12 @@ export default function ProposalPDFTemplate({
             <div style={{ fontSize: 12.5, fontWeight: 700, color: '#1B2E3C', lineHeight: 1.5 }}>{`${currency} ${fmtAmt(totalVentas)}`.replace(`${currency} $`, `${currency} `)}</div>
           </div>
         )}
+        {totalAccruedInterest > 0 && (
+          <div style={{ flex: 1, padding: '8px 16px 10px', backgroundColor: '#F7F9FB' }}>
+            <div style={{ fontSize: 8.5, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4, lineHeight: 1.4 }}>Cupón Corrido</div>
+            <div style={{ fontSize: 12.5, fontWeight: 700, color: '#1B2E3C', lineHeight: 1.5 }}>{`${currency} ${fmtAmt(totalAccruedInterest)}`.replace(`${currency} $`, `${currency} `)}</div>
+          </div>
+        )}
       </div>
 
       {grouped ? (
@@ -453,6 +483,14 @@ export default function ProposalPDFTemplate({
               padding: '7px 16px', borderRadius: 4,
             }}>
               VENTAS: {fmtAmt(totalVentas)}
+            </div>
+          )}
+          {bonds.length > 0 && totalEstimatedCash > totalAssigned && (
+            <div style={{
+              backgroundColor: '#1B2E3C', color: '#fff', fontWeight: 700, fontSize: 12,
+              padding: '7px 16px', borderRadius: 4, opacity: 0.85,
+            }}>
+              DESEMBOLSO ESTIMADO: {fmtAmt(totalEstimatedCash)}
             </div>
           )}
           <div style={{

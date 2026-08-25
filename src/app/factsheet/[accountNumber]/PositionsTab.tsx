@@ -3,15 +3,7 @@ import { useState, useMemo } from 'react'
 import type { PortfolioPositionRow, PortfolioUnrealizedGainLossRow } from '@/types/portfolio'
 import { fmtUSD2, fmtPct, fmtDate } from './PortfolioAccountClient'
 import { cleanDisplayName } from '@/lib/portfolio/theme'
-
-const ASSET_CLASS_ES: Record<string, string> = {
-  'Equity': 'Renta Variable',
-  'ETF': 'Renta Variable (ETF)',
-  'Fixed Income': 'Fondos de Renta Fija / Crédito',
-  'Alternatives': 'Otros',
-  'Real Estate': 'Otros',
-  'Cash': 'Money Market / Liquidez',
-}
+import { ASSET_CLASS_ES } from '@/lib/portfolio/engine'
 
 type SortKey = 'name' | 'asset_class' | 'quantity' | 'price' | 'market_value' | 'weight_pct'
 

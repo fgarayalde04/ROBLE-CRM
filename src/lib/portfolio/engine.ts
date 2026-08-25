@@ -14,7 +14,7 @@ export const ASSET_CLASS_ES: Record<string, string> = {
   'Fixed Income': 'Fondos de Renta Fija / Crédito',
   'Alternatives': 'Otros',
   'Real Estate': 'Otros',
-  'Cash': 'Money Market / Liquidez',
+  'Cash': 'Liquidez',
   'Sin clasificar': 'Sin clasificar',
 }
 

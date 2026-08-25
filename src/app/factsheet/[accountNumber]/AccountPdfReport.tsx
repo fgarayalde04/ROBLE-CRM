@@ -158,7 +158,9 @@ export default function AccountPdfReport({
             <div style={{ fontSize: 9, fontWeight: 700, color: COLORS.ink, marginBottom: '1mm' }}>Performance reportada por el custodio (TWRR)</div>
             <div style={{ display: 'flex', gap: '4mm', fontSize: 8 }}>
               {[
-                ['YTD', performance.return_ytd], ['1 Año', performance.return_1y], ['Desde inicio', performance.return_since_inception],
+                ['YTD', performance.return_ytd], ['1 Año', performance.return_1y],
+                ['3 Años', performance.return_3y], ['5 Años', performance.return_5y],
+                ['Desde inicio', performance.return_since_inception],
               ].map(([label, val]) => (
                 <div key={label as string}>
                   <span style={{ color: COLORS.mutedSlate }}>{label}: </span>
