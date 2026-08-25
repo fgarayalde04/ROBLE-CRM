@@ -506,6 +506,7 @@ interface Bond {
   issuer: string | null
   bond_type: string | null
   price: number | null
+  quantity: number | null
   currency: string
   maturity_date: string | null
   coupon: number | null
@@ -931,12 +932,20 @@ function BondsTable({
   const [adding, setAdding] = useState(false)
 
   const updateField = useCallback(async (bond: Bond, field: keyof Bond, raw: string) => {
-    const numFields = ['amount','coupon','yield','duration','price']
+    const numFields = ['amount','coupon','yield','duration','price','quantity']
     const value = numFields.includes(field) ? (raw === '' ? null : parseFloat(raw.replace(/,/g, ''))) : (raw === '' ? null : raw)
-    const updated = bonds.map(b => b.id === bond.id ? { ...b, [field]: value } as Bond : b)
+    // Valor Nominal (amount) siempre es Precio × Cantidad para bonos — se
+    // recalcula y persiste solo, nunca se tipea directamente.
+    const patch: Partial<Bond> = { [field]: value }
+    if (field === 'price' || field === 'quantity') {
+      const price = field === 'price' ? (value as number | null) : bond.price
+      const quantity = field === 'quantity' ? (value as number | null) : bond.quantity
+      patch.amount = price != null && quantity != null ? price * quantity : 0
+    }
+    const updated = bonds.map(b => b.id === bond.id ? { ...b, ...patch } as Bond : b)
     onUpdate(updated)
     await fetch(`/api/proposals/${proposalId}/bonds`, {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bond_id: bond.id, [field]: value }),
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bond_id: bond.id, ...patch }),
     })
   }, [bonds, proposalId, onUpdate])
 
@@ -991,11 +1000,11 @@ function BondsTable({
       ) : (
         <div className="bg-white border border-[#E2E8F0] rounded-xl overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[1080px]">
+            <table className="w-full text-sm min-w-[1180px]">
               <thead>
                 <tr className="border-b border-gray-100 bg-gray-50/60">
-                  {['Portafolio','Operación','Emisor','ISIN','Precio','Moneda','Vencimiento','Cupón %','Yield %','Dur. (a)','Rating','%','Total',''].map(h => (
-                    <th key={h} className={`px-3 py-2.5 text-[9px] font-semibold text-gray-400 uppercase tracking-wider ${h === '' ? 'w-8' : h === 'Total' || h === '%' || h === 'Precio' ? 'text-right' : h === 'Operación' ? 'text-center' : 'text-left'}`}>{h}</th>
+                  {['Portafolio','Operación','Emisor','ISIN','Precio','Cantidad','Moneda','Vencimiento','Cupón %','Yield %','Dur. (a)','Rating','%','Valor Nominal',''].map(h => (
+                    <th key={h} className={`px-3 py-2.5 text-[9px] font-semibold text-gray-400 uppercase tracking-wider ${h === '' ? 'w-8' : h === 'Valor Nominal' || h === '%' || h === 'Precio' || h === 'Cantidad' ? 'text-right' : h === 'Operación' ? 'text-center' : 'text-left'}`}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -1007,6 +1016,7 @@ function BondsTable({
                     <td className="px-3 py-2.5"><EditCell value={b.issuer}   onChange={v => updateField(b, 'issuer',   v)} placeholder="Emisor" /></td>
                     <td className="px-3 py-2.5"><EditCell value={b.isin}     onChange={v => updateField(b, 'isin',     v)} placeholder="ISIN" mono /></td>
                     <td className="px-3 py-2.5 text-right"><EditCell value={b.price} onChange={v => updateField(b, 'price', v)} numeric placeholder="—" className="text-right text-xs" /></td>
+                    <td className="px-3 py-2.5 text-right"><EditCell value={b.quantity} onChange={v => updateField(b, 'quantity', v)} numeric placeholder="—" className="text-right text-xs" /></td>
                     <td className="px-3 py-2.5"><EditCell value={b.currency} onChange={v => updateField(b, 'currency', v)} placeholder="USD" /></td>
                     <td className="px-3 py-2.5"><EditCell value={b.maturity_date} onChange={v => updateField(b, 'maturity_date', v)} placeholder="AAAA-MM-DD" /></td>
                     <td className="px-3 py-2.5 text-right"><EditCell value={b.coupon}   onChange={v => updateField(b, 'coupon',   v)} numeric placeholder="—" className="text-right text-xs" /></td>
@@ -1019,7 +1029,9 @@ function BondsTable({
                     <td className="px-3 py-2.5 text-right">
                       <div className="flex items-center justify-end gap-1">
                         <span className="text-[10px] text-gray-400">{currency}</span>
-                        <EditCell value={b.amount} onChange={v => updateField(b, 'amount', v)} numeric mono placeholder="0" className="text-right text-sm font-semibold font-mono tabular-nums text-[#2D3F52]" />
+                        <span className="text-sm font-semibold font-mono tabular-nums text-[#2D3F52]" title="Precio × Cantidad">
+                          {b.amount > 0 ? b.amount.toLocaleString('en-US', { maximumFractionDigits: 2 }) : '0'}
+                        </span>
                       </div>
                     </td>
                     <td className="pr-2 py-2.5">
