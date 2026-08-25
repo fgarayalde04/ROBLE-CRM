@@ -241,7 +241,10 @@ export default function ProposalPDFTemplate({
             <tr key={f.id} style={{ backgroundColor: i % 2 === 0 ? '#FFFFFF' : '#F7F9FB' }}>
               <td style={TD_STYLE}>{currency}</td>
               <td style={TD_STYLE}><OperacionBadge value={f.operacion} /></td>
-              <td style={{ ...TD_STYLE, textAlign: 'left', fontWeight: 600 }}>{f.fund_name?.toUpperCase() ?? '—'}</td>
+              <td style={{ ...TD_STYLE, textAlign: 'left', fontWeight: 600 }}>
+                {f.fund_name?.toUpperCase() ?? '—'}
+                {f.isin && <div style={{ fontSize: 7, fontWeight: 400, color: '#9ca3af', marginTop: 1 }}>ISIN: {f.isin}</div>}
+              </td>
               <td style={TD_STYLE}>{fmtNum(f.return_ytd)}%</td>
               <td style={TD_STYLE}>{fmtNum(f.return_1y)}%</td>
               <td style={TD_STYLE}>{fmtNum(f.return_3y)}%</td>
@@ -291,7 +294,10 @@ export default function ProposalPDFTemplate({
               <tr key={b.id} style={{ backgroundColor: i % 2 === 0 ? '#FFFFFF' : '#F7F9FB' }}>
                 <td style={TD_STYLE}>{b.currency}</td>
                 <td style={TD_STYLE}><OperacionBadge value={b.operacion} /></td>
-                <td style={{ ...TD_STYLE, textAlign: 'left', fontWeight: 600 }}>{b.issuer?.toUpperCase() ?? '—'}</td>
+                <td style={{ ...TD_STYLE, textAlign: 'left', fontWeight: 600 }}>
+                  {b.issuer?.toUpperCase() ?? '—'}
+                  {b.isin && <div style={{ fontSize: 7, fontWeight: 400, color: '#9ca3af', marginTop: 1 }}>ISIN: {b.isin}</div>}
+                </td>
                 <td style={{ ...TD_STYLE, whiteSpace: 'nowrap' }}>{fmtDate(b.maturity_date)}</td>
                 <td style={TD_STYLE}>{b.coupon != null ? fmtNum(b.coupon, 3).replace(/\.?0+$/, '') : '—'}</td>
                 <td style={TD_STYLE}>{b.yield != null ? `${fmtNum(b.yield)}%` : '—'}</td>
