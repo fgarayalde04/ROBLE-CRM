@@ -338,6 +338,8 @@ export default function FormularioDirecto({ onBack, gmailConnected = false }: Pr
   const [clientEmail, setClientEmail]   = useState('')
   const [emailMissing, setEmailMissing] = useState(false)
   const [availableEmails, setAvailableEmails] = useState<string[]>([])
+  const [additionalEmails, setAdditionalEmails] = useState<string[]>([])
+  const [additionalInput, setAdditionalInput]   = useState('')
   const [fecha, setFecha]               = useState(todayStr())
   const [operaAsesor, setOperaAsesor]   = useState(false)
   const [ccEmails, setCcEmails]         = useState<string[]>([])
@@ -378,6 +380,13 @@ export default function FormularioDirecto({ onBack, gmailConnected = false }: Pr
   }
 
   function removeCc(email: string) { setCcEmails(prev => prev.filter(e => e !== email)) }
+
+  function addAdditional(email: string) {
+    const trimmed = email.trim()
+    if (trimmed && !additionalEmails.includes(trimmed) && trimmed !== clientEmail) setAdditionalEmails(prev => [...prev, trimmed])
+    setAdditionalInput('')
+  }
+  function removeAdditional(email: string) { setAdditionalEmails(prev => prev.filter(e => e !== email)) }
 
   const addBlock = (type: OrderType) => {
     const id = uid()
@@ -440,6 +449,7 @@ export default function FormularioDirecto({ onBack, gmailConnected = false }: Pr
           mail_preview:       emailBody,
           mail_asunto:        asunto,
           cc_emails:          ccEmails.length > 0 ? ccEmails : null,
+          additional_emails:  additionalEmails.length > 0 ? additionalEmails : null,
           opera_asesor:       operaAsesor,
         }),
       })
@@ -497,7 +507,7 @@ export default function FormularioDirecto({ onBack, gmailConnected = false }: Pr
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          to: clientEmail,
+          to: additionalEmails.length > 0 ? [clientEmail, ...additionalEmails] : clientEmail,
           cc: ccEmails.length > 0 ? ccEmails : undefined,
           subject: asunto,
           body: emailBody,
@@ -532,6 +542,7 @@ export default function FormularioDirecto({ onBack, gmailConnected = false }: Pr
           mail_asunto:        asunto,
           mail_cuerpo:        emailBody,
           cc_emails:          ccEmails.length > 0 ? ccEmails : null,
+          additional_emails:  additionalEmails.length > 0 ? additionalEmails : null,
           opera_asesor:       operaAsesor,
           directo:            true,
         }),
@@ -709,6 +720,30 @@ export default function FormularioDirecto({ onBack, gmailConnected = false }: Pr
                     ))}
                   </div>
                 )}
+                {/* Destinatarios adicionales — se envía a este email + a todos los que se agreguen acá */}
+                <div className={`${inputCls} mt-1.5 min-h-[38px] flex flex-wrap gap-1.5 items-center cursor-text`}>
+                  {additionalEmails.map(email => (
+                    <span key={email} className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-medium px-2 py-0.5 rounded-full">
+                      {email}
+                      <button type="button" onClick={() => removeAdditional(email)} className="hover:text-red-500 transition">×</button>
+                    </span>
+                  ))}
+                  <input
+                    className="flex-1 min-w-[140px] outline-none text-sm bg-transparent placeholder-gray-300"
+                    placeholder={additionalEmails.length === 0 ? 'Agregar más destinatarios…' : ''}
+                    value={additionalInput}
+                    onChange={e => setAdditionalInput(e.target.value)}
+                    onKeyDown={e => {
+                      if ((e.key === 'Enter' || e.key === ',') && additionalInput.trim()) {
+                        e.preventDefault(); addAdditional(additionalInput)
+                      }
+                      if (e.key === 'Backspace' && !additionalInput && additionalEmails.length > 0) {
+                        removeAdditional(additionalEmails[additionalEmails.length - 1])
+                      }
+                    }}
+                  />
+                </div>
+                <p className="text-[10px] text-gray-400 mt-1">Presioná Enter o coma para agregar más destinatarios (Para), además del email de arriba.</p>
               </div>
               <div>
                 <label className={labelCls}>Fecha de instrucción</label>

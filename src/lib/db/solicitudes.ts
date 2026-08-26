@@ -19,7 +19,7 @@ const LIST_COLUMNS = `
   instrumento_tipo, instrumento_nombre, clase, moneda, monto, cantidad,
   fecha_operacion, client_name, client_number, client_email,
   operador, tomado_at, mail_enviado_at, ejecutado_at,
-  created_at, updated_at, cc_emails, assets_json
+  created_at, updated_at, cc_emails, additional_emails, assets_json
 `
 
 export interface ListSolicitudesFilters {

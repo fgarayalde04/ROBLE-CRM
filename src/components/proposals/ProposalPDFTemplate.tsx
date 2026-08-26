@@ -233,6 +233,8 @@ export default function ProposalPDFTemplate({
             <th style={{ ...TH_STYLE, width: 48 }}>1 AÑO</th>
             <th style={{ ...TH_STYLE, width: 48 }}>3 AÑOS</th>
             <th style={{ ...TH_STYLE, width: 48 }}>5 AÑOS</th>
+            <th style={{ ...TH_STYLE, width: 52 }}>YTM IND.</th>
+            <th style={{ ...TH_STYLE, width: 48 }}>DUR. (A)</th>
             <th style={{ ...TH_STYLE, width: 90, borderRight: 'none' }}>INVERSIÓN</th>
           </tr>
         </thead>
@@ -249,13 +251,15 @@ export default function ProposalPDFTemplate({
               <td style={TD_STYLE}>{fmtNum(f.return_1y)}%</td>
               <td style={TD_STYLE}>{fmtNum(f.return_3y)}%</td>
               <td style={TD_STYLE}>{fmtNum(f.return_5y)}%</td>
+              <td style={TD_STYLE}>{f.ytm_indicative != null ? `${fmtNum(f.ytm_indicative)}%` : '—'}</td>
+              <td style={TD_STYLE}>{f.duration_years != null ? fmtNum(f.duration_years, 1) : '—'}</td>
               <td style={{ ...TD_STYLE, textAlign: 'right', fontWeight: 600, borderRight: 'none' }}>{fmtAmt(f.amount)}</td>
             </tr>
           ))}
         </tbody>
         <tfoot>
           <tr>
-            <td colSpan={7} style={{ ...FOOTER_TD, textAlign: 'left', fontSize: 9, opacity: 0.6, borderRight: 'none' }}>
+            <td colSpan={9} style={{ ...FOOTER_TD, textAlign: 'left', fontSize: 9, opacity: 0.6, borderRight: 'none' }}>
               {opSubtotalLabel(list)}
             </td>
             <td style={{ ...FOOTER_TD, textAlign: 'right', borderRight: 'none' }}>{fmtAmt(opCompras(list))}</td>
@@ -281,6 +285,8 @@ export default function ProposalPDFTemplate({
               <th style={{ ...TH_STYLE, width: 80 }}>VENCIMIENTO</th>
               <th style={{ ...TH_STYLE, width: 55 }}>CUPÓN</th>
               <th style={{ ...TH_STYLE, width: 65 }}>RENDIMIENTO</th>
+              <th style={{ ...TH_STYLE, width: 48 }}>DUR. (A)</th>
+              <th style={{ ...TH_STYLE, width: 50 }}>RATING</th>
               <th style={{ ...TH_STYLE, width: 65 }}>PRECIO (IND)</th>
               <th style={{ ...TH_STYLE, width: 80 }}>VALOR COMPRA</th>
               <th style={{ ...TH_STYLE, width: 80 }}>CUPÓN CORRIDO</th>
@@ -301,6 +307,8 @@ export default function ProposalPDFTemplate({
                 <td style={{ ...TD_STYLE, whiteSpace: 'nowrap' }}>{fmtDate(b.maturity_date)}</td>
                 <td style={TD_STYLE}>{b.coupon != null ? fmtNum(b.coupon, 3).replace(/\.?0+$/, '') : '—'}</td>
                 <td style={TD_STYLE}>{b.yield != null ? `${fmtNum(b.yield)}%` : '—'}</td>
+                <td style={TD_STYLE}>{b.duration != null ? fmtNum(b.duration, 1) : '—'}</td>
+                <td style={TD_STYLE}>{b.rating ?? '—'}</td>
                 <td style={TD_STYLE}>{b.price != null ? fmtNum(b.price, 3) : '—'}</td>
                 <td style={{ ...TD_STYLE, textAlign: 'right', fontWeight: 600 }}>{fmtAmt(b.amount)}</td>
                 <td style={{ ...TD_STYLE, textAlign: 'right', fontWeight: 700, backgroundColor: '#FEF3C7' }}>{accrual.accruedInterest > 0 ? fmtAmt(accrual.accruedInterest) : '—'}</td>
@@ -311,7 +319,7 @@ export default function ProposalPDFTemplate({
           </tbody>
           <tfoot>
             <tr>
-              <td colSpan={7} style={{ ...FOOTER_TD, fontSize: 9, opacity: 0.6, borderRight: 'none' }}>
+              <td colSpan={9} style={{ ...FOOTER_TD, fontSize: 9, opacity: 0.6, borderRight: 'none' }}>
                 {opSubtotalLabel(list)}
               </td>
               <td style={{ ...FOOTER_TD, textAlign: 'right' }}>{fmtAmt(opCompras(list))}</td>

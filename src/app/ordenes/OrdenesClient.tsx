@@ -360,7 +360,16 @@ export default function OrdenesClient({ gmailConnected, initialTab, isAdmin = fa
   const [clientName, setClientName]     = useState('')
   const [clientNumber, setClientNumber] = useState('')
   const [fecha, setFecha]               = useState(todayStr())
-  const [to, setTo]                     = useState('')
+  const [toEmails, setToEmails]         = useState<string[]>([])
+  const [toSearch, setToSearch]         = useState('')
+  const to = toEmails.join(', ')
+
+  function addToEmail(email: string) {
+    const trimmed = email.trim()
+    if (trimmed && !toEmails.includes(trimmed)) setToEmails(prev => [...prev, trimmed])
+    setToSearch('')
+  }
+  function removeToEmail(email: string) { setToEmails(prev => prev.filter(e => e !== email)) }
 
   // CC: trading (always) + asesor (if different email)
   const ccList: string[] = [TRADING_EMAIL]
@@ -425,11 +434,11 @@ export default function OrdenesClient({ gmailConnected, initialTab, isAdmin = fa
 
   const handleClear = () => {
     setBlocks([]); setClientId(''); setClientName(''); setClientNumber('')
-    setFecha(todayStr()); setTo(''); setPreview(null); setSendStatus(null)
+    setFecha(todayStr()); setToEmails([]); setToSearch(''); setPreview(null); setSendStatus(null)
   }
 
   const handleSend = async () => {
-    if (!to.trim()) { setSendStatus({ ok: false, msg: 'Ingresá al menos un destinatario.' }); return }
+    if (toEmails.length === 0) { setSendStatus({ ok: false, msg: 'Ingresá al menos un destinatario.' }); return }
     setSending(true); setSendStatus(null)
     try {
       // 1. Guardar en historial PRIMERO
@@ -444,11 +453,11 @@ export default function OrdenesClient({ gmailConnected, initialTab, isAdmin = fa
       if (!res.ok) throw new Error(data.error ?? 'Error al enviar')
       console.log('[ORDER_EMAIL_SENT]', data.message_id)
       setSendStatus({ ok: true, msg: 'Email enviado correctamente.' })
-      // Bump usage stats for this authorized email
-      if (to && clientNumber) {
+      // Bump usage stats for this authorized email (solo el primer destinatario)
+      if (toEmails[0] && clientNumber) {
         fetch('/api/authorized-emails/use', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: to, numero_cliente: clientNumber }),
+          body: JSON.stringify({ email: toEmails[0], numero_cliente: clientNumber }),
         }).catch(() => {})
       }
     } catch (err: any) {
@@ -557,9 +566,9 @@ export default function OrdenesClient({ gmailConnected, initialTab, isAdmin = fa
                       if (name) setClientName(name)
                       if (number) setClientNumber(number)
                       if (!id) {
-                        setClientName(''); setClientNumber(''); setTo(''); setEmailMissing(false)
+                        setClientName(''); setClientNumber(''); setToEmails([]); setEmailMissing(false)
                       } else if (email) {
-                        setTo(email); setEmailMissing(false)
+                        setToEmails([email]); setEmailMissing(false)
                       } else {
                         setEmailMissing(true)
                       }
@@ -664,12 +673,29 @@ export default function OrdenesClient({ gmailConnected, initialTab, isAdmin = fa
               </div>
 
               <div>
-                <label className={labelCls}>Destinatario</label>
-                <TradingEmailSearch
-                  value={to}
-                  onChange={(v) => { setTo(v); setEmailMissing(false) }}
-                  className={inputCls}
-                />
+                <label className={labelCls}>Destinatario(s)</label>
+                {toEmails.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-1.5">
+                    {toEmails.map(email => (
+                      <span key={email} className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-medium px-2 py-0.5 rounded-full">
+                        {email}
+                        <button type="button" onClick={() => removeToEmail(email)} className="hover:text-red-500 transition">×</button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <div
+                  onBlur={e => { if (!e.currentTarget.contains(e.relatedTarget as Node) && toSearch.trim()) addToEmail(toSearch) }}
+                  onKeyDown={e => { if (e.key === 'Enter' && toSearch.trim()) { e.preventDefault(); addToEmail(toSearch) } }}
+                >
+                  <TradingEmailSearch
+                    value={toSearch}
+                    onChange={(v) => { setToSearch(v); setEmailMissing(false) }}
+                    placeholder="Buscar o escribir email y Enter…"
+                    className={inputCls}
+                  />
+                </div>
+                <p className="text-[10px] text-gray-400 mt-1">Presioná Enter para agregar más de un destinatario.</p>
                 {emailMissing && (
                   <p className="mt-1.5 text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5">
                     Este cliente no tiene correo registrado en su ficha. Ingresá el email manualmente.
