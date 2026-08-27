@@ -78,6 +78,85 @@ function assetDisplay(a: any) {
   return { tipo: tipo ?? null, nombre, moneda: a?.moneda ?? null, cantidad, monto, operacion: a?.operacion ?? null }
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function AssetDetailCard({ asset }: { asset: any }) {
+  const tipo = asset?.type as string | undefined
+  const nombre =
+    tipo === 'acciones' ? (asset.nombre || asset.ticker || '—')
+    : tipo === 'fondos'  ? (asset.fondo || '—')
+    : tipo === 'bonos'   ? (asset.descripcion || '—')
+    : '—'
+  const isin = asset?.cusipIsin || null
+  const cantidadMonto =
+    tipo === 'fondos' ? (asset.monto ? `${asset.moneda ?? ''} ${Number(asset.monto).toLocaleString('es-UY')}` : null)
+    : (asset.cantidad ? String(asset.cantidad) : null)
+  const precio =
+    asset?.precio === 'limite' ? `Límite ${asset.precioLimite ?? ''}` : asset?.precio === 'mercado' ? 'A mercado' : null
+
+  const rows = ([
+    ['Operación', asset?.operacion === 'venta' ? 'Venta' : 'Compra'],
+    tipo === 'acciones' && asset?.ticker ? ['Ticker', asset.ticker] : null,
+    isin ? ['ISIN/CUSIP', isin] : null,
+    cantidadMonto ? [tipo === 'fondos' ? 'Monto' : 'Cantidad', cantidadMonto] : null,
+    precio ? ['Precio', precio] : null,
+    asset?.moneda ? ['Moneda', asset.moneda] : null,
+    tipo === 'fondos' && asset?.clase ? ['Clase', asset.clase] : null,
+    tipo === 'bonos' && asset?.maturity ? ['Vencimiento', asset.maturity] : null,
+    tipo === 'bonos' && asset?.cupon ? ['Cupón', asset.cupon + '%'] : null,
+    asset?.vigencia ? ['Vigencia', asset.vigencia] : null,
+    asset?.comision ? ['Comisión', asset.comision] : null,
+  ] as ([string,string]|null)[]).filter(Boolean) as [string,string][]
+
+  return (
+    <div className={`rounded-lg border px-3 py-2 space-y-1 ${asset?.cancelada ? 'border-red-200 bg-red-50/40 opacity-70' : 'border-gray-200 bg-gray-50/60'}`}>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[11px] font-semibold text-gray-700 truncate">{nombre}</p>
+        {asset?.cancelada && <span className="text-[9px] font-bold text-red-500 shrink-0">CANCELADO</span>}
+      </div>
+      {rows.map(([label, value]) => (
+        <div key={label} className="flex justify-between gap-2">
+          <span className="text-[10px] text-gray-400 shrink-0">{label}</span>
+          <span className="text-[10px] text-gray-800 text-right break-words max-w-[170px]">{value}</span>
+        </div>
+      ))}
+      {asset?.observaciones && (
+        <div className="pt-1 border-t border-gray-200 mt-1">
+          <p className="text-[10px] text-gray-400">Notas internas</p>
+          <p className="text-[10px] text-gray-700 whitespace-pre-wrap">{asset.observaciones}</p>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Muestra el mail que efectivamente se armó/envió para la orden — hoy solo
+// figuraba en el historial de eventos como texto genérico; acá se puede ver
+// (y copiar) el asunto/cuerpo real para operar en el banco.
+function MailViewer({ asunto, cuerpo }: { asunto: string | null; cuerpo: string | null }) {
+  const [copied, setCopied] = useState(false)
+  if (!cuerpo) return null
+  return (
+    <div className="px-4 py-3 border-b border-gray-100">
+      <div className="flex items-center justify-between mb-1.5">
+        <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Mail</p>
+        <button
+          onClick={() => {
+            navigator.clipboard.writeText(`${asunto ? `Asunto: ${asunto}\n\n` : ''}${cuerpo}`)
+            setCopied(true); setTimeout(() => setCopied(false), 1500)
+          }}
+          className="text-[10px] text-blue-600 hover:text-blue-700 font-medium"
+        >
+          {copied ? '✓ Copiado' : 'Copiar'}
+        </button>
+      </div>
+      {asunto && <p className="text-[11px] font-medium text-gray-700 mb-1">{asunto}</p>}
+      <div className="max-h-56 overflow-y-auto bg-gray-50 border border-gray-200 rounded-lg p-2.5">
+        <pre className="text-[10.5px] text-gray-700 whitespace-pre-wrap font-sans leading-relaxed">{cuerpo}</pre>
+      </div>
+    </div>
+  )
+}
+
 // One line per asset — a solicitud with N activos must show as N separate rows
 interface BlotterLine {
   row: Solicitud
@@ -272,6 +351,19 @@ function DetailPanel({
           </div>
         )}
       </div>
+
+      {/* Activos — el ISIN/observaciones/comisión de cada uno vive acá adentro,
+          no en los campos de arriba (que solo se completan en órdenes viejas). */}
+      {Array.isArray(sol.assets_json) && sol.assets_json.length > 0 && (
+        <div className="px-4 py-3 border-b border-gray-100 space-y-2">
+          <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
+            Activos ({sol.assets_json.length})
+          </p>
+          {sol.assets_json.map((asset, i) => <AssetDetailCard key={i} asset={asset} />)}
+        </div>
+      )}
+
+      <MailViewer asunto={sol.mail_asunto ?? null} cuerpo={sol.mail_cuerpo ?? sol.mail_preview ?? null} />
 
       {/* Acciones Mesa */}
       {canAct && (
