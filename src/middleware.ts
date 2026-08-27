@@ -61,6 +61,14 @@ export async function middleware(req: NextRequest) {
     }
   }
 
+  // Cron routes — disparadas por instrumentation.ts (llamada interna a sí
+  // mismo, sin sesión) y potencialmente por un scheduler externo. Nunca deben
+  // caer al chequeo de cookie de abajo, que las mandaría a /login — la
+  // autorización real (CRON_SECRET) la hace cada ruta /api/cron/* por su cuenta.
+  if (pathname.startsWith('/api/cron/')) {
+    return NextResponse.next()
+  }
+
   const token = req.cookies.get('crm_session')?.value
   if (!token) {
     const loginUrl = req.nextUrl.clone()
