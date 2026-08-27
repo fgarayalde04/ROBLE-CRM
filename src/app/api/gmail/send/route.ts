@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
       user_name:   session.name,
     })
 
-    return NextResponse.json({ ok: true, message_id: message.id })
+    return NextResponse.json({ ok: true, message_id: message.id, thread_id: message.threadId })
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 400 })
   }

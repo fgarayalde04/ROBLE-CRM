@@ -200,10 +200,11 @@ function DetailPanel({
       body: JSON.stringify({ to: to.length > 1 ? to : (to[0] ?? sol.client_email), cc, subject: emailAsunto, body: emailCuerpo,
         client_name: sol.client_name, client_number: sol.client_number }),
     })
+    const data = await res.json()
     if (res.ok) {
-      await onAction('mail_enviado', { asunto: emailAsunto, cuerpo: emailCuerpo })
+      await onAction('mail_enviado', { asunto: emailAsunto, cuerpo: emailCuerpo, mail_thread_id: data.thread_id ?? null, mail_message_id: data.message_id ?? null })
       setShowEmail(false)
-    } else { const j = await res.json(); alert(j.error ?? 'Error al enviar') }
+    } else { alert(data.error ?? 'Error al enviar') }
     setSendingMail(false)
   }
 
@@ -293,8 +294,9 @@ function DetailPanel({
                   body: JSON.stringify({ to: to.length > 1 ? to : sol.client_email, cc, subject: emailAsunto, body: emailCuerpo,
                     client_name: sol.client_name, client_number: sol.client_number }),
                 })
-                if (res.ok) { await onAction('mail_enviado', { asunto: emailAsunto, cuerpo: emailCuerpo }) }
-                else { const j = await res.json(); alert(j.error ?? 'Error al enviar') }
+                const data = await res.json()
+                if (res.ok) { await onAction('mail_enviado', { asunto: emailAsunto, cuerpo: emailCuerpo, mail_thread_id: data.thread_id ?? null, mail_message_id: data.message_id ?? null }) }
+                else { alert(data.error ?? 'Error al enviar') }
                 setSendingMail(false)
               }} disabled={sendingMail}
                 className="flex-1 py-2 text-xs font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50">

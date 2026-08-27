@@ -111,6 +111,8 @@ export async function POST(req: NextRequest) {
       mail_cuerpo:       body.mail_cuerpo ?? null,
       mail_enviado_at:   now,
       mail_enviado_by:   session.name,
+      mail_thread_id:    body.mail_thread_id  ?? null,
+      mail_message_id:   body.mail_message_id ?? null,
       notif_mail_enviada: true,
       ...(isMesa ? {
         operador:    session.name,

@@ -512,9 +512,9 @@ export default function FormularioDirecto({ onBack, gmailConnected = false }: Pr
           body: emailBody,
         }),
       })
+      const sendData = await sendRes.json()
       if (!sendRes.ok) {
-        const j = await sendRes.json()
-        setSubmitError(j.error ?? 'Error al enviar el email al cliente')
+        setSubmitError(sendData.error ?? 'Error al enviar el email al cliente')
         return
       }
 
@@ -544,6 +544,8 @@ export default function FormularioDirecto({ onBack, gmailConnected = false }: Pr
           additional_emails:  additionalEmails.length > 0 ? additionalEmails : null,
           opera_asesor:       operaAsesor,
           directo:            true,
+          mail_thread_id:     sendData.thread_id ?? null,
+          mail_message_id:    sendData.message_id ?? null,
         }),
       })
       const data = await res.json()

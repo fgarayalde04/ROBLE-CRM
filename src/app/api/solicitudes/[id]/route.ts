@@ -108,6 +108,8 @@ export async function PATCH(
       mail_enviado_by: session.name,
       ...(body.asunto ? { mail_asunto: body.asunto } : {}),
       ...(body.cuerpo ? { mail_cuerpo: body.cuerpo } : {}),
+      ...(body.mail_thread_id ? { mail_thread_id: body.mail_thread_id } : {}),
+      ...(body.mail_message_id ? { mail_message_id: body.mail_message_id } : {}),
     })
     await logEvento('mail_enviado', `Mail enviado al cliente por ${session.name}`)
     await notifyMailEnviado(orderCtx)
