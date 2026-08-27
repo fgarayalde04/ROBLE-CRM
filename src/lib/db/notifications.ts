@@ -34,6 +34,17 @@ export interface NotificationRow {
 // group, keyed by their own id, so they display exactly as before.
 const GROUP_KEY = `coalesce(entity_type || ':' || entity_id, 'row:' || id::text)`
 
+// Marca como leídas TODAS las notificaciones sin leer de un tipo dado, para
+// todos los usuarios — usado por avisos "de una vez al día" (ej. Morning
+// Brief) para que solo quede visible la del día que llega, en vez de
+// acumular una por cada día que alguien no abrió la app.
+export async function markAllUnreadByType(notifType: string) {
+  await pool.query(
+    `update notifications set read_at = now() where notif_type = $1 and read_at is null`,
+    [notifType]
+  )
+}
+
 // Insert, deduplicated by (entity_id, notif_type, user_name) — a repeated call for
 // the same order + event + recipient is a silent no-op (returns null).
 export async function createNotification(input: NotificationInput): Promise<NotificationRow | null> {
