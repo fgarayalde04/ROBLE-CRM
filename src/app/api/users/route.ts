@@ -3,6 +3,21 @@ import { getSession } from '@/lib/auth'
 import bcrypt from 'bcryptjs'
 import { listUsers, createUser, updateUser, getUserPermissions, approveUser, deleteUser } from '@/lib/db/users'
 
+// Mismas claves que el tipo Permission del cliente (UsersManager.tsx) — se
+// valida acá también porque en algún momento la columna terminó con
+// duplicados y una clave inválida ("fondos") acumulados; esto evita que
+// vuelva a pasar sin importar qué mande el cliente.
+const VALID_PERMISSIONS = new Set([
+  'panel','tasks','clients','openings','banco_central','calendar','deadlines',
+  'ceo_dashboard','kpis','pagos','impuestos','liquidacion','recursos','claves',
+  'admin','sincronizacion','factsheet','proposals','orders',
+])
+
+function sanitizePermissions(permissions: unknown): string[] | null {
+  if (!Array.isArray(permissions)) return null
+  return Array.from(new Set(permissions.filter((p) => VALID_PERMISSIONS.has(p))))
+}
+
 async function requireAdmin() {
   const session = await getSession()
   if (!session || session.role !== 'admin') {
@@ -56,7 +71,7 @@ export async function PUT(req: Request) {
     if (email !== undefined)       update.email = email ? email.toLowerCase().trim() : null
     if (role !== undefined)        update.role = role
     if (active !== undefined)      update.active = active
-    if (permissions !== undefined) update.permissions = permissions
+    if (permissions !== undefined) update.permissions = permissions === null ? null : sanitizePermissions(permissions)
     if (modo_asesor !== undefined) update.modo_asesor = modo_asesor
     if (password)                  update.password_hash = await bcrypt.hash(password, 12)
     if (onedrive_drive_id   !== undefined) update.onedrive_drive_id   = onedrive_drive_id   || null
