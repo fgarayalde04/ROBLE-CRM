@@ -149,9 +149,9 @@ function DetalleSolicitud({ sol, eventos, isMesa, userName, onAction, onClose, o
   }
 
   return (
-    <div className="w-full md:w-80 shrink-0 bg-white rounded-lg border border-gray-200 flex flex-col overflow-hidden">
-      {/* Header */}
-      <div className="px-4 pt-4 pb-3 border-b border-gray-100 flex items-start justify-between gap-2">
+    <div className="w-full md:w-80 shrink-0 bg-white rounded-lg border border-gray-200 flex flex-col overflow-hidden md:sticky md:top-4 md:max-h-[calc(100vh-2rem)]">
+      {/* Header — fijo, no scrollea */}
+      <div className="px-4 pt-4 pb-3 border-b border-gray-100 flex items-start justify-between gap-2 shrink-0">
         <div className="min-w-0">
           <p className="text-[11px] font-mono text-gray-400">{sol.solicitud_id}</p>
           <p className="font-semibold text-gray-800 truncate">{sol.client_name}</p>
@@ -162,9 +162,9 @@ function DetalleSolicitud({ sol, eventos, isMesa, userName, onAction, onClose, o
         <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl shrink-0 leading-none">×</button>
       </div>
 
-      {/* Progress */}
+      {/* Progress — fijo, no scrollea */}
       {!sol._legacy && sol.estado !== 'cancelada' && (
-        <div className="px-4 py-3 border-b border-gray-100">
+        <div className="px-4 py-3 border-b border-gray-100 shrink-0">
           <ProgressBar estado={sol.estado} />
           <div className="flex justify-between mt-1">
             {(['mesa_operaciones'].includes(sol.estado) ? ESTADO_STEPS_OLD : ESTADO_STEPS_NEW).map((s: string) => (
@@ -176,8 +176,13 @@ function DetalleSolicitud({ sol, eventos, isMesa, userName, onAction, onClose, o
         </div>
       )}
 
+      {/* Resto — todo junto adentro de UN solo scroll interno, así el panel
+          nunca estira la página: se queda fijo (sticky) y lo que no entra
+          se scrollea acá adentro, no bajando toda la pantalla. */}
+      <div className="flex-1 min-h-0 overflow-y-auto">
+
       {/* Datos */}
-      <div className="px-4 py-3 space-y-1.5 border-b border-gray-100 overflow-y-auto flex-1">
+      <div className="px-4 py-3 space-y-1.5 border-b border-gray-100">
         {([
           ['Operación', `${OP_LABEL[sol.tipo_operacion] ?? sol.tipo_operacion} · ${sol.instrumento_tipo ?? '—'}`],
           ['Instrumento', sol.instrumento_nombre],
@@ -249,7 +254,7 @@ function DetalleSolicitud({ sol, eventos, isMesa, userName, onAction, onClose, o
       )}
 
       {/* Historial */}
-      <div className="px-4 py-3 overflow-y-auto max-h-48">
+      <div className="px-4 py-3">
         <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Historial</p>
         {eventos.length === 0 ? (
           <p className="text-xs text-gray-400">{sol._legacy ? 'Registro histórico del sistema anterior.' : 'Sin eventos.'}</p>
@@ -266,6 +271,8 @@ function DetalleSolicitud({ sol, eventos, isMesa, userName, onAction, onClose, o
             ))}
           </ul>
         )}
+      </div>
+
       </div>
 
       {/* Modal ejecutar */}
