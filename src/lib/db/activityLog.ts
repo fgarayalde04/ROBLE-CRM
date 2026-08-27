@@ -13,11 +13,19 @@ export async function logActivity(input: {
   )
 }
 
-export async function listActivityLogByAction(action: string, limit: number) {
+// userName: cada usuario debe ver solo sus propios envíos acá — sin esto
+// mostraba los últimos 30 emails enviados por CUALQUIERA (incluidas
+// confirmaciones de orden de otros asesores), mezclados como si fueran
+// propios.
+export async function listActivityLogByAction(action: string, limit: number, userName?: string | null) {
+  const params: any[] = [action]
+  let where = `action = $1`
+  if (userName) { params.push(userName); where += ` and user_name = $${params.length}` }
+  params.push(limit)
   const { rows } = await pool.query(
     `select id, description, created_at, user_name as created_by
-     from activity_log where action = $1 order by created_at desc limit $2`,
-    [action, limit]
+     from activity_log where ${where} order by created_at desc limit $${params.length}`,
+    params
   )
   return rows
 }

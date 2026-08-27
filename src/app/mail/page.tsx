@@ -1,18 +1,23 @@
 import type { Metadata } from 'next'
 import { hasGoogleConnection, getGoogleEmail } from '@/lib/google/tokens'
 import { listActivityLogByAction } from '@/lib/db/activityLog'
+import { getSession } from '@/lib/auth'
 import MailPageClient from './MailPageClient'
 
 export const metadata: Metadata = { title: 'Mail' }
 export const dynamic = 'force-dynamic'
 
 export default async function MailPage() {
-  const [isConnected, googleEmail] = await Promise.all([
+  const [isConnected, googleEmail, session] = await Promise.all([
     hasGoogleConnection().catch(() => false),
     getGoogleEmail().catch(() => null),
+    getSession(),
   ])
 
-  const sentLogs = await listActivityLogByAction('email_enviado', 30)
+  // Cada usuario ve solo lo que él mismo envió — antes mostraba los últimos
+  // 30 emails enviados por cualquiera (incluidas confirmaciones de orden de
+  // otros asesores), mezclados acá como si fueran propios.
+  const sentLogs = await listActivityLogByAction('email_enviado', 30, session?.name ?? null)
 
   return (
     <div className="p-4 md:p-6 bg-[#F4F6F8] min-h-screen">
