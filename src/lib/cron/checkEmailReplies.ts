@@ -8,7 +8,7 @@
 import { getValidMesaGoogleToken } from '@/lib/google/tokens'
 import { listInboxSince } from '@/lib/google/gmail'
 import { findSolicitudByThreadId, findSolicitudesByAsunto, insertSolicitudEvento } from '@/lib/db/solicitudes'
-import { insertEmailReply, markEmailReplyNotified, type EmailReplyMatchMethod } from '@/lib/db/emailReplies'
+import { insertEmailReply, markEmailReplyNotified, getEmailReplyCutoff, type EmailReplyMatchMethod } from '@/lib/db/emailReplies'
 import { notifyClienteRespondio, notifyClienteRespondioMesa } from '@/lib/notifications/orderEvents'
 
 const MESA_EMAIL = 'trading@roblecapital.net'
@@ -35,6 +35,7 @@ export interface CheckEmailRepliesResult {
   matchedSubject?: number
   unmatched?: number
   skippedSelf?: number
+  skippedOld?: number
 }
 
 export async function checkEmailReplies(): Promise<CheckEmailRepliesResult> {
@@ -45,17 +46,26 @@ export async function checkEmailReplies(): Promise<CheckEmailRepliesResult> {
     return { ok: true, skipped: true, reason: 'Casilla de Mesa no conectada' }
   }
 
+  // La búsqueda de Gmail solo tiene granularidad de día ("after:YYYY/MM/DD"),
+  // así que igual trae mensajes de varios días atrás — el corte real por
+  // hora/minuto se hace acá abajo contra el cutoff, no en la query.
   const since = new Date(Date.now() - LOOKBACK_DAYS * 24 * 60 * 60 * 1000)
   const messages = await listInboxSince(accessToken, since, MAX_RESULTS)
+  const cutoff = await getEmailReplyCutoff()
 
   let inserted = 0
   let matchedThreadId = 0
   let matchedSubject = 0
   let unmatched = 0
   let skippedSelf = 0
+  let skippedOld = 0
 
   for (const msg of messages) {
     if (msg.fromEmail?.toLowerCase() === MESA_EMAIL) { skippedSelf++; continue }
+    // Nunca notificar algo recibido antes del punto de corte — la notificación
+    // debe llegar cuando se responde el mail, no "para atrás" si el chequeo
+    // se retoma después de un corte o reinicio.
+    if (new Date(msg.date) < cutoff) { skippedOld++; continue }
 
     let solicitud: { id: string; client_name: string | null; asesor: string; asesor_id: string | null } | null = null
     let matchMethod: EmailReplyMatchMethod = 'unmatched'
@@ -125,5 +135,5 @@ export async function checkEmailReplies(): Promise<CheckEmailRepliesResult> {
     await markEmailReplyNotified(row.id)
   }
 
-  return { ok: true, scanned: messages.length, inserted, matchedThreadId, matchedSubject, unmatched, skippedSelf }
+  return { ok: true, scanned: messages.length, inserted, matchedThreadId, matchedSubject, unmatched, skippedSelf, skippedOld }
 }

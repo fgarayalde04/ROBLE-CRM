@@ -41,3 +41,23 @@ export async function insertEmailReply(input: EmailReplyInsert): Promise<EmailRe
 export async function markEmailReplyNotified(id: string) {
   await pool.query(`update email_replies set notified = true where id = $1`, [id])
 }
+
+// Punto de corte fijo: nunca se notifica una respuesta recibida antes de este
+// momento, sin importar cuántos días hacia atrás mire la búsqueda de Gmail
+// (que solo tiene granularidad de día, "after:YYYY/MM/DD" — no de hora). Esto
+// evita que un reinicio, una desconexión temporal de la casilla de Mesa, o
+// cualquier corte en el chequeo periódico dispare de golpe notificaciones de
+// respuestas viejas cuando se retoma — solo avanza hacia adelante, nunca hacia
+// atrás. Fila única, sembrada una sola vez (ver migración puntual).
+export async function getEmailReplyCutoff(): Promise<Date> {
+  try {
+    const { rows } = await pool.query(`select cutoff_at from email_reply_check_cutoff where id = 1`)
+    // Si por algún motivo no hay fila (tabla recién creada, nunca sembrada), el
+    // default es "ahora" — nunca "desde siempre" — para no arriesgarse a mirar
+    // hacia atrás si algo salió mal con la siembra inicial.
+    return rows[0] ? new Date(rows[0].cutoff_at) : new Date()
+  } catch {
+    // Tabla inexistente u otro error — mismo criterio: fail-safe hacia "ahora".
+    return new Date()
+  }
+}
