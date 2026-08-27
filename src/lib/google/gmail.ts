@@ -133,17 +133,14 @@ function headerVal(headers: Array<{ name: string; value: string }>, name: string
   return headers.find((h) => h.name.toLowerCase() === name.toLowerCase())?.value ?? ''
 }
 
-/** List today's inbox messages with metadata */
-export async function listInboxToday(
+/** Internal: list + fetch metadata for inbox messages matching a Gmail search query */
+async function listInboxByQuery(
   accessToken: string,
-  maxResults = 30
+  query: string,
+  maxResults: number
 ): Promise<InboxMessage[]> {
-  // Build date query: after:YYYY/MM/DD
-  const now = new Date()
-  const dateStr = `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}/${String(now.getDate()).padStart(2, '0')}`
-
   const listUrl = new URL(`${GMAIL_BASE}/users/me/messages`)
-  listUrl.searchParams.set('q', `in:inbox after:${dateStr}`)
+  listUrl.searchParams.set('q', query)
   listUrl.searchParams.set('maxResults', String(maxResults))
 
   const listRes = await fetch(listUrl.toString(), {
@@ -197,6 +194,32 @@ export async function listInboxToday(
   )
 
   return messages.filter(Boolean) as InboxMessage[]
+}
+
+/** List today's inbox messages with metadata */
+export async function listInboxToday(
+  accessToken: string,
+  maxResults = 30
+): Promise<InboxMessage[]> {
+  const now = new Date()
+  const dateStr = `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}/${String(now.getDate()).padStart(2, '0')}`
+  return listInboxByQuery(accessToken, `in:inbox after:${dateStr}`, maxResults)
+}
+
+/**
+ * List inbox messages received after a given date (metadata only — asunto,
+ * remitente, fecha, threadId — nunca el cuerpo completo). Generaliza
+ * listInboxToday para el cron de detección de respuestas, que necesita mirar
+ * una ventana de tiempo (no solo "hoy") para no perder respuestas si el cron
+ * se saltea una corrida.
+ */
+export async function listInboxSince(
+  accessToken: string,
+  afterDate: Date,
+  maxResults = 50
+): Promise<InboxMessage[]> {
+  const dateStr = `${afterDate.getFullYear()}/${String(afterDate.getMonth() + 1).padStart(2, '0')}/${String(afterDate.getDate()).padStart(2, '0')}`
+  return listInboxByQuery(accessToken, `in:inbox after:${dateStr}`, maxResults)
 }
 
 // ─── Email templates ──────────────────────────────────────────────────────────

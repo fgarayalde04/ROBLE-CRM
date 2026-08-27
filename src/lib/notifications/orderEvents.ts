@@ -28,6 +28,7 @@ async function notifyAndMaybePush(opts: {
   message: string
   clientName: string | null
   entityId: string
+  entityType?: string
   url: string
   push?: { title: string; body: string }
 }) {
@@ -38,7 +39,7 @@ async function notifyAndMaybePush(opts: {
     title: opts.title,
     message: opts.message,
     clientName: opts.clientName,
-    entityType: 'solicitud',
+    entityType: opts.entityType ?? 'solicitud',
     entityId: opts.entityId,
     url: opts.url,
   })
@@ -163,5 +164,38 @@ export async function notifyOrdenEjecutada(order: OrderCtx) {
     entityId: order.id,
     url: orderUrl(order.id),
     push: { title: '✅ Orden ejecutada', body: `La operación de ${client} fue ejecutada correctamente.` },
+  })
+}
+
+export interface ReplyCtx {
+  replyId: string                              // email_replies.id — entity_id de esta notificación
+  solicitudId: string                          // orden uuid — para el link
+  clientName: string | null
+  asesorName: string
+  asesorId: string | null
+  matchMethod: 'thread_id' | 'subject_fallback'
+}
+
+// 7. Cliente respondió al mail de confirmación — asesor — interna + push.
+// entity_id es el id de la respuesta (email_replies.id), NO el de la orden:
+// si el cliente responde varias veces, cada respuesta es un mensaje de Gmail
+// distinto y debe generar su propia notificación — usar el id de la orden acá
+// chocaría con el dedup existente (entity_id, notif_type, user_name) y la
+// segunda respuesta se perdería en silencio.
+export async function notifyClienteRespondio(reply: ReplyCtx) {
+  if (!reply.asesorId) return
+  const client = reply.clientName ?? 'Cliente'
+  const suffix = reply.matchMethod === 'subject_fallback' ? ' (coincidencia por asunto)' : ''
+  await notifyAndMaybePush({
+    userId: reply.asesorId,
+    userName: reply.asesorName,
+    notifType: 'cliente_respondio',
+    title: '💬 Cliente respondió',
+    message: `${client} respondió al mail de confirmación de su orden.${suffix}`,
+    clientName: reply.clientName,
+    entityId: reply.replyId,
+    entityType: 'email_reply',
+    url: orderUrl(reply.solicitudId),
+    push: { title: '💬 Cliente respondió', body: `${client} respondió al mail de la orden — revisá la respuesta.` },
   })
 }

@@ -112,6 +112,29 @@ export async function getSolicitudEventos(solicitudId: string) {
   return rows
 }
 
+// Para el cron de detección de respuestas de cliente — busca la orden cuyo
+// hilo de Gmail coincide exactamente. Es la señal fuerte: no depende de
+// desde qué dirección responda el cliente, solo de que sea "Responder"
+// dentro del mismo hilo.
+export async function findSolicitudByThreadId(threadId: string) {
+  const { rows } = await pool.query(
+    `select id, client_name, asesor, asesor_id, mail_asunto from solicitudes where mail_thread_id = $1 limit 1`,
+    [threadId]
+  )
+  return rows[0] ?? null
+}
+
+// Respaldo para órdenes previas a que se empezara a guardar mail_thread_id:
+// matchea por asunto exacto — el llamador solo lo usa como match si devuelve
+// exactamente una fila (inequívoco); si hay más de una o ninguna, no se adivina.
+export async function findSolicitudesByAsunto(asunto: string) {
+  const { rows } = await pool.query(
+    `select id, client_name, asesor, asesor_id from solicitudes where mail_asunto = $1`,
+    [asunto]
+  )
+  return rows
+}
+
 export async function updateSolicitud(id: string, updates: Record<string, any>) {
   const entries = Object.entries(updates).filter(([, v]) => v !== undefined)
   const setClause = entries.map(([k], i) => `"${k}" = $${i + 1}`)
