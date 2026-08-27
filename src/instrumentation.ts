@@ -10,6 +10,10 @@
 export async function register() {
   if (process.env.NEXT_RUNTIME !== 'nodejs') return
 
+  // Independiente del auto-sync de SharePoint de abajo — no depende de
+  // credenciales de Microsoft, así que se registra antes del early return.
+  registerEmailReplyCheck()
+
   const tenantId = process.env.MICROSOFT_TENANT_ID
   const clientId = process.env.MICROSOFT_CLIENT_ID
   const clientSecret = process.env.MICROSOFT_CLIENT_SECRET
@@ -69,4 +73,35 @@ export async function register() {
   console.log(
     `[auto-sync] Scheduled — interval: ${intervalMins} min, startup sync: ${runOnStartup}`
   )
+}
+
+/**
+ * Detección de respuestas de cliente a mails de confirmación de orden.
+ * Igual que el auto-sync de arriba: la app corre long-running en Railway, así
+ * que esto es un setInterval en vez de un cron serverless.
+ *
+ * Configure via .env.local:
+ *   EMAIL_REPLY_CHECK_INTERVAL_MINUTES=10   (default: 10)
+ */
+function registerEmailReplyCheck() {
+  const parsedInterval = parseInt(process.env.EMAIL_REPLY_CHECK_INTERVAL_MINUTES ?? '10', 10)
+  const intervalMins = Number.isFinite(parsedInterval) && parsedInterval > 0 ? parsedInterval : 10
+  const intervalMs = intervalMins * 60 * 1000
+
+  async function runCheck() {
+    try {
+      const { checkEmailReplies } = await import('@/lib/cron/checkEmailReplies')
+      const result = await checkEmailReplies()
+      if (result.skipped) return // silencioso — casilla de Mesa aún no conectada
+      if ((result.inserted ?? 0) > 0) {
+        console.log('[email-replies] ', JSON.stringify(result))
+      }
+    } catch (e: any) {
+      console.error('[email-replies] Error:', e.message)
+    }
+  }
+
+  setTimeout(() => runCheck(), 15000)
+  setInterval(() => runCheck(), intervalMs)
+  console.log(`[email-replies] Scheduled — interval: ${intervalMins} min`)
 }
