@@ -137,6 +137,7 @@ function DetalleSolicitud({ sol, eventos, isMesa, userName, onAction, onClose, o
   const [valor,  setValor]  = useState('')
   const [motivo, setMotivo] = useState('')
   const [busy,   setBusy]   = useState(false)
+  const [tab, setTab]       = useState<'posiciones' | 'mail' | 'timeline'>('posiciones')
 
   const cfg = (ESTADO_CFG[sol.estado] ?? ESTADO_CFG.mesa_operaciones) as { label:string; color:string; dot:string }
   // Ordenes de envio directo: el asesor dueño lleva el ciclo completo el mismo,
@@ -176,64 +177,9 @@ function DetalleSolicitud({ sol, eventos, isMesa, userName, onAction, onClose, o
         </div>
       )}
 
-      {/* Resto — todo junto adentro de UN solo scroll interno, así el panel
-          nunca estira la página: se queda fijo (sticky) y lo que no entra
-          se scrollea acá adentro, no bajando toda la pantalla. */}
-      <div className="flex-1 min-h-0 overflow-y-auto">
-
-      {/* Datos */}
-      <div className="px-4 py-3 space-y-1.5 border-b border-gray-100">
-        {([
-          ['Operación', `${OP_LABEL[sol.tipo_operacion] ?? sol.tipo_operacion} · ${sol.instrumento_tipo ?? '—'}`],
-          ['Instrumento', sol.instrumento_nombre],
-          sol.clase        ? ['Clase', sol.clase]                                     : null,
-          ['Moneda', sol.moneda],
-          sol.monto        ? ['Monto',    `${sol.moneda} ${Number(sol.monto).toLocaleString('es-UY')}`]    : null,
-          sol.cantidad     ? ['Cantidad', String(sol.cantidad)]                        : null,
-          ['Fecha', sol.fecha_operacion],
-          sol.cusip_isin   ? ['ISIN/CUSIP', sol.cusip_isin]                           : null,
-          sol.maturity     ? ['Vencimiento', sol.maturity]                             : null,
-          sol.cupon        ? ['Cupón', sol.cupon + '%']                                : null,
-          ['Asesor', sol.asesor],
-          sol.canal        ? ['Canal', sol.canal === 'directo_asesor' ? 'Envío directo por asesor' : sol.canal === 'directo_mesa' ? 'Envío directo por Mesa' : 'Derivada a Mesa'] : null,
-          ['Opera', sol.opera_asesor ? 'Asesor' : 'Mesa'],
-          sol.operador     ? ['Operador', sol.operador]                                : null,
-          sol.precio_ejecutado ? ['Precio ejec.', String(sol.precio_ejecutado)]       : null,
-          sol.valor_efectivo   ? ['Valor ef.', `${sol.moneda} ${Number(sol.valor_efectivo).toLocaleString('es-UY')}`] : null,
-          sol.comision     ? ['Comisión', sol.comision]                               : null,
-        ] as ([string,string]|null)[]).filter(Boolean).map((entry) => {
-          const [label, value] = entry as [string, string]
-          return (
-            <div key={label} className="flex justify-between gap-2">
-              <span className="text-[11px] text-gray-400 shrink-0">{label}</span>
-              <span className="text-[11px] text-gray-800 text-right break-words max-w-[180px]">{value}</span>
-            </div>
-          )
-        })}
-        {sol.observaciones && (
-          <div className="pt-2 border-t border-gray-100">
-            <p className="text-[11px] text-gray-400 mb-0.5">Observaciones</p>
-            <p className="text-[11px] text-gray-700 whitespace-pre-wrap">{sol.observaciones}</p>
-          </div>
-        )}
-      </div>
-
-      {/* Activos — el ISIN/observaciones/comisión de cada uno vive acá adentro,
-          no en los campos de arriba (que solo se completan en órdenes viejas). */}
-      {Array.isArray(sol.assets_json) && sol.assets_json.length > 0 && (
-        <div className="px-4 py-3 border-b border-gray-100 space-y-2">
-          <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
-            Activos ({sol.assets_json.length})
-          </p>
-          {sol.assets_json.map((asset, i) => <AssetDetailCard key={i} asset={asset} />)}
-        </div>
-      )}
-
-      <MailViewer asunto={sol.mail_asunto ?? null} cuerpo={sol.mail_cuerpo ?? sol.mail_preview ?? null} />
-
-      {/* Acciones (solo nuevas solicitudes con isMesa) */}
+      {/* Acciones (solo nuevas solicitudes con isMesa) — fijas arriba de las solapas */}
       {canAct && (
-        <div className="px-4 py-3 space-y-1.5 border-b border-gray-100">
+        <div className="px-4 py-3 space-y-1.5 border-b border-gray-100 shrink-0">
           {sol.estado === 'mail_enviado' && (
             <button onClick={() => act('en_ejecucion')} disabled={busy}
               className="w-full py-2 text-xs font-semibold bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50">
@@ -253,26 +199,101 @@ function DetalleSolicitud({ sol, eventos, isMesa, userName, onAction, onClose, o
         </div>
       )}
 
-      {/* Historial */}
-      <div className="px-4 py-3">
-        <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Historial</p>
-        {eventos.length === 0 ? (
-          <p className="text-xs text-gray-400">{sol._legacy ? 'Registro histórico del sistema anterior.' : 'Sin eventos.'}</p>
-        ) : (
-          <ul className="space-y-2">
-            {eventos.map(ev => (
-              <li key={ev.id} className="flex gap-2">
-                <div className="w-1.5 h-1.5 rounded-full bg-gray-300 mt-1.5 shrink-0" />
-                <div>
-                  <p className="text-[11px] text-gray-700">{ev.descripcion}</p>
-                  <p className="text-[10px] text-gray-400">{format(new Date(ev.created_at), "d MMM HH:mm", { locale: es })}</p>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
+      {/* Solapas */}
+      <div className="flex border-b border-gray-100 shrink-0">
+        {([
+          ['posiciones', 'Posiciones'],
+          ['mail', 'Mail'],
+          ['timeline', 'Timeline'],
+        ] as const).map(([key, label]) => (
+          <button key={key} onClick={() => setTab(key)}
+            className={`flex-1 px-2 py-2 text-[11px] font-semibold transition-colors border-b-2 -mb-px ${
+              tab === key ? 'text-[#2D3F52] border-[#2D3F52]' : 'text-gray-400 border-transparent hover:text-gray-600'
+            }`}>
+            {label}
+          </button>
+        ))}
       </div>
 
+      {/* Contenido de la solapa activa — scrollea acá adentro */}
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        {tab === 'posiciones' && (
+          <>
+            {/* Datos */}
+            <div className="px-4 py-3 space-y-1.5 border-b border-gray-100">
+              {([
+                ['Operación', `${OP_LABEL[sol.tipo_operacion] ?? sol.tipo_operacion} · ${sol.instrumento_tipo ?? '—'}`],
+                ['Instrumento', sol.instrumento_nombre],
+                sol.clase        ? ['Clase', sol.clase]                                     : null,
+                ['Moneda', sol.moneda],
+                sol.monto        ? ['Monto',    `${sol.moneda} ${Number(sol.monto).toLocaleString('es-UY')}`]    : null,
+                sol.cantidad     ? ['Cantidad', String(sol.cantidad)]                        : null,
+                ['Fecha', sol.fecha_operacion],
+                sol.cusip_isin   ? ['ISIN/CUSIP', sol.cusip_isin]                           : null,
+                sol.maturity     ? ['Vencimiento', sol.maturity]                             : null,
+                sol.cupon        ? ['Cupón', sol.cupon + '%']                                : null,
+                ['Asesor', sol.asesor],
+                sol.canal        ? ['Canal', sol.canal === 'directo_asesor' ? 'Envío directo por asesor' : sol.canal === 'directo_mesa' ? 'Envío directo por Mesa' : 'Derivada a Mesa'] : null,
+                ['Opera', sol.opera_asesor ? 'Asesor' : 'Mesa'],
+                sol.operador     ? ['Operador', sol.operador]                                : null,
+                sol.precio_ejecutado ? ['Precio ejec.', String(sol.precio_ejecutado)]       : null,
+                sol.valor_efectivo   ? ['Valor ef.', `${sol.moneda} ${Number(sol.valor_efectivo).toLocaleString('es-UY')}`] : null,
+                sol.comision     ? ['Comisión', sol.comision]                               : null,
+              ] as ([string,string]|null)[]).filter(Boolean).map((entry) => {
+                const [label, value] = entry as [string, string]
+                return (
+                  <div key={label} className="flex justify-between gap-2">
+                    <span className="text-[11px] text-gray-400 shrink-0">{label}</span>
+                    <span className="text-[11px] text-gray-800 text-right break-words max-w-[180px]">{value}</span>
+                  </div>
+                )
+              })}
+              {sol.observaciones && (
+                <div className="pt-2 border-t border-gray-100">
+                  <p className="text-[11px] text-gray-400 mb-0.5">Observaciones</p>
+                  <p className="text-[11px] text-gray-700 whitespace-pre-wrap">{sol.observaciones}</p>
+                </div>
+              )}
+            </div>
+
+            {/* Activos — el ISIN/observaciones/comisión de cada uno vive acá adentro,
+                no en los campos de arriba (que solo se completan en órdenes viejas). */}
+            {Array.isArray(sol.assets_json) && sol.assets_json.length > 0 && (
+              <div className="px-4 py-3 space-y-2">
+                <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
+                  Activos ({sol.assets_json.length})
+                </p>
+                {sol.assets_json.map((asset, i) => <AssetDetailCard key={i} asset={asset} />)}
+              </div>
+            )}
+          </>
+        )}
+
+        {tab === 'mail' && (
+          (sol.mail_cuerpo ?? sol.mail_preview)
+            ? <MailViewer asunto={sol.mail_asunto ?? null} cuerpo={sol.mail_cuerpo ?? sol.mail_preview ?? null} />
+            : <p className="px-4 py-3 text-xs text-gray-400">Todavía no se generó ningún mail para esta orden.</p>
+        )}
+
+        {tab === 'timeline' && (
+          <div className="px-4 py-3">
+            {eventos.length === 0 ? (
+              <p className="text-xs text-gray-400">{sol._legacy ? 'Registro histórico del sistema anterior.' : 'Sin eventos.'}</p>
+            ) : (
+              <ul className="space-y-2">
+                {eventos.map(ev => (
+                  <li key={ev.id} className="flex gap-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-gray-300 mt-1.5 shrink-0" />
+                    <div>
+                      <p className="text-[11px] text-gray-700">{ev.descripcion}</p>
+                      <p className="text-[10px] text-gray-400">{format(new Date(ev.created_at), "d MMM HH:mm", { locale: es })}</p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Modal ejecutar */}
