@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 
 type UserRole = 'admin' | 'asesor' | 'asistente' | 'compliance' | 'direccion' | 'ceo'
-type Permission = 'panel' | 'tasks' | 'clients' | 'openings' | 'banco_central' | 'calendar' | 'deadlines' | 'ceo_dashboard' | 'kpis' | 'pagos' | 'impuestos' | 'liquidacion' | 'recursos' | 'claves' | 'admin' | 'sincronizacion' | 'factsheet' | 'proposals' | 'orders'
+type Permission = 'panel' | 'tasks' | 'clients' | 'openings' | 'banco_central' | 'calendar' | 'deadlines' | 'ceo_dashboard' | 'kpis' | 'pagos' | 'impuestos' | 'liquidacion' | 'recursos' | 'claves' | 'admin' | 'sincronizacion' | 'factsheet' | 'proposals' | 'orders' | 'research'
 
 interface CrmUser {
   id: string
@@ -55,6 +55,12 @@ const PERMISSION_GROUPS: { label: string; items: { key: Permission; label: strin
     ],
   },
   {
+    label: 'Research',
+    items: [
+      { key: 'research', label: 'Research & Novedades' },
+    ],
+  },
+  {
     label: 'Finanzas',
     items: [
       { key: 'pagos', label: 'Pagos mensuales' },
@@ -80,13 +86,16 @@ const PERMISSION_GROUPS: { label: string; items: { key: Permission; label: strin
   },
 ]
 
+// Debe reflejar los mismos defaults que Sidebar.tsx y lib/auth/index.ts —
+// esas dos son las que realmente rigen qué se ve en el menú de la izquierda;
+// esta lista es la que se le muestra al admin para tocarla.
 const ROLE_DEFAULT_PERMISSIONS: Record<UserRole, Permission[]> = {
-  admin:      ['panel','tasks','clients','openings','banco_central','calendar','deadlines','pagos','impuestos','ceo_dashboard','kpis','liquidacion','recursos','claves','admin','sincronizacion','factsheet','proposals','orders'],
-  ceo:        ['panel','tasks','clients','openings','banco_central','calendar','deadlines','pagos','impuestos','ceo_dashboard','kpis','liquidacion','recursos','claves','factsheet','proposals','orders'],
-  direccion:  ['panel','tasks','clients','openings','banco_central','calendar','deadlines','ceo_dashboard','kpis','liquidacion','recursos','claves','factsheet','proposals','orders'],
-  asesor:     ['panel','tasks','clients','openings','calendar','deadlines','recursos','factsheet','proposals','orders'],
-  asistente:  ['panel','tasks','clients','openings','banco_central','calendar','deadlines','recursos'],
-  compliance: ['panel','banco_central','calendar','deadlines','recursos'],
+  admin:      ['panel','tasks','clients','openings','banco_central','calendar','deadlines','pagos','impuestos','ceo_dashboard','kpis','liquidacion','recursos','claves','admin','sincronizacion','factsheet','proposals','orders','research'],
+  ceo:        ['panel','tasks','clients','openings','banco_central','calendar','deadlines','pagos','impuestos','ceo_dashboard','kpis','liquidacion','recursos','claves','factsheet','proposals','orders','research'],
+  direccion:  ['panel','tasks','clients','openings','banco_central','calendar','deadlines','ceo_dashboard','kpis','liquidacion','recursos','claves','factsheet','proposals','orders','research'],
+  asesor:     ['panel','tasks','clients','openings','calendar','deadlines','recursos','factsheet','proposals','orders','research'],
+  asistente:  ['panel','tasks','clients','openings','banco_central','calendar','deadlines','recursos','research'],
+  compliance: ['panel','banco_central','calendar','deadlines','recursos','research'],
 }
 
 const ROLE_LABELS: Record<UserRole, string> = {
