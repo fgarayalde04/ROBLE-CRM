@@ -90,11 +90,11 @@ export async function register() {
  * pegarle por HTTP a la ruta evita el problema de raíz.
  *
  * Configure via .env.local:
- *   EMAIL_REPLY_CHECK_INTERVAL_MINUTES=10   (default: 10)
+ *   EMAIL_REPLY_CHECK_INTERVAL_MINUTES=1   (default: 1 — corre cada minuto)
  */
 function registerEmailReplyCheck() {
-  const parsedInterval = parseInt(process.env.EMAIL_REPLY_CHECK_INTERVAL_MINUTES ?? '10', 10)
-  const intervalMins = Number.isFinite(parsedInterval) && parsedInterval > 0 ? parsedInterval : 10
+  const parsedInterval = parseInt(process.env.EMAIL_REPLY_CHECK_INTERVAL_MINUTES ?? '1', 10)
+  const intervalMins = Number.isFinite(parsedInterval) && parsedInterval > 0 ? parsedInterval : 1
   const intervalMs = intervalMins * 60 * 1000
   const port = process.env.PORT ?? '3000'
   const cronSecret = process.env.CRON_SECRET
