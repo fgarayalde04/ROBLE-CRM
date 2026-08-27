@@ -195,3 +195,32 @@ export async function getGoogleName(): Promise<string | null> {
   const tokens = await getGoogleTokens()
   return tokens?.name ?? null
 }
+
+// ─── Casilla de Mesa (trading@roblecapital.net) ────────────────────────────
+// Conexión OAuth propia, guardada en la misma tabla google_connections pero
+// bajo una clave fija en vez del email de sesión de un asesor — así el cron
+// de detección de respuestas puede leer el token sin depender de que haya
+// una sesión de usuario activa (un cron job no tiene sesión).
+export const MESA_GOOGLE_CONNECTION_KEY = 'trading@roblecapital.net'
+
+/** Igual a getValidGoogleToken() pero para la casilla de Mesa — no lee cookie ni sesión. */
+export async function getValidMesaGoogleToken(): Promise<string | null> {
+  const data = await loadFromDb(MESA_GOOGLE_CONNECTION_KEY)
+  if (!data) return null
+
+  const now = Math.floor(Date.now() / 1000)
+  if (data.expires_at > now + 300) return data.access_token
+  if (!data.refresh_token) return null
+
+  const fresh = await doRefresh(data.refresh_token)
+  if (!fresh) return null
+
+  await saveToDb(MESA_GOOGLE_CONNECTION_KEY, { ...data, ...fresh })
+  return fresh.access_token
+}
+
+/** Estado de la conexión de la casilla de Mesa, para mostrar en Configuración. */
+export async function getMesaConnectionStatus(): Promise<{ connected: boolean; googleEmail: string | null }> {
+  const data = await loadFromDb(MESA_GOOGLE_CONNECTION_KEY)
+  return { connected: !!data, googleEmail: data?.email ?? null }
+}

@@ -1,33 +1,44 @@
 import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
 import { getSession } from '@/lib/auth'
-import { hasGoogleConnection, getGoogleEmail, getGoogleName } from '@/lib/google/tokens'
+import { hasGoogleConnection, getGoogleEmail, getGoogleName, getMesaConnectionStatus } from '@/lib/google/tokens'
 import SettingsClient from './SettingsClient'
 import PushNotificationsCard from '@/components/push/PushNotificationsCard'
 
 export const metadata: Metadata = { title: 'Configuración' }
 export const dynamic = 'force-dynamic'
 
+const ADMIN_ROLES = ['admin', 'ceo', 'direccion']
+
 export default async function SettingsPage({
   searchParams,
 }: {
-  searchParams: { google_connected?: string; google_error?: string }
+  searchParams: { google_connected?: string; google_error?: string; mesa_connected?: string }
 }) {
   const session = await getSession()
   if (!session) redirect('/login')
 
-  const [isGoogleConnected, googleEmail, googleName] = await Promise.all([
+  const isAdmin = ADMIN_ROLES.includes(session.role)
+
+  const [isGoogleConnected, googleEmail, googleName, mesaStatus] = await Promise.all([
     hasGoogleConnection(),
     getGoogleEmail(),
     getGoogleName(),
+    isAdmin ? getMesaConnectionStatus() : Promise.resolve(null),
   ])
 
   const googleStatus = searchParams.google_connected
     ? 'connected'
     : searchParams.google_error === 'cancelled'
     ? 'cancelled'
-    : searchParams.google_error
+    : searchParams.google_error && searchParams.google_error !== 'forbidden'
     ? 'error'
+    : null
+
+  const mesaStatusBanner = searchParams.mesa_connected
+    ? 'connected'
+    : searchParams.google_error === 'forbidden'
+    ? 'forbidden'
     : null
 
   return (
@@ -145,6 +156,63 @@ export default async function SettingsPage({
             </a>
           )}
         </div>
+
+        {/* Casilla de Mesa (trading@roblecapital.net) — admin only */}
+        {isAdmin && (
+          <div className="bg-white border border-[#E2E8F0] rounded-lg p-5">
+            <div className="flex items-center gap-2 mb-1">
+              <GoogleIcon />
+              <h2 className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest">
+                Casilla de Mesa
+              </h2>
+            </div>
+            <p className="text-xs text-gray-400 mb-4">
+              Conexión de <span className="font-mono">trading@roblecapital.net</span> usada para
+              detectar cuándo un cliente responde a un mail de confirmación de orden. Es una
+              conexión única para toda la organización, no depende de tu cuenta personal.
+            </p>
+
+            {/* Status banners */}
+            {mesaStatusBanner === 'connected' && (
+              <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded text-sm text-green-700">
+                ✓ Casilla de Mesa conectada correctamente.
+              </div>
+            )}
+            {mesaStatusBanner === 'forbidden' && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-sm text-red-700">
+                Solo un administrador puede conectar la casilla de Mesa.
+              </div>
+            )}
+
+            {mesaStatus?.connected ? (
+              <div className="flex items-center gap-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+                <div className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-800">
+                    {mesaStatus.googleEmail ?? 'Conectado'}
+                  </p>
+                </div>
+                <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-green-100 text-green-700 shrink-0">
+                  Activo
+                </span>
+                <a
+                  href="/api/auth/google-connect?mode=mesa"
+                  className="text-xs px-3 py-1.5 border border-gray-300 rounded text-gray-600 hover:bg-gray-50 transition-colors shrink-0"
+                >
+                  Reconectar
+                </a>
+              </div>
+            ) : (
+              <a
+                href="/api/auth/google-connect?mode=mesa"
+                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50 transition-colors shadow-sm"
+              >
+                <GoogleIcon />
+                Conectar casilla de Mesa
+              </a>
+            )}
+          </div>
+        )}
 
         {/* Microsoft (SharePoint only) info card */}
         <div className="bg-white border border-[#E2E8F0] rounded-lg p-5">
