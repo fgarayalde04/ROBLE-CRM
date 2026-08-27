@@ -4,6 +4,8 @@ import { useState, useCallback, useRef, useEffect, useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
+import InstrumentSearch from '@/components/InstrumentSearch'
+import type { Instrument } from '@/app/api/instruments/route'
 import {
   type CouponFrequency, type DayCountConvention,
   COUPON_FREQUENCIES, DAY_COUNT_CONVENTIONS, DEFAULT_COUPON_FREQUENCY, DEFAULT_DAY_COUNT_CONVENTION,
@@ -789,6 +791,17 @@ function FundsTable({
     })
   }, [funds, proposalId, onUpdate])
 
+  // Al elegir un fondo ya cargado en el maestro de instrumentos, autocompleta
+  // nombre/ISIN/emisor — mismo componente/API que ya usa Órdenes.
+  const selectFundInstrument = useCallback(async (fund: Fund, inst: Instrument) => {
+    const patch: Partial<Fund> = { fund_name: inst.nombre, isin: inst.isin ?? inst.cusip ?? fund.isin, issuer: inst.emisor ?? fund.issuer }
+    const updated = funds.map(f => f.id === fund.id ? { ...f, ...patch } as Fund : f)
+    onUpdate(updated)
+    await fetch(`/api/proposals/${proposalId}/funds`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fund_id: fund.id, ...patch }),
+    })
+  }, [funds, proposalId, onUpdate])
+
   const addFund = async () => {
     setAdding(true)
     const res = await fetch(`/api/proposals/${proposalId}/funds`, {
@@ -889,10 +902,19 @@ function FundsTable({
                     </td>
                     <td className={TD}>
                       <div className="flex items-center gap-1.5">
-                        <EditCell value={f.fund_name} onChange={v => updateField(f, 'fund_name', v)} placeholder="Nombre del fondo" />
-                        {f.fund_class && <span className="text-[9px] font-bold bg-[#1B2E3C]/10 text-[#1B2E3C] px-1 py-0.5 rounded">{f.fund_class}</span>}
-                        {f.needs_review && <span className="text-[9px] text-amber-500" title="Revisar">⚠</span>}
-                        {saving === f.id && <span className="w-2.5 h-2.5 border border-gray-300 border-t-gray-500 rounded-full animate-spin" />}
+                        <div className="flex-1 min-w-0">
+                          <InstrumentSearch
+                            tipo="fondo"
+                            value={f.fund_name ?? ''}
+                            onChange={v => updateField(f, 'fund_name', v)}
+                            onSelect={inst => selectFundInstrument(f, inst)}
+                            placeholder="Buscar fondo o escribir nombre…"
+                            className="w-full text-xs px-2 py-1 rounded border border-transparent hover:border-gray-200 focus:border-[#16A34A]/50 bg-transparent focus:bg-white outline-none transition"
+                          />
+                        </div>
+                        {f.fund_class && <span className="text-[9px] font-bold bg-[#1B2E3C]/10 text-[#1B2E3C] px-1 py-0.5 rounded shrink-0">{f.fund_class}</span>}
+                        {f.needs_review && <span className="text-[9px] text-amber-500 shrink-0" title="Revisar">⚠</span>}
+                        {saving === f.id && <span className="w-2.5 h-2.5 border border-gray-300 border-t-gray-500 rounded-full animate-spin shrink-0" />}
                       </div>
                     </td>
                     <td className={`${TD} text-right`}>
@@ -986,6 +1008,17 @@ function BondsTable({
     })
   }, [bonds, proposalId, onUpdate])
 
+  // Al elegir un bono ya cargado en el maestro de instrumentos, autocompleta
+  // emisor/ISIN/moneda — mismo componente/API que ya usa Órdenes.
+  const selectBondInstrument = useCallback(async (bond: Bond, inst: Instrument) => {
+    const patch: Partial<Bond> = { issuer: inst.nombre, isin: inst.isin ?? inst.cusip ?? bond.isin, currency: inst.moneda ?? bond.currency }
+    const updated = bonds.map(b => b.id === bond.id ? { ...b, ...patch } as Bond : b)
+    onUpdate(updated)
+    await fetch(`/api/proposals/${proposalId}/bonds`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bond_id: bond.id, ...patch }),
+    })
+  }, [bonds, proposalId, onUpdate])
+
   const addBond = async () => {
     setAdding(true)
     const res = await fetch(`/api/proposals/${proposalId}/bonds`, {
@@ -1045,7 +1078,16 @@ function BondsTable({
                   <tr key={b.id} className="hover:bg-gray-50/50 transition-colors group">
                     <td className="px-3 py-2.5"><EditCell value={b.broker} onChange={v => updateField(b, 'broker', v)} placeholder="Custodio" className="text-[11px]" /></td>
                     <td className="px-3 py-2.5 text-center"><OperacionToggle value={b.operacion} onChange={v => setOperacion(b, v)} /></td>
-                    <td className="px-3 py-2.5"><EditCell value={b.issuer}   onChange={v => updateField(b, 'issuer',   v)} placeholder="Emisor" /></td>
+                    <td className="px-3 py-2.5">
+                      <InstrumentSearch
+                        tipo="bono"
+                        value={b.issuer ?? ''}
+                        onChange={v => updateField(b, 'issuer', v)}
+                        onSelect={inst => selectBondInstrument(b, inst)}
+                        placeholder="Buscar bono o escribir emisor…"
+                        className="w-full text-xs px-2 py-1 rounded border border-transparent hover:border-gray-200 focus:border-[#16A34A]/50 bg-transparent focus:bg-white outline-none transition"
+                      />
+                    </td>
                     <td className="px-3 py-2.5"><EditCell value={b.isin}     onChange={v => updateField(b, 'isin',     v)} placeholder="ISIN" mono /></td>
                     <td className="px-3 py-2.5 text-right"><EditCell value={b.price} onChange={v => updateField(b, 'price', v)} numeric placeholder="—" className="text-right text-xs" /></td>
                     <td className="px-3 py-2.5 text-right"><EditCell value={b.quantity} onChange={v => updateField(b, 'quantity', v)} numeric placeholder="—" className="text-right text-xs" /></td>

@@ -137,7 +137,6 @@ function validateBlocks(blocks: OrderBlock[]): string[] {
   blocks.forEach((block, i) => {
     const n = i + 1
     if (block.type === 'acciones') {
-      if (!block.nombre.trim()) errs.push(`Orden ${n} (Acción): falta nombre de la empresa`)
       if (!block.ticker.trim()) errs.push(`Orden ${n} (Acción): falta ticker`)
       if (!block.cantidad.trim()) errs.push(`Orden ${n} (Acción): falta cantidad`)
     } else if (block.type === 'fondos') {
@@ -224,7 +223,7 @@ function AccionesForm({ block, index, onChange, onRemove }: { block: AccionesBlo
     <BlockShell title="Acciones" index={index} id={block.id} color="blue" onRemove={onRemove}>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <Field label="Operación"><select className={selectCls} value={block.operacion} onChange={upd('operacion')}><option value="compra">Compra</option><option value="venta">Venta</option></select></Field>
-        <Field label="Nombre de la empresa *"><input className={inputCls} placeholder="Ej: Apple Inc." value={block.nombre} onChange={upd('nombre')} /></Field>
+        <Field label="Nombre de la empresa"><input className={inputCls} placeholder="Ej: Apple Inc." value={block.nombre} onChange={upd('nombre')} /></Field>
         <Field label="Ticker *"><input className={inputCls} placeholder="Ej: AAPL" value={block.ticker} onChange={upd('ticker')} /></Field>
         <Field label="Cantidad *">
           <div className="flex gap-2">
