@@ -199,3 +199,47 @@ export async function notifyClienteRespondio(reply: ReplyCtx) {
     push: { title: '💬 Cliente respondió', body: `${client} respondió al mail de la orden — revisá la respuesta.` },
   })
 }
+
+export interface ReplyMesaCtx {
+  replyId: string
+  solicitudId: string | null                    // null cuando no se pudo matchear con ninguna orden
+  clientName: string | null
+  fromEmail: string
+  matchMethod: 'thread_id' | 'subject_fallback' | 'unmatched'
+}
+
+// 8. Cliente respondió — visible SIEMPRE para Mesa/admin/asistentes, sin
+// importar de qué asesor es el cliente ni si el matching encontró la orden.
+// No todos los asesores tienen los mismos clientes — notifyClienteRespondio()
+// de arriba ya asegura que cada asesor solo vea las respuestas de los suyos.
+// Esta función es la contraparte para el equipo que sí necesita ver todo,
+// incluyendo los casos que quedaron sin matchear (para revisión manual).
+export async function notifyClienteRespondioMesa(reply: ReplyMesaCtx) {
+  const client = reply.clientName ?? reply.fromEmail
+  const isUnmatched = reply.matchMethod === 'unmatched'
+  const suffix = reply.matchMethod === 'subject_fallback' ? ' (coincidencia por asunto)' : ''
+  const title = isUnmatched ? '💬 Respuesta sin identificar' : '💬 Cliente respondió'
+  const message = isUnmatched
+    ? `Llegó una respuesta de ${reply.fromEmail} que no se pudo asociar a ninguna orden — revisar manualmente.`
+    : `${client} respondió al mail de confirmación de su orden.${suffix}`
+  const url = reply.solicitudId ? orderUrl(reply.solicitudId) : '/solicitudes'
+
+  const recipients = await getUsersByRoles(MESA_ROLES)
+  await Promise.all(recipients.map((r) => notifyAndMaybePush({
+    userId: r.id,
+    userName: r.name,
+    notifType: 'cliente_respondio',
+    title,
+    message,
+    clientName: reply.clientName,
+    entityId: reply.replyId,
+    entityType: 'email_reply',
+    url,
+    push: {
+      title,
+      body: isUnmatched
+        ? `Respuesta de ${reply.fromEmail} sin asociar a ninguna orden — revisar.`
+        : `${client} respondió — revisá la respuesta.`,
+    },
+  })))
+}

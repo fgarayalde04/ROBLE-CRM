@@ -9,7 +9,7 @@ import { getValidMesaGoogleToken } from '@/lib/google/tokens'
 import { listInboxSince } from '@/lib/google/gmail'
 import { findSolicitudByThreadId, findSolicitudesByAsunto, insertSolicitudEvento } from '@/lib/db/solicitudes'
 import { insertEmailReply, markEmailReplyNotified, type EmailReplyMatchMethod } from '@/lib/db/emailReplies'
-import { notifyClienteRespondio } from '@/lib/notifications/orderEvents'
+import { notifyClienteRespondio, notifyClienteRespondioMesa } from '@/lib/notifications/orderEvents'
 
 const MESA_EMAIL = 'trading@roblecapital.net'
 
@@ -100,6 +100,8 @@ export async function checkEmailReplies(): Promise<CheckEmailRepliesResult> {
         usuario: 'Sistema',
         usuario_id: null,
       })
+      // Al asesor dueño de la orden — solo ve las respuestas de sus propios
+      // clientes (no todos los asesores tienen los mismos clientes).
       await notifyClienteRespondio({
         replyId:      row.id,
         solicitudId:  solicitud.id,
@@ -108,8 +110,19 @@ export async function checkEmailReplies(): Promise<CheckEmailRepliesResult> {
         asesorId:     solicitud.asesor_id,
         matchMethod:  matchMethod === 'subject_fallback' ? 'subject_fallback' : 'thread_id',
       })
-      await markEmailReplyNotified(row.id)
     }
+
+    // A Mesa/admin/asistentes — ven todas las respuestas, matcheadas o no,
+    // sin importar de qué asesor es el cliente (equipo con visibilidad total).
+    await notifyClienteRespondioMesa({
+      replyId:     row.id,
+      solicitudId: solicitud?.id ?? null,
+      clientName:  solicitud?.client_name ?? null,
+      fromEmail:   msg.fromEmail,
+      matchMethod,
+    })
+
+    await markEmailReplyNotified(row.id)
   }
 
   return { ok: true, scanned: messages.length, inserted, matchedThreadId, matchedSubject, unmatched, skippedSelf }
