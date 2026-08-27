@@ -367,9 +367,14 @@ export default function ProposalListClient({
                     className="hover:bg-gray-50/60 transition-colors cursor-pointer group"
                     onClick={() => router.push(`/propuestas/${p.id}`)}>
 
-                    {/* Propuesta */}
-                    <td className="px-5 py-3.5">
-                      <p className="font-medium text-gray-800">{p.title ?? 'Sin título'}</p>
+                    {/* Propuesta — título editable */}
+                    <td className="px-5 py-3.5" onClick={e => e.stopPropagation()}>
+                      <InlineEdit
+                        value={p.title}
+                        placeholder="Sin título"
+                        onSave={v => patchProposal(p.id, { title: v || null })}
+                        className="font-medium text-gray-800"
+                      />
                       <p className="text-[10px] text-gray-400 mt-0.5">{p.id.slice(0, 8)}…</p>
                     </td>
 

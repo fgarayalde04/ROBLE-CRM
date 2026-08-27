@@ -96,12 +96,16 @@ export async function bulkRestoreBancoCentralCheckboxes(records: ({ id: string }
 
 // ─── bc_fichas ───────────────────────────────────────────────────────────────
 
+// Usado para buscar clientes al cargar una orden (LegajosSearchInput) — solo
+// cuentas activas, para no traer legajos cerrados mezclados con los vigentes
+// (que aparecían como si el cliente estuviera "repetido" en el desplegable).
 export async function searchBancoCentralRecords(q: string) {
   const like = `%${q}%`
   const { rows } = await pool.query(
     `select id, customer_number, folder_name, type, fa, status, authorized_email
      from banco_central_records
-     where folder_name ilike $1 or customer_number ilike $1 or fa ilike $1
+     where (folder_name ilike $1 or customer_number ilike $1 or fa ilike $1)
+       and status <> 'cerrada'
      order by folder_name asc limit 25`,
     [like]
   )

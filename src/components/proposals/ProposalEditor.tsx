@@ -1397,6 +1397,8 @@ export default function ProposalEditor({
   const [equities, setEquities]         = useState<Equity[]>(initialEquities)
   const [savingStatus, setSavingStatus] = useState(false)
   const [statusMenu, setStatusMenu]     = useState(false)
+  const [editingTitle, setEditingTitle] = useState(false)
+  const [titleDraft, setTitleDraft]     = useState('')
   const [showPDF, setShowPDF]           = useState(false)
   const [downloading, setDownloading]   = useState(false)
   const pdfRef                          = useRef<HTMLDivElement>(null)
@@ -1522,7 +1524,30 @@ export default function ProposalEditor({
               </svg>
             </Link>
             <div className="min-w-0">
-              <p className="text-sm font-semibold text-[#2D3F52] truncate">{proposal.title ?? 'Sin título'}</p>
+              {editingTitle ? (
+                <input
+                  autoFocus
+                  value={titleDraft}
+                  onChange={e => setTitleDraft(e.target.value)}
+                  onBlur={() => {
+                    setEditingTitle(false)
+                    if (titleDraft.trim() && titleDraft !== (proposal.title ?? '')) patchProposal({ title: titleDraft.trim() })
+                  }}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+                    if (e.key === 'Escape') setEditingTitle(false)
+                  }}
+                  className="text-sm font-semibold text-[#2D3F52] border border-[#16A34A]/40 rounded px-1.5 py-0.5 -ml-1.5 focus:outline-none focus:ring-2 focus:ring-[#16A34A]/20 w-full max-w-xs"
+                />
+              ) : (
+                <p
+                  onClick={() => { setTitleDraft(proposal.title ?? ''); setEditingTitle(true) }}
+                  title="Click para renombrar"
+                  className="text-sm font-semibold text-[#2D3F52] truncate cursor-text hover:bg-gray-100 rounded px-1.5 py-0.5 -ml-1.5 transition-colors"
+                >
+                  {proposal.title ?? 'Sin título'}
+                </p>
+              )}
               <p className="text-[10px] text-gray-400 truncate">
                 {proposal.client_name ?? 'Sin cliente'} · Compras {currency} {total.toLocaleString('en-US')}
                 {ventas > 0 && <> · Ventas {currency} {ventas.toLocaleString('en-US')}</>}
