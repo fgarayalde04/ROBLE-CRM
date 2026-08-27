@@ -818,6 +818,20 @@ function FundsTable({
     await fetch(`/api/proposals/${proposalId}/funds?fund_id=${id}`, { method: 'DELETE' })
   }
 
+  // Duplica la fila tal cual (mismo fondo/ISIN/rendimientos) — para no tener
+  // que volver a tipear todo cuando se repite la misma posición.
+  const duplicateFund = async (fund: Fund) => {
+    setAdding(true)
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { id, position, created_at, ...rest } = fund as any
+    const res = await fetch(`/api/proposals/${proposalId}/funds`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(rest),
+    })
+    const data = await res.json()
+    if (res.ok) onUpdate([...funds, data])
+    setAdding(false)
+  }
+
   const totalFundsPct = funds.reduce((s, f) => s + (f.pct ?? 0), 0)
   const totalFundsCompras = funds.filter(f => f.operacion !== 'venta').reduce((s, f) => s + (f.amount ?? 0), 0)
   const totalFundsVentas  = funds.filter(f => f.operacion === 'venta').reduce((s, f) => s + (f.amount ?? 0), 0)
@@ -945,9 +959,15 @@ function FundsTable({
                       </div>
                     </td>
                     <td className="border-b border-gray-100 pr-2 py-2.5">
-                      <button onClick={() => deleteFund(f.id)} className="opacity-0 group-hover:opacity-100 w-6 h-6 flex items-center justify-center rounded text-gray-300 hover:text-red-500 hover:bg-red-50 transition-all">
-                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                      </button>
+                      <div className="flex items-center gap-0.5">
+                        <button onClick={() => duplicateFund(f)} disabled={adding} title="Duplicar fila"
+                          className="opacity-0 group-hover:opacity-100 w-6 h-6 flex items-center justify-center rounded text-gray-300 hover:text-[#1B2E3C] hover:bg-gray-100 transition-all disabled:opacity-50">
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                        </button>
+                        <button onClick={() => deleteFund(f.id)} title="Eliminar fila" className="opacity-0 group-hover:opacity-100 w-6 h-6 flex items-center justify-center rounded text-gray-300 hover:text-red-500 hover:bg-red-50 transition-all">
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -1033,6 +1053,20 @@ function BondsTable({
   const deleteBond = async (id: string) => {
     onUpdate(bonds.filter(b => b.id !== id))
     await fetch(`/api/proposals/${proposalId}/bonds?bond_id=${id}`, { method: 'DELETE' })
+  }
+
+  // Duplica la fila tal cual — para no tener que volver a tipear todo cuando
+  // se repite la misma posición.
+  const duplicateBond = async (bond: Bond) => {
+    setAdding(true)
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { id, position, created_at, ...rest } = bond as any
+    const res = await fetch(`/api/proposals/${proposalId}/bonds`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(rest),
+    })
+    const data = await res.json()
+    if (res.ok) onUpdate([...bonds, data])
+    setAdding(false)
   }
 
   return (
@@ -1149,9 +1183,15 @@ function BondsTable({
                       </span>
                     </td>
                     <td className="pr-2 py-2.5">
-                      <button onClick={() => deleteBond(b.id)} className="opacity-0 group-hover:opacity-100 w-6 h-6 flex items-center justify-center rounded text-gray-300 hover:text-red-500 hover:bg-red-50 transition-all">
-                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                      </button>
+                      <div className="flex items-center gap-0.5">
+                        <button onClick={() => duplicateBond(b)} disabled={adding} title="Duplicar fila"
+                          className="opacity-0 group-hover:opacity-100 w-6 h-6 flex items-center justify-center rounded text-gray-300 hover:text-[#1B2E3C] hover:bg-gray-100 transition-all disabled:opacity-50">
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                        </button>
+                        <button onClick={() => deleteBond(b.id)} title="Eliminar fila" className="opacity-0 group-hover:opacity-100 w-6 h-6 flex items-center justify-center rounded text-gray-300 hover:text-red-500 hover:bg-red-50 transition-all">
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                        </button>
+                      </div>
                     </td>
                   </tr>
                   )
@@ -1218,6 +1258,20 @@ function EquitiesTable({
     const res = await fetch(`/api/proposals/${proposalId}/equities`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ pct: 0, amount: 0, operacion: 'compra' }),
+    })
+    const data = await res.json()
+    if (res.ok) onUpdate([...equities, data])
+    setAdding(false)
+  }
+
+  // Duplica la fila tal cual — para no tener que volver a tipear todo cuando
+  // se repite la misma posición.
+  const duplicateEquity = async (equity: Equity) => {
+    setAdding(true)
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { id, position, created_at, ...rest } = equity as any
+    const res = await fetch(`/api/proposals/${proposalId}/equities`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(rest),
     })
     const data = await res.json()
     if (res.ok) onUpdate([...equities, data])
@@ -1292,9 +1346,15 @@ function EquitiesTable({
                       </div>
                     </td>
                     <td className="pr-2 py-2.5">
-                      <button onClick={() => deleteEquity(e.id)} className="opacity-0 group-hover:opacity-100 w-6 h-6 flex items-center justify-center rounded text-gray-300 hover:text-red-500 hover:bg-red-50 transition-all">
-                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                      </button>
+                      <div className="flex items-center gap-0.5">
+                        <button onClick={() => duplicateEquity(e)} disabled={adding} title="Duplicar fila"
+                          className="opacity-0 group-hover:opacity-100 w-6 h-6 flex items-center justify-center rounded text-gray-300 hover:text-[#1B2E3C] hover:bg-gray-100 transition-all disabled:opacity-50">
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                        </button>
+                        <button onClick={() => deleteEquity(e.id)} title="Eliminar fila" className="opacity-0 group-hover:opacity-100 w-6 h-6 flex items-center justify-center rounded text-gray-300 hover:text-red-500 hover:bg-red-50 transition-all">
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}

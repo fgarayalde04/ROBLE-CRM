@@ -251,6 +251,7 @@ export default function ProposalListClient({
   const [showCreate, setShowCreate] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [sharingId, setSharingId]   = useState<string | null>(null)
+  const [duplicatingId, setDuplicatingId] = useState<string | null>(null)
 
   const filtered = filter === 'all' ? proposals : proposals.filter(p => p.status === filter)
 
@@ -271,6 +272,18 @@ export default function ProposalListClient({
     await patchProposal(p.id, { shared_with_all: newVal })
     setProposals(prev => prev.map(x => x.id === p.id ? { ...x, shared_with_all: newVal } : x))
     setSharingId(null)
+  }
+
+  // Copia completa (con fondos/bonos/acciones) — para no rearmar de cero
+  // cuando se le quiere ofrecer la misma cartera a otro cliente.
+  const handleDuplicate = async (id: string) => {
+    setDuplicatingId(id)
+    try {
+      const res = await fetch(`/api/proposals/${id}/duplicate`, { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) { alert(data.error ?? 'Error al duplicar'); return }
+      router.push(`/propuestas/${data.id}`)
+    } finally { setDuplicatingId(null) }
   }
 
   const handleDelete = async (id: string) => {
@@ -458,6 +471,11 @@ export default function ProposalListClient({
                         <button onClick={() => router.push(`/propuestas/${p.id}`)}
                           className="text-xs text-blue-600 hover:text-blue-800 font-medium">
                           Editar
+                        </button>
+                        <button onClick={() => handleDuplicate(p.id)} disabled={duplicatingId === p.id}
+                          title="Crear una copia completa (mismos activos) para otro cliente"
+                          className="text-xs text-gray-500 hover:text-[#2D3F52] font-medium disabled:opacity-40">
+                          {duplicatingId === p.id ? 'Duplicando…' : 'Duplicar'}
                         </button>
                         {p.advisor_id === currentUserId && (
                           <button onClick={() => handleDelete(p.id)} disabled={deletingId === p.id}
