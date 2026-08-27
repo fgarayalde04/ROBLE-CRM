@@ -80,6 +80,15 @@ export async function register() {
  * Igual que el auto-sync de arriba: la app corre long-running en Railway, así
  * que esto es un setInterval en vez de un cron serverless.
  *
+ * Se dispara con un fetch a su propia ruta /api/cron/check-email-replies (en
+ * vez de importar checkEmailReplies() directo) a propósito: esa cadena de
+ * imports pasa por web-push (para el push), que usa 'crypto'/'stream' de
+ * Node — Next no puede empaquetar eso en el bundle de instrumentation.ts y
+ * el build de producción falla ("Module not found: Can't resolve 'crypto'").
+ * Las rutas /api/* sí se empaquetan aparte sin ese problema (por eso otras
+ * rutas que ya importan orderEvents.ts/web-push compilan bien), así que
+ * pegarle por HTTP a la ruta evita el problema de raíz.
+ *
  * Configure via .env.local:
  *   EMAIL_REPLY_CHECK_INTERVAL_MINUTES=10   (default: 10)
  */
@@ -87,12 +96,16 @@ function registerEmailReplyCheck() {
   const parsedInterval = parseInt(process.env.EMAIL_REPLY_CHECK_INTERVAL_MINUTES ?? '10', 10)
   const intervalMins = Number.isFinite(parsedInterval) && parsedInterval > 0 ? parsedInterval : 10
   const intervalMs = intervalMins * 60 * 1000
+  const port = process.env.PORT ?? '3000'
+  const cronSecret = process.env.CRON_SECRET
 
   async function runCheck() {
     try {
-      const { checkEmailReplies } = await import('@/lib/cron/checkEmailReplies')
-      const result = await checkEmailReplies()
-      if (result.skipped) return // silencioso — casilla de Mesa aún no conectada
+      const res = await fetch(`http://localhost:${port}/api/cron/check-email-replies`, {
+        headers: cronSecret ? { Authorization: `Bearer ${cronSecret}` } : undefined,
+      })
+      const result = await res.json()
+      if (!res.ok || result.skipped) return // error o casilla de Mesa aún no conectada — silencioso
       if ((result.inserted ?? 0) > 0) {
         console.log('[email-replies] ', JSON.stringify(result))
       }
