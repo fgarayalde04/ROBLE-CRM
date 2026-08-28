@@ -61,3 +61,17 @@ export async function getEmailReplyCutoff(): Promise<Date> {
     return new Date()
   }
 }
+
+// Heartbeat de diagnóstico: se llama en cada corrida (éxito o error) para
+// poder ver desde la base, sin acceso a los logs de Railway, si el chequeo
+// periódico realmente está corriendo cada 1 minuto como debería.
+export async function recordCheckHeartbeat(status: string, error?: string | null) {
+  try {
+    await pool.query(
+      `update email_reply_check_cutoff set last_checked_at = now(), last_status = $1, last_error = $2 where id = 1`,
+      [status, error ?? null]
+    )
+  } catch {
+    // best-effort — nunca debe tirar la corrida entera por esto
+  }
+}

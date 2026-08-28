@@ -100,17 +100,30 @@ function registerEmailReplyCheck() {
   const cronSecret = process.env.CRON_SECRET
 
   async function runCheck() {
+    // Heartbeat en la DB en cada corrida (éxito o error) — sin esto no había
+    // forma de saber, sin acceso a los logs de Railway, si este setInterval
+    // realmente sigue corriendo cada minuto como debería.
+    const { recordCheckHeartbeat } = await import('@/lib/db/emailReplies')
     try {
       const res = await fetch(`http://localhost:${port}/api/cron/check-email-replies`, {
         headers: cronSecret ? { Authorization: `Bearer ${cronSecret}` } : undefined,
       })
       const result = await res.json()
-      if (!res.ok || result.skipped) return // error o casilla de Mesa aún no conectada — silencioso
+      if (!res.ok) {
+        await recordCheckHeartbeat('http_error', `${res.status} ${JSON.stringify(result)}`)
+        return
+      }
+      if (result.skipped) {
+        await recordCheckHeartbeat('skipped', result.reason ?? null)
+        return
+      }
+      await recordCheckHeartbeat('ok', JSON.stringify(result))
       if ((result.inserted ?? 0) > 0) {
         console.log('[email-replies] ', JSON.stringify(result))
       }
     } catch (e: any) {
       console.error('[email-replies] Error:', e.message)
+      await recordCheckHeartbeat('fetch_error', e.message)
     }
   }
 

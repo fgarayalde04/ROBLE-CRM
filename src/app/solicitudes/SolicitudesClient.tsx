@@ -60,7 +60,7 @@ export default function SolicitudesClient({ isMesa, userName, userEmail, gmailCo
         <p className="text-sm text-gray-400 mt-0.5">Enviá órdenes a Mesa y seguí el estado del día</p>
       </div>
 
-      <div className="space-y-4 max-w-7xl">
+      <div className="space-y-4">
 
         <Section
           title="Enviar órdenes"
