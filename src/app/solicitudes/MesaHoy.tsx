@@ -119,6 +119,12 @@ function AssetDetailCard({ asset }: { asset: any }) {
           <span className="text-[10px] text-gray-800 text-right break-words max-w-[170px]">{value}</span>
         </div>
       ))}
+      {tipo === 'fondos' && asset?.montoAclaracion && (
+        <div className="pt-1 border-t border-gray-200 mt-1">
+          <p className="text-[10px] text-gray-400">Aclaración del monto</p>
+          <p className="text-[10px] text-gray-700 whitespace-pre-wrap">{asset.montoAclaracion}</p>
+        </div>
+      )}
       {asset?.observaciones && (
         <div className="pt-1 border-t border-gray-200 mt-1">
           <p className="text-[10px] text-gray-400">Notas internas</p>

@@ -22,6 +22,9 @@ interface FondosBlock {
   type: 'fondos'; id: string; fondo: string; cusipIsin: string
   fecha: string; operacion: 'compra' | 'venta'; monto: string; moneda: string; observaciones: string
   vigencia: 'DIA' | 'GTC'; comision: string; clase: 'Acumulativa' | 'Distributiva'
+  // Aclaración opcional sobre el monto (ej. "aproximado, a precio de cierre del
+  // día") — va tanto en el mail al cliente como en el detalle interno de la orden.
+  montoAclaracion: string
 }
 interface BonosBlock {
   type: 'bonos'; id: string; descripcion: string; cusipIsin: string
@@ -48,22 +51,28 @@ function fechaToIso(fecha: string): string | null {
 }
 function uid() { return Math.random().toString(36).slice(2, 9) }
 
-// Formato de miles estilo UY: "10000" -> "10.000". Solo dígitos, sin decimales
-// (las cantidades/montos de estas órdenes siempre se cargan como enteros).
+// Formato de miles estilo UY: "10000.5" -> "10.000,5". Acepta decimales (coma)
+// además de enteros — los montos de fondos no siempre son exactos, dependen
+// del precio de cierre del día. Internamente se guarda con punto decimal
+// (parseable con parseFloat), la coma es solo para mostrar/escribir.
 function formatMiles(raw: string): string {
-  const digits = raw.replace(/\D/g, '')
-  if (!digits) return ''
-  return digits.replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+  if (!raw) return ''
+  const [intPart, decPart] = raw.split('.')
+  const intFormatted = (intPart || '').replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+  return decPart !== undefined ? `${intFormatted},${decPart}` : intFormatted
 }
 function unformatMiles(formatted: string): string {
-  return formatted.replace(/\./g, '')
+  const cleaned = formatted.replace(/[^\d,]/g, '')
+  const [intPart, ...decParts] = cleaned.split(',')
+  if (decParts.length === 0) return intPart
+  return `${intPart}.${decParts.join('')}`
 }
 
 function newAcciones(id: string): AccionesBlock {
   return { type: 'acciones', id, nombre: '', ticker: '', cantidad: '', cantidadTipo: 'acciones', precio: 'mercado', precioLimite: '', moneda: 'USD', operacion: 'compra', fecha: todayStr(), observaciones: '', vigencia: 'DIA', comision: '' }
 }
 function newFondos(id: string): FondosBlock {
-  return { type: 'fondos', id, fondo: '', cusipIsin: '', fecha: todayStr(), operacion: 'compra', monto: '', moneda: 'USD', observaciones: '', vigencia: 'DIA', comision: '', clase: 'Acumulativa' }
+  return { type: 'fondos', id, fondo: '', cusipIsin: '', fecha: todayStr(), operacion: 'compra', monto: '', moneda: 'USD', observaciones: '', vigencia: 'DIA', comision: '', clase: 'Acumulativa', montoAclaracion: '' }
 }
 function newBonos(id: string): BonosBlock {
   return { type: 'bonos', id, descripcion: '', cusipIsin: '', cantidad: '', precio: 'mercado', precioLimite: '', moneda: 'USD', operacion: 'compra', fecha: todayStr(), observaciones: '', vigencia: 'DIA', comision: '', maturity: '', cupon: '' }
@@ -104,6 +113,7 @@ function generateEmailText(blocks: OrderBlock[], clientName: string, clientNumbe
       lines.push(`  Fondo:       ${block.fondo || '—'}`)
       if (block.cusipIsin) lines.push(`  ISIN:        ${block.cusipIsin}`)
       lines.push(`  Monto:       ${block.monto || '—'} ${block.moneda}`)
+      if (block.montoAclaracion) lines.push(`               (${block.montoAclaracion})`)
       lines.push(`  Moneda:      ${block.moneda}`)
       lines.push(`  Fecha:       ${block.fecha || '—'}`)
       lines.push(`  Vigencia:    ${block.vigencia}`)
@@ -160,15 +170,15 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   return <div><label className={labelCls}>{label}</label>{children}</div>
 }
 
-// Input numérico que muestra separador de miles ("10.000") mientras se
-// escribe, guardando internamente solo dígitos.
+// Input numérico que muestra separador de miles ("10.000,5") mientras se
+// escribe, con coma para decimales — guarda internamente con punto.
 function MilesInput({ value, onChange, placeholder, className }: {
   value: string; onChange: (raw: string) => void; placeholder?: string; className?: string
 }) {
   return (
     <input
       className={className}
-      inputMode="numeric"
+      inputMode="decimal"
       placeholder={placeholder}
       value={formatMiles(value)}
       onChange={(e) => onChange(unformatMiles(e.target.value))}
@@ -267,8 +277,15 @@ function FondosForm({ block, index, onChange, onRemove }: { block: FondosBlock; 
           <InstrumentSearch tipo="fondo" value={block.fondo} onSelect={handleSelectInstrument} onChange={(v) => onChange(block.id, 'fondo', v)} placeholder="Buscar fondo o escribir nombre…" className={inputCls} />
         </Field>
         <Field label="ISIN"><input className={inputCls} placeholder="Autocompletado al seleccionar fondo" value={block.cusipIsin} onChange={upd('cusipIsin')} /></Field>
-        <Field label="Monto *"><MilesInput className={inputCls} placeholder="Ej: 50.000" value={block.monto} onChange={(v) => onChange(block.id, 'monto', v)} /></Field>
+        <Field label="Monto *"><MilesInput className={inputCls} placeholder="Ej: 50.000,50" value={block.monto} onChange={(v) => onChange(block.id, 'monto', v)} /></Field>
         <Field label="Moneda"><select className={selectCls} value={block.moneda} onChange={upd('moneda')}><option value="USD">USD</option><option value="UYU">UYU</option><option value="EUR">EUR</option><option value="ARS">ARS</option></select></Field>
+        <div className="md:col-span-2">
+          <Field label="Aclaración del monto (opcional)">
+            <input className={inputCls} placeholder="Ej: Monto aproximado, sujeto al precio de cierre del día"
+              value={block.montoAclaracion} onChange={upd('montoAclaracion')} />
+          </Field>
+          <p className="text-[10px] text-gray-400 mt-1">Si la cargás, se agrega al mail del cliente junto al monto — útil porque los fondos se valorizan al cierre del día, no siempre se sabe el monto exacto.</p>
+        </div>
         <Field label="Fecha">
           <div className="flex gap-2">
             <input className={`${inputCls} flex-1 min-w-0`} placeholder={todayStr()} value={block.fecha} onChange={upd('fecha')} />
