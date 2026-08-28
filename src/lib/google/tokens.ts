@@ -224,3 +224,16 @@ export async function getMesaConnectionStatus(): Promise<{ connected: boolean; g
   const data = await loadFromDb(MESA_GOOGLE_CONNECTION_KEY)
   return { connected: !!data, googleEmail: data?.email ?? null }
 }
+
+/**
+ * Fuerza que el próximo getValidMesaGoogleToken() refresque el access_token,
+ * ignorando el expires_at cacheado — para cuando Gmail rechaza el token con
+ * 401 pese a que localmente todavía parecía vigente (revocado del lado de
+ * Google, reloj desincronizado, etc.). Sin esto, el chequeo periódico queda
+ * pegado reintentando el mismo token roto hasta que expire "de verdad".
+ */
+export async function invalidateMesaGoogleToken(): Promise<void> {
+  const data = await loadFromDb(MESA_GOOGLE_CONNECTION_KEY)
+  if (!data) return
+  await saveToDb(MESA_GOOGLE_CONNECTION_KEY, { ...data, expires_at: 0 })
+}

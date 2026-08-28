@@ -5,7 +5,7 @@
 // no con un cron serverless. La ruta /api/cron/check-email-replies se
 // mantiene aparte solo como gatillo manual (pruebas, un ping externo si hiciera falta).
 
-import { getValidMesaGoogleToken } from '@/lib/google/tokens'
+import { getValidMesaGoogleToken, invalidateMesaGoogleToken } from '@/lib/google/tokens'
 import { listInboxSince } from '@/lib/google/gmail'
 import { findSolicitudByThreadId, findSolicitudesByAsunto, insertSolicitudEvento } from '@/lib/db/solicitudes'
 import { insertEmailReply, markEmailReplyNotified, getEmailReplyCutoff, type EmailReplyMatchMethod } from '@/lib/db/emailReplies'
@@ -50,7 +50,20 @@ export async function checkEmailReplies(): Promise<CheckEmailRepliesResult> {
   // así que igual trae mensajes de varios días atrás — el corte real por
   // hora/minuto se hace acá abajo contra el cutoff, no en la query.
   const since = new Date(Date.now() - LOOKBACK_DAYS * 24 * 60 * 60 * 1000)
-  const messages = await listInboxSince(accessToken, since, MAX_RESULTS)
+  let messages
+  try {
+    messages = await listInboxSince(accessToken, since, MAX_RESULTS)
+  } catch (err: any) {
+    if (err?.status !== 401) throw err
+    // El access_token cacheado parecía vigente (expires_at futuro) pero
+    // Gmail lo rechazó igual — revocado del lado de Google, reloj
+    // desincronizado, etc. Forzar un refresh real y reintentar una vez, en
+    // vez de quedar pegado repitiendo el mismo token roto por casi una hora.
+    await invalidateMesaGoogleToken()
+    const freshToken = await getValidMesaGoogleToken()
+    if (!freshToken) return { ok: true, skipped: true, reason: 'Casilla de Mesa: token inválido, requiere reconectar' }
+    messages = await listInboxSince(freshToken, since, MAX_RESULTS)
+  }
   const cutoff = await getEmailReplyCutoff()
 
   let inserted = 0

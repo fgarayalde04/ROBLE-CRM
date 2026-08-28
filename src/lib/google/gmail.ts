@@ -149,7 +149,9 @@ async function listInboxByQuery(
 
   if (!listRes.ok) {
     const err = await listRes.text()
-    throw new Error(`Gmail list failed: ${err}`)
+    const e: any = new Error(`Gmail list failed: ${err}`)
+    e.status = listRes.status
+    throw e
   }
 
   const listData = await listRes.json()
