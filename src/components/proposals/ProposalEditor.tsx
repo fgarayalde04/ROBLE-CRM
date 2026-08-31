@@ -771,6 +771,22 @@ function FundsTable({
   const [adding, setAdding]       = useState(false)
   const [saving, setSaving]       = useState<string | null>(null)
   const [showFactsheet, setShowFactsheet] = useState(false)
+  const [sortKey, setSortKey] = useState<keyof Fund | null>(null)
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+
+  const toggleSort = (key: keyof Fund) => {
+    if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setSortKey(key); setSortDir('desc') }
+  }
+  // Ordena una copia para mostrar — nunca reordena funds en sí.
+  const sortedFunds = sortKey ? [...funds].sort((a, b) => {
+    const av = a[sortKey], bv = b[sortKey]
+    if (av == null && bv == null) return 0
+    if (av == null) return 1
+    if (bv == null) return -1
+    const cmp = typeof av === 'number' && typeof bv === 'number' ? av - bv : String(av).localeCompare(String(bv))
+    return sortDir === 'asc' ? cmp : -cmp
+  }) : funds
 
   const updateField = useCallback(async (fund: Fund, field: keyof Fund, raw: string) => {
     const isNumeric = ['amount','return_ytd','return_1y','return_3y','return_5y','ytm_indicative','duration_years'].includes(field)
@@ -891,19 +907,23 @@ function FundsTable({
                   <th className={`${TH} text-center w-16`}>OPERACIÓN</th>
                   <th className={`${TH} text-left w-24`}>ISIN</th>
                   <th className={`${TH} text-left`}>ACTIVO</th>
-                  <th className={`${TH} text-right w-14`}>YTD</th>
-                  <th className={`${TH} text-right w-16`}>1 AÑO</th>
-                  <th className={`${TH} text-right w-16`}>3 AÑOS</th>
-                  <th className={`${TH} text-right w-16`}>5 AÑOS</th>
-                  <th className={`${TH} text-right w-20`}>YTM IND.</th>
-                  <th className={`${TH} text-right w-16`}>DUR. (a)</th>
-                  <th className={`${TH} text-right w-12`}>%</th>
-                  <th className={`${TH} text-right w-28`}>TOTAL</th>
+                  {([
+                    ['YTD', 'return_ytd', 'w-14'], ['1 AÑO', 'return_1y', 'w-16'], ['3 AÑOS', 'return_3y', 'w-16'],
+                    ['5 AÑOS', 'return_5y', 'w-16'], ['YTM IND.', 'ytm_indicative', 'w-20'], ['DUR. (a)', 'duration_years', 'w-16'],
+                    ['%', 'pct', 'w-12'], ['TOTAL', 'amount', 'w-28'],
+                  ] as [string, keyof Fund, string][]).map(([h, key, w]) => (
+                    <th key={h} className={`${TH} text-right ${w}`}>
+                      <button onClick={() => toggleSort(key)} className={`inline-flex items-center gap-0.5 transition-colors ${sortKey === key ? 'text-[#4ADE80]' : 'text-white hover:text-[#4ADE80]'}`}>
+                        {h}
+                        <span className="text-[8px]">{sortKey === key ? (sortDir === 'asc' ? '▲' : '▼') : '↕'}</span>
+                      </button>
+                    </th>
+                  ))}
                   <th className="w-8" />
                 </tr>
               </thead>
               <tbody>
-                {funds.map((f, i) => (
+                {sortedFunds.map((f, i) => (
                   <tr key={f.id} className={`group transition-colors hover:bg-blue-50/30 ${i % 2 === 1 ? 'bg-gray-50/50' : 'bg-white'} ${f.needs_review ? '!bg-amber-50/40' : ''}`}>
                     <td className={TD}>
                       <EditCell value={f.broker} onChange={v => updateField(f, 'broker', v)} placeholder="Custodio" className="text-[11px]" />
@@ -1000,6 +1020,23 @@ function BondsTable({
   proposalId: string; total: number; currency: string; bonds: Bond[]; onUpdate: (b: Bond[]) => void; settlementDate: string | null
 }) {
   const [adding, setAdding] = useState(false)
+  const [sortKey, setSortKey] = useState<keyof Bond | null>(null)
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+
+  const toggleSort = (key: keyof Bond) => {
+    if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setSortKey(key); setSortDir('desc') }
+  }
+  // Ordena una copia para mostrar — nunca reordena bonds en sí (position en
+  // la base queda como el orden de carga real, solo cambia lo que se ve).
+  const sortedBonds = sortKey ? [...bonds].sort((a, b) => {
+    const av = a[sortKey], bv = b[sortKey]
+    if (av == null && bv == null) return 0
+    if (av == null) return 1
+    if (bv == null) return -1
+    const cmp = typeof av === 'number' && typeof bv === 'number' ? av - bv : String(av).localeCompare(String(bv))
+    return sortDir === 'asc' ? cmp : -cmp
+  }) : bonds
 
   const updateField = useCallback(async (bond: Bond, field: keyof Bond, raw: string) => {
     const numFields = ['amount','coupon','yield','duration','price','quantity']
@@ -1100,13 +1137,27 @@ function BondsTable({
             <table className="w-full text-sm min-w-[1560px]">
               <thead>
                 <tr className="border-b border-gray-100 bg-gray-50/60">
-                  {['Portafolio','Operación','Emisor','ISIN','Precio (Ind.)','Cantidad','Moneda','Vencimiento','Cupón %','Yield (Ind.) %','Dur. (a)','Rating','Frecuencia','Día/360','%','Nominal','Valor de Compra','Cupón Corrido','Desembolso Estimado',''].map(h => (
-                    <th key={h} className={`px-3 py-2.5 text-[9px] font-semibold text-gray-400 uppercase tracking-wider ${h === '' ? 'w-8' : ['Nominal','Valor de Compra','Cupón Corrido','Desembolso Estimado','%','Precio (Ind.)','Cantidad'].includes(h) ? 'text-right' : h === 'Operación' ? 'text-center' : 'text-left'}`}>{h}</th>
+                  {([
+                    ['Portafolio', null], ['Operación', null], ['Emisor', null], ['ISIN', null],
+                    ['Precio (Ind.)', 'price'], ['Cantidad', 'quantity'], ['Moneda', null],
+                    ['Vencimiento', 'maturity_date'], ['Cupón %', 'coupon'], ['Yield (Ind.) %', 'yield'],
+                    ['Dur. (a)', 'duration'], ['Rating', null], ['Frecuencia', null], ['Día/360', null],
+                    ['%', 'pct'], ['Nominal', null], ['Valor de Compra', 'amount'], ['Cupón Corrido', null],
+                    ['Desembolso Estimado', null], ['', null],
+                  ] as [string, keyof Bond | null][]).map(([h, key]) => (
+                    <th key={h} className={`px-3 py-2.5 text-[9px] font-semibold text-gray-400 uppercase tracking-wider ${h === '' ? 'w-8' : ['Nominal','Valor de Compra','Cupón Corrido','Desembolso Estimado','%','Precio (Ind.)','Cantidad'].includes(h) ? 'text-right' : h === 'Operación' ? 'text-center' : 'text-left'}`}>
+                      {key ? (
+                        <button onClick={() => toggleSort(key)} className={`inline-flex items-center gap-0.5 hover:text-[#1B2E3C] transition-colors ${sortKey === key ? 'text-[#1B2E3C]' : ''}`}>
+                          {h}
+                          <span className="text-[8px]">{sortKey === key ? (sortDir === 'asc' ? '▲' : '▼') : '↕'}</span>
+                        </button>
+                      ) : h}
+                    </th>
                   ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {bonds.map(b => {
+                {sortedBonds.map(b => {
                   const accrual = calculateBondAccrual(b, settlementDate)
                   return (
                   <tr key={b.id} className="hover:bg-gray-50/50 transition-colors group">
