@@ -28,18 +28,19 @@ export default function ClientCloseButton({
     if (!author.trim()) return
     setSaving(true)
     if (author) localStorage.setItem('crm_username', author)
-    await fetch('/api/clients', {
+    const res = await fetch('/api/clients', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         id: clientId,
-        status: 'cerrado',
+        status: 'inactivo',
         closed_at: new Date().toISOString(),
         closed_by: author.trim(),
         close_reason: reason.trim() || null,
       }),
     })
     setSaving(false)
+    if (!res.ok) { const j = await res.json().catch(() => ({})); alert(j.error ?? 'Error al cerrar el cliente'); return }
     setShowModal(false)
     router.refresh()
   }

@@ -131,7 +131,7 @@ export async function listClients(opts: ListClientsOptions) {
   const params: any[] = []
 
   if (opts.tab === 'activos') { params.push('activo'); where.push(`status = $${params.length}`) }
-  else if (opts.tab === 'cerrados') { params.push('cerrado'); where.push(`status = $${params.length}`) }
+  else if (opts.tab === 'cerrados') { params.push('inactivo'); where.push(`status = $${params.length}`) }
   else if (opts.tab === 'pendientes') { params.push('pendiente'); where.push(`status = $${params.length}`) }
 
   if (opts.folderFilter && opts.folderFilter.length > 0) {

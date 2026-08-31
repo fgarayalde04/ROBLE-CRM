@@ -1,9 +1,13 @@
+// 'cerrado' se sacó de acá porque nunca fue un valor válido en el check
+// constraint clients_status_check de la base (la rechazaba en silencio) —
+// "cerrado" en la UI usa 'inactivo' como valor real. Los demás valores de
+// esta lista ('en_apertura','pendiente','descartado') tienen el mismo
+// problema pero no se tocaron todavía — ver aviso al usuario.
 export type ClientStatus =
   | 'prospecto'
   | 'activo'
   | 'en_apertura'
   | 'pendiente'
-  | 'cerrado'
   | 'inactivo'
   | 'descartado'
   | 'pendiente_documentacion'

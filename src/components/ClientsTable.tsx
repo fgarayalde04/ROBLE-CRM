@@ -80,7 +80,7 @@ export default function ClientsTable({
           </div>
         ) : clients.map((c) => {
           const openTasks = taskCounts[c.id] ?? 0
-          const isClosed = c.status === 'cerrado'
+          const isClosed = c.status === 'inactivo'
           return (
             <div
               key={c.id}
@@ -258,7 +258,7 @@ export default function ClientsTable({
             <tbody className="divide-y divide-gray-50">
               {clients.map((c) => {
                 const openTasks = taskCounts[c.id] ?? 0
-                const isClosed = c.status === 'cerrado'
+                const isClosed = c.status === 'inactivo'
                 return (
                   <tr
                     key={c.id}

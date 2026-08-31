@@ -47,7 +47,7 @@ export default async function ClientsPage({ searchParams }: Props) {
     // Counts for tab badges (scoped by advisor if needed)
     const [ca, cc, cp] = await Promise.all([
       countClientsByStatus('activo', folderFilter),
-      countClientsByStatus('cerrado', folderFilter),
+      countClientsByStatus('inactivo', folderFilter),
       countClientsByStatus('pendiente', folderFilter),
     ])
     totalActivos    = ca
