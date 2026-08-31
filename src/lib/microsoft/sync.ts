@@ -305,9 +305,10 @@ async function syncBancoCentral(
 
     // Bulk-load existing records in 2 queries instead of N×3 individual ones
     const allItemIds = onlyFolders.map(f => f.id)
-    const [byItemIdRows, byCustomerRows] = await Promise.all([
+    const [byItemIdRows, byCustomerRows, knownClients] = await Promise.all([
       getBancoCentralByItemIds(allItemIds),
       getBancoCentralWithCustomerNumberByType(bcuType),
+      getKnownClientsForSync(),
     ])
 
     // Build lookup maps
@@ -319,10 +320,20 @@ async function syncBancoCentral(
     for (const r of byCustomerRows ?? []) {
       if (r.customer_number) byCustomer.set(r.customer_number, r.id)
     }
+    // Un legajo nuevo en Banco Central debe tener también su cliente en la
+    // sección Clientes, para poder hacerle el checklist — sin carpeta de
+    // OneDrive propia todavía (esa la completa syncClients() por separado,
+    // si existe una carpeta bajo Clientes/<asesor>/... — nunca la de Legajos,
+    // que es de otra sección).
+    const clientByNumber = new Set<string>()
+    for (const c of knownClients ?? []) {
+      if (c.client_number) clientByNumber.add(c.client_number)
+    }
 
     const now = new Date().toISOString()
     const toInsert: Record<string, unknown>[] = []
     const toUpdate: { id: string; fields: Record<string, unknown> }[] = []
+    const newClientStubs: Record<string, unknown>[] = []
 
     for (const folder of onlyFolders) {
       const folderName = folder.name.trim()
@@ -355,6 +366,22 @@ async function syncBancoCentral(
           type:            bcuType,
           ...spFields,
         })
+
+        // Legajo nuevo — asegurar que también exista en Clientes, para
+        // poder hacerle el checklist de Banco Central. Sin carpeta de
+        // OneDrive propia acá (esa es la de Clientes, no la de Legajos) —
+        // syncClients() la completa por separado si existe.
+        if (customerNumber && !clientByNumber.has(customerNumber)) {
+          newClientStubs.push({
+            first_name:     '',
+            last_name:      nombreCliente,
+            client_number:  customerNumber,
+            status:         'prospecto',
+            source:         'sharepoint',
+            client_type:    bcuType,
+          })
+          clientByNumber.add(customerNumber) // evita duplicados si dos legajos comparten número
+        }
       }
     }
 
@@ -367,6 +394,16 @@ async function syncBancoCentral(
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e)
         result.errors.push(`Insert batch: ${msg}`)
+      }
+    }
+
+    // Crear los stubs de cliente para los legajos nuevos que no tenían uno
+    for (const stub of newClientStubs) {
+      try {
+        await insertPendingClient(stub)
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e)
+        result.errors.push(`Client stub for ${stub.client_number}: ${msg}`)
       }
     }
 
