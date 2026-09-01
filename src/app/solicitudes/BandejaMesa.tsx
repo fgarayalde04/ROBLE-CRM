@@ -25,6 +25,7 @@ interface Solicitud {
   mail_enviado_at: string | null
   ejecutado_at: string | null
   created_at: string
+  cc_emails?: string[] | null
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   assets_json?: any[] | null
 }
@@ -231,6 +232,7 @@ export default function BandejaMesa({ isMesa, userName }: { isMesa: boolean; use
       sol.maturity                 ? `  Vencimiento:  ${sol.maturity}` : '',
       sol.cupon                    ? `  Cupón:        ${sol.cupon}%` : '',
       sol.precio_tipo === 'limite' ? `  Precio:       Límite ${sol.precio_limite}` : '',
+      sol.precio_tipo === 'stop'   ? `  Precio:       Stop ${sol.precio_limite}` : '',
       `  Moneda:       ${sol.moneda}`,
       `  Fecha:        ${sol.fecha_operacion}`,
       '',
@@ -282,6 +284,7 @@ export default function BandejaMesa({ isMesa, userName }: { isMesa: boolean; use
         body: emailCuerpo,
         client_name: selected!.client_name,
         client_number: selected!.client_number,
+        viaMesa: true,
       }),
     })
     if (res.ok) {
@@ -437,6 +440,10 @@ export default function BandejaMesa({ isMesa, userName }: { isMesa: boolean; use
             {/* Datos */}
             <div className="px-4 py-3 space-y-2 border-b border-gray-100 text-sm">
               {[
+                ['De', 'trading@roblecapital.net'],
+                selected.client_email || (selected.cc_emails?.length ?? 0) > 0
+                  ? ['Para', [selected.client_email, ...(selected.cc_emails ?? [])].filter(Boolean).join(', ')]
+                  : null,
                 ['Operación', `${OP_LABEL[selected.tipo_operacion]} · ${selected.instrumento_tipo}`],
                 ['Instrumento', selected.instrumento_nombre],
                 selected.clase ? ['Clase', selected.clase] : null,
@@ -488,7 +495,7 @@ export default function BandejaMesa({ isMesa, userName }: { isMesa: boolean; use
                       const res = await fetch('/api/gmail/send', {
                         method: 'POST', headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ to: selected.client_email, subject: emailAsunto, body: emailCuerpo,
-                          client_name: selected.client_name, client_number: selected.client_number }),
+                          client_name: selected.client_name, client_number: selected.client_number, viaMesa: true }),
                       })
                       if (res.ok) { await patch('mail_enviado', { asunto: emailAsunto, cuerpo: emailCuerpo }) }
                       else { const j = await res.json(); alert(j.error ?? 'Error al enviar') }

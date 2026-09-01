@@ -86,7 +86,7 @@ export async function POST(req: NextRequest) {
       cusip:        block.type !== 'acciones'  ? (block.cusipIsin || null) : null,
       quantity:     block.type === 'fondos'    ? (block.monto     || null) : (block.cantidad || null),
       value_amount: block.type === 'fondos'    ? (block.monto     || null) : null,
-      price:        block.precio === 'limite'  ? (block.precioLimite || null) : 'mercado',
+      price:        block.precio !== 'mercado' ? (block.precioLimite || null) : 'mercado',
       moneda:       block.moneda  || null,
       order_date:   block.fecha   || null,
       notes:        block.observaciones?.trim() || null,

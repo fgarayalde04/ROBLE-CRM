@@ -14,7 +14,7 @@ interface AccionesBlock {
   ticker: string
   cantidad: string
   cantidadTipo: 'acciones' | 'monto'
-  precio: 'mercado' | 'limite'
+  precio: 'mercado' | 'limite' | 'stop'
   precioLimite: string
   moneda: string
   operacion: 'compra' | 'venta'
@@ -40,7 +40,7 @@ interface BonosBlock {
   descripcion: string   // single field: emisor + isin + vencimiento + cupón
   cusipIsin: string
   cantidad: string
-  precio: 'mercado' | 'limite'
+  precio: 'mercado' | 'limite' | 'stop'
   precioLimite: string
   moneda: string
   operacion: 'compra' | 'venta'
@@ -91,7 +91,7 @@ function generateEmailText(blocks: OrderBlock[], clientName: string, clientNumbe
       lines.push(`  Ticker:      ${block.ticker || '—'}`)
       const cantLabel = block.cantidadTipo === 'acciones' ? 'acciones' : block.moneda
       lines.push(`  Cantidad:    ${block.cantidad || '—'} ${cantLabel}`)
-      lines.push(`  Precio:      ${block.precio === 'mercado' ? 'A mercado' : `Límite ${block.precioLimite} ${block.moneda}`}`)
+      lines.push(`  Precio:      ${block.precio === 'mercado' ? 'A mercado' : block.precio === 'stop' ? `Stop ${block.precioLimite} ${block.moneda}` : `Límite ${block.precioLimite} ${block.moneda}`}`)
       lines.push(`  Moneda:      ${block.moneda}`)
       lines.push(`  Fecha:       ${block.fecha || '—'}`)
       if (block.observaciones.trim()) lines.push(`  Obs.:        ${block.observaciones.trim()}`)
@@ -109,7 +109,7 @@ function generateEmailText(blocks: OrderBlock[], clientName: string, clientNumbe
       if (block.cusipIsin) lines.push(`  CUSIP/ISIN:  ${block.cusipIsin}`)
       const cantLabel2 = block.moneda
       lines.push(`  Cantidad (VN): ${block.cantidad || '—'} ${cantLabel2}`)
-      lines.push(`  Precio:      ${block.precio === 'mercado' ? 'A mercado' : `Límite ${block.precioLimite}`}`)
+      lines.push(`  Precio:      ${block.precio === 'mercado' ? 'A mercado' : block.precio === 'stop' ? `Stop ${block.precioLimite}` : `Límite ${block.precioLimite}`}`)
       lines.push(`  Moneda:      ${block.moneda}`)
       lines.push(`  Fecha:       ${block.fecha || '—'}`)
       if (block.observaciones.trim()) lines.push(`  Obs.:        ${block.observaciones.trim()}`)
@@ -207,10 +207,11 @@ function AccionesForm({ block, index, onChange, onRemove }: { block: AccionesBlo
           <select className={selectCls} value={block.precio} onChange={upd('precio')}>
             <option value="mercado">A mercado</option>
             <option value="limite">Precio límite</option>
+            <option value="stop">Stop</option>
           </select>
         </Field>
-        {block.precio === 'limite' && (
-          <Field label="Precio límite">
+        {block.precio !== 'mercado' && (
+          <Field label={block.precio === 'stop' ? 'Precio stop' : 'Precio límite'}>
             <input className={inputCls} placeholder="Ej: 185.50" value={block.precioLimite} onChange={upd('precioLimite')} />
           </Field>
         )}
@@ -308,10 +309,11 @@ function BonosForm({ block, index, onChange, onRemove }: { block: BonosBlock; in
           <select className={selectCls} value={block.precio} onChange={upd('precio')}>
             <option value="mercado">A mercado</option>
             <option value="limite">Precio límite</option>
+            <option value="stop">Stop</option>
           </select>
         </Field>
-        {block.precio === 'limite' && (
-          <Field label="Precio límite (% par)">
+        {block.precio !== 'mercado' && (
+          <Field label={block.precio === 'stop' ? 'Precio stop (% par)' : 'Precio límite (% par)'}>
             <input className={inputCls} placeholder="Ej: 98.50" value={block.precioLimite} onChange={upd('precioLimite')} />
           </Field>
         )}

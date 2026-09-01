@@ -63,7 +63,9 @@ export async function sendEmail(
 
   if (!res.ok) {
     const err = await res.text()
-    throw new Error(`Gmail send failed: ${err}`)
+    const e: any = new Error(`Gmail send failed: ${err}`)
+    e.status = res.status
+    throw e
   }
 
   return res.json()

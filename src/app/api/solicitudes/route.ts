@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
       }
     } else if (firstBlock?.type === 'bonos') {
       resolvedCantidad = firstBlock.cantidad ? parseFloat(firstBlock.cantidad) : null
-      if (firstBlock.precio === 'limite' && firstBlock.precioLimite && resolvedCantidad) {
+      if (firstBlock.precio !== 'mercado' && firstBlock.precioLimite && resolvedCantidad) {
         resolvedMonto = (parseFloat(firstBlock.precioLimite) / 100) * resolvedCantidad
       }
     }

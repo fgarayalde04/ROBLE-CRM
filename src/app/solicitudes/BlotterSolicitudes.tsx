@@ -228,6 +228,10 @@ function DetalleSolicitud({ sol, eventos, isMesa, userName, onAction, onClose, o
             {/* Datos */}
             <div className="px-4 py-3 space-y-1.5 border-b border-gray-100">
               {([
+                ['De', 'trading@roblecapital.net'],
+                sol.client_email || (sol.cc_emails?.length ?? 0) > 0
+                  ? ['Para', [sol.client_email, ...(sol.cc_emails ?? [])].filter(Boolean).join(', ')]
+                  : null,
                 ['Operación', `${OP_LABEL[sol.tipo_operacion] ?? sol.tipo_operacion} · ${sol.instrumento_tipo ?? '—'}`],
                 ['Instrumento', sol.instrumento_nombre],
                 sol.clase        ? ['Clase', sol.clase]                                     : null,

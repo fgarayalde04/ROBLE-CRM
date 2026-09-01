@@ -284,7 +284,7 @@ function DetailPanel({
     const res = await fetch('/api/gmail/send', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ to: to.length > 1 ? to : (to[0] ?? sol.client_email), cc, subject: emailAsunto, body: emailCuerpo,
-        client_name: sol.client_name, client_number: sol.client_number }),
+        client_name: sol.client_name, client_number: sol.client_number, viaMesa: true }),
     })
     const data = await res.json()
     if (res.ok) {
@@ -344,7 +344,7 @@ function DetailPanel({
                 const res = await fetch('/api/gmail/send', {
                   method: 'POST', headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ to: to.length > 1 ? to : sol.client_email, cc, subject: emailAsunto, body: emailCuerpo,
-                    client_name: sol.client_name, client_number: sol.client_number }),
+                    client_name: sol.client_name, client_number: sol.client_number, viaMesa: true }),
                 })
                 const data = await res.json()
                 if (res.ok) { await onAction('mail_enviado', { asunto: emailAsunto, cuerpo: emailCuerpo, mail_thread_id: data.thread_id ?? null, mail_message_id: data.message_id ?? null }) }
@@ -411,6 +411,10 @@ function DetailPanel({
             {/* Datos */}
             <div className="px-4 py-3 space-y-1.5 border-b border-gray-100">
               {([
+                ['De', 'trading@roblecapital.net'],
+                sol.client_email || (sol.cc_emails?.length ?? 0) > 0
+                  ? ['Para', [sol.client_email, ...(sol.cc_emails ?? [])].filter(Boolean).join(', ')]
+                  : null,
                 ['Operación', `${OP_LABEL[sol.tipo_operacion] ?? sol.tipo_operacion} · ${sol.instrumento_tipo}`],
                 ['Instrumento', sol.instrumento_nombre],
                 sol.clase ? ['Clase', sol.clase] : null,

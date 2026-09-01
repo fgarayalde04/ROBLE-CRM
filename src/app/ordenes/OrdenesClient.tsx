@@ -22,7 +22,7 @@ type Tab = 'nueva' | 'blotter' | 'mesa' | 'mis-ordenes' | 'instrumentos' | 'mis-
 interface AccionesBlock {
   type: 'acciones'; id: string; nombre: string; ticker: string
   cantidad: string; cantidadTipo: 'acciones' | 'monto'
-  precio: 'mercado' | 'limite'; precioLimite: string
+  precio: 'mercado' | 'limite' | 'stop'; precioLimite: string
   moneda: string; operacion: 'compra' | 'venta'; fecha: string; observaciones: string
   vigencia: 'DIA' | 'GTC'; comision: string
 }
@@ -33,7 +33,7 @@ interface FondosBlock {
 }
 interface BonosBlock {
   type: 'bonos'; id: string; descripcion: string; cusipIsin: string
-  cantidad: string; precio: 'mercado' | 'limite'; precioLimite: string
+  cantidad: string; precio: 'mercado' | 'limite' | 'stop'; precioLimite: string
   moneda: string; operacion: 'compra' | 'venta'; fecha: string; observaciones: string
   vigencia: 'DIA' | 'GTC'; comision: string; maturity: string; cupon: string
 }
@@ -79,7 +79,7 @@ function generateEmailText(blocks: OrderBlock[], clientName: string, clientNumbe
       lines.push(`  Ticker:      ${block.ticker || '—'}`)
       const cantLabel = block.cantidadTipo === 'acciones' ? 'acciones' : block.moneda
       lines.push(`  Cantidad:    ${block.cantidad || '—'} ${cantLabel}`)
-      lines.push(`  Precio:      ${block.precio === 'mercado' ? 'A mercado' : `Límite ${block.precioLimite} ${block.moneda}`}`)
+      lines.push(`  Precio:      ${block.precio === 'mercado' ? 'A mercado' : block.precio === 'stop' ? `Stop ${block.precioLimite} ${block.moneda}` : `Límite ${block.precioLimite} ${block.moneda}`}`)
       lines.push(`  Moneda:      ${block.moneda}`)
       lines.push(`  Fecha:       ${block.fecha || '—'}`)
       lines.push(`  Vigencia:    ${block.vigencia}`)
@@ -96,7 +96,7 @@ function generateEmailText(blocks: OrderBlock[], clientName: string, clientNumbe
       lines.push(`  Bono:        ${block.descripcion || '—'}`)
       if (block.cusipIsin) lines.push(`  CUSIP:       ${block.cusipIsin}`)
       lines.push(`  Cantidad (VN): ${block.cantidad || '—'} ${block.moneda}`)
-      lines.push(`  Precio:      ${block.precio === 'mercado' ? 'A mercado' : `Límite ${block.precioLimite}`}`)
+      lines.push(`  Precio:      ${block.precio === 'mercado' ? 'A mercado' : block.precio === 'stop' ? `Stop ${block.precioLimite}` : `Límite ${block.precioLimite}`}`)
       lines.push(`  Moneda:      ${block.moneda}`)
       lines.push(`  Fecha:       ${block.fecha || '—'}`)
       lines.push(`  Vigencia:    ${block.vigencia}`)
@@ -187,8 +187,8 @@ function AccionesForm({ block, index, onChange, onRemove }: { block: AccionesBlo
             </select>
           </div>
         </Field>
-        <Field label="Tipo de precio"><select className={selectCls} value={block.precio} onChange={upd('precio')}><option value="mercado">A mercado</option><option value="limite">Precio límite</option></select></Field>
-        {block.precio === 'limite' && <Field label="Precio límite"><input className={inputCls} placeholder="Ej: 185.50" value={block.precioLimite} onChange={upd('precioLimite')} /></Field>}
+        <Field label="Tipo de precio"><select className={selectCls} value={block.precio} onChange={upd('precio')}><option value="mercado">A mercado</option><option value="limite">Precio límite</option><option value="stop">Stop</option></select></Field>
+        {block.precio !== 'mercado' && <Field label={block.precio === 'stop' ? 'Precio stop' : 'Precio límite'}><input className={inputCls} placeholder="Ej: 185.50" value={block.precioLimite} onChange={upd('precioLimite')} /></Field>}
         <Field label="Moneda"><select className={selectCls} value={block.moneda} onChange={upd('moneda')}><option value="USD">USD</option><option value="UYU">UYU</option><option value="EUR">EUR</option><option value="ARS">ARS</option></select></Field>
         <Field label="Fecha">
           <div className="flex gap-2">
@@ -301,8 +301,8 @@ function BonosForm({ block, index, onChange, onRemove }: { block: BonosBlock; in
         <Field label="Vencimiento (Maturity)"><input className={inputCls} placeholder="Ej: 15/03/2030" value={block.maturity} onChange={upd('maturity')} /></Field>
         <Field label="Cupón (%)"><input className={inputCls} type="number" placeholder="Ej: 6.50" value={block.cupon} onChange={upd('cupon')} /></Field>
         <Field label="Cantidad (Valor Nominal)"><input className={inputCls} type="number" placeholder="Ej: 100000" value={block.cantidad} onChange={upd('cantidad')} /></Field>
-        <Field label="Tipo de precio"><select className={selectCls} value={block.precio} onChange={upd('precio')}><option value="mercado">A mercado</option><option value="limite">Precio límite</option></select></Field>
-        {block.precio === 'limite' && <Field label="Precio límite (% par)"><input className={inputCls} placeholder="Ej: 98.50" value={block.precioLimite} onChange={upd('precioLimite')} /></Field>}
+        <Field label="Tipo de precio"><select className={selectCls} value={block.precio} onChange={upd('precio')}><option value="mercado">A mercado</option><option value="limite">Precio límite</option><option value="stop">Stop</option></select></Field>
+        {block.precio !== 'mercado' && <Field label={block.precio === 'stop' ? 'Precio stop (% par)' : 'Precio límite (% par)'}><input className={inputCls} placeholder="Ej: 98.50" value={block.precioLimite} onChange={upd('precioLimite')} /></Field>}
         <Field label="Moneda"><select className={selectCls} value={block.moneda} onChange={upd('moneda')}><option value="USD">USD</option><option value="UYU">UYU</option><option value="EUR">EUR</option></select></Field>
         <Field label="Fecha">
           <div className="flex gap-2">
@@ -447,7 +447,7 @@ export default function OrdenesClient({ gmailConnected, initialTab, isAdmin = fa
       const res = await fetch('/api/gmail/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ to, cc, subject: asunto, body: getBody(), replyTo: TRADING_EMAIL }),
+        body: JSON.stringify({ to, cc, subject: asunto, body: getBody(), replyTo: TRADING_EMAIL, viaMesa: true }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Error al enviar')
@@ -474,7 +474,7 @@ export default function OrdenesClient({ gmailConnected, initialTab, isAdmin = fa
       const res = await fetch('/api/gmail/draft', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ to, cc, subject: asunto, body: getBody(), replyTo: TRADING_EMAIL }),
+        body: JSON.stringify({ to, cc, subject: asunto, body: getBody(), replyTo: TRADING_EMAIL, viaMesa: true }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Error al crear borrador')

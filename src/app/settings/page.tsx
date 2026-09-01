@@ -168,8 +168,9 @@ export default async function SettingsPage({
             </div>
             <p className="text-xs text-gray-400 mb-4">
               Conexión de <span className="font-mono">trading@roblecapital.net</span> usada para
-              detectar cuándo un cliente responde a un mail de confirmación de orden. Es una
-              conexión única para toda la organización, no depende de tu cuenta personal.
+              enviar los mails de confirmación de orden directamente desde esa casilla — así
+              quedan guardados en su carpeta de Enviados, sin importar qué asesor los generó. Es
+              una conexión única para toda la organización, no depende de tu cuenta personal.
             </p>
 
             {/* Status banners */}
