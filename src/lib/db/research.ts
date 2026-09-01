@@ -2,11 +2,11 @@ import { pool } from './pool'
 
 export type ResearchType =
   | 'morning_brief' | 'noticia_mercado' | 'bono' | 'fondo' | 'nueva_emision'
-  | 'research' | 'macro' | 'regulacion' | 'novedad_interna'
+  | 'research' | 'macro' | 'regulacion' | 'novedad_interna' | 'comite_inversiones'
 
 // El feed general no incluye morning_brief — ese tiene su propia pestaña.
 export const MANUAL_RESEARCH_TYPES: ResearchType[] = [
-  'noticia_mercado', 'bono', 'fondo', 'nueva_emision', 'research', 'macro', 'regulacion', 'novedad_interna',
+  'noticia_mercado', 'bono', 'fondo', 'nueva_emision', 'research', 'macro', 'regulacion', 'novedad_interna', 'comite_inversiones',
 ]
 
 export interface MorningBriefSection {

@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation'
 
 type ResearchType =
   | 'morning_brief' | 'noticia_mercado' | 'bono' | 'fondo' | 'nueva_emision'
-  | 'research' | 'macro' | 'regulacion' | 'novedad_interna'
+  | 'research' | 'macro' | 'regulacion' | 'novedad_interna' | 'comite_inversiones'
 
 const TYPE_LABEL: Record<ResearchType, string> = {
   morning_brief: 'Morning Brief',
@@ -17,10 +17,11 @@ const TYPE_LABEL: Record<ResearchType, string> = {
   macro: 'Macroeconomía',
   regulacion: 'Regulación',
   novedad_interna: 'Novedad interna',
+  comite_inversiones: 'Comité de Inversiones',
 }
 
 const MANUAL_TYPES: ResearchType[] = [
-  'noticia_mercado', 'bono', 'fondo', 'nueva_emision', 'research', 'macro', 'regulacion', 'novedad_interna',
+  'noticia_mercado', 'bono', 'fondo', 'nueva_emision', 'research', 'macro', 'regulacion', 'novedad_interna', 'comite_inversiones',
 ]
 
 // Las secciones del Morning Brief tienen título libre (vienen tal cual del
