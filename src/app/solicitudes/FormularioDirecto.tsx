@@ -731,7 +731,13 @@ export default function FormularioDirecto({ onBack, gmailConnected = false }: Pr
                         <span key={e} className="inline-flex items-center gap-1">
                           <button
                             type="button"
-                            onClick={() => { setClientEmail(e); setEmailMissing(false); setPreview(null); if (ccEmails.includes(e)) removeCc(e) }}
+                            onClick={() => {
+                              // El anterior "Para" nunca se pierde: si había uno
+                              // seleccionado, pasa a CC en vez de descartarse.
+                              if (clientEmail && clientEmail !== e) addCc(clientEmail)
+                              setClientEmail(e); setEmailMissing(false); setPreview(null)
+                              if (ccEmails.includes(e)) removeCc(e)
+                            }}
                             title="Usar como destinatario principal (Para)"
                             className={`text-[10px] px-2 py-0.5 rounded-full border transition-colors ${
                               isTo

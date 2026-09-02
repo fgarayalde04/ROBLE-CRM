@@ -225,6 +225,7 @@ function DetailPanel({
   const [emailCuerpo, setEmailCuerpo] = useState(sol.mail_cuerpo ?? '')
   const [emailTo, setEmailTo]         = useState([sol.client_email, ...(sol.additional_emails ?? [])].filter(Boolean).join(', '))
   const [emailCc, setEmailCc]         = useState((sol.cc_emails ?? []).join(', '))
+  const knownClientEmails = Array.from(new Set([sol.client_email, ...(sol.additional_emails ?? [])].filter(Boolean))) as string[]
   const [showEmail, setShowEmail]     = useState(false)
   const [showEjecutar, setShowEjecutar] = useState(false)
   const [showCancelar, setShowCancelar] = useState(false)
@@ -274,6 +275,21 @@ function DetailPanel({
 
   async function act(accion: string, extra?: Record<string,unknown>) {
     setBusy(true); await onAction(accion, extra); setBusy(false)
+  }
+
+  function parseList(field: string): string[] {
+    return field.split(',').map(e => e.trim()).filter(Boolean)
+  }
+  function toggleInTo(email: string) {
+    const list = parseList(emailTo)
+    setEmailTo(list.includes(email) ? list.filter(e => e !== email).join(', ') : [...list, email].join(', '))
+    // nunca se pierde: si estaba en CC al pasar a Para, se saca de CC
+    const ccList = parseList(emailCc)
+    if (!list.includes(email) && ccList.includes(email)) setEmailCc(ccList.filter(e => e !== email).join(', '))
+  }
+  function toggleInCc(email: string) {
+    const list = parseList(emailCc)
+    setEmailCc(list.includes(email) ? list.filter(e => e !== email).join(', ') : [...list, email].join(', '))
   }
 
   async function handleEnviarEmail() {
@@ -498,6 +514,33 @@ function DetailPanel({
                 <input className="w-full border border-gray-200 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
                   placeholder="email1@cliente.com, email2@cliente.com"
                   value={emailTo} onChange={e => setEmailTo(e.target.value)} />
+                {knownClientEmails.length > 1 && (
+                  <div className="mt-1.5 flex flex-wrap gap-1.5 items-center">
+                    <span className="text-[9px] text-gray-400 uppercase tracking-wide">Emails del cliente:</span>
+                    {knownClientEmails.map(e => {
+                      const isTo = parseList(emailTo).includes(e)
+                      const isCc = parseList(emailCc).includes(e)
+                      return (
+                        <span key={e} className="inline-flex items-center gap-1">
+                          <button type="button" onClick={() => toggleInTo(e)} title="Para"
+                            className={`text-[10px] px-2 py-0.5 rounded-full border transition-colors ${
+                              isTo ? 'bg-[#2D3F52] text-white border-[#2D3F52]' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
+                            }`}>
+                            {e}
+                          </button>
+                          {!isTo && (
+                            <button type="button" onClick={() => toggleInCc(e)} title={isCc ? 'Quitar de CC' : 'Agregar como CC'}
+                              className={`text-[9px] px-1.5 py-0.5 rounded-full border transition-colors ${
+                                isCc ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-white text-gray-400 border-gray-200 hover:border-blue-200 hover:text-blue-600'
+                              }`}>
+                              {isCc ? '✓ CC' : '+ CC'}
+                            </button>
+                          )}
+                        </span>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">CC</label>

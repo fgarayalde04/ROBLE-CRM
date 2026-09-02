@@ -26,6 +26,7 @@ interface Solicitud {
   ejecutado_at: string | null
   created_at: string
   cc_emails?: string[] | null
+  additional_emails?: string[] | null
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   assets_json?: any[] | null
 }
@@ -172,6 +173,8 @@ export default function BandejaMesa({ isMesa, userName }: { isMesa: boolean; use
   const [showEmail, setShowEmail]   = useState(false)
   const [emailAsunto, setEmailAsunto] = useState('')
   const [emailCuerpo, setEmailCuerpo] = useState('')
+  const [emailTo, setEmailTo]       = useState('')
+  const [emailCc, setEmailCc]       = useState('')
   const [sendingEmail, setSendingEmail] = useState(false)
 
   // Ejecutar modal
@@ -203,6 +206,8 @@ export default function BandejaMesa({ isMesa, userName }: { isMesa: boolean; use
     const sol = json.solicitud as SolicitudDetail
     setSelected(sol)
     setEventos(json.eventos ?? [])
+    setEmailTo([sol.client_email, ...(sol.additional_emails ?? [])].filter(Boolean).join(', '))
+    setEmailCc((sol.cc_emails ?? []).join(', '))
     // Pre-fill email: prefer pre-generated preview from asesor
     if (sol.mail_preview) {
       setEmailCuerpo(sol.mail_preview)
@@ -272,14 +277,31 @@ export default function BandejaMesa({ isMesa, userName }: { isMesa: boolean; use
     setShowEmail(true)
   }
 
+  function parseList(field: string): string[] {
+    return field.split(',').map(e => e.trim()).filter(Boolean)
+  }
+  function toggleInTo(email: string) {
+    const list = parseList(emailTo)
+    setEmailTo(list.includes(email) ? list.filter(e => e !== email).join(', ') : [...list, email].join(', '))
+    const ccList = parseList(emailCc)
+    if (!list.includes(email) && ccList.includes(email)) setEmailCc(ccList.filter(e => e !== email).join(', '))
+  }
+  function toggleInCc(email: string) {
+    const list = parseList(emailCc)
+    setEmailCc(list.includes(email) ? list.filter(e => e !== email).join(', ') : [...list, email].join(', '))
+  }
+
   async function handleEnviarEmail() {
     setSendingEmail(true)
+    const to = parseList(emailTo)
+    const cc = parseList(emailCc)
     // Send via Gmail API (reuse existing endpoint)
     const res = await fetch('/api/gmail/send', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        to: selected!.client_email,
+        to: to.length > 1 ? to : (to[0] ?? selected!.client_email),
+        cc: cc.length > 0 ? cc : undefined,
         subject: emailAsunto,
         body: emailCuerpo,
         client_name: selected!.client_name,
@@ -492,9 +514,12 @@ export default function BandejaMesa({ isMesa, userName }: { isMesa: boolean; use
                   <div className="flex gap-1.5">
                     <button onClick={async () => {
                       setSendingEmail(true)
+                      const to = [selected.client_email, ...(selected.additional_emails ?? [])].filter(Boolean)
                       const res = await fetch('/api/gmail/send', {
                         method: 'POST', headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ to: selected.client_email, subject: emailAsunto, body: emailCuerpo,
+                        body: JSON.stringify({ to: to.length > 1 ? to : selected.client_email,
+                          cc: (selected.cc_emails?.length ?? 0) > 0 ? selected.cc_emails : undefined,
+                          subject: emailAsunto, body: emailCuerpo,
                           client_name: selected.client_name, client_number: selected.client_number, viaMesa: true }),
                       })
                       if (res.ok) { await patch('mail_enviado', { asunto: emailAsunto, cuerpo: emailCuerpo }) }
@@ -579,7 +604,45 @@ export default function BandejaMesa({ isMesa, userName }: { isMesa: boolean; use
             <div className="px-6 py-4 space-y-3">
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">Para</label>
-                <p className="text-sm text-gray-700 bg-gray-50 rounded px-3 py-2">{selected.client_email || selected.client_name}</p>
+                <input className="w-full border border-gray-200 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+                  placeholder="email1@cliente.com, email2@cliente.com"
+                  value={emailTo} onChange={e => setEmailTo(e.target.value)} />
+                {(() => {
+                  const known = Array.from(new Set([selected.client_email, ...(selected.additional_emails ?? [])].filter(Boolean))) as string[]
+                  return known.length > 1 && (
+                    <div className="mt-1.5 flex flex-wrap gap-1.5 items-center">
+                      <span className="text-[9px] text-gray-400 uppercase tracking-wide">Emails del cliente:</span>
+                      {known.map(e => {
+                        const isTo = parseList(emailTo).includes(e)
+                        const isCc = parseList(emailCc).includes(e)
+                        return (
+                          <span key={e} className="inline-flex items-center gap-1">
+                            <button type="button" onClick={() => toggleInTo(e)} title="Para"
+                              className={`text-[10px] px-2 py-0.5 rounded-full border transition-colors ${
+                                isTo ? 'bg-[#2D3F52] text-white border-[#2D3F52]' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
+                              }`}>
+                              {e}
+                            </button>
+                            {!isTo && (
+                              <button type="button" onClick={() => toggleInCc(e)} title={isCc ? 'Quitar de CC' : 'Agregar como CC'}
+                                className={`text-[9px] px-1.5 py-0.5 rounded-full border transition-colors ${
+                                  isCc ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-white text-gray-400 border-gray-200 hover:border-blue-200 hover:text-blue-600'
+                                }`}>
+                                {isCc ? '✓ CC' : '+ CC'}
+                              </button>
+                            )}
+                          </span>
+                        )
+                      })}
+                    </div>
+                  )
+                })()}
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">CC</label>
+                <input className="w-full border border-gray-200 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+                  placeholder="email1@roble.com, email2@roble.com"
+                  value={emailCc} onChange={e => setEmailCc(e.target.value)} />
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">Asunto</label>

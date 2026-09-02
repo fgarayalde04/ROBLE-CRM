@@ -362,6 +362,8 @@ export default function OrdenesClient({ gmailConnected, initialTab, isAdmin = fa
   const [fecha, setFecha]               = useState(todayStr())
   const [toEmails, setToEmails]         = useState<string[]>([])
   const [toSearch, setToSearch]         = useState('')
+  const [availableEmails, setAvailableEmails] = useState<string[]>([])
+  const [extraCc, setExtraCc]           = useState<string[]>([])
   const to = toEmails.join(', ')
 
   function addToEmail(email: string) {
@@ -370,10 +372,17 @@ export default function OrdenesClient({ gmailConnected, initialTab, isAdmin = fa
     setToSearch('')
   }
   function removeToEmail(email: string) { setToEmails(prev => prev.filter(e => e !== email)) }
+  function addExtraCc(email: string) {
+    const trimmed = email.trim()
+    if (trimmed && !extraCc.includes(trimmed)) setExtraCc(prev => [...prev, trimmed])
+  }
+  function removeExtraCc(email: string) { setExtraCc(prev => prev.filter(e => e !== email)) }
 
-  // CC: trading (always) + asesor (if different email)
+  // CC: trading (siempre) + asesor (si tiene otro email) + emails extra del
+  // cliente que se hayan agregado a mano como copia (ver availableEmails).
   const ccList: string[] = [TRADING_EMAIL]
   if (userEmail && userEmail !== TRADING_EMAIL) ccList.push(userEmail)
+  for (const e of extraCc) if (!ccList.includes(e)) ccList.push(e)
   const cc = ccList.join(', ')
   const [emailMissing, setEmailMissing]  = useState(false)
   const [preview, setPreview]           = useState<string | null>(null)
@@ -561,10 +570,12 @@ export default function OrdenesClient({ gmailConnected, initialTab, isAdmin = fa
                   </label>
                   <LegajosSearchInput
                     value={clientId}
-                    onChange={(id, name, number, _fa, email) => {
+                    onChange={(id, name, number, _fa, email, allEmails) => {
                       setClientId(id)
                       if (name) setClientName(name)
                       if (number) setClientNumber(number)
+                      setAvailableEmails(allEmails ?? [])
+                      setExtraCc([])
                       if (!id) {
                         setClientName(''); setClientNumber(''); setToEmails([]); setEmailMissing(false)
                       } else if (email) {
@@ -696,6 +707,45 @@ export default function OrdenesClient({ gmailConnected, initialTab, isAdmin = fa
                   />
                 </div>
                 <p className="text-[10px] text-gray-400 mt-1">Presioná Enter para agregar más de un destinatario.</p>
+                {availableEmails.length > 1 && (
+                  <div className="mt-1.5 flex flex-wrap gap-1.5 items-center">
+                    <span className="text-[9px] text-gray-400 uppercase tracking-wide">Emails del cliente:</span>
+                    {availableEmails.map(e => {
+                      const isTo = toEmails.includes(e)
+                      const isCc = extraCc.includes(e)
+                      return (
+                        <span key={e} className="inline-flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => { isTo ? removeToEmail(e) : addToEmail(e); if (!isTo && extraCc.includes(e)) removeExtraCc(e) }}
+                            title={isTo ? 'Quitar de Destinatarios' : 'Agregar a Destinatarios'}
+                            className={`text-[10px] px-2 py-0.5 rounded-full border transition-colors ${
+                              isTo
+                                ? 'bg-[#2D3F52] text-white border-[#2D3F52]'
+                                : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
+                            }`}
+                          >
+                            {e}
+                          </button>
+                          {!isTo && (
+                            <button
+                              type="button"
+                              onClick={() => { isCc ? removeExtraCc(e) : addExtraCc(e) }}
+                              title={isCc ? 'Quitar de CC' : 'Agregar como CC'}
+                              className={`text-[9px] px-1.5 py-0.5 rounded-full border transition-colors ${
+                                isCc
+                                  ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                  : 'bg-white text-gray-400 border-gray-200 hover:border-blue-200 hover:text-blue-600'
+                              }`}
+                            >
+                              {isCc ? '✓ CC' : '+ CC'}
+                            </button>
+                          )}
+                        </span>
+                      )
+                    })}
+                  </div>
+                )}
                 {emailMissing && (
                   <p className="mt-1.5 text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5">
                     Este cliente no tiene correo registrado en su ficha. Ingresá el email manualmente.
@@ -705,13 +755,19 @@ export default function OrdenesClient({ gmailConnected, initialTab, isAdmin = fa
 
               {/* CC: trading + asesor */}
               <div>
-                <label className={labelCls}>CC <span className="text-[10px] text-gray-400 normal-case tracking-normal font-normal">(automático)</span></label>
+                <label className={labelCls}>CC <span className="text-[10px] text-gray-400 normal-case tracking-normal font-normal">(automático{extraCc.length > 0 ? ' + agregados' : ''})</span></label>
                 <div className="flex flex-wrap gap-1.5 px-3 py-2 rounded-lg border border-gray-100 bg-gray-50">
-                  {ccList.map(email => (
-                    <span key={email} className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${email === TRADING_EMAIL ? 'bg-[#2D3F52]/10 text-[#2D3F52]' : 'bg-green-50 text-green-700 border border-green-200'}`}>
-                      {email === TRADING_EMAIL ? '📊 ' : '👤 '}{email}
-                    </span>
-                  ))}
+                  {ccList.map(email => {
+                    const removable = extraCc.includes(email)
+                    return (
+                      <span key={email} className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full font-medium ${email === TRADING_EMAIL ? 'bg-[#2D3F52]/10 text-[#2D3F52]' : removable ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'bg-green-50 text-green-700 border border-green-200'}`}>
+                        {email === TRADING_EMAIL ? '📊 ' : removable ? '✉️ ' : '👤 '}{email}
+                        {removable && (
+                          <button type="button" onClick={() => removeExtraCc(email)} className="hover:text-red-500 transition">×</button>
+                        )}
+                      </span>
+                    )
+                  })}
                 </div>
               </div>
 
