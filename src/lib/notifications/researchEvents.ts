@@ -16,22 +16,29 @@ export async function notifyMorningBriefPublished(postId: string, briefDate: str
   const message = `Morning Brief — ${briefDate}`
   const url = `/research?open=${postId}`
 
+  // Cada destinatario se procesa de forma totalmente aislada: si uno solo
+  // falla (insert de la notificación o el push), no debe tirar abajo a los
+  // demás ni, sobre todo, hacer que esta función rechace — eso volvía con un
+  // 500 a la ruta que llama (el webhook de Zapia), que interpretaba "falló
+  // todo" y reintentaba; el reintento chocaba con el Morning Brief ya creado
+  // (un solo post por día) y nunca volvía a intentar notificar a nadie, ni
+  // siquiera a los que sí habían fallado la primera vez.
   await Promise.all(recipients.map(async (r) => {
-    const created = await createNotification({
-      userId: r.id,
-      userName: r.name,
-      notifType: 'morning_brief',
-      title,
-      message,
-      entityType: 'research',
-      entityId: postId,
-      url,
-    })
+    try {
+      const created = await createNotification({
+        userId: r.id,
+        userName: r.name,
+        notifType: 'morning_brief',
+        title,
+        message,
+        entityType: 'research',
+        entityId: postId,
+        url,
+      })
 
-    // created === null significa que esta notificación ya existía (dedup) —
-    // no reenviar push tampoco, evita duplicados en ambos frentes.
-    if (created) {
-      try {
+      // created === null significa que esta notificación ya existía (dedup) —
+      // no reenviar push tampoco, evita duplicados en ambos frentes.
+      if (created) {
         await sendPushNotification({
           userId: r.id,
           title,
@@ -40,10 +47,9 @@ export async function notifyMorningBriefPublished(postId: string, briefDate: str
           type: 'morning_brief',
           entityId: postId,
         })
-      } catch (err) {
-        // Push es best-effort — la notificación interna ya quedó guardada.
-        console.error('[researchEvents] push failed', err)
       }
+    } catch (err) {
+      console.error('[researchEvents] notify/push failed for user', r.id, err)
     }
   }))
 }

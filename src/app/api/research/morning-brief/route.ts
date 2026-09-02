@@ -85,7 +85,15 @@ export async function POST(request: NextRequest) {
       authorName,
     })
 
-    await notifyMorningBriefPublished(post.id, body.briefDate)
+    // Best-effort: si falla, el brief ya quedó guardado y debe responderse 201
+    // igual — si no, el caller (worker automático) reintentaría, chocaría con
+    // el brief ya existente (un solo post por día) y nunca volvería a
+    // notificar a nadie.
+    try {
+      await notifyMorningBriefPublished(post.id, body.briefDate)
+    } catch (err) {
+      console.error('[morning-brief] notify failed', err)
+    }
 
     return NextResponse.json({ post }, { status: 201 })
   } catch (err: any) {
