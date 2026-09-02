@@ -1,17 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getSession } from '@/lib/auth'
 import { searchClientsForOrders, getAllEmailsByClientNumbers } from '@/lib/db/clients'
 
 // GET /api/legajos/search?q=...
 // Buscador de cliente para armar órdenes — busca siempre en Clientes (no en
 // Legajos/Banco Central): un cliente activo sin legajo cargado ahí quedaba
 // invisible para enviar órdenes aunque existiera y estuviera activo.
+// Respeta allowed_folders: un asesor solo debe poder armar una orden para
+// sus propios clientes, igual que en la sección Clientes.
 export async function GET(req: NextRequest) {
+  const session = await getSession()
+  if (!session) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+
   const q = req.nextUrl.searchParams.get('q')?.trim()
   if (!q || q.length < 2) return NextResponse.json({ results: [] })
 
   let rawResults
   try {
-    rawResults = await searchClientsForOrders(q)
+    rawResults = await searchClientsForOrders(q, session.allowed_folders)
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }

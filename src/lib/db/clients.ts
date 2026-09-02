@@ -57,33 +57,41 @@ export async function getClients(search?: string) {
 // antes buscaba en banco_central_records (Legajos), pero un cliente activo
 // sin legajo cargado quedaba invisible ahí aunque existiera y estuviera
 // activo en Clientes. Ahora busca siempre en clients.
-export async function searchClientsForOrders(q: string, limit = 25) {
+export async function searchClientsForOrders(q: string, folderFilter?: string[] | null, limit = 25) {
   const like = `%${q}%`
+  const params: any[] = [like]
+  let where = `status = 'activo' and (first_name ilike $1 or last_name ilike $1 or client_number ilike $1)`
+  if (folderFilter && folderFilter.length > 0) {
+    params.push(folderFilter)
+    where += ` and advisor = ANY($${params.length})`
+  }
+  params.push(limit)
   const { rows } = await pool.query(
     `select id, first_name, last_name, client_number, advisor, email
      from clients
-     where status = 'activo' and (first_name ilike $1 or last_name ilike $1 or client_number ilike $1)
-     order by last_name asc limit $2`,
-    [like, limit]
+     where ${where}
+     order by last_name asc limit $${params.length}`,
+    params
   )
   return rows
 }
 
-export async function searchActiveClients(q: string, limit = 20) {
+export async function searchActiveClients(q: string, folderFilter?: string[] | null, limit = 20) {
+  const params: any[] = []
+  let where = `status = 'activo'`
   if (q) {
-    const like = `%${q}%`
-    const { rows } = await pool.query(
-      `select id, first_name, last_name, client_number, status from clients
-       where status = 'activo' and (first_name ilike $1 or last_name ilike $1 or client_number ilike $1)
-       order by last_name limit $2`,
-      [like, limit]
-    )
-    return rows
+    params.push(`%${q}%`)
+    where += ` and (first_name ilike $${params.length} or last_name ilike $${params.length} or client_number ilike $${params.length})`
   }
+  if (folderFilter && folderFilter.length > 0) {
+    params.push(folderFilter)
+    where += ` and advisor = ANY($${params.length})`
+  }
+  params.push(limit)
   const { rows } = await pool.query(
     `select id, first_name, last_name, client_number, status from clients
-     where status = 'activo' order by last_name limit $1`,
-    [limit]
+     where ${where} order by last_name limit $${params.length}`,
+    params
   )
   return rows
 }

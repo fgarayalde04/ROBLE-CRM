@@ -1,12 +1,16 @@
 import { NextResponse } from 'next/server'
+import { getSession } from '@/lib/auth'
 import { searchActiveClients, createClient, updateClient, deleteClient } from '@/lib/db/clients'
 
 export async function GET(req: Request) {
+  const session = await getSession()
+  if (!session) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+
   try {
     const { searchParams } = new URL(req.url)
     const q = searchParams.get('q')?.trim() ?? ''
     const limit = parseInt(searchParams.get('limit') ?? '20', 10) || 20
-    const data = await searchActiveClients(q, limit)
+    const data = await searchActiveClients(q, session.allowed_folders, limit)
     return NextResponse.json(data)
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 400 })

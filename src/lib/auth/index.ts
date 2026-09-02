@@ -73,7 +73,18 @@ export async function getSession(): Promise<SessionUser | null> {
       // Load folder permissions for this user
       const folderPerms = await getUserFolderPermissions(user.id)
 
-      extra.allowed_folders = folderPerms.length > 0 ? folderPerms : null
+      if (folderPerms.length > 0) {
+        extra.allowed_folders = folderPerms
+      } else if (user.role === 'asesor') {
+        // Un asesor sin permisos de carpeta configurados explícitamente NO
+        // debe ver todo por default — solo sus propios clientes (carpeta con
+        // su propio nombre). see_all_folders sigue siendo la forma explícita
+        // de darle a un asesor puntual visibilidad total.
+        extra.allowed_folders = [user.name]
+      } else {
+        // Mesa/asistente/compliance/ceo/dirección: sin restricción por default.
+        extra.allowed_folders = null
+      }
     }
 
     return { ...user, ...extra }
