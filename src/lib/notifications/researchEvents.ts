@@ -47,3 +47,29 @@ export async function notifyMorningBriefPublished(postId: string, briefDate: str
     }
   }))
 }
+
+// Reenvío manual del push del Morning Brief (botón en Research, solo
+// admin/ceo/dirección) — a diferencia de notifyMorningBriefPublished(), NO
+// pasa por createNotification ni su dedup: la notificación interna ya existe
+// (o el usuario ya la vio), esto solo vuelve a mandar el push en sí, por si
+// no llegó la primera vez.
+export async function resendMorningBriefPush(postId: string, briefDate: string) {
+  const recipients = await getUsersByRoles(ALL_ROLES)
+  const title = '📰 Morning Brief disponible'
+  const message = `Morning Brief — ${briefDate}`
+  const url = `/research?open=${postId}`
+
+  const results = await Promise.all(recipients.map(async (r) => {
+    try {
+      const res = await sendPushNotification({
+        userId: r.id, title, body: message, url, type: 'morning_brief', entityId: postId,
+      })
+      return res.sent
+    } catch (err) {
+      console.error('[researchEvents] resend push failed', r.id, err)
+      return 0
+    }
+  }))
+
+  return { recipients: recipients.length, sent: results.reduce((a, b) => a + b, 0) }
+}

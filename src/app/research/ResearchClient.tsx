@@ -392,6 +392,44 @@ function BriefTab({
   )
 }
 
+function ResendPushButton({ postId }: { postId: string }) {
+  const [state, setState] = useState<'idle' | 'sending' | 'done' | 'error'>('idle')
+  const [result, setResult] = useState<{ sent: number; recipients: number } | null>(null)
+
+  async function handleClick() {
+    setState('sending')
+    try {
+      const res = await fetch(`/api/research/${postId}/resend-push`, { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Error al reenviar')
+      setResult({ sent: data.sent, recipients: data.recipients })
+      setState('done')
+    } catch {
+      setState('error')
+    }
+  }
+
+  return (
+    <div className="mt-2 flex items-center gap-2">
+      <button
+        onClick={handleClick}
+        disabled={state === 'sending'}
+        className="text-xs px-3 py-1.5 bg-gray-100 rounded-lg font-medium text-gray-700 hover:bg-gray-200 disabled:opacity-50"
+      >
+        {state === 'sending' ? 'Reenviando…' : '🔔 Reenviar push'}
+      </button>
+      {state === 'done' && result && (
+        <span className="text-[11px] text-emerald-600">
+          Enviado a {result.sent} de {result.recipients} suscripciones activas
+        </span>
+      )}
+      {state === 'error' && (
+        <span className="text-[11px] text-red-500">Error al reenviar — intentá de nuevo</span>
+      )}
+    </div>
+  )
+}
+
 // ─── Detail panel ───────────────────────────────────────────────────────────
 
 function DetailPanel({
@@ -419,6 +457,8 @@ function DetailPanel({
         <p className="text-xs text-gray-400 mt-1">
           {post.author || post.created_by_name} · {fmtDateTime(post.published_at)}
         </p>
+
+        {canAuthor && post.type === 'morning_brief' && <ResendPushButton postId={post.id} />}
 
         {post.type === 'morning_brief' ? (
           <div className="mt-5 space-y-5">
