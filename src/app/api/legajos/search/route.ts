@@ -1,57 +1,34 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { searchBancoCentralRecords, getClientEmailsByNumbers } from '@/lib/db/bancoCentral'
-import { getAllEmailsByClientNumbers } from '@/lib/db/clients'
-
-// Strip numeric prefix "1234 - " from folder names
-function displayName(folderName: string): string {
-  return folderName.replace(/^\d+\s*-\s*/, '').trim()
-}
+import { searchClientsForOrders, getAllEmailsByClientNumbers } from '@/lib/db/clients'
 
 // GET /api/legajos/search?q=...
-// Searches banco_central_records by folder_name, customer_number, fa
-// Also returns authorized_email (from banco_central_records.authorized_email OR clients.email)
+// Buscador de cliente para armar órdenes — busca siempre en Clientes (no en
+// Legajos/Banco Central): un cliente activo sin legajo cargado ahí quedaba
+// invisible para enviar órdenes aunque existiera y estuviera activo.
 export async function GET(req: NextRequest) {
   const q = req.nextUrl.searchParams.get('q')?.trim()
   if (!q || q.length < 2) return NextResponse.json({ results: [] })
 
   let rawResults
   try {
-    rawResults = await searchBancoCentralRecords(q)
+    rawResults = await searchClientsForOrders(q)
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  // Fetch emails from clients table as fallback for records without authorized_email
-  const customerNumbers = rawResults
-    .filter((r) => !r.authorized_email && r.customer_number)
-    .map((r) => r.customer_number as string)
-
-  let clientEmailMap = new Map<string, string>()
-  if (customerNumbers.length > 0) {
-    const clientData = await getClientEmailsByNumbers(customerNumbers)
-    for (const c of clientData ?? []) {
-      if (c.client_number && c.email) clientEmailMap.set(c.client_number, c.email)
-    }
-  }
-
-  const allNumbers = rawResults.map((r) => r.customer_number).filter(Boolean) as string[]
-  const allEmailsMap = await getAllEmailsByClientNumbers(allNumbers)
+  const clientNumbers = rawResults.map((r) => r.client_number).filter(Boolean) as string[]
+  const allEmailsMap = await getAllEmailsByClientNumbers(clientNumbers)
 
   const results = rawResults.map((r) => {
-    const authorizedEmail =
-      (r.authorized_email as string | null) ||
-      (r.customer_number ? (clientEmailMap.get(r.customer_number) ?? null) : null)
-    const allEmails = r.customer_number ? (allEmailsMap.get(r.customer_number) ?? []) : []
+    const displayName = [r.first_name, r.last_name].filter(Boolean).join(' ').trim() || 'Sin nombre'
+    const allEmails = r.client_number ? (allEmailsMap.get(r.client_number) ?? []) : (r.email ? [r.email] : [])
     return {
       id: r.id,
-      customer_number: r.customer_number as string | null,
-      folder_name: r.folder_name as string,
-      display_name: displayName(r.folder_name as string),
-      type: r.type as 'local' | 'internacional',
-      fa: r.fa as string | null,
-      status: r.status as string,
-      authorized_email: authorizedEmail,
-      all_emails: allEmails.length > 0 ? allEmails : (authorizedEmail ? [authorizedEmail] : []),
+      customer_number: r.client_number as string | null,
+      display_name: displayName,
+      advisor: r.advisor as string | null,
+      authorized_email: (r.email as string | null) ?? (allEmails[0] ?? null),
+      all_emails: allEmails,
     }
   })
 

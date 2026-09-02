@@ -5,11 +5,8 @@ import { useState, useRef, useEffect } from 'react'
 interface LegajoResult {
   id: string
   customer_number: string | null
-  folder_name: string
   display_name: string
-  type: 'local' | 'internacional'
-  fa: string | null
-  status: string
+  advisor: string | null
   authorized_email: string | null
   all_emails?: string[]
 }
@@ -70,7 +67,7 @@ export default function LegajosSearchInput({ value, onChange, placeholder, class
     setSelectedName(r.display_name)
     setQuery('')
     setOpen(false)
-    onChange(r.id, r.display_name, r.customer_number ?? '', r.fa ?? undefined, r.authorized_email ?? null, r.all_emails ?? [])
+    onChange(r.id, r.display_name, r.customer_number ?? '', r.advisor ?? undefined, r.authorized_email ?? null, r.all_emails ?? [])
   }
 
   function handleClear() {
@@ -108,7 +105,7 @@ export default function LegajosSearchInput({ value, onChange, placeholder, class
           </div>
           <input
             className={inputCls + ' pl-9'}
-            placeholder={placeholder ?? 'Buscar en Legajos…'}
+            placeholder={placeholder ?? 'Buscar cliente…'}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onFocus={() => query.length >= 2 && results.length > 0 && setOpen(true)}
@@ -125,7 +122,7 @@ export default function LegajosSearchInput({ value, onChange, placeholder, class
       {open && results.length > 0 && (
         <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl max-h-72 overflow-y-auto">
           <div className="px-3 py-1.5 border-b border-gray-100">
-            <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Legajos Banco Central</span>
+            <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Clientes</span>
           </div>
           {results.map((r) => (
             <button
@@ -142,22 +139,14 @@ export default function LegajosSearchInput({ value, onChange, placeholder, class
                       #{r.customer_number}
                     </span>
                   )}
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
-                    r.type === 'local' ? 'bg-blue-50 text-blue-600' : 'bg-purple-50 text-purple-600'
-                  }`}>
-                    {r.type === 'local' ? 'Local' : 'Internacional'}
-                  </span>
-                  {r.fa && (
-                    <span className="text-[11px] text-gray-400">FA: {r.fa}</span>
+                  {r.advisor && (
+                    <span className="text-[11px] text-gray-400">{r.advisor}</span>
                   )}
                   {r.authorized_email && (
                     <span className="text-[11px] text-emerald-600">✓ {r.authorized_email}</span>
                   )}
                   {!r.authorized_email && (
                     <span className="text-[10px] text-amber-500 bg-amber-50 px-1.5 py-0.5 rounded">Sin email</span>
-                  )}
-                  {r.status === 'cerrada' && (
-                    <span className="text-[10px] text-red-500 bg-red-50 px-1.5 py-0.5 rounded">Cerrada</span>
                   )}
                 </div>
               </div>
@@ -172,7 +161,7 @@ export default function LegajosSearchInput({ value, onChange, placeholder, class
       {/* No results */}
       {open && !loading && results.length === 0 && query.length >= 2 && (
         <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl px-4 py-3">
-          <p className="text-sm text-gray-400">Sin resultados en Legajos para <strong>"{query}"</strong></p>
+          <p className="text-sm text-gray-400">Sin resultados en Clientes para <strong>"{query}"</strong></p>
         </div>
       )}
     </div>

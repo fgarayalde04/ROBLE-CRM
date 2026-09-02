@@ -53,6 +53,22 @@ export async function getClients(search?: string) {
   return rows as Client[]
 }
 
+// Usado por el buscador de cliente al armar una orden (LegajosSearchInput) —
+// antes buscaba en banco_central_records (Legajos), pero un cliente activo
+// sin legajo cargado quedaba invisible ahí aunque existiera y estuviera
+// activo en Clientes. Ahora busca siempre en clients.
+export async function searchClientsForOrders(q: string, limit = 25) {
+  const like = `%${q}%`
+  const { rows } = await pool.query(
+    `select id, first_name, last_name, client_number, advisor, email
+     from clients
+     where status = 'activo' and (first_name ilike $1 or last_name ilike $1 or client_number ilike $1)
+     order by last_name asc limit $2`,
+    [like, limit]
+  )
+  return rows
+}
+
 export async function searchActiveClients(q: string, limit = 20) {
   if (q) {
     const like = `%${q}%`
