@@ -394,15 +394,20 @@ function BriefTab({
 
 function ResendPushButton({ postId }: { postId: string }) {
   const [state, setState] = useState<'idle' | 'sending' | 'done' | 'error'>('idle')
-  const [result, setResult] = useState<{ sent: number; recipients: number } | null>(null)
+  const [result, setResult] = useState<{ sent: number; recipients: number; onlyMe: boolean } | null>(null)
 
-  async function handleClick() {
+  async function handleClick(onlyMe: boolean) {
+    if (!onlyMe && !confirm('Esto reenvía el push a TODO el equipo (no solo a vos). ¿Confirmás?')) return
     setState('sending')
     try {
-      const res = await fetch(`/api/research/${postId}/resend-push`, { method: 'POST' })
+      const res = await fetch(`/api/research/${postId}/resend-push`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ onlyMe }),
+      })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Error al reenviar')
-      setResult({ sent: data.sent, recipients: data.recipients })
+      setResult({ sent: data.sent, recipients: data.recipients, onlyMe })
       setState('done')
     } catch {
       setState('error')
@@ -410,17 +415,24 @@ function ResendPushButton({ postId }: { postId: string }) {
   }
 
   return (
-    <div className="mt-2 flex items-center gap-2">
+    <div className="mt-2 flex items-center gap-2 flex-wrap">
       <button
-        onClick={handleClick}
+        onClick={() => handleClick(true)}
         disabled={state === 'sending'}
         className="text-xs px-3 py-1.5 bg-gray-100 rounded-lg font-medium text-gray-700 hover:bg-gray-200 disabled:opacity-50"
       >
-        {state === 'sending' ? 'Reenviando…' : '🔔 Reenviar push'}
+        {state === 'sending' ? 'Reenviando…' : '🔔 Reenviar push (solo a mí)'}
+      </button>
+      <button
+        onClick={() => handleClick(false)}
+        disabled={state === 'sending'}
+        className="text-xs px-3 py-1.5 bg-white border border-gray-200 rounded-lg font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
+      >
+        Reenviar a todo el equipo
       </button>
       {state === 'done' && result && (
         <span className="text-[11px] text-emerald-600">
-          Enviado a {result.sent} de {result.recipients} suscripciones activas
+          Enviado a {result.sent} de {result.recipients} suscripciones {result.onlyMe ? '(solo vos)' : 'activas'}
         </span>
       )}
       {state === 'error' && (

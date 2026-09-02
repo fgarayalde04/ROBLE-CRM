@@ -2,7 +2,7 @@ import { createNotification, markAllUnreadByType } from '@/lib/db/notifications'
 import { getUsersByRoles } from '@/lib/db/users'
 import { sendPushNotification } from '@/lib/push/server'
 
-const ALL_ROLES = ['admin', 'ceo', 'direccion', 'asesor', 'asistente', 'compliance']
+export const ALL_ROLES = ['admin', 'ceo', 'direccion', 'asesor', 'asistente', 'compliance']
 
 // Morning Brief: notificación interna + push a todos los roles.
 // Solo debe quedar visible el del día que llega: si alguien no abrió la app en
@@ -59,23 +59,25 @@ export async function notifyMorningBriefPublished(postId: string, briefDate: str
 // pasa por createNotification ni su dedup: la notificación interna ya existe
 // (o el usuario ya la vio), esto solo vuelve a mandar el push en sí, por si
 // no llegó la primera vez.
-export async function resendMorningBriefPush(postId: string, briefDate: string) {
-  const recipients = await getUsersByRoles(ALL_ROLES)
+export async function resendMorningBriefPush(
+  postId: string, briefDate: string,
+  target: { userId: string; userName: string }[]
+) {
   const title = '📰 Morning Brief disponible'
   const message = `Morning Brief — ${briefDate}`
   const url = `/research?open=${postId}`
 
-  const results = await Promise.all(recipients.map(async (r) => {
+  const results = await Promise.all(target.map(async (r) => {
     try {
       const res = await sendPushNotification({
-        userId: r.id, title, body: message, url, type: 'morning_brief', entityId: postId,
+        userId: r.userId, title, body: message, url, type: 'morning_brief', entityId: postId,
       })
       return res.sent
     } catch (err) {
-      console.error('[researchEvents] resend push failed', r.id, err)
+      console.error('[researchEvents] resend push failed', r.userId, err)
       return 0
     }
   }))
 
-  return { recipients: recipients.length, sent: results.reduce((a, b) => a + b, 0) }
+  return { recipients: target.length, sent: results.reduce((a, b) => a + b, 0) }
 }
