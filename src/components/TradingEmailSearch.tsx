@@ -10,11 +10,19 @@ interface Contact {
 interface Props {
   value: string
   onChange: (email: string) => void
+  // Se dispara al elegir un contacto de la lista, con el email exacto —
+  // separado de onChange a propósito. handleSelect llama a .blur() en el
+  // mismo tick que actualiza el texto de búsqueda, y ese blur del padre
+  // (que agrega lo que haya en su propio estado de búsqueda) todavía ve el
+  // valor VIEJO — React no aplica el setState de onChange a tiempo. Sin
+  // onSelect, el padre terminaba agregando el texto tipeado a medias (o
+  // nada, si el campo estaba vacío) en vez del contacto elegido.
+  onSelect?: (email: string) => void
   placeholder?: string
   className?: string
 }
 
-export default function TradingEmailSearch({ value, onChange, placeholder, className }: Props) {
+export default function TradingEmailSearch({ value, onChange, onSelect, placeholder, className }: Props) {
   const [contacts, setContacts]     = useState<Contact[]>([])
   const [filtered, setFiltered]     = useState<Contact[]>([])
   const [open, setOpen]             = useState(false)
@@ -62,6 +70,7 @@ export default function TradingEmailSearch({ value, onChange, placeholder, class
   }, [])
 
   function handleSelect(c: Contact) {
+    onSelect?.(c.email)
     onChange(c.email)
     setOpen(false)
     setFiltered([])

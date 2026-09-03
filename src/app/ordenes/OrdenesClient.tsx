@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import LegajosSearchInput from '@/components/LegajosSearchInput'
@@ -365,6 +365,14 @@ export default function OrdenesClient({ gmailConnected, initialTab, isAdmin = fa
   const [availableEmails, setAvailableEmails] = useState<string[]>([])
   const [extraCc, setExtraCc]           = useState<string[]>([])
   const to = toEmails.join(', ')
+  // TradingEmailSearch.handleSelect llama a .blur() en el mismo tick que
+  // actualiza el texto de búsqueda — el onBlur de acá abajo, que agrega lo
+  // que haya en `toSearch`, todavía ve el valor viejo en ese momento (React
+  // no aplicó el setState todavía). Sin este flag, elegir un contacto de la
+  // lista terminaba agregando el texto tipeado a medias en vez del contacto,
+  // o no agregaba nada si el campo estaba vacío — por eso "el segundo mail
+  // no se envía" pese a aparecer seleccionado.
+  const justSelectedRef = useRef(false)
 
   function addToEmail(email: string) {
     const trimmed = email.trim()
@@ -696,12 +704,16 @@ export default function OrdenesClient({ gmailConnected, initialTab, isAdmin = fa
                   </div>
                 )}
                 <div
-                  onBlur={e => { if (!e.currentTarget.contains(e.relatedTarget as Node) && toSearch.trim()) addToEmail(toSearch) }}
+                  onBlur={e => {
+                    if (justSelectedRef.current) { justSelectedRef.current = false; return }
+                    if (!e.currentTarget.contains(e.relatedTarget as Node) && toSearch.trim()) addToEmail(toSearch)
+                  }}
                   onKeyDown={e => { if (e.key === 'Enter' && toSearch.trim()) { e.preventDefault(); addToEmail(toSearch) } }}
                 >
                   <TradingEmailSearch
                     value={toSearch}
                     onChange={(v) => { setToSearch(v); setEmailMissing(false) }}
+                    onSelect={(email) => { justSelectedRef.current = true; addToEmail(email); setEmailMissing(false) }}
                     placeholder="Buscar o escribir email y Enter…"
                     className={inputCls}
                   />
