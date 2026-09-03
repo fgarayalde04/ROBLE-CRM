@@ -70,8 +70,15 @@ export default function TradingEmailSearch({ value, onChange, onSelect, placehol
   }, [])
 
   function handleSelect(c: Contact) {
-    onSelect?.(c.email)
-    onChange(c.email)
+    if (onSelect) {
+      // El padre agrega c.email directo y vacía su propio campo de búsqueda
+      // — llamar onChange(c.email) acá encima pisaría ese vaciado (el
+      // último setState del mismo tick gana) y el texto elegido quedaría
+      // pegado en el buscador en vez de limpiarse.
+      onSelect(c.email)
+    } else {
+      onChange(c.email)
+    }
     setOpen(false)
     setFiltered([])
     inputRef.current?.blur()
