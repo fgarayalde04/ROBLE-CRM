@@ -51,19 +51,39 @@ function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString('es-UY', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
-// ─── PDF Icon ─────────────────────────────────────────────────────────────────
+// ─── File Icon (por tipo de archivo) ───────────────────────────────────────────
 
-function PdfIcon() {
+type FileKind = 'pdf' | 'word' | 'excel' | 'powerpoint' | 'other'
+
+function fileKindFromName(fileName: string): FileKind {
+  const ext = fileName.split('.').pop()?.toLowerCase() ?? ''
+  if (ext === 'pdf') return 'pdf'
+  if (ext === 'doc' || ext === 'docx') return 'word'
+  if (ext === 'xls' || ext === 'xlsx' || ext === 'csv') return 'excel'
+  if (ext === 'ppt' || ext === 'pptx') return 'powerpoint'
+  return 'other'
+}
+
+const FILE_KIND_STYLE: Record<FileKind, { label: string; bg: string; fg: string; solid: string }> = {
+  pdf:        { label: 'PDF',  bg: 'bg-rose-50',    fg: 'text-rose-500',    solid: 'bg-rose-500' },
+  word:       { label: 'WORD', bg: 'bg-blue-50',    fg: 'text-blue-600',    solid: 'bg-blue-600' },
+  excel:      { label: 'EXCEL',bg: 'bg-emerald-50', fg: 'text-emerald-600', solid: 'bg-emerald-600' },
+  powerpoint: { label: 'PPT',  bg: 'bg-orange-50',  fg: 'text-orange-500',  solid: 'bg-orange-500' },
+  other:      { label: 'FILE', bg: 'bg-gray-100',   fg: 'text-gray-500',    solid: 'bg-gray-500' },
+}
+
+function FileIcon({ fileName }: { fileName: string }) {
+  const kind = fileKindFromName(fileName)
+  const s = FILE_KIND_STYLE[kind]
   return (
-    <div className="w-14 h-16 flex flex-col rounded-lg overflow-hidden shadow-sm border border-rose-100 flex-shrink-0">
-      <div className="flex-1 bg-rose-50 flex items-center justify-center">
-        <svg className="w-7 h-7 text-rose-500" fill="currentColor" viewBox="0 0 24 24">
+    <div className={`w-14 h-16 flex flex-col rounded-lg overflow-hidden shadow-sm border border-gray-100 flex-shrink-0`}>
+      <div className={`flex-1 ${s.bg} flex items-center justify-center`}>
+        <svg className={`w-7 h-7 ${s.fg}`} fill="currentColor" viewBox="0 0 24 24">
           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zM6 20V4h7v5h5v11H6z" />
-          <path d="M9 13h1.5a1 1 0 0 1 0 2H9v1h1.5a2 2 0 0 0 0-4H8v5h1v-4zm4 4h1v-4h-1v4zm2-4h-.5v4H16a2 2 0 0 0 0-4h-1zm.5 3h-.5v-2h.5a1 1 0 0 1 0 2z" />
         </svg>
       </div>
-      <div className="bg-rose-500 text-white text-[9px] font-bold tracking-wider text-center py-0.5">
-        PDF
+      <div className={`${s.solid} text-white text-[9px] font-bold tracking-wider text-center py-0.5`}>
+        {s.label}
       </div>
     </div>
   )
@@ -123,7 +143,7 @@ function ResourceCard({
 
       {/* Main content */}
       <div className="flex gap-3">
-        <PdfIcon />
+        <FileIcon fileName={resource.file_name} />
         <div className="flex-1 min-w-0 pr-12">
           <p className="font-medium text-gray-900 text-sm leading-snug break-words">{resource.name}</p>
           <span className="inline-block mt-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">
@@ -335,7 +355,7 @@ function UploadModal({
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <div>
             <h2 className="text-base font-semibold text-gray-900">
-              {isEdit ? 'Editar recurso' : 'Subir recurso PDF'}
+              {isEdit ? 'Editar recurso' : 'Subir recurso'}
             </h2>
             <p className="text-xs text-gray-500 mt-0.5">
               {isEdit ? 'Modifica los metadatos del archivo' : 'Agrega un nuevo documento a la biblioteca'}
@@ -353,7 +373,7 @@ function UploadModal({
           {!isEdit && (
             <div>
               <label className="block text-xs font-medium text-gray-700 mb-1.5">
-                Archivo PDF <span className="text-rose-500">*</span>
+                Archivo <span className="text-rose-500">*</span>
               </label>
               <div
                 className="border-2 border-dashed border-gray-200 rounded-xl p-6 text-center cursor-pointer hover:border-gray-300 hover:bg-gray-50 transition-colors"
@@ -361,7 +381,7 @@ function UploadModal({
               >
                 {file ? (
                   <div className="flex items-center justify-center gap-2">
-                    <svg className="w-5 h-5 text-rose-500" fill="currentColor" viewBox="0 0 24 24">
+                    <svg className={`w-5 h-5 ${FILE_KIND_STYLE[fileKindFromName(file.name)].fg}`} fill="currentColor" viewBox="0 0 24 24">
                       <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6z" />
                     </svg>
                     <span className="text-sm font-medium text-gray-700">{file.name}</span>
@@ -372,15 +392,15 @@ function UploadModal({
                     <svg className="w-8 h-8 text-gray-300 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
                     </svg>
-                    <p className="text-sm text-gray-500">Haz clic para seleccionar un PDF</p>
-                    <p className="text-xs text-gray-400 mt-1">Solo archivos PDF</p>
+                    <p className="text-sm text-gray-500">Haz clic para seleccionar un archivo</p>
+                    <p className="text-xs text-gray-400 mt-1">PDF, Word, Excel o PowerPoint</p>
                   </>
                 )}
               </div>
               <input
                 id="pdf-file-input"
                 type="file"
-                accept="application/pdf"
+                accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.ppt,.pptx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation"
                 className="hidden"
                 onChange={(e) => setFile(e.target.files?.[0] ?? null)}
               />
