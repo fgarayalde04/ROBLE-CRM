@@ -432,7 +432,8 @@ function ResendPushButton({ postId }: { postId: string }) {
       </button>
       {state === 'done' && result && (
         <span className="text-[11px] text-emerald-600">
-          Enviado a {result.sent} de {result.recipients} suscripciones {result.onlyMe ? '(solo vos)' : 'activas'}
+          Enviado a {result.sent} dispositivo{result.sent !== 1 ? 's' : ''}
+          {result.onlyMe ? ' tuyo(s)' : ` de ${result.recipients} persona${result.recipients !== 1 ? 's' : ''}`}
         </span>
       )}
       {state === 'error' && (
