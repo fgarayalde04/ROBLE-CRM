@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, Fragment } from 'react'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 
@@ -732,10 +732,23 @@ export default function MesaHoy({ isMesa, userName, openId }: { isMesa: boolean;
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
-                  {expandRows(rows).map(line => {
-                    const row = line.row
-                    const cfg = ESTADO_CFG[row.estado] ?? ESTADO_CFG.mesa_operaciones
-                    return (
+                  {(() => {
+                    let lastDay = ''
+                    return expandRows(rows).map(line => {
+                      const row = line.row
+                      const cfg = ESTADO_CFG[row.estado] ?? ESTADO_CFG.mesa_operaciones
+                      const day = new Date(row.created_at).toLocaleDateString('en-CA', { timeZone: 'America/Montevideo' })
+                      const showHeader = day !== lastDay
+                      lastDay = day
+                      return (
+                        <Fragment key={line.key}>
+                          {showHeader && (
+                            <tr key={`h-${day}`} className="bg-gray-100/80">
+                              <td colSpan={9} className="px-3 py-1.5 text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                                {day === today ? 'Hoy' : format(new Date(day + 'T12:00:00'), "EEEE d 'de' MMMM", { locale: es })}
+                              </td>
+                            </tr>
+                          )}
                       <tr key={line.key} onClick={() => loadDetail(row.id)}
                         className={`cursor-pointer hover:bg-blue-50/50 transition-colors ${selected?.id === row.id ? 'bg-blue-50' : ''}`}>
                         <td className="px-3 py-2 text-[11px] text-gray-400 whitespace-nowrap">
@@ -774,8 +787,10 @@ export default function MesaHoy({ isMesa, userName, openId }: { isMesa: boolean;
                         </td>
                         <td className="px-3 py-2 text-xs text-gray-500 whitespace-nowrap">{row.operador ?? '—'}</td>
                       </tr>
-                    )
-                  })}
+                        </Fragment>
+                      )
+                    })
+                  })()}
                 </tbody>
               </table>
             </div>
