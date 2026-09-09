@@ -161,6 +161,38 @@ export async function updateBancoCentralRecordById(id: string, fields: Record<st
   await pool.query(`update banco_central_records set ${setClause.join(', ')} where id = $${values.length}`, values)
 }
 
+// Legajos que ya existían antes de que el sync empezara a crear el cliente
+// automáticamente (o que por algún motivo puntual se insertaron sin crearlo)
+// quedan con linked_client_id null para siempre — nada vuelve a intentar
+// repararlos, porque la lógica de creación de cliente solo corre para
+// carpetas recién detectadas (toInsert), no para las que ya estaban en la
+// tabla. Esta reconciliación corre en cada sync y los cierra: si ya existe
+// un cliente con ese client_number lo linkea, y si no existe lo crea.
+export async function getUnlinkedBancoCentralWithNumber() {
+  const { rows } = await pool.query(
+    `select id, customer_number, nombre_cliente, folder_name, type
+     from banco_central_records
+     where linked_client_id is null and customer_number is not null`
+  )
+  return rows
+}
+
+export async function getClientIdsByNumbers(clientNumbers: string[]) {
+  if (clientNumbers.length === 0) return []
+  const { rows } = await pool.query(
+    `select id, client_number from clients where client_number = ANY($1)`,
+    [clientNumbers]
+  )
+  return rows as { id: string; client_number: string }[]
+}
+
+export async function setBancoCentralLinkedClient(id: string, clientId: string) {
+  await pool.query(
+    `update banco_central_records set linked_client_id = $1, updated_at = now() where id = $2`,
+    [clientId, id]
+  )
+}
+
 // ── Sync recursos ─────────────────────────────────────────────────────────────
 
 export async function getRecursoByItemId(itemId: string) {

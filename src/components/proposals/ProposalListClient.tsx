@@ -14,6 +14,7 @@ interface Proposal {
   title: string | null
   status: string
   shared_with_all: boolean
+  shared_with_user_ids?: string[]
   created_at: string
   updated_at: string
   sent_at: string | null
@@ -100,6 +101,84 @@ function InlineEdit({
     >
       {value || placeholder}
     </span>
+  )
+}
+
+// ── Compartir: menú de visibilidad ──────────────────────────────────────────────
+
+function EyeIcon({ open, className = 'w-2.5 h-2.5' }: { open: boolean; className?: string }) {
+  return open ? (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+  ) : (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/></svg>
+  )
+}
+
+function ShareMenu({
+  proposal, teamMembers, onClose, onChange,
+}: {
+  proposal:    Proposal
+  teamMembers: { id: string; name: string; email: string }[]
+  onClose:     () => void
+  onChange:    (patch: { shared_with_all?: boolean; shared_with_user_ids?: string[] }) => void
+}) {
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const onDocClick = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose()
+    }
+    document.addEventListener('mousedown', onDocClick)
+    return () => document.removeEventListener('mousedown', onDocClick)
+  }, [onClose])
+
+  const selectedIds = proposal.shared_with_user_ids ?? []
+
+  const toggleMember = (id: string) => {
+    const next = selectedIds.includes(id) ? selectedIds.filter(x => x !== id) : [...selectedIds, id]
+    onChange({ shared_with_all: false, shared_with_user_ids: next })
+  }
+
+  return (
+    <div ref={ref} className="absolute z-20 top-full left-0 mt-1.5 w-56 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden text-left">
+      <button
+        onClick={() => { onChange({ shared_with_all: false, shared_with_user_ids: [] }); onClose() }}
+        className={`w-full text-left px-3 py-2 text-xs flex items-center gap-2 hover:bg-gray-50 ${
+          !proposal.shared_with_all && selectedIds.length === 0 ? 'font-semibold text-gray-900' : 'text-gray-500'
+        }`}
+      >
+        <EyeIcon open={false} /> Solo yo
+      </button>
+      <button
+        onClick={() => { onChange({ shared_with_all: true, shared_with_user_ids: [] }); onClose() }}
+        className={`w-full text-left px-3 py-2 text-xs flex items-center gap-2 hover:bg-gray-50 border-t border-gray-100 ${
+          proposal.shared_with_all ? 'font-semibold text-emerald-700' : 'text-gray-500'
+        }`}
+      >
+        <EyeIcon open /> Todo el equipo
+      </button>
+      {teamMembers.length > 0 && (
+        <>
+          <div className="px-3 pt-2 pb-1 text-[10px] uppercase tracking-wide text-gray-400 border-t border-gray-100">
+            Compartir con...
+          </div>
+          <div className="max-h-48 overflow-y-auto pb-1">
+            {teamMembers.map(m => (
+              <label key={m.id} className="flex items-center gap-2 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={!proposal.shared_with_all && selectedIds.includes(m.id)}
+                  disabled={proposal.shared_with_all}
+                  onChange={() => toggleMember(m.id)}
+                  className="rounded border-gray-300"
+                />
+                {m.name}
+              </label>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
   )
 }
 
@@ -252,6 +331,15 @@ export default function ProposalListClient({
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [sharingId, setSharingId]   = useState<string | null>(null)
   const [duplicatingId, setDuplicatingId] = useState<string | null>(null)
+  const [shareMenuOpenId, setShareMenuOpenId] = useState<string | null>(null)
+  const [teamMembers, setTeamMembers] = useState<{ id: string; name: string; email: string }[]>([])
+
+  useEffect(() => {
+    fetch('/api/team-emails')
+      .then(r => r.json())
+      .then(d => setTeamMembers(Array.isArray(d) ? d : []))
+      .catch(() => {})
+  }, [])
 
   const filtered = filter === 'all' ? proposals : proposals.filter(p => p.status === filter)
 
@@ -266,11 +354,10 @@ export default function ProposalListClient({
     }
   }, [])
 
-  const toggleShare = async (p: Proposal) => {
-    setSharingId(p.id)
-    const newVal = !p.shared_with_all
-    await patchProposal(p.id, { shared_with_all: newVal })
-    setProposals(prev => prev.map(x => x.id === p.id ? { ...x, shared_with_all: newVal } : x))
+  const updateSharing = async (id: string, patch: { shared_with_all?: boolean; shared_with_user_ids?: string[] }) => {
+    setSharingId(id)
+    await patchProposal(id, patch)
+    setProposals(prev => prev.map(x => x.id === id ? { ...x, ...patch } : x))
     setSharingId(null)
   }
 
@@ -442,31 +529,50 @@ export default function ProposalListClient({
                     <td className="px-4 py-3.5 text-xs text-gray-400 hidden lg:table-cell">{fmtDate(p.created_at)}</td>
 
                     {/* Visibilidad */}
-                    <td className="px-4 py-3.5 hidden lg:table-cell" onClick={e => e.stopPropagation()}>
+                    <td className="px-4 py-3.5 hidden lg:table-cell relative" onClick={e => e.stopPropagation()}>
                       {p.advisor_id === currentUserId ? (
-                        <button
-                          onClick={() => toggleShare(p)}
-                          disabled={sharingId === p.id}
-                          title={p.shared_with_all ? 'Visible para todos — click para hacer privada' : 'Solo vos — click para compartir'}
-                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold transition-colors border ${
-                            p.shared_with_all
-                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
-                              : 'bg-gray-50 text-gray-400 border-gray-200 hover:bg-gray-100 hover:text-gray-600'
-                          } ${sharingId === p.id ? 'opacity-50 pointer-events-none' : ''}`}
-                        >
-                          {sharingId === p.id
-                            ? <span className="w-2.5 h-2.5 border border-current/40 border-t-current rounded-full animate-spin" />
-                            : p.shared_with_all
-                              ? <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
-                              : <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/></svg>
-                          }
-                          {p.shared_with_all ? 'Visible para todos' : 'Solo yo'}
-                        </button>
-                      ) : (
+                        <div className="relative inline-block">
+                          <button
+                            onClick={() => setShareMenuOpenId(shareMenuOpenId === p.id ? null : p.id)}
+                            disabled={sharingId === p.id}
+                            title="Click para elegir con quién compartir"
+                            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold transition-colors border ${
+                              p.shared_with_all
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                                : (p.shared_with_user_ids?.length ?? 0) > 0
+                                  ? 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100'
+                                  : 'bg-gray-50 text-gray-400 border-gray-200 hover:bg-gray-100 hover:text-gray-600'
+                            } ${sharingId === p.id ? 'opacity-50 pointer-events-none' : ''}`}
+                          >
+                            {sharingId === p.id
+                              ? <span className="w-2.5 h-2.5 border border-current/40 border-t-current rounded-full animate-spin" />
+                              : <EyeIcon open={p.shared_with_all || (p.shared_with_user_ids?.length ?? 0) > 0} />
+                            }
+                            {p.shared_with_all
+                              ? 'Visible para todos'
+                              : (p.shared_with_user_ids?.length ?? 0) > 0
+                                ? `Compartida (${p.shared_with_user_ids!.length})`
+                                : 'Solo yo'}
+                          </button>
+                          {shareMenuOpenId === p.id && (
+                            <ShareMenu
+                              proposal={p}
+                              teamMembers={teamMembers.filter(m => m.id !== currentUserId)}
+                              onClose={() => setShareMenuOpenId(null)}
+                              onChange={patch => updateSharing(p.id, patch)}
+                            />
+                          )}
+                        </div>
+                      ) : p.shared_with_all ? (
                         <span className="flex items-center gap-1 text-[10px] text-emerald-600 font-medium">
-                          <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
-                          Compartida
+                          <EyeIcon open /> Compartida
                         </span>
+                      ) : p.shared_with_user_ids?.includes(currentUserId) ? (
+                        <span className="flex items-center gap-1 text-[10px] text-blue-600 font-medium">
+                          <EyeIcon open /> Compartida con vos
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-gray-300">Privada</span>
                       )}
                     </td>
 

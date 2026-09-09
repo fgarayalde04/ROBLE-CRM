@@ -21,7 +21,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
     const body = await req.json()
     const allowed: Record<string, unknown> = {}
-    const fields = ['title', 'client_id', 'client_name', 'client_email', 'total_amount', 'total_ventas', 'currency', 'status', 'notes', 'disclaimer', 'sent_at', 'shared_with_all', 'settlement_date']
+    const fields = ['title', 'client_id', 'client_name', 'client_email', 'total_amount', 'total_ventas', 'currency', 'status', 'notes', 'disclaimer', 'sent_at', 'shared_with_all', 'shared_with_user_ids', 'settlement_date']
     for (const f of fields) {
       if (body[f] !== undefined) allowed[f] = body[f]
     }

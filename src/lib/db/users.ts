@@ -47,7 +47,7 @@ export async function getUserOneDriveConfig(userId: string) {
 
 export async function getActiveUsersWithEmail() {
   const { rows } = await pool.query(
-    `select name, email from crm_users where active = true and email is not null order by name`
+    `select id, name, email from crm_users where active = true and email is not null order by name`
   )
   return rows
 }

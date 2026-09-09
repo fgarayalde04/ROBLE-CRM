@@ -5,6 +5,7 @@ import {
   insertPendingClient, insertAccountOpeningStub,
   getBancoCentralByItemIds, getBancoCentralWithCustomerNumberByType,
   bulkInsertBancoCentralRecords, updateBancoCentralRecordById,
+  getUnlinkedBancoCentralWithNumber, getClientIdsByNumbers, setBancoCentralLinkedClient,
   getRecursoByItemId, insertRecurso, updateRecursoById,
   getScoringFileByItemId, insertScoringFile, updateScoringFileById,
 } from '@/lib/db/sync'
@@ -416,6 +417,36 @@ async function syncBancoCentral(
         )
       )
       result.updated += toUpdate.slice(i, i + UPDATE_CONCURRENCY).length
+    }
+
+    // Reconciliación: legajos (de esta corrida o de antes) que quedaron sin
+    // cliente linkeado — crea el cliente si todavía no existe y linkea.
+    try {
+      const unlinked = await getUnlinkedBancoCentralWithNumber()
+      if (unlinked.length > 0) {
+        const numbers = Array.from(new Set(unlinked.map((u: any) => u.customer_number as string)))
+        const existingClients = await getClientIdsByNumbers(numbers)
+        const clientIdByNumber = new Map<string, string>(existingClients.map(c => [c.client_number, c.id]))
+        for (const rec of unlinked as any[]) {
+          let clientId: string | undefined = clientIdByNumber.get(rec.customer_number)
+          if (!clientId) {
+            const created = await insertPendingClient({
+              first_name:    '',
+              last_name:     rec.nombre_cliente || rec.folder_name,
+              client_number: rec.customer_number,
+              status:        'prospecto',
+              source:        'sharepoint',
+              client_type:   rec.type,
+            })
+            clientId = created.id as string
+            clientIdByNumber.set(rec.customer_number, clientId)
+          }
+          await setBancoCentralLinkedClient(rec.id, clientId!)
+        }
+      }
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e)
+      result.errors.push(`Reconciliación linked_client_id: ${msg}`)
     }
 
     const status = result.errors.length === 0 ? 'success' : 'partial'

@@ -6,7 +6,7 @@ export async function listProposals(status: string | null, scope: { advisorId?: 
   if (status) { params.push(status); where.push(`status = $${params.length}`) }
   if (scope?.advisorId) {
     params.push(scope.advisorId)
-    where.push(`(advisor_id = $${params.length} or shared_with_all = true)`)
+    where.push(`(advisor_id = $${params.length} or shared_with_all = true or $${params.length} = ANY(shared_with_user_ids))`)
   }
   const whereClause = where.length > 0 ? `where ${where.join(' and ')}` : ''
   const { rows } = await pool.query(
