@@ -480,7 +480,7 @@ export default function BancoCentralTable({ initialRecords }: { initialRecords: 
       </div>
 
       {/* Table */}
-      <div className="bg-white border border-[#E2E8F0] rounded-xl overflow-x-auto">
+      <div className="bg-white border border-[#E2E8F0] rounded-xl overflow-auto max-h-[75vh]">
         <table className="w-full text-sm">
           <thead className="sticky top-0 z-10">
             <tr className="border-b border-gray-100 bg-gray-50">

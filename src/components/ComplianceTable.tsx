@@ -200,7 +200,7 @@ export default function ComplianceTable({ rows: initialRows, fields }: Props) {
 
       {/* Table */}
       <div className="bg-white border border-[#E2E8F0] rounded-lg overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="overflow-auto max-h-[75vh]">
           <table className="w-full text-sm">
             <thead className="sticky top-0 z-10">
               <tr className="bg-gray-50 border-b border-gray-200">
