@@ -39,7 +39,10 @@ export async function POST(req: NextRequest) {
     }
     const tradingName = process.env.TRADING_NAME ?? 'Mesa de Operaciones | Roble Capital'
     fromHeader = `"${tradingName}" <${MESA_GOOGLE_CONNECTION_KEY}>`
-    effectiveReplyTo = replyTo ?? MESA_GOOGLE_CONNECTION_KEY
+    // Reply-To incluye siempre trading@ + el mail de quien mandó la orden —
+    // así si el cliente responde, le llega a los dos, no solo a la casilla
+    // compartida (que puede tardar más en ser vista que el propio asesor/mesa).
+    effectiveReplyTo = [MESA_GOOGLE_CONNECTION_KEY, session.email].filter(Boolean).join(', ')
   } else {
     accessToken = await getValidGoogleToken()
     if (!accessToken) {
