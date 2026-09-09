@@ -482,19 +482,19 @@ export default function BancoCentralTable({ initialRecords }: { initialRecords: 
       {/* Table */}
       <div className="bg-white border border-[#E2E8F0] rounded-xl overflow-x-auto">
         <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-gray-100 bg-gray-50/50">
-              <th className="px-3 py-3 text-center text-[11px] font-semibold text-gray-500 uppercase tracking-wide w-12">FA</th>
-              <SortHeader label="N° Cliente" sortKey="number" active={sortKey} dir={sortDir} onClick={toggleSort} className="px-4 py-3 w-24" />
-              <SortHeader label="Nombre"     sortKey="name"   active={sortKey} dir={sortDir} onClick={toggleSort} className="px-4 py-3" />
+          <thead className="sticky top-0 z-10">
+            <tr className="border-b border-gray-100 bg-gray-50">
+              <th className="px-3 py-3 text-center text-[11px] font-semibold text-gray-500 uppercase tracking-wide w-12 bg-gray-50">FA</th>
+              <SortHeader label="N° Cliente" sortKey="number" active={sortKey} dir={sortDir} onClick={toggleSort} className="px-4 py-3 w-24 bg-gray-50" />
+              <SortHeader label="Nombre"     sortKey="name"   active={sortKey} dir={sortDir} onClick={toggleSort} className="px-4 py-3 bg-gray-50" />
               {CHECKBOX_FIELDS.map((f) => (
-                <th key={f.key} className="text-center px-2 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap w-24">
+                <th key={f.key} className="text-center px-2 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap w-24 bg-gray-50">
                   {f.label}
                 </th>
               ))}
-              <th className="text-left px-3 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wide min-w-[160px]">Comentario</th>
-              <th className="text-left px-3 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wide w-24">Carpeta</th>
-              <th className="text-center px-3 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wide w-28">Estado</th>
+              <th className="text-left px-3 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wide min-w-[160px] bg-gray-50">Comentario</th>
+              <th className="text-left px-3 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wide w-24 bg-gray-50">Carpeta</th>
+              <th className="text-center px-3 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wide w-28 bg-gray-50">Estado</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">

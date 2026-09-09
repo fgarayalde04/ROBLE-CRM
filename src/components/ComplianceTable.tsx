@@ -202,26 +202,26 @@ export default function ComplianceTable({ rows: initialRows, fields }: Props) {
       <div className="bg-white border border-[#E2E8F0] rounded-lg overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead>
+            <thead className="sticky top-0 z-10">
               <tr className="bg-gray-50 border-b border-gray-200">
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap bg-gray-50">
                   N. Cliente
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide bg-gray-50">
                   Nombre
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide bg-gray-50">
                   Asesor
                 </th>
                 {fields.map((f) => (
-                  <th key={f.key} className="px-3 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">
+                  <th key={f.key} className="px-3 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap bg-gray-50">
                     {f.label}
                   </th>
                 ))}
-                <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wide bg-gray-50">
                   Estado
                 </th>
-                <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide bg-gray-50">
                   Acciones
                 </th>
               </tr>
