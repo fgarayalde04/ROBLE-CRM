@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import bcrypt from 'bcryptjs'
-import { listUsers, createUser, updateUser, getUserPermissions, approveUser, deleteUser } from '@/lib/db/users'
+import { listUsers, createUser, updateUser, getUserPermissions, approveUser, deleteUser, setFolderPermissions } from '@/lib/db/users'
 
 // Mismas claves que el tipo Permission del cliente (UsersManager.tsx) — se
 // valida acá también porque en algún momento la columna terminó con
@@ -54,6 +54,17 @@ export async function POST(req: Request) {
       onedriveFolderId: onedrive_folder_id,
       onedriveFolderPath: onedrive_folder_path,
     })
+
+    // Un asesor sin permisos de carpeta explícitos cae en el fallback
+    // "ve solo la carpeta con su propio nombre" (src/lib/auth/index.ts) —
+    // ese fallback se recalcula del nombre actual en cada login, así que un
+    // simple cambio de nombre más adelante le vacía el acceso sin ningún
+    // error visible. Fijarlo ACÁ, como una fila explícita, evita eso: un
+    // rename posterior de crm_users.name ya no afecta este valor guardado.
+    if (role === 'asesor') {
+      await setFolderPermissions(data.id, false, [name])
+    }
+
     return NextResponse.json(data)
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 400 })
