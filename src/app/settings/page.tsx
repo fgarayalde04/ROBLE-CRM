@@ -2,8 +2,10 @@ import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
 import { getSession } from '@/lib/auth'
 import { hasGoogleConnection, getGoogleEmail, getGoogleName, getMesaConnectionStatus } from '@/lib/google/tokens'
+import { getSyncHealthReport } from '@/lib/db/sync'
 import SettingsClient from './SettingsClient'
 import PushNotificationsCard from '@/components/push/PushNotificationsCard'
+import SyncHealthCard from '@/components/SyncHealthCard'
 
 export const metadata: Metadata = { title: 'Configuración' }
 export const dynamic = 'force-dynamic'
@@ -20,11 +22,12 @@ export default async function SettingsPage({
 
   const isAdmin = ADMIN_ROLES.includes(session.role)
 
-  const [isGoogleConnected, googleEmail, googleName, mesaStatus] = await Promise.all([
+  const [isGoogleConnected, googleEmail, googleName, mesaStatus, syncHealth] = await Promise.all([
     hasGoogleConnection(),
     getGoogleEmail(),
     getGoogleName(),
     isAdmin ? getMesaConnectionStatus() : Promise.resolve(null),
+    isAdmin ? getSyncHealthReport() : Promise.resolve(null),
   ])
 
   const googleStatus = searchParams.google_connected
@@ -214,6 +217,9 @@ export default async function SettingsPage({
             )}
           </div>
         )}
+
+        {/* Salud de sincronización Legajos/Clientes — admin only */}
+        {isAdmin && syncHealth && <SyncHealthCard report={syncHealth} />}
 
         {/* Microsoft (SharePoint only) info card */}
         <div className="bg-white border border-[#E2E8F0] rounded-lg p-5">

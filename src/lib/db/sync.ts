@@ -236,3 +236,50 @@ export async function updateScoringFileById(id: string, fields: Record<string, a
   values.push(id)
   await pool.query(`update scoring_files set ${setClause.join(', ')} where id = $${values.length}`, values)
 }
+
+// ── Panel de salud de sync ──────────────────────────────────────────────────
+// Huecos de Legajos↔Clientes que hoy solo se detectan mirando la tabla a
+// ojo — expuestos acá para mostrarlos en Configuración antes de que se
+// acumulen (ver src/components/SyncHealthCard.tsx).
+export async function getSyncHealthReport() {
+  const [unlinkedLegajos, unparsedLegajos, clientsWithoutNumber, duplicateNumbers] = await Promise.all([
+    // Legajos con número pero sin cliente vinculado — la reconciliación del
+    // sync debería resolverlos solos en la próxima corrida; si aparecen
+    // muchos seguido, algo anda mal en esa reconciliación.
+    pool.query(
+      `select folder_name, customer_number, type, created_at
+       from banco_central_records
+       where linked_client_id is null and customer_number is not null
+       order by created_at desc limit 20`
+    ),
+    // Legajos cuyo nombre de carpeta no tiene número parseable — nunca se
+    // pueden auto-linkear, hay que corregir el nombre de la carpeta a mano.
+    pool.query(
+      `select folder_name, type, created_at
+       from banco_central_records
+       where linked_client_id is null and customer_number is null
+       order by created_at desc limit 20`
+    ),
+    // Clientes activos sin client_number — no van a poder linkearse con
+    // ningún legajo futuro que llegue por número.
+    pool.query(
+      `select id, first_name, last_name, created_at from clients
+       where client_number is null and status <> 'inactivo'
+       order by created_at desc limit 20`
+    ),
+    // Dos o más clientes con el mismo client_number — cualquier legajo con
+    // ese número linkea a uno arbitrario de los dos.
+    pool.query(
+      `select client_number, count(*) as count from clients
+       where client_number is not null
+       group by client_number having count(*) > 1
+       order by client_number`
+    ),
+  ])
+  return {
+    unlinkedLegajos: unlinkedLegajos.rows,
+    unparsedLegajos: unparsedLegajos.rows,
+    clientsWithoutNumber: clientsWithoutNumber.rows,
+    duplicateNumbers: duplicateNumbers.rows,
+  }
+}
