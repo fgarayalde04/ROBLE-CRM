@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSession } from '@/lib/auth'
+import { getSession, hasPortfolioAccess } from '@/lib/auth'
 import { resolveAccount, getLatestImport, getImportByDate, getPositions, deletePortfolioAccount } from '@/lib/db/portfolio'
 
 // GET /api/portfolio/[accountNumber] — latest snapshot (or ?date=YYYY-MM-DD)
@@ -19,8 +19,7 @@ export async function GET(
 
   const account = await resolveAccount(accountNumber)
 
-  const folderFilter = session.allowed_folders ?? null
-  if (folderFilter && (!account.advisor || !folderFilter.includes(account.advisor))) {
+  if (!hasPortfolioAccess(session, account)) {
     return NextResponse.json({ error: 'Sin permiso' }, { status: 403 })
   }
 

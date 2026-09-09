@@ -10,6 +10,6 @@ export async function GET(req: NextRequest) {
 
   const folderFilter = session.allowed_folders ?? null
   const account = req.nextUrl.searchParams.get('account')
-  const history = await listImportHistory(folderFilter, account)
+  const history = await listImportHistory(folderFilter, account, session.shared_client_numbers ?? [])
   return NextResponse.json(history)
 }

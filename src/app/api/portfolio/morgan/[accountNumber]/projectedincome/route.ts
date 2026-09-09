@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSession } from '@/lib/auth'
+import { getSession, hasPortfolioAccess } from '@/lib/auth'
 import { parseMorganProjectedIncomeExcel } from '@/lib/portfolio/morganProjectedIncomeParser'
 import { resolveAccount, createCashProjectionsImport } from '@/lib/db/portfolio'
 
@@ -16,8 +16,7 @@ export async function POST(
 
   const accountNumber = decodeURIComponent(params.accountNumber)
   const account = await resolveAccount(accountNumber)
-  const folderFilter = session.allowed_folders ?? null
-  if (folderFilter && (!account.advisor || !folderFilter.includes(account.advisor))) {
+  if (!hasPortfolioAccess(session, account)) {
     return NextResponse.json({ error: 'Sin permiso' }, { status: 403 })
   }
 

@@ -102,6 +102,17 @@ export async function getClient(id: string) {
   return rows[0] as Client
 }
 
+// Números de cliente cuyo portafolio fue compartido puntualmente con este
+// usuario (independiente del esquema de carpetas por asesor) — usado para
+// ampliar el scoping de /portfolio en src/lib/auth.
+export async function getClientNumbersSharedWithUser(userId: string) {
+  const { rows } = await pool.query(
+    `select client_number from clients where $1 = ANY(shared_with_user_ids) and client_number is not null`,
+    [userId]
+  )
+  return rows.map((r) => r.client_number as string)
+}
+
 export async function createClient(client: Omit<Client, 'id' | 'created_at' | 'updated_at'>) {
   const entries = Object.entries(client).filter(([, v]) => v !== undefined)
   const cols = entries.map(([k]) => `"${k}"`)

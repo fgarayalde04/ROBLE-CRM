@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSession } from '@/lib/auth'
+import { getSession, hasPortfolioAccess } from '@/lib/auth'
 import { resolveAccount, getImportByDate, getPositions } from '@/lib/db/portfolio'
 
 interface PosRow { id: string; isin: string | null; cusip: string | null; name: string; market_value: string; weight_pct: string | null }
@@ -24,8 +24,7 @@ export async function GET(
   if (!from || !to) return NextResponse.json({ error: 'Faltan los parámetros from/to' }, { status: 400 })
 
   const account = await resolveAccount(accountNumber)
-  const folderFilter = session.allowed_folders ?? null
-  if (folderFilter && (!account.advisor || !folderFilter.includes(account.advisor))) {
+  if (!hasPortfolioAccess(session, account)) {
     return NextResponse.json({ error: 'Sin permiso' }, { status: 403 })
   }
 

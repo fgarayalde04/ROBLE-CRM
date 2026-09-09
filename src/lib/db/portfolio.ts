@@ -207,12 +207,17 @@ export async function listSnapshotDates(accountNumber: string) {
 // an account with a single custodian (today's only case) that sum is
 // mathematically identical to that one row's own total, so this is a
 // zero-behavior-change superset of the previous DISTINCT ON query.
-export async function listAccounts(advisorFilter: string[] | null) {
+export async function listAccounts(advisorFilter: string[] | null, sharedClientNumbers: string[] = []) {
   const params: unknown[] = []
   let where = ''
   if (advisorFilter) {
     params.push(advisorFilter)
-    where = `where pi.advisor = ANY($${params.length})`
+    const conditions = [`pi.advisor = ANY($${params.length})`]
+    if (sharedClientNumbers.length > 0) {
+      params.push(sharedClientNumbers)
+      conditions.push(`pi.client_number = ANY($${params.length})`)
+    }
+    where = `where ${conditions.join(' or ')}`
   }
   // Falls back to the manually-entered account_name (monitoring_base_accounts)
   // when the import has no resolved client_name — same fallback as the
@@ -432,10 +437,18 @@ export async function getLatestUnrealizedGainLoss(accountNumber: string, custodi
   return { importRow, rows }
 }
 
-export async function listImportHistory(advisorFilter: string[] | null, accountNumber?: string | null) {
+export async function listImportHistory(advisorFilter: string[] | null, accountNumber?: string | null, sharedClientNumbers: string[] = []) {
   const params: unknown[] = []
   const where: string[] = []
-  if (advisorFilter) { params.push(advisorFilter); where.push(`advisor = ANY($${params.length})`) }
+  if (advisorFilter) {
+    params.push(advisorFilter)
+    const conditions = [`advisor = ANY($${params.length})`]
+    if (sharedClientNumbers.length > 0) {
+      params.push(sharedClientNumbers)
+      conditions.push(`client_number = ANY($${params.length})`)
+    }
+    where.push(`(${conditions.join(' or ')})`)
+  }
   if (accountNumber) { params.push(accountNumber); where.push(`account_number = $${params.length}`) }
   const whereClause = where.length ? `where ${where.join(' and ')}` : ''
   const { rows } = await pool.query(

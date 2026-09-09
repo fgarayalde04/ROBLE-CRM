@@ -3,12 +3,14 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { getDocuments, getTasks, getDeadlines } from '@/lib/supabase/queries'
 import { getClient } from '@/lib/db/clients'
+import { getSession } from '@/lib/auth'
 import StatusBadge from '@/components/StatusBadge'
 import ComplianceBlock from '@/components/ComplianceBlock'
 import ClientEmailsManager from '@/components/ClientEmailsManager'
 import OneDriveFolderButton from '@/components/OneDriveFolderButton'
 import ClientCloseButton from '@/components/ClientCloseButton'
 import DeleteClientButton from '@/components/DeleteClientButton'
+import PortfolioShareControl from '@/components/PortfolioShareControl'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 
@@ -39,8 +41,13 @@ const categoryLabel: Record<string, string> = {
 }
 
 export default async function ClientDetailPage({ params }: Props) {
-  const client = await getClient(params.id).catch(() => null)
+  const [client, session] = await Promise.all([
+    getClient(params.id).catch(() => null),
+    getSession(),
+  ])
   if (!client) notFound()
+
+  const canManageSharing = !!session && (session.role === 'admin' || session.name === client.advisor)
 
   let documents, tasks, deadlines
   try {
@@ -202,6 +209,14 @@ export default async function ClientDetailPage({ params }: Props) {
               </div>
             </dl>
           </div>
+
+          {canManageSharing && (
+            <PortfolioShareControl
+              clientId={client.id}
+              initialSharedWithUserIds={client.shared_with_user_ids ?? []}
+              currentUserId={session!.id}
+            />
+          )}
 
           {((client.drive_id && client.item_id) || client.web_url || client.onedrive_folder_url) && (
             <div className="bg-white rounded-lg border border-gray-200 p-5">

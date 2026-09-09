@@ -1,6 +1,7 @@
 import { SignJWT, jwtVerify } from 'jose'
 import { cookies } from 'next/headers'
 import { getUserAuthExtras, getUserFolderPermissions } from '@/lib/db/users'
+import { getClientNumbersSharedWithUser } from '@/lib/db/clients'
 
 export type UserRole = 'admin' | 'asesor' | 'asistente' | 'compliance' | 'direccion' | 'ceo'
 
@@ -11,6 +12,7 @@ export interface SessionUser {
   role: UserRole
   permissions?: Permission[]       // custom per-user permissions; when set, overrides role
   allowed_folders?: string[] | null // null = ver todo; string[] = solo esas carpetas de asesor
+  shared_client_numbers?: string[] | null // client_numbers compartidos puntualmente (portafolio), por fuera de allowed_folders
   modo_asesor?: boolean             // admin-controlled: restricts navigation to orders only
 }
 
@@ -87,6 +89,13 @@ export async function getSession(): Promise<SessionUser | null> {
       }
     }
 
+    // Portafolios compartidos puntualmente (independiente de allowed_folders)
+    // — solo hace falta consultarlos cuando el usuario ya está restringido;
+    // si allowed_folders es null (ve todo) no hay nada que ampliar.
+    extra.shared_client_numbers = extra.allowed_folders
+      ? await getClientNumbersSharedWithUser(user.id)
+      : null
+
     return { ...user, ...extra }
   } catch {
     return user
@@ -94,6 +103,20 @@ export async function getSession(): Promise<SessionUser | null> {
 }
 
 export const SESSION_COOKIE = COOKIE
+
+// Scoping de /portfolio: además de allowed_folders (por asesor), un usuario
+// puede tener acceso puntual al portafolio de un cliente específico vía
+// clients.shared_with_user_ids (ver ClientDetail → "Compartir portafolio").
+export function hasPortfolioAccess(
+  session: Pick<SessionUser, 'allowed_folders' | 'shared_client_numbers'>,
+  account: { advisor?: string | null; clientNumber?: string | null }
+): boolean {
+  const folderFilter = session.allowed_folders ?? null
+  if (!folderFilter) return true
+  if (account.advisor && folderFilter.includes(account.advisor)) return true
+  if (account.clientNumber && session.shared_client_numbers?.includes(account.clientNumber)) return true
+  return false
+}
 
 // ─── Role permissions ─────────────────────────────────────────────────────────
 

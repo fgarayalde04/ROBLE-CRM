@@ -9,6 +9,6 @@ export async function GET() {
   if (!session) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
   const folderFilter = session.allowed_folders ?? null
-  const accounts = await listAccounts(folderFilter)
+  const accounts = await listAccounts(folderFilter, session.shared_client_numbers ?? [])
   return NextResponse.json(accounts)
 }

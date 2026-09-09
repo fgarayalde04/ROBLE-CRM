@@ -95,6 +95,7 @@ export interface Client {
   address: string | null
   document_type: string | null
   document_number: string | null
+  shared_with_user_ids?: string[]
 }
 
 export interface Event {
