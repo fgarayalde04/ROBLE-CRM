@@ -15,7 +15,7 @@ export const dynamic = 'force-dynamic'
 
 const ADVISORS = ['Francisco', 'Guillermo', 'Sandra', 'Ines', 'Javier', 'Fernando - Federico']
 
-type SortKey = 'nombre' | 'created_at' | 'updated_at'
+type SortKey = 'nombre' | 'created_at' | 'updated_at' | 'client_number'
 type SortDir = 'asc' | 'desc'
 
 interface Props {
@@ -34,7 +34,7 @@ export default async function ClientsPage({ searchParams }: Props) {
     : searchParams.tab === 'pendientes' ? 'pendientes'
     : 'activos'
 
-  const activeSort: SortKey = (searchParams.sort as SortKey) ?? 'updated_at'
+  const activeSort: SortKey = (searchParams.sort as SortKey) ?? 'client_number'
   const activeDir:  SortDir = (searchParams.dir  as SortDir) ?? 'desc'
 
   let clients: Client[] = []
@@ -80,7 +80,7 @@ export default async function ClientsPage({ searchParams }: Props) {
     if (searchParams.q) merged.q = searchParams.q
     if (searchParams.advisor) merged.advisor = searchParams.advisor
     if (activeTab !== 'activos') merged.tab = activeTab
-    if (activeSort !== 'updated_at') merged.sort = activeSort
+    if (activeSort !== 'client_number') merged.sort = activeSort
     if (activeDir !== 'desc') merged.dir = activeDir
     Object.assign(merged, params)
     Object.keys(merged).forEach((k) => { if (!merged[k]) delete merged[k] })
@@ -119,6 +119,7 @@ export default async function ClientsPage({ searchParams }: Props) {
     nombre: sortHref('nombre'),
     created_at: sortHref('created_at'),
     updated_at: sortHref('updated_at'),
+    client_number: sortHref('client_number'),
   }
 
   return (

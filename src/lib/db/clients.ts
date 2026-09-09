@@ -143,7 +143,7 @@ const LIST_COLUMNS =
 
 export interface ListClientsOptions {
   tab: 'activos' | 'cerrados' | 'pendientes' | 'todos'
-  sort: 'nombre' | 'created_at' | 'updated_at'
+  sort: 'nombre' | 'created_at' | 'updated_at' | 'client_number'
   dir: 'asc' | 'desc'
   folderFilter?: string[] | null
   search?: string
@@ -175,9 +175,13 @@ export async function listClients(opts: ListClientsOptions) {
 
   const whereClause = where.length > 0 ? `where ${where.join(' and ')}` : ''
   const dir = opts.dir === 'asc' ? 'asc' : 'desc'
+  // client_number es texto ("02", "7683165", etc.) — se ordena numéricamente
+  // cuando es puramente dígitos, y al final (nulls last) cuando no aplica o
+  // está vacío, para que 7683100 no quede antes de 7877106 por ser "más corto".
   const orderClause =
     opts.sort === 'nombre' ? `order by last_name ${dir}, first_name ${dir}` :
     opts.sort === 'created_at' ? `order by created_at ${dir}` :
+    opts.sort === 'client_number' ? `order by (case when client_number ~ '^[0-9]+$' then client_number::bigint end) ${dir} nulls last, last_name asc` :
     `order by updated_at ${dir}`
 
   const { rows } = await pool.query(

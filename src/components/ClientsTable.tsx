@@ -10,7 +10,7 @@ import OneDriveFolderButton from './OneDriveFolderButton'
 import ClientStatusToggle from './ClientStatusToggle'
 import DeleteClientButton from './DeleteClientButton'
 
-type SortKey = 'nombre' | 'created_at' | 'updated_at'
+type SortKey = 'nombre' | 'created_at' | 'updated_at' | 'client_number'
 type SortDir = 'asc' | 'desc'
 
 interface Props {
