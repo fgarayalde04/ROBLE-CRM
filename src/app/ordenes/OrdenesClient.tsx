@@ -6,6 +6,7 @@ import { es } from 'date-fns/locale'
 import LegajosSearchInput from '@/components/LegajosSearchInput'
 import InstrumentSearch from '@/components/InstrumentSearch'
 import TradingEmailSearch from '@/components/TradingEmailSearch'
+import ClientEmailTogglePills from '@/components/ClientEmailTogglePills'
 import InstrumentsManager from './InstrumentsManager'
 import BlotterTable from './BlotterTable'
 import BlotterSolicitudes from '../solicitudes/BlotterSolicitudes'
@@ -743,45 +744,17 @@ export default function OrdenesClient({ gmailConnected, initialTab, isAdmin = fa
                   />
                 </div>
                 <p className="text-[10px] text-gray-400 mt-1">Presioná Enter para agregar más de un destinatario.</p>
-                {availableEmails.length > 1 && (
-                  <div className="mt-1.5 flex flex-wrap gap-1.5 items-center">
-                    <span className="text-[9px] text-gray-400 uppercase tracking-wide">Emails del cliente:</span>
-                    {availableEmails.map(e => {
-                      const isTo = toEmails.includes(e)
-                      const isCc = extraCc.includes(e)
-                      return (
-                        <span key={e} className="inline-flex items-center gap-1">
-                          <button
-                            type="button"
-                            onClick={() => { isTo ? removeToEmail(e) : addToEmail(e); if (!isTo && extraCc.includes(e)) removeExtraCc(e) }}
-                            title={isTo ? 'Quitar de Destinatarios' : 'Agregar a Destinatarios'}
-                            className={`text-[10px] px-2 py-0.5 rounded-full border transition-colors ${
-                              isTo
-                                ? 'bg-[#2D3F52] text-white border-[#2D3F52]'
-                                : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
-                            }`}
-                          >
-                            {e}
-                          </button>
-                          {!isTo && (
-                            <button
-                              type="button"
-                              onClick={() => { isCc ? removeExtraCc(e) : addExtraCc(e) }}
-                              title={isCc ? 'Quitar de CC' : 'Agregar como CC'}
-                              className={`text-[9px] px-1.5 py-0.5 rounded-full border transition-colors ${
-                                isCc
-                                  ? 'bg-blue-50 text-blue-700 border-blue-200'
-                                  : 'bg-white text-gray-400 border-gray-200 hover:border-blue-200 hover:text-blue-600'
-                              }`}
-                            >
-                              {isCc ? '✓ CC' : '+ CC'}
-                            </button>
-                          )}
-                        </span>
-                      )
-                    })}
-                  </div>
-                )}
+                <ClientEmailTogglePills
+                  emails={availableEmails}
+                  isTo={e => toEmails.includes(e)}
+                  isCc={e => extraCc.includes(e)}
+                  onToggleTo={e => {
+                    const isTo = toEmails.includes(e)
+                    isTo ? removeToEmail(e) : addToEmail(e)
+                    if (!isTo && extraCc.includes(e)) removeExtraCc(e)
+                  }}
+                  onToggleCc={e => { extraCc.includes(e) ? removeExtraCc(e) : addExtraCc(e) }}
+                />
                 {emailMissing && (
                   <p className="mt-1.5 text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5">
                     Este cliente no tiene correo registrado en su ficha. Ingresá el email manualmente.

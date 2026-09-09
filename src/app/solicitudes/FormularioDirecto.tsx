@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import LegajosSearchInput from '@/components/LegajosSearchInput'
 import InstrumentSearch from '@/components/InstrumentSearch'
+import ClientEmailTogglePills from '@/components/ClientEmailTogglePills'
 import type { Instrument } from '@/app/api/instruments/route'
 
 interface TeamMember { name: string; email: string }
@@ -745,51 +746,20 @@ export default function FormularioDirecto({ onBack, gmailConnected = false }: Pr
                 {emailMissing && (
                   <p className="mt-1 text-[11px] text-amber-600">No tiene email en su ficha. Ingresalo manualmente.</p>
                 )}
-                {availableEmails.length > 1 && (
-                  <div className="mt-1.5 flex flex-wrap gap-1.5 items-center">
-                    <span className="text-[9px] text-gray-400 uppercase tracking-wide">Emails del cliente:</span>
-                    {availableEmails.map(e => {
-                      const isTo = clientEmail === e
-                      const isCc = ccEmails.includes(e)
-                      return (
-                        <span key={e} className="inline-flex items-center gap-1">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              // El anterior "Para" nunca se pierde: si había uno
-                              // seleccionado, pasa a CC en vez de descartarse.
-                              if (clientEmail && clientEmail !== e) addCc(clientEmail)
-                              setClientEmail(e); setEmailMissing(false); setPreview(null)
-                              if (ccEmails.includes(e)) removeCc(e)
-                            }}
-                            title="Usar como destinatario principal (Para)"
-                            className={`text-[10px] px-2 py-0.5 rounded-full border transition-colors ${
-                              isTo
-                                ? 'bg-[#2D3F52] text-white border-[#2D3F52]'
-                                : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
-                            }`}
-                          >
-                            {e}
-                          </button>
-                          {!isTo && (
-                            <button
-                              type="button"
-                              onClick={() => { isCc ? removeCc(e) : addCc(e) }}
-                              title={isCc ? 'Quitar de CC' : 'Agregar como CC'}
-                              className={`text-[9px] px-1.5 py-0.5 rounded-full border transition-colors ${
-                                isCc
-                                  ? 'bg-blue-50 text-blue-700 border-blue-200'
-                                  : 'bg-white text-gray-400 border-gray-200 hover:border-blue-200 hover:text-blue-600'
-                              }`}
-                            >
-                              {isCc ? '✓ CC' : '+ CC'}
-                            </button>
-                          )}
-                        </span>
-                      )
-                    })}
-                  </div>
-                )}
+                <ClientEmailTogglePills
+                  emails={availableEmails}
+                  isTo={e => clientEmail === e}
+                  isCc={e => ccEmails.includes(e)}
+                  toTitle="Usar como destinatario principal (Para)"
+                  onToggleTo={e => {
+                    // El anterior "Para" nunca se pierde: si había uno
+                    // seleccionado, pasa a CC en vez de descartarse.
+                    if (clientEmail && clientEmail !== e) addCc(clientEmail)
+                    setClientEmail(e); setEmailMissing(false); setPreview(null)
+                    if (ccEmails.includes(e)) removeCc(e)
+                  }}
+                  onToggleCc={e => { ccEmails.includes(e) ? removeCc(e) : addCc(e) }}
+                />
                 {/* Destinatarios adicionales — se envía a este email + a todos los que se agreguen acá */}
                 <div className={`${inputCls} mt-1.5 min-h-[38px] flex flex-wrap gap-1.5 items-center cursor-text`}>
                   {additionalEmails.map(email => (

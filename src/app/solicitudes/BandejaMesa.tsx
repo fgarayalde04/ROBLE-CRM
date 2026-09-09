@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
+import ClientEmailTogglePills from '@/components/ClientEmailTogglePills'
 
 interface Solicitud {
   id: string
@@ -607,36 +608,14 @@ export default function BandejaMesa({ isMesa, userName }: { isMesa: boolean; use
                 <input className="w-full border border-gray-200 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
                   placeholder="email1@cliente.com, email2@cliente.com"
                   value={emailTo} onChange={e => setEmailTo(e.target.value)} />
-                {(() => {
-                  const known = Array.from(new Set([selected.client_email, ...(selected.additional_emails ?? [])].filter(Boolean))) as string[]
-                  return known.length > 1 && (
-                    <div className="mt-1.5 flex flex-wrap gap-1.5 items-center">
-                      <span className="text-[9px] text-gray-400 uppercase tracking-wide">Emails del cliente:</span>
-                      {known.map(e => {
-                        const isTo = parseList(emailTo).includes(e)
-                        const isCc = parseList(emailCc).includes(e)
-                        return (
-                          <span key={e} className="inline-flex items-center gap-1">
-                            <button type="button" onClick={() => toggleInTo(e)} title="Para"
-                              className={`text-[10px] px-2 py-0.5 rounded-full border transition-colors ${
-                                isTo ? 'bg-[#2D3F52] text-white border-[#2D3F52]' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
-                              }`}>
-                              {e}
-                            </button>
-                            {!isTo && (
-                              <button type="button" onClick={() => toggleInCc(e)} title={isCc ? 'Quitar de CC' : 'Agregar como CC'}
-                                className={`text-[9px] px-1.5 py-0.5 rounded-full border transition-colors ${
-                                  isCc ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-white text-gray-400 border-gray-200 hover:border-blue-200 hover:text-blue-600'
-                                }`}>
-                                {isCc ? '✓ CC' : '+ CC'}
-                              </button>
-                            )}
-                          </span>
-                        )
-                      })}
-                    </div>
-                  )
-                })()}
+                <ClientEmailTogglePills
+                  emails={Array.from(new Set([selected.client_email, ...(selected.additional_emails ?? [])].filter(Boolean))) as string[]}
+                  isTo={e => parseList(emailTo).includes(e)}
+                  isCc={e => parseList(emailCc).includes(e)}
+                  toTitle="Para"
+                  onToggleTo={toggleInTo}
+                  onToggleCc={toggleInCc}
+                />
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">CC</label>
