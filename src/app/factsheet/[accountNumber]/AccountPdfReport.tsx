@@ -196,7 +196,7 @@ function PdfDisclosure() {
 }
 
 export default function AccountPdfReport({
-  account, accountNumber, importRow, sortedByValue, history, assetAllocation, fixedIncomeBreakdown, currencyExposure,
+  account, accountNumber, importRow, sortedByValue, history, sections, assetAllocation, fixedIncomeBreakdown, currencyExposure,
   liquidity, maturityBuckets, nextMaturity, cashProjImport, cashProjRows, projectedIncome12m, nextPayment,
   cleanedNames, performance, unrealizedGLTotals, glByCusip,
   isConsolidated, custodianByPositionId, custodianBreakdown,
@@ -206,6 +206,7 @@ export default function AccountPdfReport({
   importRow: PortfolioImportRow
   sortedByValue: PortfolioPositionRow[]
   history: { snapshot_date: string; total_market_value: string }[]
+  sections?: { performance: boolean; composicion: boolean; holdings: boolean; income: boolean }
   assetAllocation: { assetClass: string; label: string; value: number; pct: number }[]
   fixedIncomeBreakdown: { label: string; value: number; pct: number }[]
   currencyExposure: { label: string; value: number; pct: number }[]
@@ -276,7 +277,10 @@ export default function AccountPdfReport({
   })()
   const holdingColSpan = 5 + (hasGL ? 2 : 0) + (hasMaturityCols ? 1 : 0) + (isConsolidated ? 1 : 0)
 
-  const hasIncomePage = !!cashProjImport && cashProjRows.length > 0
+  const sec = { performance: true, composicion: true, holdings: true, income: true, ...(sections ?? {}) }
+  const hasIncomePage = sec.income && !!cashProjImport && cashProjRows.length > 0
+  // El disclosure va al pie de la última hoja de contenido que se muestre.
+  const disclosureOn = hasIncomePage ? 'income' : sec.holdings ? 'holdings' : sec.composicion ? 'composicion' : 'performance'
   const growthPoints = [...history]
     .sort((a, b) => a.snapshot_date.localeCompare(b.snapshot_date))
     .map(h => ({ date: h.snapshot_date, value: Number(h.total_market_value) }))
@@ -318,6 +322,7 @@ export default function AccountPdfReport({
       </div>
 
       {/* ── Página 2: Performance ── */}
+      {sec.performance && (
       <div className="pdf-page" style={PAGE_STYLE}>
         <PdfHeader title="Performance" />
 
@@ -402,10 +407,13 @@ export default function AccountPdfReport({
           </div>
         )}
 
+        {disclosureOn === 'performance' && <PdfDisclosure />}
         <PdfFooter clientName={clientName} />
       </div>
+      )}
 
       {/* ── Página 3: Composición y renta ── */}
+      {sec.composicion && (
       <div className="pdf-page" style={PAGE_STYLE}>
         <PdfHeader title="Composición y renta" />
 
@@ -471,10 +479,13 @@ export default function AccountPdfReport({
           })}
         </div>
 
+        {disclosureOn === 'composicion' && <PdfDisclosure />}
         <PdfFooter clientName={clientName} />
       </div>
+      )}
 
       {/* ── Página 4: Holdings ── */}
+      {sec.holdings && (
       <div className="pdf-page" style={PAGE_STYLE}>
         <PdfHeader title="Portfolio Holdings" />
         <table style={{ width: '100%', fontSize: 7.3, borderCollapse: 'collapse' }}>
@@ -570,9 +581,10 @@ export default function AccountPdfReport({
             </tr>
           </tfoot>
         </table>
-        {!hasIncomePage && <PdfDisclosure />}
+        {disclosureOn === 'holdings' && <PdfDisclosure />}
         <PdfFooter clientName={clientName} />
       </div>
+      )}
 
       {/* ── Página 5: Income & Cash Flow (solo si se importaron proyecciones) ── */}
       {hasIncomePage && (

@@ -10,6 +10,7 @@ import MovimientosTab from './MovimientosTab'
 import ResumenTab from './ResumenTab'
 import ImportHistoryModal from '@/components/portfolio/ImportHistoryModal'
 import AccountPdfReport from './AccountPdfReport'
+import PdfOptionsModal, { type PdfSections, DEFAULT_PDF_SECTIONS } from '@/components/portfolio/PdfOptionsModal'
 import { cleanDisplayName } from '@/lib/portfolio/theme'
 import {
   ASSET_CLASS_ES,
@@ -224,6 +225,18 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
   }, [consolidatedPositions])
 
   const [downloadingPdf, setDownloadingPdf] = useState(false)
+  const [showPdfOptions, setShowPdfOptions] = useState(false)
+  const [pdfSections, setPdfSections] = useState<PdfSections>(DEFAULT_PDF_SECTIONS)
+  const [pendingPdf, setPendingPdf] = useState(false)
+
+  // El reporte se genera después de un re-render con las secciones elegidas
+  // aplicadas al DOM oculto — por eso pasa por un flag en vez de llamarse
+  // directo desde el modal.
+  useEffect(() => {
+    if (!pendingPdf) return
+    handleDownloadPDF().finally(() => setPendingPdf(false))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingPdf])
 
   async function handleDownloadPDF() {
     setDownloadingPdf(true)
@@ -314,7 +327,7 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
   return (
     <div className="min-h-screen bg-gray-50">
       <Header router={router} account={account} accountNumber={accountNumber} importRow={importRow} onImport={() => setShowImport(true)} onHistory={() => setShowHistory(true)}
-        onDownloadPdf={handleDownloadPDF} downloadingPdf={downloadingPdf} onCustodianChange={handleCustodianChange} onAccountNameChange={handleAccountNameChange}
+        onDownloadPdf={() => setShowPdfOptions(true)} downloadingPdf={downloadingPdf || pendingPdf} onCustodianChange={handleCustodianChange} onAccountNameChange={handleAccountNameChange}
         onAddMorgan={!isConsolidated && custodians.length === 1 && custodians[0]?.custodian === 'Pershing' ? () => setShowAddMorgan(true) : undefined} />
 
       {custodians.length > 1 && (
@@ -342,7 +355,16 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
         </div>
       )}
 
+      {showPdfOptions && (
+        <PdfOptionsModal
+          initial={pdfSections}
+          onCancel={() => setShowPdfOptions(false)}
+          onGenerate={(s) => { setPdfSections(s); setShowPdfOptions(false); setPendingPdf(true) }}
+        />
+      )}
+
       <AccountPdfReport account={account} accountNumber={accountNumber} importRow={importRow} sortedByValue={sortedByValue}
+        sections={pdfSections}
         history={history}
         assetAllocation={assetAllocation} fixedIncomeBreakdown={fixedIncomeBreakdown} currencyExposure={currencyExposure}
         liquidity={liquidity} maturityBuckets={maturityBuckets} nextMaturity={nextMaturity}
