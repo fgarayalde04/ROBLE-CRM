@@ -18,21 +18,24 @@ import { ROBLE_DISCLAIMER } from '@/lib/disclaimers'
 const PAGE_PAD_MM = 14
 const PAGE_STYLE: React.CSSProperties = { width: '297mm', minHeight: '210mm', background: '#fff', padding: `${PAGE_PAD_MM}mm`, fontFamily: 'Arial, sans-serif', boxSizing: 'border-box', position: 'relative' }
 
-// Logo del custodio para la carátula. Subir el archivo a public/bny-logo.png
-// y cambiar BNY_LOGO_READY a true para usar la imagen en vez del lockup de
-// texto.
+// Logo del custodio para la carátula. Si existe public/bny-logo.png, poner
+// BNY_LOGO_READY = true para usar la imagen; si no, se dibuja un lockup de
+// texto con la misma marca ("BNY MELLON | PERSHING").
 const BNY_LOGO_READY = false
 const BNY_LOGO_SRC = '/bny-logo.png'
+const BNY_GREY = '#585858'
+const BNY_GOLD = '#A9861F'
 
 function BnyLogo({ height = 10 }: { height?: number }) {
   if (BNY_LOGO_READY) {
     // eslint-disable-next-line @next/next/no-img-element
-    return <img src={BNY_LOGO_SRC} alt="BNY" style={{ height: `${height}mm`, objectFit: 'contain' }} />
+    return <img src={BNY_LOGO_SRC} alt="BNY Mellon | Pershing" style={{ height: `${height}mm`, objectFit: 'contain' }} />
   }
   return (
-    <div style={{ lineHeight: 1.1 }}>
-      <div style={{ fontSize: height * 2.4, fontWeight: 800, color: COLORS.charcoal, letterSpacing: 0.5 }}>BNY</div>
-      <div style={{ fontSize: height * 0.9, color: COLORS.mutedSlate, textTransform: 'uppercase', letterSpacing: 1 }}>Custodia</div>
+    <div style={{ display: 'flex', alignItems: 'center', gap: `${height * 0.35}mm`, fontFamily: 'Georgia, "Times New Roman", serif' }}>
+      <span style={{ fontSize: height * 2.1, fontWeight: 700, color: BNY_GREY, letterSpacing: 1 }}>BNY&nbsp;MELLON</span>
+      <span style={{ width: 1, height: `${height * 1.3}mm`, background: COLORS.mutedSlate }} />
+      <span style={{ fontSize: height * 2.1, fontWeight: 700, color: BNY_GOLD, letterSpacing: 1 }}>PERSHING</span>
     </div>
   )
 }
