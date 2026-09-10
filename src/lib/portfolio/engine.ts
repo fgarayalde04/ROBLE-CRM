@@ -18,6 +18,40 @@ export const ASSET_CLASS_ES: Record<string, string> = {
   'Sin clasificar': 'Sin clasificar',
 }
 
+// Orden de los grupos por clase de activo al listar posiciones (pantalla y
+// PDF): renta variable primero, liquidez y sin clasificar al final. Una
+// clase que no esté acá va después, ordenada por su subtotal.
+export const ASSET_CLASS_ORDER = ['Equity', 'ETF', 'Fund', 'Fixed Income', 'Alternatives', 'Real Estate', 'Cash', 'Sin clasificar']
+export function assetClassRank(ac: string): number {
+  const i = ASSET_CLASS_ORDER.indexOf(ac)
+  return i === -1 ? ASSET_CLASS_ORDER.length : i
+}
+
+// Agrupa posiciones por clase de activo, con el subtotal de Market Value de
+// cada grupo, ordenadas por ASSET_CLASS_ORDER (y a igualdad, por subtotal
+// descendente). El orden interno de cada grupo es el que traía `positions`.
+export function groupPositionsByAssetClass<T extends { asset_class: string; market_value: string | number }>(
+  positions: T[]
+): { assetClass: string; label: string; rows: T[]; subtotalValue: number }[] {
+  const byClass = new Map<string, T[]>()
+  for (const p of positions) {
+    const arr = byClass.get(p.asset_class) ?? []
+    arr.push(p)
+    byClass.set(p.asset_class, arr)
+  }
+  return Array.from(byClass.entries())
+    .map(([assetClass, rows]) => ({
+      assetClass,
+      label: ASSET_CLASS_ES[assetClass] ?? assetClass,
+      rows,
+      subtotalValue: rows.reduce((s, p) => s + Number(p.market_value), 0),
+    }))
+    .sort((a, b) => {
+      const rk = assetClassRank(a.assetClass) - assetClassRank(b.assetClass)
+      return rk !== 0 ? rk : b.subtotalValue - a.subtotalValue
+    })
+}
+
 // Fixed Income sub-classification (security_type → client-facing bucket).
 export function fixedIncomeBucket(securityType: string): string {
   const t = securityType.toLowerCase()

@@ -1,7 +1,9 @@
+import { Fragment } from 'react'
 import type { PortfolioPositionRow, PortfolioImportRow, PortfolioAccountInfo, PortfolioCashProjectionRow, PortfolioCashProjectionsImportRow, PortfolioPerformanceRow, PortfolioUnrealizedGainLossRow } from '@/types/portfolio'
 import { fmtUSD, fmtUSD2, fmtPct, fmtDate } from './PortfolioAccountClient'
 import DonutChart from '@/components/portfolio/DonutChart'
 import { COLORS, DONUT_COLORS, monthLabel } from '@/lib/portfolio/theme'
+import { ASSET_CLASS_ES, assetClassRank } from '@/lib/portfolio/engine'
 
 // Off-screen printable layout captured page-by-page (html2canvas + jsPDF) by
 // PortfolioAccountClient's handleDownloadPDF — never shown to the user
@@ -147,6 +149,38 @@ export default function AccountPdfReport({
   const totalGainLoss = sortedByValue.reduce((s, p) => s + (p.cusip && glByCusip.get(p.cusip) ? Number(glByCusip.get(p.cusip)!.gain_loss) : 0), 0)
   const totalGainLossPct = totalCostBasis > 0 ? (totalGainLoss / totalCostBasis) * 100 : 0
 
+  // Holdings agrupados por clase de activo (mismo orden y subtotales que la
+  // vista en pantalla). El % de cada fila se recalcula sobre el total real
+  // en modo consolidado.
+  const rowPct = (p: PortfolioPositionRow) =>
+    isConsolidated ? (totalValue > 0 ? (Number(p.market_value) / totalValue) * 100 : 0) : (p.weight_pct != null ? Number(p.weight_pct) : 0)
+  const holdingGroups = (() => {
+    const byClass = new Map<string, PortfolioPositionRow[]>()
+    for (const p of sortedByValue) {
+      const arr = byClass.get(p.asset_class) ?? []
+      arr.push(p)
+      byClass.set(p.asset_class, arr)
+    }
+    return Array.from(byClass.entries())
+      .map(([assetClass, rows]) => {
+        const subtotalValue = rows.reduce((s, p) => s + Number(p.market_value), 0)
+        return {
+          assetClass,
+          label: ASSET_CLASS_ES[assetClass] ?? assetClass,
+          rows,
+          subtotalValue,
+          subtotalPct: rows.reduce((s, p) => s + rowPct(p), 0),
+          subtotalCost: rows.reduce((s, p) => s + (p.cusip && glByCusip.get(p.cusip) ? Number(glByCusip.get(p.cusip)!.cost_basis) : 0), 0),
+          subtotalGL: rows.reduce((s, p) => s + (p.cusip && glByCusip.get(p.cusip) ? Number(glByCusip.get(p.cusip)!.gain_loss) : 0), 0),
+        }
+      })
+      .sort((a, b) => {
+        const rk = assetClassRank(a.assetClass) - assetClassRank(b.assetClass)
+        return rk !== 0 ? rk : b.subtotalValue - a.subtotalValue
+      })
+  })()
+  const holdingColSpan = 5 + (hasGL ? 2 : 0) + (hasMaturityCols ? 1 : 0) + (isConsolidated ? 1 : 0)
+
   return (
     <div id="account-pdf-report" style={{ position: 'fixed', left: -10000, top: 0 }}>
       {/* ── Page 1: Overview ── */}
@@ -170,6 +204,29 @@ export default function AccountPdfReport({
                 </div>
               ))}
             </div>
+            {performance.change_in_value && (() => {
+              const civ = performance.change_in_value!
+              const cells: [string, number | null][] = [
+                ['YTD', civ.ytd], ['1 Año', civ.oneYear], ['3 Años', civ.threeYear],
+                ['5 Años', civ.fiveYear], ['Desde inicio', civ.sinceInception],
+              ]
+              if (cells.every(([, v]) => v == null)) return null
+              return (
+                <>
+                  <div style={{ fontSize: 7, fontWeight: 700, color: COLORS.mutedSlate, textTransform: 'uppercase', letterSpacing: 0.4, marginTop: '2.5mm', marginBottom: '1mm' }}>Cuánto creció en dinero</div>
+                  <div style={{ display: 'flex', gap: '4mm', fontSize: 8 }}>
+                    {cells.map(([label, val]) => (
+                      <div key={label}>
+                        <span style={{ color: COLORS.mutedSlate }}>{label}: </span>
+                        <span style={{ fontWeight: 700, color: val == null ? COLORS.mutedSlate : val >= 0 ? COLORS.gain : COLORS.loss }}>
+                          {val == null ? '—' : `${val >= 0 ? '+' : ''}${fmtUSD(val)}`}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )
+            })()}
           </div>
         )}
 
@@ -250,7 +307,6 @@ export default function AccountPdfReport({
           <thead>
             <tr style={{ background: COLORS.charcoal }}>
               <th style={{ textAlign: 'left', padding: '2mm 1.5mm', color: '#fff', fontWeight: 700 }}>Investment</th>
-              <th style={{ textAlign: 'left', padding: '2mm 1.5mm', color: '#fff', fontWeight: 700 }}>Asset Class</th>
               <th style={{ textAlign: 'right', padding: '2mm 1.5mm', color: '#fff', fontWeight: 700 }}>Quantity</th>
               <th style={{ textAlign: 'right', padding: '2mm 1.5mm', color: '#fff', fontWeight: 700 }}>Price</th>
               <th style={{ textAlign: 'right', padding: '2mm 1.5mm', color: '#fff', fontWeight: 700 }}>Market Value</th>
@@ -266,42 +322,67 @@ export default function AccountPdfReport({
             </tr>
           </thead>
           <tbody>
-            {sortedByValue.map((p, i) => {
-              // In consolidated mode weight_pct was computed against each
-              // custodian's own total, not the combined one — always
-              // recalculate live here instead of trusting the stored value.
-              const pct = isConsolidated ? (totalValue > 0 ? (Number(p.market_value) / totalValue) * 100 : 0) : (p.weight_pct != null ? Number(p.weight_pct) : 0)
-              const clean = cleanedNames.get(p.id)
-              const gl = p.cusip ? glByCusip.get(p.cusip) : undefined
-              return (
-                <tr key={p.id} style={{ background: i % 2 === 0 ? '#fff' : COLORS.bgSofter }}>
-                  <td style={{ padding: '2.2mm 1.5mm', maxWidth: '58mm' }}>
-                    <div style={{ color: COLORS.ink, fontWeight: 600, lineHeight: 1.6, fontFamily: 'Arial, sans-serif' }}>{truncateName(clean?.name ?? p.name, 46)}</div>
-                    {clean?.detail && <div style={{ fontSize: 6, lineHeight: 1.6, color: COLORS.mutedSlate, fontFamily: 'Arial, sans-serif' }}>{clean.detail}</div>}
-                    {(p.purchase_date || gl?.purchase_date) && <div style={{ fontSize: 6, lineHeight: 1.6, color: COLORS.mutedSlate, fontFamily: 'Arial, sans-serif' }}>Compra: {p.purchase_date ?? gl?.purchase_date}</div>}
+            {holdingGroups.map(group => (
+              <Fragment key={group.assetClass}>
+                <tr style={{ background: COLORS.bgSofter }}>
+                  <td colSpan={holdingColSpan} style={{ padding: '1.8mm 1.5mm', fontWeight: 700, color: COLORS.ink, textTransform: 'uppercase', letterSpacing: 0.4, fontSize: 6.8 }}>
+                    {group.label} · {group.rows.length} {group.rows.length === 1 ? 'posición' : 'posiciones'}
                   </td>
-                  <td style={{ padding: '2.2mm 1.5mm', color: COLORS.slate }}>{p.asset_class}</td>
-                  <td style={{ padding: '2.2mm 1.5mm', textAlign: 'right', color: COLORS.slate }}>{p.quantity != null ? Number(p.quantity).toLocaleString('en-US') : '—'}</td>
-                  <td style={{ padding: '2.2mm 1.5mm', textAlign: 'right', color: COLORS.slate }}>{p.price != null ? fmtUSD2(Number(p.price)) : '—'}</td>
-                  <td style={{ padding: '2.2mm 1.5mm', textAlign: 'right', fontWeight: 700, color: COLORS.ink }}>{fmtUSD2(Number(p.market_value))}</td>
-                  <td style={{ padding: '2.2mm 1.5mm', textAlign: 'right', color: COLORS.slate }}>{fmtPct(pct)}</td>
-                  {hasGL && (
-                    <>
-                      <td style={{ padding: '2.2mm 1.5mm', textAlign: 'right', color: COLORS.slate }}>{gl ? fmtUSD2(Number(gl.cost_basis)) : '—'}</td>
-                      <td style={{ padding: '2.2mm 1.5mm', textAlign: 'right', fontWeight: 700, color: gl ? (Number(gl.gain_loss) >= 0 ? COLORS.gain : COLORS.loss) : COLORS.mutedSlate }}>
-                        {gl ? `${Number(gl.gain_loss) >= 0 ? '+' : ''}${fmtUSD2(Number(gl.gain_loss))} (${Number(gl.gain_loss_pct) >= 0 ? '+' : ''}${Number(gl.gain_loss_pct).toFixed(2)}%)` : '—'}
-                      </td>
-                    </>
-                  )}
-                  {hasMaturityCols && <td style={{ padding: '2.2mm 1.5mm', textAlign: 'right', color: COLORS.slate }}>{p.maturity_date ? fmtDate(p.maturity_date) : '—'}</td>}
-                  {isConsolidated && <td style={{ padding: '2.2mm 1.5mm', color: COLORS.slate }}>{custodianByPositionId?.get(p.id) ?? '—'}</td>}
                 </tr>
-              )
-            })}
+                {group.rows.map((p, i) => {
+                  const pct = rowPct(p)
+                  const clean = cleanedNames.get(p.id)
+                  const gl = p.cusip ? glByCusip.get(p.cusip) : undefined
+                  return (
+                    <tr key={p.id} style={{ background: i % 2 === 0 ? '#fff' : COLORS.bgSofter }}>
+                      <td style={{ padding: '2.2mm 1.5mm', maxWidth: '58mm' }}>
+                        <div style={{ color: COLORS.ink, fontWeight: 600, lineHeight: 1.6, fontFamily: 'Arial, sans-serif' }}>{truncateName(clean?.name ?? p.name, 46)}</div>
+                        {clean?.detail && <div style={{ fontSize: 6, lineHeight: 1.6, color: COLORS.mutedSlate, fontFamily: 'Arial, sans-serif' }}>{clean.detail}</div>}
+                        {(p.purchase_date || gl?.purchase_date) && <div style={{ fontSize: 6, lineHeight: 1.6, color: COLORS.mutedSlate, fontFamily: 'Arial, sans-serif' }}>Compra: {p.purchase_date ?? gl?.purchase_date}</div>}
+                      </td>
+                      <td style={{ padding: '2.2mm 1.5mm', textAlign: 'right', color: COLORS.slate }}>{p.quantity != null ? Number(p.quantity).toLocaleString('en-US') : '—'}</td>
+                      <td style={{ padding: '2.2mm 1.5mm', textAlign: 'right', color: COLORS.slate }}>{p.price != null ? fmtUSD2(Number(p.price)) : '—'}</td>
+                      <td style={{ padding: '2.2mm 1.5mm', textAlign: 'right', fontWeight: 700, color: COLORS.ink }}>{fmtUSD2(Number(p.market_value))}</td>
+                      <td style={{ padding: '2.2mm 1.5mm', textAlign: 'right', color: COLORS.slate }}>{fmtPct(pct)}</td>
+                      {hasGL && (
+                        <>
+                          <td style={{ padding: '2.2mm 1.5mm', textAlign: 'right', color: COLORS.slate }}>{gl ? fmtUSD2(Number(gl.cost_basis)) : '—'}</td>
+                          <td style={{ padding: '2.2mm 1.5mm', textAlign: 'right', fontWeight: 700, color: gl ? (Number(gl.gain_loss) >= 0 ? COLORS.gain : COLORS.loss) : COLORS.mutedSlate }}>
+                            {gl ? `${Number(gl.gain_loss) >= 0 ? '+' : ''}${fmtUSD2(Number(gl.gain_loss))} (${Number(gl.gain_loss_pct) >= 0 ? '+' : ''}${Number(gl.gain_loss_pct).toFixed(2)}%)` : '—'}
+                          </td>
+                        </>
+                      )}
+                      {hasMaturityCols && <td style={{ padding: '2.2mm 1.5mm', textAlign: 'right', color: COLORS.slate }}>{p.maturity_date ? fmtDate(p.maturity_date) : '—'}</td>}
+                      {isConsolidated && <td style={{ padding: '2.2mm 1.5mm', color: COLORS.slate }}>{custodianByPositionId?.get(p.id) ?? '—'}</td>}
+                    </tr>
+                  )
+                })}
+                {(() => {
+                  const glPct = group.subtotalCost > 0 ? (group.subtotalGL / group.subtotalCost) * 100 : 0
+                  return (
+                    <tr style={{ background: '#EEF2F1', borderBottom: `1.5px solid ${COLORS.border}` }}>
+                      <td colSpan={3} style={{ padding: '1.8mm 1.5mm', textAlign: 'right', fontWeight: 700, color: COLORS.slate, fontSize: 6.8 }}>Subtotal {group.label}</td>
+                      <td style={{ padding: '1.8mm 1.5mm', textAlign: 'right', fontWeight: 700, color: COLORS.ink }}>{fmtUSD2(group.subtotalValue)}</td>
+                      <td style={{ padding: '1.8mm 1.5mm', textAlign: 'right', fontWeight: 700, color: COLORS.slate }}>{fmtPct(group.subtotalPct)}</td>
+                      {hasGL && (
+                        <>
+                          <td style={{ padding: '1.8mm 1.5mm', textAlign: 'right', fontWeight: 700, color: COLORS.slate }}>{group.subtotalCost > 0 ? fmtUSD2(group.subtotalCost) : '—'}</td>
+                          <td style={{ padding: '1.8mm 1.5mm', textAlign: 'right', fontWeight: 700, color: group.subtotalCost > 0 ? (group.subtotalGL >= 0 ? COLORS.gain : COLORS.loss) : COLORS.mutedSlate }}>
+                            {group.subtotalCost > 0 ? `${group.subtotalGL >= 0 ? '+' : ''}${fmtUSD2(group.subtotalGL)} (${glPct >= 0 ? '+' : ''}${glPct.toFixed(2)}%)` : '—'}
+                          </td>
+                        </>
+                      )}
+                      {hasMaturityCols && <td style={{ padding: '1.8mm 1.5mm' }} />}
+                      {isConsolidated && <td style={{ padding: '1.8mm 1.5mm' }} />}
+                    </tr>
+                  )
+                })()}
+              </Fragment>
+            ))}
           </tbody>
           <tfoot>
             <tr style={{ background: COLORS.charcoal }}>
-              <td colSpan={4} style={{ padding: '2mm 1.5mm', color: '#fff', fontWeight: 700, textAlign: 'right' }}>TOTAL</td>
+              <td colSpan={3} style={{ padding: '2mm 1.5mm', color: '#fff', fontWeight: 700, textAlign: 'right' }}>TOTAL</td>
               <td style={{ padding: '2mm 1.5mm', color: '#fff', fontWeight: 700, textAlign: 'right' }}>{fmtUSD2(totalValue)}</td>
               <td style={{ padding: '2mm 1.5mm' }} />
               {hasGL && (

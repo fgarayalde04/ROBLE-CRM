@@ -3,18 +3,9 @@ import { useState, useMemo, Fragment } from 'react'
 import type { PortfolioPositionRow, PortfolioUnrealizedGainLossRow } from '@/types/portfolio'
 import { fmtUSD2, fmtPct, fmtDate } from './PortfolioAccountClient'
 import { cleanDisplayName } from '@/lib/portfolio/theme'
-import { ASSET_CLASS_ES } from '@/lib/portfolio/engine'
+import { ASSET_CLASS_ES, assetClassRank } from '@/lib/portfolio/engine'
 
 type SortKey = 'name' | 'quantity' | 'price' | 'market_value' | 'weight_pct'
-
-// Orden de los grupos por clase de activo en la tabla — acciones primero,
-// liquidez y sin clasificar al final. Cualquier clase que no esté acá va
-// después, ordenada por su subtotal.
-const ASSET_CLASS_ORDER = ['Equity', 'ETF', 'Fund', 'Fixed Income', 'Alternatives', 'Real Estate', 'Cash', 'Sin clasificar']
-function assetClassRank(ac: string) {
-  const i = ASSET_CLASS_ORDER.indexOf(ac)
-  return i === -1 ? ASSET_CLASS_ORDER.length : i
-}
 
 function DetailRow({ label, value }: { label: string; value: string | null | undefined }) {
   if (value == null || value === '') return null
