@@ -274,7 +274,7 @@ export default function AccountPdfReport({
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/download.png" alt="Roble Capital" style={{ height: '15mm', objectFit: 'contain' }} />
-            <BnyLogo height={9} />
+            <BnyLogo height={16} />
           </div>
           <div style={{ textAlign: 'center' }}>
             <div style={{ fontSize: 12, color: COLORS.midGreen, textTransform: 'uppercase', letterSpacing: 8, fontWeight: 700 }}>Portfolio Report</div>
@@ -586,18 +586,7 @@ export default function AccountPdfReport({
             </table>
           </div>
 
-          {maturityBuckets.length > 0 && (
-            <div data-pdf-keep-together style={{ border: `1px solid ${COLORS.border}`, borderRadius: 8, padding: '3mm 4mm' }}>
-              <div style={{ fontSize: 9, fontWeight: 700, color: COLORS.ink, marginBottom: '1mm' }}>Bond Maturity Schedule</div>
-              <CssBarChart data={maturityBuckets.map(b => ({ label: String(b.year), value: b.value }))} color={COLORS.darkGreen} />
-              {nextMaturity && (
-                <div style={{ marginTop: '2mm', paddingTop: '2mm', borderTop: `1px solid ${COLORS.border}`, display: 'flex', justifyContent: 'space-between', fontSize: 7 }}>
-                  <span style={{ color: COLORS.slate }}>Próximo: {cleanedNames.get(nextMaturity.id)?.name ?? nextMaturity.name}</span>
-                  <span style={{ fontWeight: 700, color: COLORS.ink }}>{fmtDate(nextMaturity.maturity_date as string)} · {fmtUSD(Number(nextMaturity.market_value))}</span>
-                </div>
-              )}
-            </div>
-          )}
+          {/* Bond Maturity Schedule — sacado por ahora a pedido. */}
 
           <PdfDisclosure />
           <PdfFooter clientName={clientName} />
