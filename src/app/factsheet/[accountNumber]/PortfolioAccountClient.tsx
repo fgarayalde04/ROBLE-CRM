@@ -343,6 +343,7 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
       )}
 
       <AccountPdfReport account={account} accountNumber={accountNumber} importRow={importRow} sortedByValue={sortedByValue}
+        history={history}
         assetAllocation={assetAllocation} fixedIncomeBreakdown={fixedIncomeBreakdown} currencyExposure={currencyExposure}
         liquidity={liquidity} maturityBuckets={maturityBuckets} nextMaturity={nextMaturity}
         cashProjImport={cashProjImport} cashProjRows={cashProjRows} projectedIncome12m={projectedIncome12m}

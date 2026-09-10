@@ -119,9 +119,34 @@ function CssBarChart({ data, color }: { data: { label: string; value: number }[]
   )
 }
 
-// Gráfico de evolución del valor de mercado — SVG plano (se captura bien en
-// html2canvas). Muestra "cuánto creció la cuenta" a lo largo del tiempo,
-// igual que la pestaña Rendimiento.
+// Gráfico de línea/área de la evolución del valor de la cuenta — SVG plano
+// (se captura bien en html2canvas), igual que la pestaña Rendimiento.
+function PdfAreaChart({ points, height = 46 }: { points: { date: string; value: number }[]; height?: number }) {
+  const W = 1000, H = 260, padL = 8, padR = 8, padT = 12, padB = 24
+  const values = points.map(p => p.value)
+  const min = Math.min(...values)
+  const max = Math.max(...values)
+  const span = max - min || 1
+  const n = points.length
+  const x = (i: number) => padL + (i / Math.max(n - 1, 1)) * (W - padL - padR)
+  const y = (v: number) => padT + (1 - (v - min) / span) * (H - padT - padB)
+  const line = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${x(i).toFixed(1)} ${y(p.value).toFixed(1)}`).join(' ')
+  const area = `${line} L ${x(n - 1).toFixed(1)} ${(H - padB).toFixed(1)} L ${x(0).toFixed(1)} ${(H - padB).toFixed(1)} Z`
+  const first = points[0], last = points[n - 1]
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: `${height}mm`, display: 'block' }} preserveAspectRatio="none">
+      <line x1={padL} y1={H - padB} x2={W - padR} y2={H - padB} stroke={COLORS.border} strokeWidth={1} />
+      <path d={area} fill={COLORS.mintGreen} opacity={0.55} />
+      <path d={line} fill="none" stroke={COLORS.midGreen} strokeWidth={2.5} />
+      <circle cx={x(n - 1)} cy={y(last.value)} r={4} fill={COLORS.darkGreen} />
+      <text x={padL} y={H - 6} fontSize={13} fill={COLORS.mutedSlate}>{fmtDate(first.date)}</text>
+      <text x={W - padR} y={H - 6} fontSize={13} fill={COLORS.mutedSlate} textAnchor="end">{fmtDate(last.date)}</text>
+      <text x={x(n - 1)} y={y(last.value) - 8} fontSize={14} fontWeight={700} fill={COLORS.ink} textAnchor="end">{fmtUSD(last.value)}</text>
+      <text x={padL} y={y(min) + 4} fontSize={12} fill={COLORS.mutedSlate}>{fmtUSD(min)}</text>
+    </svg>
+  )
+}
+
 // Gráfico de barras de rentabilidad por período — el mismo que trae el PDF
 // de performance del custodio (return % por período). SVG plano.
 function PdfPerfBarChart({ series, height = 58 }: { series: { label: string; value: number | null }[]; height?: number }) {
@@ -171,7 +196,7 @@ function PdfDisclosure() {
 }
 
 export default function AccountPdfReport({
-  account, accountNumber, importRow, sortedByValue, assetAllocation, fixedIncomeBreakdown, currencyExposure,
+  account, accountNumber, importRow, sortedByValue, history, assetAllocation, fixedIncomeBreakdown, currencyExposure,
   liquidity, maturityBuckets, nextMaturity, cashProjImport, cashProjRows, projectedIncome12m, nextPayment,
   cleanedNames, performance, unrealizedGLTotals, glByCusip,
   isConsolidated, custodianByPositionId, custodianBreakdown,
@@ -180,6 +205,7 @@ export default function AccountPdfReport({
   accountNumber: string
   importRow: PortfolioImportRow
   sortedByValue: PortfolioPositionRow[]
+  history: { snapshot_date: string; total_market_value: string }[]
   assetAllocation: { assetClass: string; label: string; value: number; pct: number }[]
   fixedIncomeBreakdown: { label: string; value: number; pct: number }[]
   currencyExposure: { label: string; value: number; pct: number }[]
@@ -251,6 +277,9 @@ export default function AccountPdfReport({
   const holdingColSpan = 5 + (hasGL ? 2 : 0) + (hasMaturityCols ? 1 : 0) + (isConsolidated ? 1 : 0)
 
   const hasIncomePage = !!cashProjImport && cashProjRows.length > 0
+  const growthPoints = [...history]
+    .sort((a, b) => a.snapshot_date.localeCompare(b.snapshot_date))
+    .map(h => ({ date: h.snapshot_date, value: Number(h.total_market_value) }))
   const sinceMoney = performance?.change_in_value?.sinceInception ?? null
   const sincePct = performance?.return_since_inception != null ? Number(performance.return_since_inception) : null
   const reportDate = new Date().toLocaleDateString('es-UY', { day: '2-digit', month: 'long', year: 'numeric' })
@@ -346,6 +375,16 @@ export default function AccountPdfReport({
             })()}
           </div>
         </div>
+
+        {growthPoints.length >= 2 && (
+          <div style={{ border: `1px solid ${COLORS.border}`, borderRadius: 10, padding: '5mm 6mm', marginBottom: '5mm' }}>
+            <div style={{ fontSize: 9.5, fontWeight: 700, color: COLORS.ink, marginBottom: '2mm' }}>Evolución del valor de la cuenta</div>
+            <PdfAreaChart points={growthPoints} height={50} />
+            <div style={{ fontSize: 6.4, color: COLORS.mutedSlate, marginTop: '2mm' }}>
+              Valor de mercado en cada importación. Puede incluir aportes, retiros u operaciones — no representa rentabilidad por sí solo.
+            </div>
+          </div>
+        )}
 
         {performance && (
           <div style={{ border: `1px solid ${COLORS.border}`, borderRadius: 10, padding: '5mm 6mm' }}>
