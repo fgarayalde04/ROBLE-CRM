@@ -249,14 +249,14 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
           const r = (el as HTMLElement).getBoundingClientRect()
           return { top: (r.top - containerTop), bottom: (r.bottom - containerTop) }
         })
-        const canvas = await html2canvas(pageEl, { scale: 3, useCORS: true, logging: false, backgroundColor: '#ffffff', windowWidth: pageEl.scrollWidth })
+        const canvas = await html2canvas(pageEl, { scale: 4, useCORS: true, logging: false, backgroundColor: '#ffffff', windowWidth: pageEl.scrollWidth })
         const scale = canvas.width / pageEl.scrollWidth
         const imgRatio = canvas.height / canvas.width
         const imgH = pdfW * imgRatio
         if (imgH <= pdfH) {
           if (!firstPdfPage) pdf.addPage()
           firstPdfPage = false
-          pdf.addImage(canvas.toDataURL('image/jpeg', 0.97), 'JPEG', 0, 0, pdfW, imgH)
+          pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, pdfW, imgH)
         } else {
           const maxSliceH = Math.round(canvas.width * pdfH / pdfW)
           let position = 0
@@ -279,7 +279,7 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
             if (!firstPdfPage) pdf.addPage()
             firstPdfPage = false
             const destH = pdfW * (sliceH / canvas.width)
-            pdf.addImage(pageCanvas.toDataURL('image/jpeg', 0.97), 'JPEG', 0, 0, pdfW, destH)
+            pdf.addImage(pageCanvas.toDataURL('image/png'), 'PNG', 0, 0, pdfW, destH)
             position += sliceH
           }
         }
@@ -343,7 +343,6 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
       )}
 
       <AccountPdfReport account={account} accountNumber={accountNumber} importRow={importRow} sortedByValue={sortedByValue}
-        history={history}
         assetAllocation={assetAllocation} fixedIncomeBreakdown={fixedIncomeBreakdown} currencyExposure={currencyExposure}
         liquidity={liquidity} maturityBuckets={maturityBuckets} nextMaturity={nextMaturity}
         cashProjImport={cashProjImport} cashProjRows={cashProjRows} projectedIncome12m={projectedIncome12m}

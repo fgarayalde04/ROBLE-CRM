@@ -8,7 +8,7 @@ import { ROBLE_DISCLAIMER } from '@/lib/disclaimers'
 // Off-screen printable layout captured page-by-page (html2canvas + jsPDF) by
 // PortfolioAccountClient's handleDownloadPDF — never shown to the user
 // directly, mounted positioned off-screen so it still has real layout.
-// Deliberately avoids recharts here: only plain SVG (DonutChart, PdfAreaChart)
+// Deliberately avoids recharts here: only plain SVG (DonutChart, PdfPerfBarChart)
 // and CSS div-bars, which paint synchronously and capture reliably in
 // html2canvas — unlike animated/portal-based chart libraries.
 
@@ -122,43 +122,56 @@ function CssBarChart({ data, color }: { data: { label: string; value: number }[]
 // Gráfico de evolución del valor de mercado — SVG plano (se captura bien en
 // html2canvas). Muestra "cuánto creció la cuenta" a lo largo del tiempo,
 // igual que la pestaña Rendimiento.
-function PdfAreaChart({ points, height = 46 }: { points: { date: string; value: number }[]; height?: number }) {
-  const W = 1000, H = 260, padL = 8, padR = 8, padT = 12, padB = 24
-  const values = points.map(p => p.value)
-  const min = Math.min(...values)
-  const max = Math.max(...values)
-  const span = max - min || 1
-  const n = points.length
-  const x = (i: number) => padL + (i / (n - 1)) * (W - padL - padR)
-  const y = (v: number) => padT + (1 - (v - min) / span) * (H - padT - padB)
-  const line = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${x(i).toFixed(1)} ${y(p.value).toFixed(1)}`).join(' ')
-  const area = `${line} L ${x(n - 1).toFixed(1)} ${(H - padB).toFixed(1)} L ${x(0).toFixed(1)} ${(H - padB).toFixed(1)} Z`
-  const first = points[0], last = points[n - 1]
+// Gráfico de barras de rentabilidad por período — el mismo que trae el PDF
+// de performance del custodio (return % por período). SVG plano.
+function PdfPerfBarChart({ series, height = 58 }: { series: { label: string; value: number | null }[]; height?: number }) {
+  const vals = series.map(s => s.value).filter((v): v is number => v != null)
+  if (vals.length === 0) return null
+  const maxV = Math.max(...vals, 0)
+  const minV = Math.min(...vals, 0)
+  const range = (maxV - minV) || 1
+  const W = 1000, H = 320, padT = 26, padB = 34
+  const plotH = H - padT - padB
+  const zeroY = padT + (maxV / range) * plotH
+  const bw = W / series.length
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: `${height}mm`, display: 'block' }} preserveAspectRatio="none">
-      <line x1={padL} y1={H - padB} x2={W - padR} y2={H - padB} stroke={COLORS.border} strokeWidth={1} />
-      <path d={area} fill={COLORS.mintGreen} opacity={0.55} />
-      <path d={line} fill="none" stroke={COLORS.midGreen} strokeWidth={2.5} />
-      <circle cx={x(n - 1)} cy={y(last.value)} r={4} fill={COLORS.darkGreen} />
-      <text x={padL} y={H - 6} fontSize={13} fill={COLORS.mutedSlate}>{fmtDate(first.date)}</text>
-      <text x={W - padR} y={H - 6} fontSize={13} fill={COLORS.mutedSlate} textAnchor="end">{fmtDate(last.date)}</text>
-      <text x={x(n - 1)} y={y(last.value) - 8} fontSize={14} fontWeight={700} fill={COLORS.ink} textAnchor="end">{fmtUSD(last.value)}</text>
-      <text x={padL} y={y(min) + 4} fontSize={12} fill={COLORS.mutedSlate}>{fmtUSD(min)}</text>
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: `${height}mm`, display: 'block' }}>
+      <line x1={0} y1={zeroY} x2={W} y2={zeroY} stroke={COLORS.mutedSlate} strokeWidth={1.5} />
+      {series.map((s, i) => {
+        if (s.value == null) {
+          return <text key={s.label} x={i * bw + bw / 2} y={H - 10} fontSize={15} fill={COLORS.slate} textAnchor="middle">{s.label}</text>
+        }
+        const pos = s.value >= 0
+        const h = Math.max(Math.abs(s.value / range) * plotH, 2)
+        const y = pos ? zeroY - h : zeroY
+        const x = i * bw + bw * 0.24
+        return (
+          <g key={s.label}>
+            <rect x={x} y={y} width={bw * 0.52} height={h} rx={3} fill={pos ? COLORS.midGreen : COLORS.loss} />
+            <text x={i * bw + bw / 2} y={pos ? y - 8 : y + h + 20} fontSize={17} fontWeight={700}
+              fill={pos ? COLORS.gain : COLORS.loss} textAnchor="middle">
+              {s.value >= 0 ? '+' : ''}{s.value.toFixed(2)}%
+            </text>
+            <text x={i * bw + bw / 2} y={H - 10} fontSize={15} fill={COLORS.slate} textAnchor="middle">{s.label}</text>
+          </g>
+        )
+      })}
     </svg>
   )
 }
 
+// Disclosure fijado al pie de la hoja (arriba del footer institucional).
 function PdfDisclosure() {
   return (
-    <div data-pdf-keep-together style={{ marginTop: '5mm', paddingTop: '3mm', borderTop: `1px solid ${COLORS.border}` }}>
+    <div style={{ position: 'absolute', left: `${PAGE_PAD_MM}mm`, right: `${PAGE_PAD_MM}mm`, bottom: `${PAGE_PAD_MM + 6}mm`, paddingTop: '3mm', borderTop: `1px solid ${COLORS.border}` }}>
       <div style={{ fontSize: 7, fontWeight: 700, color: COLORS.mutedSlate, textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: '1.5mm' }}>Disclosures</div>
-      <div style={{ fontSize: 6.6, color: COLORS.slate, lineHeight: 1.5, textAlign: 'justify' }}>{ROBLE_DISCLAIMER}</div>
+      <div style={{ fontSize: 6.4, color: COLORS.slate, lineHeight: 1.45, textAlign: 'justify' }}>{ROBLE_DISCLAIMER}</div>
     </div>
   )
 }
 
 export default function AccountPdfReport({
-  account, accountNumber, importRow, sortedByValue, history, assetAllocation, fixedIncomeBreakdown, currencyExposure,
+  account, accountNumber, importRow, sortedByValue, assetAllocation, fixedIncomeBreakdown, currencyExposure,
   liquidity, maturityBuckets, nextMaturity, cashProjImport, cashProjRows, projectedIncome12m, nextPayment,
   cleanedNames, performance, unrealizedGLTotals, glByCusip,
   isConsolidated, custodianByPositionId, custodianBreakdown,
@@ -167,7 +180,6 @@ export default function AccountPdfReport({
   accountNumber: string
   importRow: PortfolioImportRow
   sortedByValue: PortfolioPositionRow[]
-  history: { snapshot_date: string; total_market_value: string }[]
   assetAllocation: { assetClass: string; label: string; value: number; pct: number }[]
   fixedIncomeBreakdown: { label: string; value: number; pct: number }[]
   currencyExposure: { label: string; value: number; pct: number }[]
@@ -239,9 +251,6 @@ export default function AccountPdfReport({
   const holdingColSpan = 5 + (hasGL ? 2 : 0) + (hasMaturityCols ? 1 : 0) + (isConsolidated ? 1 : 0)
 
   const hasIncomePage = !!cashProjImport && cashProjRows.length > 0
-  const growthPoints = [...history]
-    .sort((a, b) => a.snapshot_date.localeCompare(b.snapshot_date))
-    .map(h => ({ date: h.snapshot_date, value: Number(h.total_market_value) }))
   const sinceMoney = performance?.change_in_value?.sinceInception ?? null
   const sincePct = performance?.return_since_inception != null ? Number(performance.return_since_inception) : null
   const reportDate = new Date().toLocaleDateString('es-UY', { day: '2-digit', month: 'long', year: 'numeric' })
@@ -259,37 +268,44 @@ export default function AccountPdfReport({
 
   return (
     <div id="account-pdf-report" style={{ position: 'fixed', left: -10000, top: 0 }}>
-      {/* ── Página 1: Performance + evolución + valor de cuenta ── */}
+      {/* ── Página 1: Portada ── */}
       <div className="pdf-page" style={PAGE_STYLE}>
-        {/* Encabezado institucional */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10mm' }}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/download.png" alt="Roble Capital" style={{ height: '13mm', objectFit: 'contain' }} />
-          <BnyLogo height={8} />
+        <div style={{ position: 'absolute', inset: `${PAGE_PAD_MM}mm`, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/download.png" alt="Roble Capital" style={{ height: '15mm', objectFit: 'contain' }} />
+            <BnyLogo height={9} />
+          </div>
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: 12, color: COLORS.midGreen, textTransform: 'uppercase', letterSpacing: 8, fontWeight: 700 }}>Portfolio Report</div>
+            <div style={{ width: '42mm', height: '2.5px', background: COLORS.darkGreen, margin: '6mm auto' }} />
+            <div style={{ fontSize: 34, fontWeight: 800, color: COLORS.ink, letterSpacing: 0.3 }}>{clientName}</div>
+            <div style={{ fontSize: 11, color: COLORS.slate, marginTop: '3mm', letterSpacing: 1 }}>Reporte generado el {reportDate}</div>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '5mm', paddingTop: '5mm', borderTop: `1px solid ${COLORS.border}`, fontSize: 8, color: COLORS.mutedSlate, textTransform: 'uppercase', letterSpacing: 1.5 }}>
+            Documento confidencial · Preparado exclusivamente para {clientName}
+          </div>
         </div>
+      </div>
 
-        <div style={{ textAlign: 'center', marginBottom: '9mm' }}>
-          <div style={{ fontSize: 10, color: COLORS.midGreen, textTransform: 'uppercase', letterSpacing: 6, fontWeight: 700 }}>Portfolio Report</div>
-          <div style={{ width: '32mm', height: '2px', background: COLORS.darkGreen, margin: '4mm auto' }} />
-          <div style={{ fontSize: 26, fontWeight: 800, color: COLORS.ink, letterSpacing: 0.3 }}>{clientName}</div>
-          <div style={{ fontSize: 9.5, color: COLORS.slate, marginTop: '2mm', letterSpacing: 1 }}>Reporte generado el {reportDate}</div>
-        </div>
+      {/* ── Página 2: Performance ── */}
+      <div className="pdf-page" style={PAGE_STYLE}>
+        <PdfHeader title="Performance" />
 
-        {/* Valor de cuenta + performance grande */}
         <div style={{ display: 'flex', gap: '4mm', marginBottom: '7mm' }}>
-          <div style={{ flex: '0 0 40%', borderRadius: 10, padding: '5mm 6mm', color: '#fff', background: `linear-gradient(135deg, ${COLORS.darkGreen}, ${COLORS.charcoal})` }}>
-            <div style={{ fontSize: 8, textTransform: 'uppercase', letterSpacing: 1, opacity: 0.7 }}>Valor de la cuenta</div>
-            <div style={{ fontSize: 30, fontWeight: 800, marginTop: '2mm' }}>{fmtUSD(totalValue)}</div>
+          <div style={{ flex: '0 0 38%', borderRadius: 10, padding: '6mm', color: '#fff', background: `linear-gradient(135deg, ${COLORS.darkGreen}, ${COLORS.charcoal})` }}>
+            <div style={{ fontSize: 8.5, textTransform: 'uppercase', letterSpacing: 1, opacity: 0.7 }}>Valor de la cuenta</div>
+            <div style={{ fontSize: 32, fontWeight: 800, marginTop: '3mm' }}>{fmtUSD(totalValue)}</div>
             {sinceMoney != null && (
-              <div style={{ fontSize: 8.5, marginTop: '3mm', opacity: 0.9 }}>
+              <div style={{ fontSize: 9, marginTop: '4mm', opacity: 0.9 }}>
                 Crecimiento desde inicio:{' '}
                 <span style={{ fontWeight: 800 }}>{sinceMoney >= 0 ? '+' : ''}{fmtUSD(sinceMoney)}{sincePct != null ? ` (${sincePct >= 0 ? '+' : ''}${sincePct.toFixed(2)}%)` : ''}</span>
               </div>
             )}
           </div>
-          <div style={{ flex: 1, border: `1px solid ${COLORS.border}`, borderRadius: 10, padding: '4mm 5mm' }}>
-            <div style={{ fontSize: 8, fontWeight: 700, color: COLORS.mutedSlate, textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: '3mm' }}>
-              Performance (TWRR{performance ? '' : ' — sin reporte importado'})
+          <div style={{ flex: 1, border: `1px solid ${COLORS.border}`, borderRadius: 10, padding: '5mm' }}>
+            <div style={{ fontSize: 8.5, fontWeight: 700, color: COLORS.mutedSlate, textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: '3.5mm' }}>
+              Rentabilidad real (TWRR){performance ? '' : ' — sin reporte importado'}
             </div>
             {performance ? (
               <div style={{ display: 'flex', gap: '3mm' }}>
@@ -297,16 +313,16 @@ export default function AccountPdfReport({
                   ['YTD', performance.return_ytd], ['1 Año', performance.return_1y], ['3 Años', performance.return_3y],
                   ['5 Años', performance.return_5y], ['Desde inicio', performance.return_since_inception],
                 ].map(([label, val]) => (
-                  <div key={label as string} style={{ flex: 1, textAlign: 'center', background: COLORS.bgSofter, borderRadius: 8, padding: '3.5mm 1mm' }}>
-                    <div style={{ fontSize: 7, color: COLORS.mutedSlate, textTransform: 'uppercase', letterSpacing: 0.4 }}>{label}</div>
-                    <div style={{ fontSize: 15, fontWeight: 800, marginTop: '1.5mm', color: val == null ? COLORS.mutedSlate : Number(val) >= 0 ? COLORS.gain : COLORS.loss }}>
+                  <div key={label as string} style={{ flex: 1, textAlign: 'center', background: COLORS.bgSofter, borderRadius: 8, padding: '4mm 1mm' }}>
+                    <div style={{ fontSize: 7.5, color: COLORS.mutedSlate, textTransform: 'uppercase', letterSpacing: 0.4 }}>{label}</div>
+                    <div style={{ fontSize: 17, fontWeight: 800, marginTop: '2mm', color: val == null ? COLORS.mutedSlate : Number(val) >= 0 ? COLORS.gain : COLORS.loss }}>
                       {val == null ? '—' : `${Number(val) >= 0 ? '+' : ''}${Number(val).toFixed(2)}%`}
                     </div>
                   </div>
                 ))}
               </div>
             ) : (
-              <div style={{ fontSize: 8, color: COLORS.mutedSlate }}>Subí el PDF de performance del custodio para ver la rentabilidad real de la cuenta.</div>
+              <div style={{ fontSize: 8.5, color: COLORS.mutedSlate }}>Subí el PDF de performance del custodio (Pershing o Morgan Stanley) para ver la rentabilidad real de la cuenta.</div>
             )}
             {performance?.change_in_value && (() => {
               const civ = performance.change_in_value!
@@ -316,8 +332,8 @@ export default function AccountPdfReport({
               if (cells.every(([, v]) => v == null)) return null
               return (
                 <>
-                  <div style={{ fontSize: 7, fontWeight: 700, color: COLORS.mutedSlate, textTransform: 'uppercase', letterSpacing: 0.4, marginTop: '4mm', marginBottom: '1.5mm' }}>Cuánto creció en dinero</div>
-                  <div style={{ display: 'flex', gap: '4mm', fontSize: 8 }}>
+                  <div style={{ fontSize: 7.5, fontWeight: 700, color: COLORS.mutedSlate, textTransform: 'uppercase', letterSpacing: 0.4, marginTop: '4.5mm', marginBottom: '1.5mm' }}>Cuánto creció en dinero</div>
+                  <div style={{ display: 'flex', gap: '4mm', fontSize: 8.5 }}>
                     {cells.map(([label, val]) => (
                       <div key={label} style={{ flex: 1 }}>
                         <span style={{ color: COLORS.mutedSlate }}>{label}: </span>
@@ -331,27 +347,26 @@ export default function AccountPdfReport({
           </div>
         </div>
 
-        {/* Gráfico de cómo se movió la cuenta */}
-        <div style={{ border: `1px solid ${COLORS.border}`, borderRadius: 10, padding: '4mm 5mm' }}>
-          <div style={{ fontSize: 9, fontWeight: 700, color: COLORS.ink, marginBottom: '2mm' }}>Evolución del valor de la cuenta</div>
-          {growthPoints.length >= 2 ? (
-            <>
-              <PdfAreaChart points={growthPoints} height={52} />
-              <div style={{ fontSize: 6.3, color: COLORS.mutedSlate, marginTop: '1.5mm' }}>
-                Valor de mercado en cada importación. Puede incluir aportes, retiros u operaciones — no representa rentabilidad por sí solo.
-              </div>
-            </>
-          ) : (
-            <div style={{ fontSize: 8, color: COLORS.mutedSlate, padding: '10mm 0', textAlign: 'center' }}>
-              Se necesitan al menos dos importaciones de posiciones para graficar la evolución.
+        {performance && (
+          <div style={{ border: `1px solid ${COLORS.border}`, borderRadius: 10, padding: '5mm 6mm' }}>
+            <div style={{ fontSize: 9.5, fontWeight: 700, color: COLORS.ink, marginBottom: '3mm' }}>Rentabilidad por período (Net of Fees)</div>
+            <PdfPerfBarChart series={[
+              { label: 'YTD', value: performance.return_ytd != null ? Number(performance.return_ytd) : null },
+              { label: '1 Año', value: performance.return_1y != null ? Number(performance.return_1y) : null },
+              { label: '3 Años', value: performance.return_3y != null ? Number(performance.return_3y) : null },
+              { label: '5 Años', value: performance.return_5y != null ? Number(performance.return_5y) : null },
+              { label: 'Desde inicio', value: performance.return_since_inception != null ? Number(performance.return_since_inception) : null },
+            ]} />
+            <div style={{ fontSize: 6.4, color: COLORS.mutedSlate, marginTop: '2mm' }}>
+              Rentabilidad time-weighted reportada por el custodio — no calculada por el sistema. Los períodos mayores a un año están anualizados.
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
         <PdfFooter clientName={clientName} />
       </div>
 
-      {/* ── Página 2: Composición y renta ── */}
+      {/* ── Página 3: Composición y renta ── */}
       <div className="pdf-page" style={PAGE_STYLE}>
         <PdfHeader title="Composición y renta" />
 
@@ -420,7 +435,7 @@ export default function AccountPdfReport({
         <PdfFooter clientName={clientName} />
       </div>
 
-      {/* ── Página 3: Holdings ── */}
+      {/* ── Página 4: Holdings ── */}
       <div className="pdf-page" style={PAGE_STYLE}>
         <PdfHeader title="Portfolio Holdings" />
         <table style={{ width: '100%', fontSize: 7.3, borderCollapse: 'collapse' }}>
@@ -520,7 +535,7 @@ export default function AccountPdfReport({
         <PdfFooter clientName={clientName} />
       </div>
 
-      {/* ── Página 4: Income & Cash Flow (solo si se importaron proyecciones) ── */}
+      {/* ── Página 5: Income & Cash Flow (solo si se importaron proyecciones) ── */}
       {hasIncomePage && (
         <div className="pdf-page" style={PAGE_STYLE}>
           <PdfHeader title="Income & Cash Flow" />
