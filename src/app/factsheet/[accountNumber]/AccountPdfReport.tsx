@@ -1,4 +1,3 @@
-import { Fragment } from 'react'
 import type { PortfolioPositionRow, PortfolioImportRow, PortfolioAccountInfo, PortfolioCashProjectionRow, PortfolioCashProjectionsImportRow, PortfolioPerformanceRow, PortfolioUnrealizedGainLossRow } from '@/types/portfolio'
 import { fmtUSD, fmtUSD2, fmtPct, fmtDate } from './PortfolioAccountClient'
 import DonutChart from '@/components/portfolio/DonutChart'
@@ -48,61 +47,25 @@ function truncateName(s: string, maxChars: number): string {
   return s.length > maxChars ? s.slice(0, maxChars - 1).trimEnd() + '…' : s
 }
 
-// Carátula — solo hoja 1. Institucional: logos, nombre del cliente, y el
-// recuadro Cliente / Custodio / Actualizado / Fecha del reporte (que a
-// partir de ahora NO se repite en las hojas siguientes).
-function PdfCover({ accountNumber, account, importRow, custodianLabel }: { accountNumber: string; account: PortfolioAccountInfo | null; importRow: PortfolioImportRow; custodianLabel?: string }) {
-  const today = new Date().toLocaleDateString('es-UY', { day: '2-digit', month: 'long', year: 'numeric' })
-  const clientName = account?.clientName || account?.accountName || accountNumber
+// Encabezado de cada hoja: logo Roble a la izquierda, título de la sección a
+// la derecha. Sin recuadro de datos (ese se sacó del reporte).
+function PdfHeader({ title }: { title: string }) {
   return (
-    <div style={{ position: 'absolute', inset: `${PAGE_PAD_MM}mm`, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-      {/* Top — marca Roble */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/download.png" alt="Roble Capital" style={{ height: '14mm', objectFit: 'contain' }} />
-        <div style={{ fontSize: 8, color: COLORS.mutedSlate, textTransform: 'uppercase', letterSpacing: 2, marginTop: '3mm' }}>Documento confidencial</div>
-      </div>
-
-      {/* Centro — título + cliente */}
-      <div style={{ textAlign: 'center' }}>
-        <div style={{ fontSize: 11, color: COLORS.midGreen, textTransform: 'uppercase', letterSpacing: 6, fontWeight: 700 }}>Portfolio Report</div>
-        <div style={{ width: '40mm', height: '2px', background: COLORS.darkGreen, margin: '5mm auto' }} />
-        <div style={{ fontSize: 30, fontWeight: 800, color: COLORS.ink, letterSpacing: 0.5 }}>{clientName}</div>
-        <div style={{ fontSize: 11, color: COLORS.slate, marginTop: '2mm', letterSpacing: 1 }}>Cuenta {accountNumber}</div>
-      </div>
-
-      {/* Recuadro de datos — solo acá */}
-      <div>
-        <div style={{ display: 'flex', border: `1px solid ${COLORS.border}`, borderRadius: 6, overflow: 'hidden', marginBottom: '8mm' }}>
-          {[
-            ['Cliente', clientName],
-            ['Custodio', custodianLabel ?? account?.custodian ?? '—'],
-            ['Actualizado', fmtDate(importRow.snapshot_date)],
-            ['Fecha del reporte', today],
-          ].map(([label, val], i, arr) => (
-            <div key={label} style={{ flex: 1, padding: '3mm 4mm', borderRight: i < arr.length - 1 ? `1px solid ${COLORS.border}` : 'none', background: COLORS.bgSoft }}>
-              <div style={{ fontSize: 7, color: COLORS.mutedSlate, textTransform: 'uppercase', letterSpacing: 0.5 }}>{label}</div>
-              <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.ink, marginTop: '1mm' }}>{val}</div>
-            </div>
-          ))}
-        </div>
-        {/* Custodia */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6mm', paddingTop: '5mm', borderTop: `1px solid ${COLORS.border}` }}>
-          <span style={{ fontSize: 8, color: COLORS.mutedSlate, textTransform: 'uppercase', letterSpacing: 1 }}>Custodia y compensación</span>
-          <BnyLogo height={9} />
-        </div>
-      </div>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', borderBottom: `2px solid ${COLORS.darkGreen}`, paddingBottom: '2.5mm', marginBottom: '5mm' }}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/download.png" alt="Roble Capital" style={{ height: '9mm', objectFit: 'contain' }} />
+      <div style={{ fontSize: 13, fontWeight: 800, color: COLORS.darkGreen }}>{title}</div>
     </div>
   )
 }
 
-// Encabezado compacto para las hojas 2+ (sin el recuadro de datos).
-function PdfHeader({ title }: { title: string }) {
+// Tarjeta de estadística reutilizable (institucional, prolija).
+function StatTile({ label, value, sub, color, big }: { label: string; value: string; sub?: string | null; color?: string; big?: boolean }) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', borderBottom: `2px solid ${COLORS.darkGreen}`, paddingBottom: '2.5mm', marginBottom: '4mm' }}>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src="/download.png" alt="Roble Capital" style={{ height: '9mm', objectFit: 'contain' }} />
-      <div style={{ fontSize: 13, fontWeight: 800, color: COLORS.darkGreen }}>{title}</div>
+    <div style={{ flex: 1, border: `1px solid ${COLORS.border}`, borderRadius: 8, padding: big ? '4mm 5mm' : '2.8mm 3.2mm' }}>
+      <div style={{ fontSize: big ? 8 : 6.8, color: COLORS.mutedSlate, textTransform: 'uppercase', letterSpacing: 0.6 }}>{label}</div>
+      <div style={{ fontSize: big ? 20 : 12, fontWeight: 800, color: color ?? COLORS.ink, marginTop: '1.2mm' }}>{value}</div>
+      {sub && <div style={{ fontSize: big ? 7 : 6.3, color: COLORS.mutedSlate, marginTop: '0.6mm' }}>{sub}</div>}
     </div>
   )
 }
@@ -225,7 +188,6 @@ export default function AccountPdfReport({
 }) {
   const totalValue = Number(importRow.total_market_value)
   const clientName = account?.clientName || account?.accountName || accountNumber
-  const custodianLabel = isConsolidated ? 'Pershing + Morgan Stanley' : undefined
   const topHoldings = sortedByValue.slice(0, 6)
   const maxHoldingValue = topHoldings[0] ? Number(topHoldings[0].market_value) : 1
 
@@ -282,72 +244,84 @@ export default function AccountPdfReport({
     .map(h => ({ date: h.snapshot_date, value: Number(h.total_market_value) }))
   const sinceMoney = performance?.change_in_value?.sinceInception ?? null
   const sincePct = performance?.return_since_inception != null ? Number(performance.return_since_inception) : null
+  const reportDate = new Date().toLocaleDateString('es-UY', { day: '2-digit', month: 'long', year: 'numeric' })
+
+  // Rendimiento estimado del Projected Income: income proyectado a 12 meses
+  // dividido el market value de las posiciones que efectivamente generan
+  // renta (bonos con cupón, liquidez, fondos y las que pagan dividendo).
+  const incomeProducingMV = sortedByValue.reduce((s, p) => {
+    const pays = (p.coupon != null && Number(p.coupon) > 0) ||
+      !!p.dividend_policy ||
+      ['Fixed Income', 'Cash', 'Fund'].includes(p.asset_class)
+    return pays ? s + Number(p.market_value) : s
+  }, 0)
+  const incomeYield = hasIncomePage && incomeProducingMV > 0 ? (projectedIncome12m / incomeProducingMV) * 100 : null
 
   return (
     <div id="account-pdf-report" style={{ position: 'fixed', left: -10000, top: 0 }}>
-      {/* ── Página 1: Carátula ── */}
+      {/* ── Página 1: Performance + evolución + valor de cuenta ── */}
       <div className="pdf-page" style={PAGE_STYLE}>
-        <PdfCover accountNumber={accountNumber} account={account} importRow={importRow} custodianLabel={custodianLabel} />
-      </div>
+        {/* Encabezado institucional */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10mm' }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/download.png" alt="Roble Capital" style={{ height: '13mm', objectFit: 'contain' }} />
+          <BnyLogo height={8} />
+        </div>
 
-      {/* ── Página 2: Resumen ── */}
-      <div className="pdf-page" style={PAGE_STYLE}>
-        <PdfHeader title="Resumen" />
+        <div style={{ textAlign: 'center', marginBottom: '9mm' }}>
+          <div style={{ fontSize: 10, color: COLORS.midGreen, textTransform: 'uppercase', letterSpacing: 6, fontWeight: 700 }}>Portfolio Report</div>
+          <div style={{ width: '32mm', height: '2px', background: COLORS.darkGreen, margin: '4mm auto' }} />
+          <div style={{ fontSize: 26, fontWeight: 800, color: COLORS.ink, letterSpacing: 0.3 }}>{clientName}</div>
+          <div style={{ fontSize: 9.5, color: COLORS.slate, marginTop: '2mm', letterSpacing: 1 }}>Reporte generado el {reportDate}</div>
+        </div>
 
-        {growthPoints.length >= 2 && (
-          <div data-pdf-keep-together style={{ border: `1px solid ${COLORS.border}`, borderRadius: 8, padding: '3mm 4mm', marginBottom: '4mm' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '1mm' }}>
-              <div style={{ fontSize: 9, fontWeight: 700, color: COLORS.ink }}>Evolución del valor de la cuenta</div>
-              {sinceMoney != null && (
-                <div style={{ fontSize: 8, color: COLORS.slate }}>
-                  Crecimiento desde inicio:{' '}
-                  <span style={{ fontWeight: 700, color: sinceMoney >= 0 ? COLORS.gain : COLORS.loss }}>
-                    {sinceMoney >= 0 ? '+' : ''}{fmtUSD(sinceMoney)}{sincePct != null ? ` (${sincePct >= 0 ? '+' : ''}${sincePct.toFixed(2)}%)` : ''}
-                  </span>
-                </div>
-              )}
-            </div>
-            <PdfAreaChart points={growthPoints} />
-            <div style={{ fontSize: 6.3, color: COLORS.mutedSlate, marginTop: '1mm' }}>
-              Valor de mercado en cada importación. Puede incluir aportes, retiros u operaciones — no representa rentabilidad por sí solo.
-            </div>
+        {/* Valor de cuenta + performance grande */}
+        <div style={{ display: 'flex', gap: '4mm', marginBottom: '7mm' }}>
+          <div style={{ flex: '0 0 40%', borderRadius: 10, padding: '5mm 6mm', color: '#fff', background: `linear-gradient(135deg, ${COLORS.darkGreen}, ${COLORS.charcoal})` }}>
+            <div style={{ fontSize: 8, textTransform: 'uppercase', letterSpacing: 1, opacity: 0.7 }}>Valor de la cuenta</div>
+            <div style={{ fontSize: 30, fontWeight: 800, marginTop: '2mm' }}>{fmtUSD(totalValue)}</div>
+            {sinceMoney != null && (
+              <div style={{ fontSize: 8.5, marginTop: '3mm', opacity: 0.9 }}>
+                Crecimiento desde inicio:{' '}
+                <span style={{ fontWeight: 800 }}>{sinceMoney >= 0 ? '+' : ''}{fmtUSD(sinceMoney)}{sincePct != null ? ` (${sincePct >= 0 ? '+' : ''}${sincePct.toFixed(2)}%)` : ''}</span>
+              </div>
+            )}
           </div>
-        )}
-
-        {performance && (
-          <div data-pdf-keep-together style={{ border: `1px solid ${COLORS.border}`, borderRadius: 8, padding: '3mm 4mm', marginBottom: '4mm' }}>
-            <div style={{ fontSize: 9, fontWeight: 700, color: COLORS.ink, marginBottom: '1mm' }}>Performance reportada por el custodio (TWRR)</div>
-            <div style={{ display: 'flex', gap: '4mm', fontSize: 8 }}>
-              {[
-                ['YTD', performance.return_ytd], ['1 Año', performance.return_1y],
-                ['3 Años', performance.return_3y], ['5 Años', performance.return_5y],
-                ['Desde inicio', performance.return_since_inception],
-              ].map(([label, val]) => (
-                <div key={label as string}>
-                  <span style={{ color: COLORS.mutedSlate }}>{label}: </span>
-                  <span style={{ fontWeight: 700, color: val != null && Number(val) >= 0 ? COLORS.gain : COLORS.loss }}>
-                    {val != null ? `${Number(val) >= 0 ? '+' : ''}${Number(val).toFixed(2)}%` : '—'}
-                  </span>
-                </div>
-              ))}
+          <div style={{ flex: 1, border: `1px solid ${COLORS.border}`, borderRadius: 10, padding: '4mm 5mm' }}>
+            <div style={{ fontSize: 8, fontWeight: 700, color: COLORS.mutedSlate, textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: '3mm' }}>
+              Performance (TWRR{performance ? '' : ' — sin reporte importado'})
             </div>
-            {performance.change_in_value && (() => {
+            {performance ? (
+              <div style={{ display: 'flex', gap: '3mm' }}>
+                {[
+                  ['YTD', performance.return_ytd], ['1 Año', performance.return_1y], ['3 Años', performance.return_3y],
+                  ['5 Años', performance.return_5y], ['Desde inicio', performance.return_since_inception],
+                ].map(([label, val]) => (
+                  <div key={label as string} style={{ flex: 1, textAlign: 'center', background: COLORS.bgSofter, borderRadius: 8, padding: '3.5mm 1mm' }}>
+                    <div style={{ fontSize: 7, color: COLORS.mutedSlate, textTransform: 'uppercase', letterSpacing: 0.4 }}>{label}</div>
+                    <div style={{ fontSize: 15, fontWeight: 800, marginTop: '1.5mm', color: val == null ? COLORS.mutedSlate : Number(val) >= 0 ? COLORS.gain : COLORS.loss }}>
+                      {val == null ? '—' : `${Number(val) >= 0 ? '+' : ''}${Number(val).toFixed(2)}%`}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ fontSize: 8, color: COLORS.mutedSlate }}>Subí el PDF de performance del custodio para ver la rentabilidad real de la cuenta.</div>
+            )}
+            {performance?.change_in_value && (() => {
               const civ = performance.change_in_value!
               const cells: [string, number | null][] = [
-                ['YTD', civ.ytd], ['1 Año', civ.oneYear], ['3 Años', civ.threeYear],
-                ['5 Años', civ.fiveYear], ['Desde inicio', civ.sinceInception],
+                ['YTD', civ.ytd], ['1 Año', civ.oneYear], ['3 Años', civ.threeYear], ['5 Años', civ.fiveYear], ['Desde inicio', civ.sinceInception],
               ]
               if (cells.every(([, v]) => v == null)) return null
               return (
                 <>
-                  <div style={{ fontSize: 7, fontWeight: 700, color: COLORS.mutedSlate, textTransform: 'uppercase', letterSpacing: 0.4, marginTop: '2.5mm', marginBottom: '1mm' }}>Cuánto creció en dinero</div>
+                  <div style={{ fontSize: 7, fontWeight: 700, color: COLORS.mutedSlate, textTransform: 'uppercase', letterSpacing: 0.4, marginTop: '4mm', marginBottom: '1.5mm' }}>Cuánto creció en dinero</div>
                   <div style={{ display: 'flex', gap: '4mm', fontSize: 8 }}>
                     {cells.map(([label, val]) => (
-                      <div key={label}>
+                      <div key={label} style={{ flex: 1 }}>
                         <span style={{ color: COLORS.mutedSlate }}>{label}: </span>
-                        <span style={{ fontWeight: 700, color: val == null ? COLORS.mutedSlate : val >= 0 ? COLORS.gain : COLORS.loss }}>
-                          {val == null ? '—' : `${val >= 0 ? '+' : ''}${fmtUSD(val)}`}
-                        </span>
+                        <span style={{ fontWeight: 700, color: val == null ? COLORS.mutedSlate : val >= 0 ? COLORS.gain : COLORS.loss }}>{val == null ? '—' : `${val >= 0 ? '+' : ''}${fmtUSD(val)}`}</span>
                       </div>
                     ))}
                   </div>
@@ -355,59 +329,58 @@ export default function AccountPdfReport({
               )
             })()}
           </div>
-        )}
-
-        <div style={{ borderRadius: 10, padding: '5mm 6mm', color: '#fff', marginBottom: '4mm', background: `linear-gradient(135deg, ${COLORS.darkGreen}, ${COLORS.charcoal})` }}>
-          <div style={{ fontSize: 8, textTransform: 'uppercase', letterSpacing: 1, opacity: 0.65 }}>Valor del portafolio</div>
-          <div style={{ fontSize: 26, fontWeight: 800, marginTop: '1mm' }}>{fmtUSD(totalValue)}</div>
         </div>
 
-        <div data-pdf-keep-together style={{ display: 'flex', gap: '3mm', marginBottom: '4mm' }}>
-          {[
-            ['Posiciones', String(sortedByValue.length), null, COLORS.ink],
-            ['Liquidez', fmtUSD(liquidity.value), fmtPct(liquidity.pct), COLORS.ink],
-            unrealizedGLTotals
-              ? ['Unrealized Gain/Loss', `${unrealizedGLTotals.gainLoss >= 0 ? '+' : ''}${fmtUSD(unrealizedGLTotals.gainLoss)}`, `${unrealizedGLTotals.gainLoss >= 0 ? '+' : ''}${unrealizedGLTotals.pct.toFixed(2)}%`, unrealizedGLTotals.gainLoss >= 0 ? COLORS.gain : COLORS.loss]
-              : ['Unrealized Gain/Loss', 'No disponible', 'Sin costo base en el archivo', COLORS.mutedSlate],
-            ['Income próx. 12 meses', cashProjImport ? fmtUSD(projectedIncome12m) : '—', null, COLORS.ink],
-          ].map(([label, val, sub, color]) => (
-            <div key={label as string} style={{ flex: 1, border: `1px solid ${COLORS.border}`, borderRadius: 8, padding: '2.5mm 3mm' }}>
-              <div style={{ fontSize: 6.8, color: COLORS.mutedSlate, textTransform: 'uppercase', letterSpacing: 0.5 }}>{label}</div>
-              <div style={{ fontSize: 11.5, fontWeight: 700, color: color as string, marginTop: '1mm' }}>{val}</div>
-              {sub && <div style={{ fontSize: 6.3, color: COLORS.mutedSlate, marginTop: '0.5mm' }}>{sub}</div>}
+        {/* Gráfico de cómo se movió la cuenta */}
+        <div style={{ border: `1px solid ${COLORS.border}`, borderRadius: 10, padding: '4mm 5mm' }}>
+          <div style={{ fontSize: 9, fontWeight: 700, color: COLORS.ink, marginBottom: '2mm' }}>Evolución del valor de la cuenta</div>
+          {growthPoints.length >= 2 ? (
+            <>
+              <PdfAreaChart points={growthPoints} height={52} />
+              <div style={{ fontSize: 6.3, color: COLORS.mutedSlate, marginTop: '1.5mm' }}>
+                Valor de mercado en cada importación. Puede incluir aportes, retiros u operaciones — no representa rentabilidad por sí solo.
+              </div>
+            </>
+          ) : (
+            <div style={{ fontSize: 8, color: COLORS.mutedSlate, padding: '10mm 0', textAlign: 'center' }}>
+              Se necesitan al menos dos importaciones de posiciones para graficar la evolución.
             </div>
-          ))}
+          )}
         </div>
 
-        <div data-pdf-keep-together style={{ display: 'flex', gap: '3mm', marginBottom: '4mm' }}>
+        <PdfFooter clientName={clientName} />
+      </div>
+
+      {/* ── Página 2: Composición y renta ── */}
+      <div className="pdf-page" style={PAGE_STYLE}>
+        <PdfHeader title="Composición y renta" />
+
+        <div data-pdf-keep-together style={{ display: 'flex', gap: '3mm', marginBottom: '5mm' }}>
           <PdfDonut title="Asset Allocation" data={assetAllocation.map(a => ({ label: a.label, value: a.value, pct: a.pct }))} />
           {fixedIncomeBreakdown.length > 0 && <PdfDonut title="Fixed Income Allocation" data={fixedIncomeBreakdown} />}
           <PdfDonut title="Currency Exposure" data={currencyExposure} />
         </div>
 
-        <div data-pdf-keep-together style={{ border: `1px solid ${COLORS.border}`, borderRadius: 8, padding: '3mm 4mm', marginBottom: '3mm' }}>
-          <div style={{ fontSize: 9, fontWeight: 700, color: COLORS.ink, marginBottom: '2.5mm' }}>Principales inversiones</div>
-          {topHoldings.map(p => {
-            const pct = p.weight_pct != null ? Number(p.weight_pct) : 0
-            const mv = Number(p.market_value)
-            const clean = cleanedNames.get(p.id)
-            return (
-              <div key={p.id} style={{ marginBottom: '4mm' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', minHeight: '4mm', fontSize: 7.5, lineHeight: 1.4, marginBottom: '1.2mm', fontFamily: 'Arial, sans-serif' }}>
-                  <span style={{ color: COLORS.ink, fontWeight: 600 }}>{truncateName(clean?.name ?? p.name, 78)}</span>
-                  <span style={{ color: COLORS.ink, fontWeight: 700, flexShrink: 0, marginLeft: '2mm' }}>{fmtUSD(mv)} · {fmtPct(pct)}</span>
-                </div>
-                <div style={{ height: '2mm', background: COLORS.bgSofter, borderRadius: '1mm', overflow: 'hidden' }}>
-                  <div style={{ height: '100%', width: `${Math.max((mv / maxHoldingValue) * 100, 3)}%`, background: `linear-gradient(90deg, ${COLORS.darkGreen}, ${COLORS.midGreen})` }} />
-                </div>
-              </div>
-            )
-          })}
+        <div data-pdf-keep-together style={{ display: 'flex', gap: '3mm', marginBottom: '5mm' }}>
+          <StatTile label="Liquidez" value={fmtUSD(liquidity.value)} sub={`${fmtPct(liquidity.pct)} del portafolio`} />
+          <StatTile label="Projected Income · próx. 12 meses" value={hasIncomePage ? fmtUSD(projectedIncome12m) : '—'} sub={hasIncomePage ? 'Cupones y dividendos estimados' : 'Sin archivo importado'} />
+          <StatTile
+            label="Rendimiento estimado del income"
+            value={incomeYield != null ? `${incomeYield.toFixed(2)}%` : '—'}
+            sub={incomeYield != null ? `Income 12m ÷ ${fmtUSD(incomeProducingMV)} en posiciones que generan renta` : 'Requiere Projected Income'}
+            color={COLORS.darkGreen}
+          />
+          <StatTile
+            label="Unrealized Gain/Loss"
+            value={unrealizedGLTotals ? `${unrealizedGLTotals.gainLoss >= 0 ? '+' : ''}${fmtUSD(unrealizedGLTotals.gainLoss)}` : 'No disponible'}
+            sub={unrealizedGLTotals ? `${unrealizedGLTotals.gainLoss >= 0 ? '+' : ''}${unrealizedGLTotals.pct.toFixed(2)}% sobre costo` : 'Sin costo base en el archivo'}
+            color={unrealizedGLTotals ? (unrealizedGLTotals.gainLoss >= 0 ? COLORS.gain : COLORS.loss) : COLORS.mutedSlate}
+          />
         </div>
 
         {custodianBreakdown && custodianBreakdown.length > 0 && (
-          <div data-pdf-keep-together style={{ border: `1px solid ${COLORS.border}`, borderRadius: 8, padding: '3mm 4mm', marginBottom: '3mm' }}>
-            <div style={{ fontSize: 8, fontWeight: 700, color: COLORS.ink, marginBottom: '2mm' }}>Portfolio por Custodio</div>
+          <div data-pdf-keep-together style={{ border: `1px solid ${COLORS.border}`, borderRadius: 8, padding: '3mm 4mm', marginBottom: '4mm' }}>
+            <div style={{ fontSize: 8, fontWeight: 700, color: COLORS.ink, marginBottom: '2mm' }}>Portfolio por custodio</div>
             <div style={{ display: 'flex', gap: '4mm' }}>
               {custodianBreakdown.map(c => (
                 <div key={c.label} style={{ flex: 1 }}>
@@ -423,6 +396,26 @@ export default function AccountPdfReport({
             </div>
           </div>
         )}
+
+        <div data-pdf-keep-together style={{ border: `1px solid ${COLORS.border}`, borderRadius: 8, padding: '3mm 4mm' }}>
+          <div style={{ fontSize: 9, fontWeight: 700, color: COLORS.ink, marginBottom: '2.5mm' }}>Principales inversiones</div>
+          {topHoldings.map(p => {
+            const pct = p.weight_pct != null ? Number(p.weight_pct) : 0
+            const mv = Number(p.market_value)
+            const clean = cleanedNames.get(p.id)
+            return (
+              <div key={p.id} style={{ marginBottom: '3.5mm' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', minHeight: '4mm', fontSize: 7.5, lineHeight: 1.4, marginBottom: '1.2mm' }}>
+                  <span style={{ color: COLORS.ink, fontWeight: 600 }}>{truncateName(clean?.name ?? p.name, 78)}</span>
+                  <span style={{ color: COLORS.ink, fontWeight: 700, flexShrink: 0, marginLeft: '2mm' }}>{fmtUSD(mv)} · {fmtPct(pct)}</span>
+                </div>
+                <div style={{ height: '2mm', background: COLORS.bgSofter, borderRadius: '1mm', overflow: 'hidden' }}>
+                  <div style={{ height: '100%', width: `${Math.max((mv / maxHoldingValue) * 100, 3)}%`, background: `linear-gradient(90deg, ${COLORS.darkGreen}, ${COLORS.midGreen})` }} />
+                </div>
+              </div>
+            )
+          })}
+        </div>
 
         <PdfFooter clientName={clientName} />
       </div>
@@ -448,9 +441,8 @@ export default function AccountPdfReport({
               {isConsolidated && <th style={{ textAlign: 'left', padding: '2mm 1.5mm', color: '#fff', fontWeight: 700 }}>Custodian</th>}
             </tr>
           </thead>
-          <tbody>
-            {holdingGroups.map(group => (
-              <Fragment key={group.assetClass}>
+          {holdingGroups.map(group => (
+              <tbody data-pdf-keep-together key={group.assetClass}>
                 <tr style={{ background: COLORS.bgSofter }}>
                   <td colSpan={holdingColSpan} style={{ padding: '1.8mm 1.5mm', fontWeight: 700, color: COLORS.ink, textTransform: 'uppercase', letterSpacing: 0.4, fontSize: 6.8 }}>
                     {group.label} · {group.rows.length} {group.rows.length === 1 ? 'posición' : 'posiciones'}
@@ -504,9 +496,8 @@ export default function AccountPdfReport({
                     </tr>
                   )
                 })()}
-              </Fragment>
+              </tbody>
             ))}
-          </tbody>
           <tfoot>
             <tr style={{ background: COLORS.charcoal }}>
               <td colSpan={3} style={{ padding: '2mm 1.5mm', color: '#fff', fontWeight: 700, textAlign: 'right' }}>TOTAL</td>

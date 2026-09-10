@@ -46,13 +46,13 @@ async function extractPositionedLines(buffer: Buffer): Promise<PositionedLine[]>
       const x = Math.round(it.transform[4])
       const y = Math.round(it.transform[5])
       // agrupar líneas con y a ±1 (a veces difieren por subpíxel)
-      const key = [...byY.keys()].find(k => Math.abs(k - y) <= 1) ?? y
+      const key = Array.from(byY.keys()).find(k => Math.abs(k - y) <= 1) ?? y
       if (!byY.has(key)) byY.set(key, [])
       byY.get(key)!.push({ x, str: it.str })
     }
-    for (const [y, items] of byY) {
-      out.push({ page: p, y, items: items.sort((a, b) => a.x - b.x) })
-    }
+    Array.from(byY.entries()).forEach(([y, items]) => {
+      out.push({ page: p, y, items: items.sort((a: PositionedItem, b: PositionedItem) => a.x - b.x) })
+    })
   }
   return out
 }
