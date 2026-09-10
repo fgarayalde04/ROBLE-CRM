@@ -1,6 +1,6 @@
 'use client'
 import { useState, useMemo } from 'react'
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, BarChart, Bar, Cell, LabelList, ReferenceLine } from 'recharts'
 import { fmtUSD, fmtDate } from './PortfolioAccountClient'
 import DocumentUploadButton from '@/components/portfolio/DocumentUploadButton'
 import type { PortfolioPerformanceRow } from '@/types/portfolio'
@@ -160,13 +160,48 @@ export default function RendimientoTab({ accountNumber, history, performance, on
       </div>
 
       {sorted.length < 2 ? (
-        <div className="bg-white rounded-xl border border-gray-200 p-10 text-center">
-          <div className="text-3xl mb-3">📈</div>
-          <p className="text-sm font-semibold text-gray-600">Todavía no hay suficiente historial de Market Value</p>
-          <p className="text-xs text-gray-400 mt-1 max-w-sm mx-auto">
-            Se necesitan al menos dos importaciones de posiciones para mostrar la evolución del valor de mercado.
-          </p>
-        </div>
+        (() => {
+          const perfBars = performance ? [
+            ['YTD', performance.return_ytd], ['1 Año', performance.return_1y], ['3 Años', performance.return_3y],
+            ['5 Años', performance.return_5y], ['Desde inicio', performance.return_since_inception],
+          ].map(([label, v]) => ({ label: label as string, value: v == null ? null : Number(v) }))
+            .filter(d => d.value != null) as { label: string; value: number }[] : []
+
+          if (perfBars.length === 0) {
+            return (
+              <div className="bg-white rounded-xl border border-gray-200 p-10 text-center">
+                <div className="text-3xl mb-3">📈</div>
+                <p className="text-sm font-semibold text-gray-600">Todavía no hay suficiente historial de Market Value</p>
+                <p className="text-xs text-gray-400 mt-1 max-w-sm mx-auto">
+                  Se necesitan al menos dos importaciones de posiciones para mostrar la evolución del valor de mercado.
+                  Importá el reporte de performance del custodio para ver la rentabilidad por período.
+                </p>
+              </div>
+            )
+          }
+          return (
+            <div className="bg-white rounded-xl border border-gray-200 p-5">
+              <p className="text-sm font-bold text-gray-900 mb-1">Rentabilidad por período (TWRR)</p>
+              <p className="text-[11px] text-gray-400 mb-4">
+                Rentabilidad real reportada por el custodio. Los períodos mayores a un año están anualizados.
+              </p>
+              <ResponsiveContainer width="100%" height={260}>
+                <BarChart data={perfBars} margin={{ top: 20, right: 8, bottom: 0, left: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" vertical={false} />
+                  <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#6B7280' }} />
+                  <YAxis tick={{ fontSize: 10, fill: '#6B7280' }} tickFormatter={(v) => `${v}%`} />
+                  <ReferenceLine y={0} stroke="#9CA3AF" />
+                  <Tooltip formatter={(v: any) => `${Number(v) >= 0 ? '+' : ''}${Number(v).toFixed(2)}%`} cursor={{ fill: '#F3F4F6' }} />
+                  <Bar dataKey="value" radius={[3, 3, 0, 0]} maxBarSize={64}>
+                    {perfBars.map((d, i) => <Cell key={i} fill={d.value >= 0 ? '#2E7D52' : '#B91C1C'} />)}
+                    <LabelList dataKey="value" position="top" formatter={(v: any) => `${Number(v) >= 0 ? '+' : ''}${Number(v).toFixed(2)}%`}
+                      style={{ fontSize: 11, fontWeight: 700, fill: '#111827' }} />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )
+        })()
       ) : (
       <div className="bg-white rounded-xl border border-gray-200 p-5">
         <div className="flex items-center justify-between mb-1">
