@@ -52,6 +52,10 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
   const [cashProjRows, setCashProjRows] = useState<PortfolioCashProjectionRow[]>([])
   const [unrealizedGLImport, setUnrealizedGLImport] = useState<PortfolioUnrealizedGainLossImportRow | null>(null)
   const [unrealizedGLRows, setUnrealizedGLRows] = useState<PortfolioUnrealizedGainLossRow[]>([])
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [activityImport, setActivityImport] = useState<any | null>(null)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [activityRows, setActivityRows] = useState<any[]>([])
   const [custodians, setCustodians] = useState<{ custodian: string; latestSnapshotDate: string; totalMarketValue: number }[]>([])
   const [consolidatedPositions, setConsolidatedPositions] = useState<Record<string, unknown>[] | null>(null)
   const [consolidatedGLByCusip, setConsolidatedGLByCusip] = useState<Map<string, PortfolioUnrealizedGainLossRow> | null>(null)
@@ -95,12 +99,13 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
 
     setConsolidatedPositions(null); setConsolidatedGLByCusip(null); setCustodianBreakdown([]); setConsolidatedWarnings([])
     const custodianQS = custodianParam ? `?custodian=${encodeURIComponent(custodianParam)}` : ''
-    const [detailRes, historyRes, perfRes, cashRes, glRes] = await Promise.all([
+    const [detailRes, historyRes, perfRes, cashRes, glRes, activityRes] = await Promise.all([
       fetch(`/api/portfolio/${encodeURIComponent(accountNumber)}${custodianQS}`),
       fetch(`/api/portfolio/${encodeURIComponent(accountNumber)}/history`),
       fetch(`/api/portfolio/${encodeURIComponent(accountNumber)}/performance${custodianQS}`),
       fetch(`/api/portfolio/${encodeURIComponent(accountNumber)}/cashflows${custodianQS}`),
       fetch(`/api/portfolio/${encodeURIComponent(accountNumber)}/unrealizedgl${custodianQS}`),
+      fetch(`/api/portfolio/${encodeURIComponent(accountNumber)}/activity${custodianQS}`),
     ])
     if (detailRes.ok) {
       const d = await detailRes.json()
@@ -115,6 +120,10 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
     if (glRes.ok) {
       const g = await glRes.json()
       setUnrealizedGLImport(g.import); setUnrealizedGLRows(g.rows ?? [])
+    }
+    if (activityRes.ok) {
+      const a = await activityRes.json()
+      setActivityImport(a.import); setActivityRows(a.rows ?? [])
     }
     setLoading(false)
   }
@@ -409,7 +418,8 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
           <RendimientoTab accountNumber={accountNumber} history={history} performance={performance} onPerformanceImported={load} />
         )}
         {tab === 'movimientos' && (
-          <MovimientosTab accountNumber={accountNumber} cashProjImport={cashProjImport} cashProjRows={cashProjRows} onCashProjImported={load} />
+          <MovimientosTab accountNumber={accountNumber} cashProjImport={cashProjImport} cashProjRows={cashProjRows} onCashProjImported={load}
+            activityImport={activityImport} activityRows={activityRows} onActivityImported={load} />
         )}
       </div>
 

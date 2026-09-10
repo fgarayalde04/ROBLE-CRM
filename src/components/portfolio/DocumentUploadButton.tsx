@@ -8,7 +8,7 @@ import { useRef, useState } from 'react'
 // to review first.
 export default function DocumentUploadButton({ accountNumber, endpoint, accept, label, onImported }: {
   accountNumber: string
-  endpoint: 'performance' | 'cashflows' | 'unrealizedgl'
+  endpoint: 'performance' | 'cashflows' | 'unrealizedgl' | 'activity'
   accept: string
   label: string
   onImported: () => void

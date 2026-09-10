@@ -373,6 +373,67 @@ export async function getLatestCashProjections(accountNumber: string, custodian?
   return { importRow, rows }
 }
 
+// ── Activity / movimientos de cuenta ──────────────────────────────────────
+
+export async function createActivityImport(input: {
+  parsed: { asOfDate: string | null; rows: { tradeDate: string | null; settleDate: string | null; activityType: string | null; description: string; symbol: string | null; cusip: string | null; quantity: number | null; price: number | null; amount: number | null }[] }
+  accountNumber: string
+  fileName: string
+  importedBy: string
+  importedById: string
+  custodian?: string
+}) {
+  const custodian = input.custodian ?? 'Pershing'
+  const client = await pool.connect()
+  try {
+    await client.query('begin')
+    await client.query(
+      `delete from portfolio_activity_imports where account_number = $1 and coalesce(as_of_date, '1900-01-01') = coalesce($2::date, '1900-01-01') and custodian = $3`,
+      [input.accountNumber, input.parsed.asOfDate, custodian]
+    )
+    const { rows } = await client.query(
+      `insert into portfolio_activity_imports (account_number, as_of_date, file_name, imported_by, imported_by_id, custodian)
+       values ($1,$2,$3,$4,$5,$6) returning *`,
+      [input.accountNumber, input.parsed.asOfDate, input.fileName, input.importedBy, input.importedById, custodian]
+    )
+    const importRow = rows[0]
+    if (input.parsed.rows.length > 0) {
+      const cols = ['import_id', 'account_number', 'trade_date', 'settle_date', 'activity_type', 'description', 'symbol', 'cusip', 'quantity', 'price', 'amount']
+      const values: unknown[] = []
+      const rowsSql = input.parsed.rows.map((r, idx) => {
+        const base = idx * cols.length
+        values.push(importRow.id, input.accountNumber, r.tradeDate, r.settleDate, r.activityType, r.description, r.symbol, r.cusip, r.quantity, r.price, r.amount)
+        return `(${cols.map((_, i) => `$${base + i + 1}`).join(',')})`
+      })
+      await client.query(`insert into portfolio_activity (${cols.join(',')}) values ${rowsSql.join(',')}`, values)
+    }
+    await client.query('commit')
+    return importRow
+  } catch (e) {
+    await client.query('rollback')
+    throw e
+  } finally {
+    client.release()
+  }
+}
+
+export async function getLatestActivity(accountNumber: string, custodian?: string) {
+  const params: unknown[] = [accountNumber]
+  let custodianClause = ''
+  if (custodian) { params.push(custodian); custodianClause = `and custodian = $2` }
+  const { rows: imports } = await pool.query(
+    `select * from portfolio_activity_imports where account_number = $1 ${custodianClause} order by created_at desc limit 1`,
+    params
+  )
+  const importRow = imports[0] ?? null
+  if (!importRow) return { importRow: null, rows: [] }
+  const { rows } = await pool.query(
+    `select * from portfolio_activity where import_id = $1 order by coalesce(trade_date, settle_date) desc nulls last`,
+    [importRow.id]
+  )
+  return { importRow, rows }
+}
+
 // ── Unrealized Gain/Loss (real Cost Basis — never calculated by us) ────────
 
 export async function createUnrealizedGainLossImport(input: {
