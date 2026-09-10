@@ -38,8 +38,10 @@ const ALIASES: Record<keyof Omit<ActivityRow, never>, string[]> = {
   cusip:        ['cusip'],
   quantity:     ['quantity', 'shares', 'qty', 'units'],
   price:        ['price', 'unit price', 'trade price'],
-  amount:       ['amount', 'net amount', 'transaction amount', 'net cash', 'value', 'credit debit', 'gross amount', 'total amount'],
+  amount:       ['amount', 'net amount', 'net amt', 'net amt trans ccy', 'net amount trans ccy', 'transaction amount', 'net cash', 'value', 'credit debit', 'gross amount', 'total amount'],
 }
+
+const isBlank = (s: string | null) => s == null || s === '' || s === '-' || s.toUpperCase() === 'N/A'
 
 function matchCol(header: string): keyof ActivityRow | null {
   const h = norm(header)
@@ -99,13 +101,15 @@ export function parseActivityExcel(buffer: ArrayBuffer): ParsedActivity {
 
     const d = td ?? sd
     if (d) dates.push(d)
+    const sym = parseStr(get(row, 'symbol'))
+    const cus = parseStr(get(row, 'cusip'))
     rows.push({
       tradeDate: td,
       settleDate: sd,
-      activityType: type,
-      description: desc ?? type ?? '—',
-      symbol: (() => { const s = parseStr(get(row, 'symbol')); return s && s !== '-' ? s : null })(),
-      cusip: (() => { const s = parseStr(get(row, 'cusip')); return s && s !== '-' ? s : null })(),
+      activityType: type ? type.replace(/\s+/g, ' ').trim() : null,
+      description: (desc ?? type ?? '—').replace(/\s+/g, ' ').trim(),
+      symbol: isBlank(sym) ? null : sym,
+      cusip: isBlank(cus) ? null : cus,
       quantity: parseNum(get(row, 'quantity')),
       price: parseNum(get(row, 'price')),
       amount,
