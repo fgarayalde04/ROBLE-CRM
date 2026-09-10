@@ -15,9 +15,10 @@ export async function generateSolicitudId(clientNumber: string | null): Promise<
 }
 
 const LIST_COLUMNS = `
-  id, solicitud_id, asesor, estado, canal, opera_asesor, tipo_operacion,
+  id, solicitud_id, asesor, estado, canal, opera_asesor, ingresada_por, tipo_operacion,
   instrumento_tipo, instrumento_nombre, clase, moneda, monto, cantidad,
   fecha_operacion, client_name, client_number, client_email,
+  precio_tipo, precio_limite, vigencia,
   operador, tomado_at, mail_enviado_at, ejecutado_at,
   created_at, updated_at, cc_emails, additional_emails, assets_json
 `

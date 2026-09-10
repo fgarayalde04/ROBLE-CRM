@@ -104,6 +104,7 @@ export async function POST(req: NextRequest) {
     mail_asunto:        body.mail_asunto         ?? null,
     canal,
     estado,
+    ingresada_por:      isMesa ? 'mesa' : 'asesor',
     opera_asesor:       body.opera_asesor === true,
     cc_emails: Array.isArray(body.cc_emails) && body.cc_emails.length > 0 ? body.cc_emails : null,
     additional_emails: Array.isArray(body.additional_emails) && body.additional_emails.length > 0 ? body.additional_emails : null,

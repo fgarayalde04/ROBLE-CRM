@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
+import AssetDetailCard from './AssetDetailCard'
 
 interface Solicitud {
   id: string; solicitud_id: string; asesor: string; estado: string
@@ -18,8 +19,16 @@ interface Solicitud {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   assets_json?: any[] | null
   precio_ejecutado?: number | null; valor_efectivo?: number | null
+  precio_tipo?: string | null; precio_limite?: string | null; vigencia?: string | null
   canal?: string | null; cc_emails?: string[] | null; opera_asesor?: boolean | null
+  ingresada_por?: string | null
   _legacy?: boolean
+}
+
+const PRECIO_TIPO_LABEL_BLOTTER: Record<string, string> = { mercado: 'A mercado', limite: 'Límite', stop: 'Stop' }
+function ingresadaPorBlotter(s: { ingresada_por?: string | null; canal?: string | null }): 'mesa' | 'asesor' {
+  if (s.ingresada_por === 'mesa' || s.ingresada_por === 'asesor') return s.ingresada_por
+  return s.canal === 'directo_mesa' ? 'mesa' : 'asesor'
 }
 
 interface Evento {
@@ -47,62 +56,6 @@ function ProgressBar({ estado }: { estado: string }) {
   )
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function AssetDetailCard({ asset }: { asset: any }) {
-  const tipo = asset?.type as string | undefined
-  const nombre =
-    tipo === 'acciones' ? (asset.nombre || asset.ticker || '—')
-    : tipo === 'fondos'  ? (asset.fondo || '—')
-    : tipo === 'bonos'   ? (asset.descripcion || '—')
-    : '—'
-  const isin = asset?.cusipIsin || null
-  const cantidadMonto =
-    tipo === 'fondos' ? (asset.monto ? `${asset.moneda ?? ''} ${Number(asset.monto).toLocaleString('es-UY')}` : null)
-    : (asset.cantidad ? String(asset.cantidad) : null)
-  const precio =
-    asset?.precio === 'limite' ? `Límite ${asset.precioLimite ?? ''}` : asset?.precio === 'mercado' ? 'A mercado' : null
-
-  const rows = ([
-    ['Operación', asset?.operacion === 'venta' ? 'Venta' : 'Compra'],
-    tipo === 'acciones' && asset?.ticker ? ['Ticker', asset.ticker] : null,
-    isin ? ['ISIN/CUSIP', isin] : null,
-    cantidadMonto ? [tipo === 'fondos' ? 'Monto' : 'Cantidad', cantidadMonto] : null,
-    precio ? ['Precio', precio] : null,
-    asset?.moneda ? ['Moneda', asset.moneda] : null,
-    tipo === 'fondos' && asset?.clase ? ['Clase', asset.clase] : null,
-    tipo === 'bonos' && asset?.maturity ? ['Vencimiento', asset.maturity] : null,
-    tipo === 'bonos' && asset?.cupon ? ['Cupón', asset.cupon + '%'] : null,
-    asset?.vigencia ? ['Vigencia', asset.vigencia] : null,
-    asset?.comision ? ['Comisión', asset.comision] : null,
-  ] as ([string,string]|null)[]).filter(Boolean) as [string,string][]
-
-  return (
-    <div className={`rounded-lg border px-3 py-2 space-y-1 ${asset?.cancelada ? 'border-red-200 bg-red-50/40 opacity-70' : 'border-gray-200 bg-gray-50/60'}`}>
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-[11px] font-semibold text-gray-700 truncate">{nombre}</p>
-        {asset?.cancelada && <span className="text-[9px] font-bold text-red-500 shrink-0">CANCELADO</span>}
-      </div>
-      {rows.map(([label, value]) => (
-        <div key={label} className="flex justify-between gap-2">
-          <span className="text-[10px] text-gray-400 shrink-0">{label}</span>
-          <span className="text-[10px] text-gray-800 text-right break-words max-w-[170px]">{value}</span>
-        </div>
-      ))}
-      {tipo === 'fondos' && asset?.montoAclaracion && (
-        <div className="pt-1 border-t border-gray-200 mt-1">
-          <p className="text-[10px] text-gray-400">Aclaración del monto</p>
-          <p className="text-[10px] text-gray-700 whitespace-pre-wrap">{asset.montoAclaracion}</p>
-        </div>
-      )}
-      {asset?.observaciones && (
-        <div className="pt-1 border-t border-gray-200 mt-1">
-          <p className="text-[10px] text-gray-400">Notas internas</p>
-          <p className="text-[10px] text-gray-700 whitespace-pre-wrap">{asset.observaciones}</p>
-        </div>
-      )}
-    </div>
-  )
-}
 
 // Muestra el mail que efectivamente se armó/envió para la orden — hoy solo
 // figuraba en el historial de eventos como texto genérico; acá se puede ver
@@ -235,14 +188,18 @@ function DetalleSolicitud({ sol, eventos, isMesa, userName, onAction, onClose, o
                 ['Operación', `${OP_LABEL[sol.tipo_operacion] ?? sol.tipo_operacion} · ${sol.instrumento_tipo ?? '—'}`],
                 ['Instrumento', sol.instrumento_nombre],
                 sol.clase        ? ['Clase', sol.clase]                                     : null,
+                sol.precio_tipo  ? ['Tipo de orden', PRECIO_TIPO_LABEL_BLOTTER[sol.precio_tipo] ?? sol.precio_tipo] : null,
+                sol.precio_limite ? [sol.precio_tipo === 'stop' ? 'Precio stop' : 'Precio límite', `${sol.precio_limite}${sol.moneda ? ` ${sol.moneda}` : ''}`] : null,
                 ['Moneda', sol.moneda],
                 sol.monto        ? ['Monto',    `${sol.moneda} ${Number(sol.monto).toLocaleString('es-UY')}`]    : null,
                 sol.cantidad     ? ['Cantidad', String(sol.cantidad)]                        : null,
+                sol.vigencia     ? ['Vigencia', sol.vigencia === 'GTC' ? 'Hasta cancelar (GTC)' : 'Día (DAY)'] : null,
                 ['Fecha', sol.fecha_operacion],
                 sol.cusip_isin   ? ['ISIN/CUSIP', sol.cusip_isin]                           : null,
                 sol.maturity     ? ['Vencimiento', sol.maturity]                             : null,
                 sol.cupon        ? ['Cupón', sol.cupon + '%']                                : null,
                 ['Asesor', sol.asesor],
+                ['Ingresada por', ingresadaPorBlotter(sol) === 'mesa' ? 'Mesa' : 'Asesor'],
                 sol.canal        ? ['Canal', sol.canal === 'directo_asesor' ? 'Envío directo por asesor' : sol.canal === 'directo_mesa' ? 'Envío directo por Mesa' : 'Derivada a Mesa'] : null,
                 ['Opera', sol.opera_asesor ? 'Asesor' : 'Mesa'],
                 sol.operador     ? ['Operador', sol.operador]                                : null,

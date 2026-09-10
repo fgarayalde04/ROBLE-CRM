@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, Fragment } from 'react'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import ClientEmailTogglePills from '@/components/ClientEmailTogglePills'
+import AssetDetailCard from './AssetDetailCard'
 
 interface Solicitud {
   id: string
@@ -43,9 +44,18 @@ interface Solicitud {
   symbol?: string | null
   canal?: string | null
   opera_asesor?: boolean | null
+  ingresada_por?: string | null
   cc_emails?: string[] | null
   additional_emails?: string[] | null
 }
+
+// Quién ingresó la orden al sistema. Filas viejas sin ingresada_por se
+// infieren del canal (directo_mesa = mesa; el resto, asesor).
+function ingresadaPor(s: { ingresada_por?: string | null; canal?: string | null }): 'mesa' | 'asesor' {
+  if (s.ingresada_por === 'mesa' || s.ingresada_por === 'asesor') return s.ingresada_por
+  return s.canal === 'directo_mesa' ? 'mesa' : 'asesor'
+}
+const PRECIO_TIPO_LABEL: Record<string, string> = { mercado: 'A mercado', limite: 'Límite', stop: 'Stop' }
 
 interface Evento {
   id: string; tipo: string; descripcion: string
@@ -79,62 +89,6 @@ function assetDisplay(a: any) {
   return { tipo: tipo ?? null, nombre, moneda: a?.moneda ?? null, cantidad, monto, operacion: a?.operacion ?? null }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function AssetDetailCard({ asset }: { asset: any }) {
-  const tipo = asset?.type as string | undefined
-  const nombre =
-    tipo === 'acciones' ? (asset.nombre || asset.ticker || '—')
-    : tipo === 'fondos'  ? (asset.fondo || '—')
-    : tipo === 'bonos'   ? (asset.descripcion || '—')
-    : '—'
-  const isin = asset?.cusipIsin || null
-  const cantidadMonto =
-    tipo === 'fondos' ? (asset.monto ? `${asset.moneda ?? ''} ${Number(asset.monto).toLocaleString('es-UY')}` : null)
-    : (asset.cantidad ? String(asset.cantidad) : null)
-  const precio =
-    asset?.precio === 'limite' ? `Límite ${asset.precioLimite ?? ''}` : asset?.precio === 'mercado' ? 'A mercado' : null
-
-  const rows = ([
-    ['Operación', asset?.operacion === 'venta' ? 'Venta' : 'Compra'],
-    tipo === 'acciones' && asset?.ticker ? ['Ticker', asset.ticker] : null,
-    isin ? ['ISIN/CUSIP', isin] : null,
-    cantidadMonto ? [tipo === 'fondos' ? 'Monto' : 'Cantidad', cantidadMonto] : null,
-    precio ? ['Precio', precio] : null,
-    asset?.moneda ? ['Moneda', asset.moneda] : null,
-    tipo === 'fondos' && asset?.clase ? ['Clase', asset.clase] : null,
-    tipo === 'bonos' && asset?.maturity ? ['Vencimiento', asset.maturity] : null,
-    tipo === 'bonos' && asset?.cupon ? ['Cupón', asset.cupon + '%'] : null,
-    asset?.vigencia ? ['Vigencia', asset.vigencia] : null,
-    asset?.comision ? ['Comisión', asset.comision] : null,
-  ] as ([string,string]|null)[]).filter(Boolean) as [string,string][]
-
-  return (
-    <div className={`rounded-lg border px-3 py-2 space-y-1 ${asset?.cancelada ? 'border-red-200 bg-red-50/40 opacity-70' : 'border-gray-200 bg-gray-50/60'}`}>
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-[11px] font-semibold text-gray-700 truncate">{nombre}</p>
-        {asset?.cancelada && <span className="text-[9px] font-bold text-red-500 shrink-0">CANCELADO</span>}
-      </div>
-      {rows.map(([label, value]) => (
-        <div key={label} className="flex justify-between gap-2">
-          <span className="text-[10px] text-gray-400 shrink-0">{label}</span>
-          <span className="text-[10px] text-gray-800 text-right break-words max-w-[170px]">{value}</span>
-        </div>
-      ))}
-      {tipo === 'fondos' && asset?.montoAclaracion && (
-        <div className="pt-1 border-t border-gray-200 mt-1">
-          <p className="text-[10px] text-gray-400">Aclaración del monto</p>
-          <p className="text-[10px] text-gray-700 whitespace-pre-wrap">{asset.montoAclaracion}</p>
-        </div>
-      )}
-      {asset?.observaciones && (
-        <div className="pt-1 border-t border-gray-200 mt-1">
-          <p className="text-[10px] text-gray-400">Notas internas</p>
-          <p className="text-[10px] text-gray-700 whitespace-pre-wrap">{asset.observaciones}</p>
-        </div>
-      )}
-    </div>
-  )
-}
 
 // Muestra el mail que efectivamente se armó/envió para la orden — hoy solo
 // figuraba en el historial de eventos como texto genérico; acá se puede ver
@@ -174,6 +128,7 @@ interface BlotterLine {
   monto: number | null
   cantidad: number | null
   operacion: string | null
+  precioTipo: string | null   // 'mercado' | 'limite' | 'stop'
 }
 
 function expandRows(rows: Solicitud[]): BlotterLine[] {
@@ -184,6 +139,7 @@ function expandRows(rows: Solicitud[]): BlotterLine[] {
       lines.push({
         row, key: row.id, tipo: row.instrumento_tipo, instrumento_nombre: row.instrumento_nombre,
         moneda: row.moneda, monto: row.monto, cantidad: row.cantidad, operacion: row.tipo_operacion,
+        precioTipo: row.precio_tipo ?? (assets[0]?.precio ?? null),
       })
     } else {
       assets.forEach((asset, i) => {
@@ -191,6 +147,7 @@ function expandRows(rows: Solicitud[]): BlotterLine[] {
         lines.push({
           row, key: `${row.id}-${i}`, tipo: d.tipo, instrumento_nombre: d.nombre,
           moneda: d.moneda, monto: d.monto, cantidad: d.cantidad, operacion: d.operacion,
+          precioTipo: asset?.precio ?? null,
         })
       })
     }
@@ -435,14 +392,18 @@ function DetailPanel({
                 ['Operación', `${OP_LABEL[sol.tipo_operacion] ?? sol.tipo_operacion} · ${sol.instrumento_tipo}`],
                 ['Instrumento', sol.instrumento_nombre],
                 sol.clase ? ['Clase', sol.clase] : null,
+                sol.precio_tipo ? ['Tipo de orden', PRECIO_TIPO_LABEL[sol.precio_tipo] ?? sol.precio_tipo] : null,
+                sol.precio_limite ? [sol.precio_tipo === 'stop' ? 'Precio stop' : 'Precio límite', `${sol.precio_limite}${sol.moneda ? ` ${sol.moneda}` : ''}`] : null,
                 ['Moneda', sol.moneda],
                 sol.monto    ? ['Monto', `${sol.moneda} ${Number(sol.monto).toLocaleString('es-UY')}`] : null,
                 sol.cantidad ? ['Cantidad', String(sol.cantidad)] : null,
+                sol.vigencia ? ['Vigencia', sol.vigencia === 'GTC' ? 'Hasta cancelar (GTC)' : 'Día (DAY)'] : null,
                 ['Fecha', sol.fecha_operacion],
                 sol.cusip_isin ? ['ISIN/CUSIP', sol.cusip_isin] : null,
                 sol.maturity   ? ['Vencimiento', sol.maturity]   : null,
                 sol.cupon      ? ['Cupón', sol.cupon + '%']       : null,
                 ['Asesor', sol.asesor],
+                ['Ingresada por', ingresadaPor(sol) === 'mesa' ? 'Mesa' : 'Asesor'],
                 sol.canal ? ['Canal', sol.canal === 'directo_asesor' ? 'Envío directo por asesor' : sol.canal === 'directo_mesa' ? 'Envío directo por Mesa' : 'Derivada a Mesa'] : null,
                 ['Opera', sol.opera_asesor ? 'Asesor' : 'Mesa'],
                 sol.operador  ? ['Operador', sol.operador]        : null,
@@ -708,7 +669,7 @@ export default function MesaHoy({ isMesa, userName, openId }: { isMesa: boolean;
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 border-b border-gray-100">
                   <tr>
-                    {['Hora','Cliente','Asesor','Operación','Instrumento','Monto ($)','Cantidad','Estado','Operador'].map(h => (
+                    {['Hora','Cliente','Asesor','Ingresó','Operación','Instrumento','Monto ($)','Cantidad','Estado','Operador'].map(h => (
                       <th key={h} className="px-3 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
@@ -726,7 +687,7 @@ export default function MesaHoy({ isMesa, userName, openId }: { isMesa: boolean;
                         <Fragment key={line.key}>
                           {showHeader && (
                             <tr key={`h-${day}`} className="bg-gray-100/80">
-                              <td colSpan={9} className="px-3 py-1.5 text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                              <td colSpan={10} className="px-3 py-1.5 text-[10px] font-bold text-gray-500 uppercase tracking-wider">
                                 {day === today ? 'Hoy' : format(new Date(day + 'T12:00:00'), "EEEE d 'de' MMMM", { locale: es })}
                               </td>
                             </tr>
@@ -741,8 +702,19 @@ export default function MesaHoy({ isMesa, userName, openId }: { isMesa: boolean;
                           <p className="text-[10px] text-gray-400">#{row.client_number}</p>
                         </td>
                         <td className="px-3 py-2 text-xs text-gray-600 whitespace-nowrap">{row.asesor}</td>
+                        <td className="px-3 py-2 whitespace-nowrap">
+                          {ingresadaPor(row) === 'mesa' ? (
+                            <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">Mesa</span>
+                          ) : (
+                            <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-sky-100 text-sky-700">Asesor</span>
+                          )}
+                        </td>
                         <td className="px-3 py-2 text-xs font-medium text-gray-700 whitespace-nowrap">
-                          {OP_LABEL[line.operacion ?? ''] ?? line.operacion}
+                          <div className="flex items-center gap-1.5">
+                            <span>{OP_LABEL[line.operacion ?? ''] ?? line.operacion}</span>
+                            {line.precioTipo === 'stop' && <span className="text-[9px] font-bold text-white bg-purple-500 rounded px-1 py-px">STOP</span>}
+                            {line.precioTipo === 'limite' && <span className="text-[9px] font-bold text-white bg-blue-500 rounded px-1 py-px">LÍMITE</span>}
+                          </div>
                         </td>
                         <td className="px-3 py-2">
                           <p className="text-xs text-gray-800 truncate max-w-[140px]">{line.instrumento_nombre}</p>
