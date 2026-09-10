@@ -67,8 +67,9 @@ export async function POST(
       fileName: file.name,
       importedBy: session.name,
       importedById: session.id,
+      custodian: parsed.custodian === 'morgan' ? 'Morgan Stanley' : 'Pershing',
     })
-    return NextResponse.json({ ok: true, performance: importRow, warnings })
+    return NextResponse.json({ ok: true, performance: importRow, warnings, custodian: parsed.custodian ?? 'pershing' })
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 })
   }

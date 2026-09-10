@@ -77,7 +77,7 @@ export default function RendimientoTab({ accountNumber, history, performance, on
         <div className="flex items-center justify-between mb-1">
           <p className="text-sm font-bold text-gray-900">Performance reportada</p>
           <DocumentUploadButton accountNumber={accountNumber} endpoint="performance" accept=".pdf"
-            label={performance ? 'Actualizar reporte de performance' : 'Importar reporte de performance (PDF)'} onImported={onPerformanceImported} />
+            label={performance ? 'Actualizar reporte de performance' : 'Importar reporte de performance (PDF Pershing o Morgan Stanley)'} onImported={onPerformanceImported} />
         </div>
         {performance ? (
           <>
@@ -154,7 +154,7 @@ export default function RendimientoTab({ accountNumber, history, performance, on
           </>
         ) : (
           <p className="text-xs text-gray-400">
-            Todavía no hay un reporte de performance importado. Subí el PDF de "Portfolio Performance" del custodio para ver la rentabilidad real (TWRR) de la cuenta.
+            Todavía no hay un reporte de performance importado. Subí el PDF de "Portfolio Performance" (Pershing) o "Time Weighted Performance Summary" (Morgan Stanley) para ver la rentabilidad real (TWRR) de la cuenta.
           </p>
         )}
       </div>

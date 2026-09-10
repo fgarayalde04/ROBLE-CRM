@@ -15,12 +15,13 @@ export function detectCustodianFormat(buffer: ArrayBuffer): DetectedCustodianFor
 
   const firstCell = String(raw[0]?.[0] ?? '').trim().toLowerCase()
   if (firstCell === 'positions' || firstCell === 'unrealized gain loss') return 'pershing'
-  if (firstCell === 'view cost basis') return 'morgan'
+  if (firstCell === 'view cost basis' || firstCell.includes('all product type')) return 'morgan'
 
   // Fall back to a header-row scan within the first 25 rows.
   for (let i = 0; i < Math.min(25, raw.length); i++) {
     const cells = (raw[i] as unknown[]).map(c => String(c).trim().toLowerCase())
     if (cells.includes('acquired') && cells.includes('adj. cost ($)')) return 'morgan'
+    if (cells.includes('product type') && cells.includes('cusip') && cells.some(c => c.includes('unrealized gain/loss ($)'))) return 'morgan'
     if (cells.includes('cusip') && cells.includes('security description') && cells.includes('gain/loss')) return 'pershing'
   }
   return 'unknown'

@@ -48,6 +48,7 @@ export interface ParsedPerformanceReport {
   netContribution:  PeriodReturns | null
   changeInValue:    PeriodReturns | null
   benchmarks:       BenchmarkPerformance[]
+  custodian?:       'pershing' | 'morgan'   // formato detectado; undefined = Pershing (default histórico)
   warnings:         string[]
 }
 
@@ -122,7 +123,24 @@ function toPeriodReturns(values: (number | null)[]): PeriodReturns {
   }
 }
 
+// Dispatcher: el reporte de performance puede venir de Pershing/Insigneo
+// ("Portfolio Performance") o de Morgan Stanley ("Time Weighted Performance
+// Summary"). Se detecta por el texto y se despacha al parser que
+// corresponde — ambos devuelven la misma forma (ParsedPerformanceReport).
 export async function parsePerformancePdf(buffer: Buffer): Promise<ParsedPerformanceReport> {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const pdfParse: (buf: Buffer) => Promise<{ text: string }> = require('pdf-parse/lib/pdf-parse.js')
+  const { text } = await pdfParse(buffer)
+  const isMorgan = /morgan stanley/i.test(text) &&
+    /(time[- ]weighted performance summary|return % \(net of fees\))/i.test(text)
+  if (isMorgan) {
+    const { parseMorganPerformancePdf } = await import('./morganPerformanceParser')
+    return parseMorganPerformancePdf(buffer)
+  }
+  return parsePershingPerformancePdf(buffer)
+}
+
+async function parsePershingPerformancePdf(buffer: Buffer): Promise<ParsedPerformanceReport> {
   const warnings: string[] = []
 
   // eslint-disable-next-line @typescript-eslint/no-require-imports

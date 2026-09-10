@@ -110,13 +110,30 @@ export function mapMorganAssetClass(symbol: string | null, name: string, quantit
   return 'Sin clasificar'
 }
 
+// Morgan Stanley exporta las posiciones en (al menos) dos formatos:
+//   • "View Cost Basis"            → una fila por lote fiscal, sin Product Type
+//   • "All Product Type By Security" ("Holdings Ungrouped") → una fila por
+//     security, CON Product Type, Maturity, Coupon, Yield, Accrued Interest,
+//     Est. Annual Income y % of Portfolio.
+// Los dos se normalizan a la MISMA forma `ParsedMorganHoldings`.
 export function parseMorganHoldingsExcel(buffer: ArrayBuffer): ParsedMorganHoldings {
-  const emptyPortfolio: ParsedPortfolioImport = { accountNumber: null, snapshotDate: null, baseCurrency: 'USD', totalMarketValue: 0, positions: [], warnings: [] }
-  const emptyGL: ParsedUnrealizedGainLoss = { clientName: null, asOfDate: null, netGainLoss: null, rows: [], warnings: [] }
-
   const wb  = XLSX.read(buffer, { type: 'array' })
   const ws  = wb.Sheets[wb.SheetNames[0]]
   const raw = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: '' }) as unknown[][]
+
+  const firstCell = String(raw?.[0]?.[0] ?? '').trim().toLowerCase()
+  const looksUngrouped = firstCell.includes('all product type') ||
+    raw.slice(0, 25).some(r => {
+      const cells = (r as unknown[]).map(c => String(c).trim().toLowerCase())
+      return cells.includes('product type') && cells.some(c => c.includes('unrealized gain/loss ($)'))
+    })
+
+  return looksUngrouped ? parseMorganHoldingsUngrouped(raw) : parseMorganCostBasisExcel(raw)
+}
+
+function parseMorganCostBasisExcel(raw: unknown[][]): ParsedMorganHoldings {
+  const emptyPortfolio: ParsedPortfolioImport = { accountNumber: null, snapshotDate: null, baseCurrency: 'USD', totalMarketValue: 0, positions: [], warnings: [] }
+  const emptyGL: ParsedUnrealizedGainLoss = { clientName: null, asOfDate: null, netGainLoss: null, rows: [], warnings: [] }
 
   if (!raw || raw.length < 3) {
     return { portfolio: { ...emptyPortfolio, warnings: ['Archivo vacío o sin datos'] }, unrealizedGL: { ...emptyGL, warnings: ['Archivo vacío o sin datos'] } }
@@ -254,6 +271,160 @@ export function parseMorganHoldingsExcel(buffer: ArrayBuffer): ParsedMorganHoldi
   if (!positions.length) warnings.push('No se encontraron posiciones en el archivo')
   const unclassifiedCount = positions.filter(p => p.assetClass === 'Sin clasificar').length
   if (unclassifiedCount > 0) warnings.push(`${unclassifiedCount} posición(es) quedaron "Sin clasificar" — revisalas y asigná la clase de activo manualmente en Posiciones`)
+
+  const netGainLoss = totals.get('total unrealized gain/loss ($)') ?? glRows.reduce((s, r) => s + r.gainLoss, 0)
+
+  return {
+    portfolio: { accountNumber: null, snapshotDate: asOfDate, baseCurrency: 'USD', totalMarketValue, positions, warnings },
+    unrealizedGL: { clientName: nickname, asOfDate, netGainLoss, rows: glRows, warnings: [] },
+  }
+}
+
+// ── Formato "All Product Type By Security" (Holdings Ungrouped) ──────────────
+
+// El "Product Type" de Morgan mapeado a la clase de activo del sistema.
+export function mapMorganProductType(pt: string): string {
+  const t = pt.toLowerCase()
+  if (!t || t === '-') return 'Sin clasificar'
+  if (/etf|exchange[- ]traded/.test(t)) return 'ETF'
+  if (/fixed income|bond|treasury|govt|government|municipal|structured|note|preferred/.test(t)) return 'Fixed Income'
+  if (/mutual fund|open.?end|closed.?end|fund/.test(t)) return 'Fund'
+  if (/cash|mmf|bdp|money market|deposit/.test(t)) return 'Cash'
+  if (/equit|common stock|adr|stock|shares/.test(t)) return 'Equity'
+  if (/alternative|hedge|private/.test(t)) return 'Alternatives'
+  if (/real estate|reit/.test(t)) return 'Real Estate'
+  return 'Sin clasificar'
+}
+
+function parseMorganHoldingsUngrouped(raw: unknown[][]): ParsedMorganHoldings {
+  const empty = (w: string[]): ParsedMorganHoldings => ({
+    portfolio: { accountNumber: null, snapshotDate: null, baseCurrency: 'USD', totalMarketValue: 0, positions: [], warnings: w },
+    unrealizedGL: { clientName: null, asOfDate: null, netGainLoss: null, rows: [], warnings: [] },
+  })
+  if (!raw || raw.length < 3) return empty(['Archivo vacío o sin datos'])
+
+  // Header row: la que tiene "Name" + "Product Type" + "CUSIP".
+  let headerIdx = -1
+  for (let i = 0; i < Math.min(20, raw.length); i++) {
+    const cells = (raw[i] as unknown[]).map(c => String(c).trim().toLowerCase())
+    if (cells.includes('name') && cells.includes('product type') && cells.includes('cusip')) { headerIdx = i; break }
+  }
+  if (headerIdx === -1) return empty(['No se encontró la fila de encabezados (Name / Product Type / CUSIP)'])
+
+  const headers = (raw[headerIdx] as unknown[]).map(h => String(h).trim().toLowerCase())
+  const col = (...names: string[]) => {
+    for (const n of names) { const i = headers.indexOf(n.toLowerCase()); if (i !== -1) return i }
+    return -1
+  }
+  const idx = {
+    name:     col('name'),
+    type:     col('product type'),
+    symbol:   col('symbol'),
+    cusip:    col('cusip'),
+    price:    col('last ($)', 'last'),
+    asof:     col('as of'),
+    qty:      col('quantity'),
+    mv:       col('market value ($)', 'market value'),
+    cost:     col('total cost ($)', 'total cost'),
+    glPct:    col('unrealized gain/loss (%)'),
+    glUsd:    col('unrealized gain/loss ($)'),
+    accrued:  col('accrued interest'),
+    yield:    col('current yield (%)'),
+    maturity: col('maturity date'),
+    weight:   col('% of portfolio'),
+    coupon:   col('coupon rate (%)'),
+    annInc:   col('est. annual income ($)'),
+  }
+
+  // Meta (nickname / as-of) de las filas previas al header.
+  const metaLines = raw.slice(0, headerIdx).map(r => (r as unknown[]).map(c => String(c ?? '')).join(' ').trim()).filter(Boolean)
+  let nickname: string | null = null
+  for (const l of metaLines) {
+    const m = l.match(/holdings for account\s+(.+?)(?:\s+as of\b.*)?$/i)
+    if (m) { nickname = m[1].trim(); break }
+  }
+  const totals = extractLabeledTotals(raw.slice(0, headerIdx) as unknown[][])
+
+  const warnings: string[] = ['Morgan Stanley no incluye el número de cuenta completo en este archivo — ingresalo manualmente.']
+
+  const positions: PortfolioPositionParsed[] = []
+  const glRows: UnrealizedGainLossRow[] = []
+  const asOfDates = new Set<string>()
+
+  for (let i = headerIdx + 1; i < raw.length; i++) {
+    const row = raw[i] as unknown[]
+    const name = parseStr(row[idx.name])
+    if (!name) continue
+    if (/^total\b/i.test(name)) break
+    const cusip = idx.cusip !== -1 ? parseStr(row[idx.cusip]) : null
+
+    const productType = idx.type !== -1 ? (parseStr(row[idx.type]) ?? '') : ''
+    const assetClass = mapMorganProductType(productType)
+    const symbol = idx.symbol !== -1 ? parseStr(row[idx.symbol]) : null
+    const quantity = idx.qty !== -1 ? parseNum(row[idx.qty]) : null
+    const price = idx.price !== -1 ? parseNum(row[idx.price]) : null
+    const marketValue = (idx.mv !== -1 ? parseNum(row[idx.mv]) : null) ?? 0
+    const costBasis = idx.cost !== -1 ? (parseNum(row[idx.cost]) ?? 0) : 0
+    const gainLoss = idx.glUsd !== -1 ? (parseNum(row[idx.glUsd]) ?? 0) : 0
+    const gainLossPctRaw = idx.glPct !== -1 ? parseNum(row[idx.glPct]) : null
+    const maturityDate = idx.maturity !== -1 ? parseDateStr(row[idx.maturity]) : null
+    const coupon = idx.coupon !== -1 ? parseNum(row[idx.coupon]) : null
+    const accruedInterest = idx.accrued !== -1 ? parseNum(row[idx.accrued]) : null
+    const asof = idx.asof !== -1 ? parseDateStr(row[idx.asof]) : null
+    if (asof) asOfDates.add(asof)
+
+    positions.push({
+      symbol: symbol && symbol !== '-' ? symbol : null,
+      name,
+      securityType: productType,
+      assetClass,
+      region: mapRegion(name, symbol ?? ''),
+      sector: mapSector(productType, name),
+      currency: 'USD',
+      quantity,
+      price,
+      marketValue: parseFloat(marketValue.toFixed(2)),
+      weight: 0,
+      isin: null,
+      cusip: cusip && cusip !== '-' ? cusip : null,
+      maturityDate,
+      purchaseDate: null,
+      coupon,
+      accruedInterest,
+      fundFamily: null,
+      dividendPolicy: null,
+    })
+
+    if (cusip && cusip !== '-') {
+      glRows.push({
+        cusip,
+        securityIdentifier: null,
+        description: name,
+        quantity: quantity ?? 0,
+        costBasis: parseFloat(costBasis.toFixed(2)),
+        marketValue: parseFloat(marketValue.toFixed(2)),
+        gainLoss: parseFloat(gainLoss.toFixed(2)),
+        gainLossPct: gainLossPctRaw != null ? gainLossPctRaw : (costBasis > 0 ? parseFloat(((gainLoss / costBasis) * 100).toFixed(2)) : 0),
+        purchaseDate: null,
+      })
+    }
+  }
+
+  const totalMarketValue = positions.reduce((s, p) => s + p.marketValue, 0)
+  if (totalMarketValue > 0) {
+    for (const p of positions) p.weight = parseFloat(((p.marketValue / totalMarketValue) * 100).toFixed(4))
+  }
+
+  const declaredTotal = totals.get('total market value')
+  if (declaredTotal != null && declaredTotal > 0 && Math.abs(totalMarketValue - declaredTotal) / declaredTotal * 100 > 1) {
+    warnings.push(`El Market Value calculado (${totalMarketValue.toFixed(2)}) difiere del total del archivo (${declaredTotal.toFixed(2)}) en más de 1%`)
+  }
+  if (!positions.length) warnings.push('No se encontraron posiciones en el archivo')
+  const unclassified = positions.filter(p => p.assetClass === 'Sin clasificar').length
+  if (unclassified > 0) warnings.push(`${unclassified} posición(es) quedaron "Sin clasificar" — revisalas en Posiciones`)
+
+  const asOfDate = asOfDates.size ? Array.from(asOfDates).sort().pop()! : null
+  if (!asOfDate) warnings.push('No se pudo detectar la fecha ("as of") en el archivo')
 
   const netGainLoss = totals.get('total unrealized gain/loss ($)') ?? glRows.reduce((s, r) => s + r.gainLoss, 0)
 
