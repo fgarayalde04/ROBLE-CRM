@@ -159,76 +159,79 @@ export default function RendimientoTab({ accountNumber, history, performance, on
         )}
       </div>
 
-      {sorted.length < 2 ? (
-        (() => {
-          const perfBars = performance ? [
-            ['YTD', performance.return_ytd], ['1 Año', performance.return_1y], ['3 Años', performance.return_3y],
-            ['5 Años', performance.return_5y], ['Desde inicio', performance.return_since_inception],
-          ].map(([label, v]) => ({ label: label as string, value: v == null ? null : Number(v) }))
-            .filter(d => d.value != null) as { label: string; value: number }[] : []
+      {(() => {
+        const perfBars = (performance ? ([
+          ['YTD', performance.return_ytd], ['1 Año', performance.return_1y], ['3 Años', performance.return_3y],
+          ['5 Años', performance.return_5y], ['Desde inicio', performance.return_since_inception],
+        ] as [string, unknown][]).map(([label, v]) => ({ label, value: v == null ? null : Number(v) }))
+          .filter((d): d is { label: string; value: number } => d.value != null) : [])
 
-          if (perfBars.length === 0) {
-            return (
+        return (
+          <>
+            {perfBars.length > 0 && (
+              <div className="bg-white rounded-xl border border-gray-200 p-5">
+                <p className="text-sm font-bold text-gray-900 mb-1">Rentabilidad por período (TWRR)</p>
+                <p className="text-[11px] text-gray-400 mb-4">
+                  Rentabilidad real reportada por el custodio. Los períodos mayores a un año están anualizados.
+                </p>
+                <ResponsiveContainer width="100%" height={260}>
+                  <BarChart data={perfBars} margin={{ top: 20, right: 8, bottom: 0, left: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" vertical={false} />
+                    <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#6B7280' }} />
+                    <YAxis tick={{ fontSize: 10, fill: '#6B7280' }} tickFormatter={(v) => `${v}%`} />
+                    <ReferenceLine y={0} stroke="#9CA3AF" />
+                    <Tooltip formatter={(v: any) => `${Number(v) >= 0 ? '+' : ''}${Number(v).toFixed(2)}%`} cursor={{ fill: '#F3F4F6' }} />
+                    <Bar dataKey="value" radius={[3, 3, 0, 0]} maxBarSize={64}>
+                      {perfBars.map((d, i) => <Cell key={i} fill={d.value >= 0 ? '#2E7D52' : '#B91C1C'} />)}
+                      <LabelList dataKey="value" position="top" formatter={(v: any) => `${Number(v) >= 0 ? '+' : ''}${Number(v).toFixed(2)}%`}
+                        style={{ fontSize: 11, fontWeight: 700, fill: '#111827' }} />
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+
+            {sorted.length >= 2 && (
+              <div className="bg-white rounded-xl border border-gray-200 p-5">
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-sm font-bold text-gray-900">Evolución del valor de la cuenta</p>
+                  <div className="flex gap-1">
+                    {PERIODS.map(p => (
+                      <button key={p.key} onClick={() => setPeriod(p.key)}
+                        className={`px-2.5 py-1 text-xs font-semibold rounded-md transition ${period === p.key ? 'bg-[#1B3A2B] text-white' : 'text-gray-500 hover:bg-gray-100'}`}>
+                        {p.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <p className="text-[11px] text-gray-400 mb-4">
+                  Muestra el Market Value de la cuenta en cada importación. No representa rentabilidad — puede incluir depósitos, retiros u operaciones.
+                </p>
+                <ResponsiveContainer width="100%" height={260}>
+                  <LineChart data={chartData} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
+                    <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#6B7280' }} tickFormatter={(v) => fmtDate(v)} />
+                    <YAxis tick={{ fontSize: 10, fill: '#6B7280' }} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
+                    <Tooltip formatter={(v: any) => fmtUSD(Number(v))} labelFormatter={(v) => fmtDate(String(v))} />
+                    <Line type="monotone" dataKey="value" stroke="#2E7D52" strokeWidth={2} dot={{ r: 3, fill: '#2E7D52' }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+
+            {perfBars.length === 0 && sorted.length < 2 && (
               <div className="bg-white rounded-xl border border-gray-200 p-10 text-center">
                 <div className="text-3xl mb-3">📈</div>
-                <p className="text-sm font-semibold text-gray-600">Todavía no hay suficiente historial de Market Value</p>
+                <p className="text-sm font-semibold text-gray-600">Todavía no hay datos para graficar</p>
                 <p className="text-xs text-gray-400 mt-1 max-w-sm mx-auto">
-                  Se necesitan al menos dos importaciones de posiciones para mostrar la evolución del valor de mercado.
-                  Importá el reporte de performance del custodio para ver la rentabilidad por período.
+                  Se necesitan al menos dos importaciones de posiciones para la evolución del valor, o el reporte
+                  de performance del custodio para la rentabilidad por período.
                 </p>
               </div>
-            )
-          }
-          return (
-            <div className="bg-white rounded-xl border border-gray-200 p-5">
-              <p className="text-sm font-bold text-gray-900 mb-1">Rentabilidad por período (TWRR)</p>
-              <p className="text-[11px] text-gray-400 mb-4">
-                Rentabilidad real reportada por el custodio. Los períodos mayores a un año están anualizados.
-              </p>
-              <ResponsiveContainer width="100%" height={260}>
-                <BarChart data={perfBars} margin={{ top: 20, right: 8, bottom: 0, left: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" vertical={false} />
-                  <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#6B7280' }} />
-                  <YAxis tick={{ fontSize: 10, fill: '#6B7280' }} tickFormatter={(v) => `${v}%`} />
-                  <ReferenceLine y={0} stroke="#9CA3AF" />
-                  <Tooltip formatter={(v: any) => `${Number(v) >= 0 ? '+' : ''}${Number(v).toFixed(2)}%`} cursor={{ fill: '#F3F4F6' }} />
-                  <Bar dataKey="value" radius={[3, 3, 0, 0]} maxBarSize={64}>
-                    {perfBars.map((d, i) => <Cell key={i} fill={d.value >= 0 ? '#2E7D52' : '#B91C1C'} />)}
-                    <LabelList dataKey="value" position="top" formatter={(v: any) => `${Number(v) >= 0 ? '+' : ''}${Number(v).toFixed(2)}%`}
-                      style={{ fontSize: 11, fontWeight: 700, fill: '#111827' }} />
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          )
-        })()
-      ) : (
-      <div className="bg-white rounded-xl border border-gray-200 p-5">
-        <div className="flex items-center justify-between mb-1">
-          <p className="text-sm font-bold text-gray-900">Evolución del valor de mercado</p>
-          <div className="flex gap-1">
-            {PERIODS.map(p => (
-              <button key={p.key} onClick={() => setPeriod(p.key)}
-                className={`px-2.5 py-1 text-xs font-semibold rounded-md transition ${period === p.key ? 'bg-[#1B3A2B] text-white' : 'text-gray-500 hover:bg-gray-100'}`}>
-                {p.label}
-              </button>
-            ))}
-          </div>
-        </div>
-        <p className="text-[11px] text-gray-400 mb-4">
-          Muestra el Market Value de la cuenta en cada importación. No representa rentabilidad — puede incluir depósitos, retiros u operaciones.
-        </p>
-        <ResponsiveContainer width="100%" height={260}>
-          <LineChart data={chartData} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
-            <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#6B7280' }} tickFormatter={(v) => fmtDate(v)} />
-            <YAxis tick={{ fontSize: 10, fill: '#6B7280' }} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
-            <Tooltip formatter={(v: any) => fmtUSD(Number(v))} labelFormatter={(v) => fmtDate(String(v))} />
-            <Line type="monotone" dataKey="value" stroke="#2E7D52" strokeWidth={2} dot={{ r: 3, fill: '#2E7D52' }} />
-          </LineChart>
-        </ResponsiveContainer>
-      </div>
-      )}
+            )}
+          </>
+        )
+      })()}
 
       {sorted.length >= 2 && (
       <div className="bg-white rounded-xl border border-gray-200 p-5">
