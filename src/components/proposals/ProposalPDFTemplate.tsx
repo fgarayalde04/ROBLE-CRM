@@ -2,6 +2,7 @@
 
 import Image from 'next/image'
 import { type CouponFrequency, type DayCountConvention, calculateBondAccrual } from '@/lib/proposals/bondCalculations'
+import { ROBLE_DISCLAIMER } from '@/lib/disclaimers'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -121,8 +122,7 @@ function uniqueBrokers(...lists: { broker: string | null }[][]): (string | null)
 
 // ─── Default disclaimer ───────────────────────────────────────────────────────
 
-const DEFAULT_DISCLAIMER =
-  'This was prepared for informational purposes only. It is not an official confirmation of terms. It is based on information generally available to the public from sources believed to be reliable. No representation is made that it is accurate or complete or that any returns indicated will be achieved. Changes to assumptions may have a material impact on returns. Past performance is not indicative of future results. Price/availability is subject to change without notice. Additional info is available on request. This is neither an offer to sell nor a solicitation of an offer to buy a new issue security. For further info on a new issue, including a prospectus, please contact Roble Capital Wealth Management. Any unauthorized copying, disclosure or distribution of the material in this e-mail is strictly forbidden. If you have received it by mistake please let us know by fax or e-mail immediately and destroy or delete it from your files or system; you should also not copy the message nor disclose its contents to anyone. Thank you.'
+const DEFAULT_DISCLAIMER = ROBLE_DISCLAIMER
 
 // ─── Table styles ──────────────────────────────────────────────────────────────
 

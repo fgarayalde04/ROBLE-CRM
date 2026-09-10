@@ -4,15 +4,38 @@ import { fmtUSD, fmtUSD2, fmtPct, fmtDate } from './PortfolioAccountClient'
 import DonutChart from '@/components/portfolio/DonutChart'
 import { COLORS, DONUT_COLORS, monthLabel } from '@/lib/portfolio/theme'
 import { ASSET_CLASS_ES, assetClassRank } from '@/lib/portfolio/engine'
+import { ROBLE_DISCLAIMER } from '@/lib/disclaimers'
 
 // Off-screen printable layout captured page-by-page (html2canvas + jsPDF) by
 // PortfolioAccountClient's handleDownloadPDF — never shown to the user
 // directly, mounted positioned off-screen so it still has real layout.
-// Deliberately avoids recharts here: only plain SVG (DonutChart) and CSS
-// div-bars, which paint synchronously and capture reliably in html2canvas —
-// unlike animated/portal-based chart libraries.
+// Deliberately avoids recharts here: only plain SVG (DonutChart, PdfAreaChart)
+// and CSS div-bars, which paint synchronously and capture reliably in
+// html2canvas — unlike animated/portal-based chart libraries.
 
-const PAGE_STYLE: React.CSSProperties = { width: '210mm', minHeight: '297mm', background: '#fff', padding: '13mm', fontFamily: 'Arial, sans-serif', boxSizing: 'border-box', position: 'relative' }
+// A4 apaisado. El paginado (PortfolioAccountClient.handleDownloadPDF) usa
+// orientation: 'landscape' — este ancho/alto tiene que coincidir.
+const PAGE_PAD_MM = 14
+const PAGE_STYLE: React.CSSProperties = { width: '297mm', minHeight: '210mm', background: '#fff', padding: `${PAGE_PAD_MM}mm`, fontFamily: 'Arial, sans-serif', boxSizing: 'border-box', position: 'relative' }
+
+// Logo del custodio para la carátula. Subir el archivo a public/bny-logo.png
+// y cambiar BNY_LOGO_READY a true para usar la imagen en vez del lockup de
+// texto.
+const BNY_LOGO_READY = false
+const BNY_LOGO_SRC = '/bny-logo.png'
+
+function BnyLogo({ height = 10 }: { height?: number }) {
+  if (BNY_LOGO_READY) {
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img src={BNY_LOGO_SRC} alt="BNY" style={{ height: `${height}mm`, objectFit: 'contain' }} />
+  }
+  return (
+    <div style={{ lineHeight: 1.1 }}>
+      <div style={{ fontSize: height * 2.4, fontWeight: 800, color: COLORS.charcoal, letterSpacing: 0.5 }}>BNY</div>
+      <div style={{ fontSize: height * 0.9, color: COLORS.mutedSlate, textTransform: 'uppercase', letterSpacing: 1 }}>Custodia</div>
+    </div>
+  )
+}
 
 // Long names are truncated here in JS rather than via CSS
 // (overflow:hidden + text-overflow:ellipsis) — html2canvas doesn't always
@@ -22,38 +45,68 @@ function truncateName(s: string, maxChars: number): string {
   return s.length > maxChars ? s.slice(0, maxChars - 1).trimEnd() + '…' : s
 }
 
-function PdfLetterhead({ title, accountNumber, account, importRow, custodianLabel }: { title: string; accountNumber: string; account: PortfolioAccountInfo | null; importRow: PortfolioImportRow; custodianLabel?: string }) {
+// Carátula — solo hoja 1. Institucional: logos, nombre del cliente, y el
+// recuadro Cliente / Custodio / Actualizado / Fecha del reporte (que a
+// partir de ahora NO se repite en las hojas siguientes).
+function PdfCover({ accountNumber, account, importRow, custodianLabel }: { accountNumber: string; account: PortfolioAccountInfo | null; importRow: PortfolioImportRow; custodianLabel?: string }) {
   const today = new Date().toLocaleDateString('es-UY', { day: '2-digit', month: 'long', year: 'numeric' })
+  const clientName = account?.clientName || account?.accountName || accountNumber
   return (
-    <div style={{ marginBottom: '5mm' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: `3px solid ${COLORS.darkGreen}`, paddingBottom: '3mm', marginBottom: '3mm' }}>
+    <div style={{ position: 'absolute', inset: `${PAGE_PAD_MM}mm`, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+      {/* Top — marca Roble */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/download.png" alt="Roble Capital" style={{ height: '11mm', objectFit: 'contain' }} />
-        <div style={{ textAlign: 'right' }}>
-          <div style={{ fontSize: 15, fontWeight: 800, color: COLORS.darkGreen }}>{title}</div>
-          <div style={{ fontSize: 8, color: COLORS.mutedSlate, textTransform: 'uppercase', letterSpacing: 1 }}>Portfolio Report · Confidencial</div>
+        <img src="/download.png" alt="Roble Capital" style={{ height: '14mm', objectFit: 'contain' }} />
+        <div style={{ fontSize: 8, color: COLORS.mutedSlate, textTransform: 'uppercase', letterSpacing: 2, marginTop: '3mm' }}>Documento confidencial</div>
+      </div>
+
+      {/* Centro — título + cliente */}
+      <div style={{ textAlign: 'center' }}>
+        <div style={{ fontSize: 11, color: COLORS.midGreen, textTransform: 'uppercase', letterSpacing: 6, fontWeight: 700 }}>Portfolio Report</div>
+        <div style={{ width: '40mm', height: '2px', background: COLORS.darkGreen, margin: '5mm auto' }} />
+        <div style={{ fontSize: 30, fontWeight: 800, color: COLORS.ink, letterSpacing: 0.5 }}>{clientName}</div>
+        <div style={{ fontSize: 11, color: COLORS.slate, marginTop: '2mm', letterSpacing: 1 }}>Cuenta {accountNumber}</div>
+      </div>
+
+      {/* Recuadro de datos — solo acá */}
+      <div>
+        <div style={{ display: 'flex', border: `1px solid ${COLORS.border}`, borderRadius: 6, overflow: 'hidden', marginBottom: '8mm' }}>
+          {[
+            ['Cliente', clientName],
+            ['Custodio', custodianLabel ?? account?.custodian ?? '—'],
+            ['Actualizado', fmtDate(importRow.snapshot_date)],
+            ['Fecha del reporte', today],
+          ].map(([label, val], i, arr) => (
+            <div key={label} style={{ flex: 1, padding: '3mm 4mm', borderRight: i < arr.length - 1 ? `1px solid ${COLORS.border}` : 'none', background: COLORS.bgSoft }}>
+              <div style={{ fontSize: 7, color: COLORS.mutedSlate, textTransform: 'uppercase', letterSpacing: 0.5 }}>{label}</div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.ink, marginTop: '1mm' }}>{val}</div>
+            </div>
+          ))}
+        </div>
+        {/* Custodia */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6mm', paddingTop: '5mm', borderTop: `1px solid ${COLORS.border}` }}>
+          <span style={{ fontSize: 8, color: COLORS.mutedSlate, textTransform: 'uppercase', letterSpacing: 1 }}>Custodia y compensación</span>
+          <BnyLogo height={9} />
         </div>
       </div>
-      <div style={{ display: 'flex', border: `1px solid ${COLORS.border}`, borderRadius: 6, overflow: 'hidden' }}>
-        {[
-          ['Cliente', account?.clientName || account?.accountName || accountNumber],
-          ['Custodio', custodianLabel ?? account?.custodian ?? '—'],
-          ['Actualizado', fmtDate(importRow.snapshot_date)],
-          ['Fecha del reporte', today],
-        ].map(([label, val], i, arr) => (
-          <div key={label} style={{ flex: 1, padding: '2mm 3mm', borderRight: i < arr.length - 1 ? `1px solid ${COLORS.border}` : 'none', background: COLORS.bgSoft }}>
-            <div style={{ fontSize: 6.5, color: COLORS.mutedSlate, textTransform: 'uppercase', letterSpacing: 0.5 }}>{label}</div>
-            <div style={{ fontSize: 9, fontWeight: 700, color: COLORS.ink, marginTop: '0.8mm' }}>{val}</div>
-          </div>
-        ))}
-      </div>
+    </div>
+  )
+}
+
+// Encabezado compacto para las hojas 2+ (sin el recuadro de datos).
+function PdfHeader({ title }: { title: string }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', borderBottom: `2px solid ${COLORS.darkGreen}`, paddingBottom: '2.5mm', marginBottom: '4mm' }}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/download.png" alt="Roble Capital" style={{ height: '9mm', objectFit: 'contain' }} />
+      <div style={{ fontSize: 13, fontWeight: 800, color: COLORS.darkGreen }}>{title}</div>
     </div>
   )
 }
 
 function PdfFooter({ clientName }: { clientName: string }) {
   return (
-    <div style={{ position: 'absolute', bottom: '10mm', left: '13mm', right: '13mm', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: `1px solid ${COLORS.border}`, paddingTop: '2mm' }}>
+    <div style={{ position: 'absolute', bottom: `${PAGE_PAD_MM - 4}mm`, left: `${PAGE_PAD_MM}mm`, right: `${PAGE_PAD_MM}mm`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: `1px solid ${COLORS.border}`, paddingTop: '2mm' }}>
       <span style={{ fontSize: 7, fontWeight: 700, color: COLORS.darkGreen }}>ROBLE CAPITAL WEALTH MANAGEMENT</span>
       <span style={{ fontSize: 6.5, color: COLORS.mutedSlate }}>Documento confidencial · Preparado exclusivamente para {clientName}</span>
     </div>
@@ -100,8 +153,46 @@ function CssBarChart({ data, color }: { data: { label: string; value: number }[]
   )
 }
 
+// Gráfico de evolución del valor de mercado — SVG plano (se captura bien en
+// html2canvas). Muestra "cuánto creció la cuenta" a lo largo del tiempo,
+// igual que la pestaña Rendimiento.
+function PdfAreaChart({ points, height = 46 }: { points: { date: string; value: number }[]; height?: number }) {
+  const W = 1000, H = 260, padL = 8, padR = 8, padT = 12, padB = 24
+  const values = points.map(p => p.value)
+  const min = Math.min(...values)
+  const max = Math.max(...values)
+  const span = max - min || 1
+  const n = points.length
+  const x = (i: number) => padL + (i / (n - 1)) * (W - padL - padR)
+  const y = (v: number) => padT + (1 - (v - min) / span) * (H - padT - padB)
+  const line = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${x(i).toFixed(1)} ${y(p.value).toFixed(1)}`).join(' ')
+  const area = `${line} L ${x(n - 1).toFixed(1)} ${(H - padB).toFixed(1)} L ${x(0).toFixed(1)} ${(H - padB).toFixed(1)} Z`
+  const first = points[0], last = points[n - 1]
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: `${height}mm`, display: 'block' }} preserveAspectRatio="none">
+      <line x1={padL} y1={H - padB} x2={W - padR} y2={H - padB} stroke={COLORS.border} strokeWidth={1} />
+      <path d={area} fill={COLORS.mintGreen} opacity={0.55} />
+      <path d={line} fill="none" stroke={COLORS.midGreen} strokeWidth={2.5} />
+      <circle cx={x(n - 1)} cy={y(last.value)} r={4} fill={COLORS.darkGreen} />
+      <text x={padL} y={H - 6} fontSize={13} fill={COLORS.mutedSlate}>{fmtDate(first.date)}</text>
+      <text x={W - padR} y={H - 6} fontSize={13} fill={COLORS.mutedSlate} textAnchor="end">{fmtDate(last.date)}</text>
+      <text x={x(n - 1)} y={y(last.value) - 8} fontSize={14} fontWeight={700} fill={COLORS.ink} textAnchor="end">{fmtUSD(last.value)}</text>
+      <text x={padL} y={y(min) + 4} fontSize={12} fill={COLORS.mutedSlate}>{fmtUSD(min)}</text>
+    </svg>
+  )
+}
+
+function PdfDisclosure() {
+  return (
+    <div data-pdf-keep-together style={{ marginTop: '5mm', paddingTop: '3mm', borderTop: `1px solid ${COLORS.border}` }}>
+      <div style={{ fontSize: 7, fontWeight: 700, color: COLORS.mutedSlate, textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: '1.5mm' }}>Disclosures</div>
+      <div style={{ fontSize: 6.6, color: COLORS.slate, lineHeight: 1.5, textAlign: 'justify' }}>{ROBLE_DISCLAIMER}</div>
+    </div>
+  )
+}
+
 export default function AccountPdfReport({
-  account, accountNumber, importRow, sortedByValue, assetAllocation, fixedIncomeBreakdown, currencyExposure,
+  account, accountNumber, importRow, sortedByValue, history, assetAllocation, fixedIncomeBreakdown, currencyExposure,
   liquidity, maturityBuckets, nextMaturity, cashProjImport, cashProjRows, projectedIncome12m, nextPayment,
   cleanedNames, performance, unrealizedGLTotals, glByCusip,
   isConsolidated, custodianByPositionId, custodianBreakdown,
@@ -110,6 +201,7 @@ export default function AccountPdfReport({
   accountNumber: string
   importRow: PortfolioImportRow
   sortedByValue: PortfolioPositionRow[]
+  history: { snapshot_date: string; total_market_value: string }[]
   assetAllocation: { assetClass: string; label: string; value: number; pct: number }[]
   fixedIncomeBreakdown: { label: string; value: number; pct: number }[]
   currencyExposure: { label: string; value: number; pct: number }[]
@@ -181,11 +273,43 @@ export default function AccountPdfReport({
   })()
   const holdingColSpan = 5 + (hasGL ? 2 : 0) + (hasMaturityCols ? 1 : 0) + (isConsolidated ? 1 : 0)
 
+  const hasIncomePage = !!cashProjImport && cashProjRows.length > 0
+  const growthPoints = [...history]
+    .sort((a, b) => a.snapshot_date.localeCompare(b.snapshot_date))
+    .map(h => ({ date: h.snapshot_date, value: Number(h.total_market_value) }))
+  const sinceMoney = performance?.change_in_value?.sinceInception ?? null
+  const sincePct = performance?.return_since_inception != null ? Number(performance.return_since_inception) : null
+
   return (
     <div id="account-pdf-report" style={{ position: 'fixed', left: -10000, top: 0 }}>
-      {/* ── Page 1: Overview ── */}
+      {/* ── Página 1: Carátula ── */}
       <div className="pdf-page" style={PAGE_STYLE}>
-        <PdfLetterhead title="Portfolio Report" accountNumber={accountNumber} account={account} importRow={importRow} custodianLabel={custodianLabel} />
+        <PdfCover accountNumber={accountNumber} account={account} importRow={importRow} custodianLabel={custodianLabel} />
+      </div>
+
+      {/* ── Página 2: Resumen ── */}
+      <div className="pdf-page" style={PAGE_STYLE}>
+        <PdfHeader title="Resumen" />
+
+        {growthPoints.length >= 2 && (
+          <div data-pdf-keep-together style={{ border: `1px solid ${COLORS.border}`, borderRadius: 8, padding: '3mm 4mm', marginBottom: '4mm' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '1mm' }}>
+              <div style={{ fontSize: 9, fontWeight: 700, color: COLORS.ink }}>Evolución del valor de la cuenta</div>
+              {sinceMoney != null && (
+                <div style={{ fontSize: 8, color: COLORS.slate }}>
+                  Crecimiento desde inicio:{' '}
+                  <span style={{ fontWeight: 700, color: sinceMoney >= 0 ? COLORS.gain : COLORS.loss }}>
+                    {sinceMoney >= 0 ? '+' : ''}{fmtUSD(sinceMoney)}{sincePct != null ? ` (${sincePct >= 0 ? '+' : ''}${sincePct.toFixed(2)}%)` : ''}
+                  </span>
+                </div>
+              )}
+            </div>
+            <PdfAreaChart points={growthPoints} />
+            <div style={{ fontSize: 6.3, color: COLORS.mutedSlate, marginTop: '1mm' }}>
+              Valor de mercado en cada importación. Puede incluir aportes, retiros u operaciones — no representa rentabilidad por sí solo.
+            </div>
+          </div>
+        )}
 
         {performance && (
           <div data-pdf-keep-together style={{ border: `1px solid ${COLORS.border}`, borderRadius: 8, padding: '3mm 4mm', marginBottom: '4mm' }}>
@@ -300,9 +424,9 @@ export default function AccountPdfReport({
         <PdfFooter clientName={clientName} />
       </div>
 
-      {/* ── Page 2: Holdings ── */}
+      {/* ── Página 3: Holdings ── */}
       <div className="pdf-page" style={PAGE_STYLE}>
-        <PdfLetterhead title="Portfolio Holdings" accountNumber={accountNumber} account={account} importRow={importRow} custodianLabel={custodianLabel} />
+        <PdfHeader title="Portfolio Holdings" />
         <table style={{ width: '100%', fontSize: 7.3, borderCollapse: 'collapse' }}>
           <thead>
             <tr style={{ background: COLORS.charcoal }}>
@@ -398,13 +522,14 @@ export default function AccountPdfReport({
             </tr>
           </tfoot>
         </table>
+        {!hasIncomePage && <PdfDisclosure />}
         <PdfFooter clientName={clientName} />
       </div>
 
-      {/* ── Page 3: Income & Cash Flow (only if cash projections were imported) ── */}
-      {cashProjImport && cashProjRows.length > 0 && (
+      {/* ── Página 4: Income & Cash Flow (solo si se importaron proyecciones) ── */}
+      {hasIncomePage && (
         <div className="pdf-page" style={PAGE_STYLE}>
-          <PdfLetterhead title="Income & Cash Flow" accountNumber={accountNumber} account={account} importRow={importRow} custodianLabel={custodianLabel} />
+          <PdfHeader title="Income & Cash Flow" />
 
           <div data-pdf-keep-together style={{ display: 'flex', gap: '3mm', marginBottom: '4mm' }}>
             <div style={{ flex: 1, border: `1px solid ${COLORS.border}`, borderRadius: 8, padding: '3mm' }}>
@@ -465,6 +590,7 @@ export default function AccountPdfReport({
             </div>
           )}
 
+          <PdfDisclosure />
           <PdfFooter clientName={clientName} />
         </div>
       )}

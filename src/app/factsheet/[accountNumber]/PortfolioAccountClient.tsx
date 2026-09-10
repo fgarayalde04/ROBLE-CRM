@@ -233,7 +233,7 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
         import('jspdf'),
       ])
       const pages = Array.from(document.querySelectorAll('#account-pdf-report .pdf-page')) as HTMLElement[]
-      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+      const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
       const pdfW = pdf.internal.pageSize.getWidth()
       const pdfH = pdf.internal.pageSize.getHeight()
       let firstPdfPage = true
@@ -343,6 +343,7 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
       )}
 
       <AccountPdfReport account={account} accountNumber={accountNumber} importRow={importRow} sortedByValue={sortedByValue}
+        history={history}
         assetAllocation={assetAllocation} fixedIncomeBreakdown={fixedIncomeBreakdown} currencyExposure={currencyExposure}
         liquidity={liquidity} maturityBuckets={maturityBuckets} nextMaturity={nextMaturity}
         cashProjImport={cashProjImport} cashProjRows={cashProjRows} projectedIncome12m={projectedIncome12m}
