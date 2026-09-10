@@ -21,8 +21,8 @@ const PAGE_STYLE: React.CSSProperties = { width: '297mm', minHeight: '210mm', ba
 // Logo del custodio para la carátula. Si existe public/bny-logo.png, poner
 // BNY_LOGO_READY = true para usar la imagen; si no, se dibuja un lockup de
 // texto con la misma marca ("BNY MELLON | PERSHING").
-const BNY_LOGO_READY = false
-const BNY_LOGO_SRC = '/bny-logo.png'
+const BNY_LOGO_READY = true
+const BNY_LOGO_SRC = '/bny-logo.webp'
 const BNY_GREY = '#585858'
 const BNY_GOLD = '#A9861F'
 
