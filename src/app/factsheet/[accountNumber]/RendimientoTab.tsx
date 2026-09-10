@@ -3,6 +3,7 @@ import { useState, useMemo } from 'react'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, BarChart, Bar, Cell, LabelList, ReferenceLine } from 'recharts'
 import { fmtUSD, fmtDate } from './PortfolioAccountClient'
 import DocumentUploadButton from '@/components/portfolio/DocumentUploadButton'
+import { computePerfValueSeries } from '@/lib/portfolio/engine'
 import type { PortfolioPerformanceRow } from '@/types/portfolio'
 
 type Period = '1M' | '3M' | '6M' | 'YTD' | '1Y' | 'ALL'
@@ -191,35 +192,45 @@ export default function RendimientoTab({ accountNumber, history, performance, on
               </div>
             )}
 
-            {sorted.length >= 2 && (
-              <div className="bg-white rounded-xl border border-gray-200 p-5">
-                <div className="flex items-center justify-between mb-1">
-                  <p className="text-sm font-bold text-gray-900">Evolución del valor de la cuenta</p>
-                  <div className="flex gap-1">
-                    {PERIODS.map(p => (
-                      <button key={p.key} onClick={() => setPeriod(p.key)}
-                        className={`px-2.5 py-1 text-xs font-semibold rounded-md transition ${period === p.key ? 'bg-[#1B3A2B] text-white' : 'text-gray-500 hover:bg-gray-100'}`}>
-                        {p.label}
-                      </button>
-                    ))}
+            {(() => {
+              const perfSeries = computePerfValueSeries(performance)
+              const usePerf = perfSeries.length >= 2
+              const lineData = usePerf ? perfSeries : chartData
+              if (!usePerf && sorted.length < 2) return null
+              return (
+                <div className="bg-white rounded-xl border border-gray-200 p-5">
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="text-sm font-bold text-gray-900">Evolución del valor de la cuenta</p>
+                    {!usePerf && (
+                      <div className="flex gap-1">
+                        {PERIODS.map(p => (
+                          <button key={p.key} onClick={() => setPeriod(p.key)}
+                            className={`px-2.5 py-1 text-xs font-semibold rounded-md transition ${period === p.key ? 'bg-[#1B3A2B] text-white' : 'text-gray-500 hover:bg-gray-100'}`}>
+                            {p.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
+                  <p className="text-[11px] text-gray-400 mb-4">
+                    {usePerf
+                      ? 'Valor de la cuenta según el reporte de performance del custodio: en cuánto arrancó, los valores que tuvo y cuánto vale hoy.'
+                      : 'Market Value de la cuenta en cada importación. No representa rentabilidad — puede incluir depósitos, retiros u operaciones.'}
+                  </p>
+                  <ResponsiveContainer width="100%" height={260}>
+                    <LineChart data={lineData} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
+                      <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#6B7280' }} tickFormatter={(v) => fmtDate(v)} />
+                      <YAxis tick={{ fontSize: 10, fill: '#6B7280' }} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
+                      <Tooltip formatter={(v: any) => fmtUSD(Number(v))} labelFormatter={(v) => fmtDate(String(v))} />
+                      <Line type="monotone" dataKey="value" stroke="#2E7D52" strokeWidth={2} dot={{ r: 3, fill: '#2E7D52' }} />
+                    </LineChart>
+                  </ResponsiveContainer>
                 </div>
-                <p className="text-[11px] text-gray-400 mb-4">
-                  Muestra el Market Value de la cuenta en cada importación. No representa rentabilidad — puede incluir depósitos, retiros u operaciones.
-                </p>
-                <ResponsiveContainer width="100%" height={260}>
-                  <LineChart data={chartData} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
-                    <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#6B7280' }} tickFormatter={(v) => fmtDate(v)} />
-                    <YAxis tick={{ fontSize: 10, fill: '#6B7280' }} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
-                    <Tooltip formatter={(v: any) => fmtUSD(Number(v))} labelFormatter={(v) => fmtDate(String(v))} />
-                    <Line type="monotone" dataKey="value" stroke="#2E7D52" strokeWidth={2} dot={{ r: 3, fill: '#2E7D52' }} />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            )}
+              )
+            })()}
 
-            {perfBars.length === 0 && sorted.length < 2 && (
+            {perfBars.length === 0 && sorted.length < 2 && computePerfValueSeries(performance).length < 2 && (
               <div className="bg-white rounded-xl border border-gray-200 p-10 text-center">
                 <div className="text-3xl mb-3">📈</div>
                 <p className="text-sm font-semibold text-gray-600">Todavía no hay datos para graficar</p>

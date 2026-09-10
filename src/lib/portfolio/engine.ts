@@ -6,7 +6,7 @@
 // custodian's snapshot or an already-merged consolidated position list: the
 // functions themselves never branch on custodian, they just group/sum/divide
 // whatever position list and total they're given.
-import type { PortfolioPositionRow, PortfolioUnrealizedGainLossRow, PortfolioCashProjectionRow } from '@/types/portfolio'
+import type { PortfolioPositionRow, PortfolioUnrealizedGainLossRow, PortfolioCashProjectionRow, PortfolioPerformanceRow } from '@/types/portfolio'
 
 export const ASSET_CLASS_ES: Record<string, string> = {
   'Equity': 'Renta Variable',
@@ -158,4 +158,32 @@ export function computeProjectedIncome12m(cashProjRows: PortfolioCashProjectionR
   return cashProjRows
     .filter(r => { const d = new Date(r.pay_date + 'T00:00:00'); return d >= today && d <= in12m })
     .reduce((s, r) => s + (r.estimated_amount != null ? Number(r.estimated_amount) : 0), 0)
+}
+
+// Serie de "valor de la cuenta a lo largo del tiempo" reconstruida SOLO a
+// partir del reporte de performance del custodio (no necesita historial de
+// snapshots): cada período trae su "Beginning Value" y el reporte trae el
+// "Ending Value" actual — se fechan retrocediendo desde period_end.
+export function computePerfValueSeries(
+  p: PortfolioPerformanceRow | null
+): { date: string; value: number; label: string }[] {
+  if (!p) return []
+  const end = p.period_end ? new Date(p.period_end + 'T00:00:00') : new Date()
+  const bv = p.beginning_value
+  const byDate = new Map<string, { date: string; value: number; label: string }>()
+  const add = (d: Date, v: number | null | undefined, label: string) => {
+    if (v == null || isNaN(d.getTime())) return
+    byDate.set(d.toISOString().slice(0, 10), { date: d.toISOString().slice(0, 10), value: Number(v), label })
+  }
+  const back = (years: number) => { const d = new Date(end); d.setFullYear(d.getFullYear() - years); return d }
+
+  if (p.inception_date && bv?.sinceInception != null) add(new Date(p.inception_date + 'T00:00:00'), bv.sinceInception, 'Inicio')
+  if (bv?.fiveYear != null) add(back(5), bv.fiveYear, 'Hace 5 años')
+  if (bv?.threeYear != null) add(back(3), bv.threeYear, 'Hace 3 años')
+  if (bv?.oneYear != null) add(back(1), bv.oneYear, 'Hace 1 año')
+  if (bv?.ytd != null) add(new Date(Date.UTC(end.getUTCFullYear(), 0, 1)), bv.ytd, 'Inicio de año')
+  if (p.period_start && bv?.selected != null) add(new Date(p.period_start + 'T00:00:00'), bv.selected, 'Inicio del período')
+  if (p.ending_value != null) add(end, Number(p.ending_value), 'Actual')
+
+  return Array.from(byDate.values()).sort((a, b) => a.date.localeCompare(b.date))
 }

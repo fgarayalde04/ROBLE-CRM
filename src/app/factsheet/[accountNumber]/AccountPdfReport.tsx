@@ -2,7 +2,7 @@ import type { PortfolioPositionRow, PortfolioImportRow, PortfolioAccountInfo, Po
 import { fmtUSD, fmtUSD2, fmtPct, fmtDate } from './PortfolioAccountClient'
 import DonutChart from '@/components/portfolio/DonutChart'
 import { COLORS, DONUT_COLORS, monthLabel } from '@/lib/portfolio/theme'
-import { ASSET_CLASS_ES, assetClassRank } from '@/lib/portfolio/engine'
+import { ASSET_CLASS_ES, assetClassRank, computePerfValueSeries } from '@/lib/portfolio/engine'
 import { ROBLE_DISCLAIMER } from '@/lib/disclaimers'
 
 // Off-screen printable layout captured page-by-page (html2canvas + jsPDF) by
@@ -186,9 +186,11 @@ function PdfPerfBarChart({ series, height = 58 }: { series: { label: string; val
 }
 
 // Disclosure fijado al pie de la hoja (arriba del footer institucional).
+// Va en el flujo normal, al final del contenido de la hoja (arriba del
+// footer). data-pdf-keep-together evita que el paginado lo parta al medio.
 function PdfDisclosure() {
   return (
-    <div style={{ position: 'absolute', left: `${PAGE_PAD_MM}mm`, right: `${PAGE_PAD_MM}mm`, bottom: `${PAGE_PAD_MM + 6}mm`, paddingTop: '3mm', borderTop: `1px solid ${COLORS.border}` }}>
+    <div data-pdf-keep-together style={{ marginTop: '6mm', marginBottom: '8mm', paddingTop: '3mm', borderTop: `1px solid ${COLORS.border}` }}>
       <div style={{ fontSize: 7, fontWeight: 700, color: COLORS.mutedSlate, textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: '1.5mm' }}>Disclosures</div>
       <div style={{ fontSize: 6.4, color: COLORS.slate, lineHeight: 1.45, textAlign: 'justify' }}>{ROBLE_DISCLAIMER}</div>
     </div>
@@ -281,9 +283,15 @@ export default function AccountPdfReport({
   const hasIncomePage = sec.income && !!cashProjImport && cashProjRows.length > 0
   // El disclosure va al pie de la última hoja de contenido que se muestre.
   const disclosureOn = hasIncomePage ? 'income' : sec.holdings ? 'holdings' : sec.composicion ? 'composicion' : 'performance'
-  const growthPoints = [...history]
-    .sort((a, b) => a.snapshot_date.localeCompare(b.snapshot_date))
-    .map(h => ({ date: h.snapshot_date, value: Number(h.total_market_value) }))
+  // Preferimos la serie reconstruida del reporte de performance (arranque,
+  // valores intermedios y valor actual) — no necesita historial de
+  // snapshots. Si no hay performance, caemos al historial de importaciones.
+  const perfSeries = computePerfValueSeries(performance)
+  const growthPoints = perfSeries.length >= 2
+    ? perfSeries.map(p => ({ date: p.date, value: p.value }))
+    : [...history]
+        .sort((a, b) => a.snapshot_date.localeCompare(b.snapshot_date))
+        .map(h => ({ date: h.snapshot_date, value: Number(h.total_market_value) }))
   const sinceMoney = performance?.change_in_value?.sinceInception ?? null
   const sincePct = performance?.return_since_inception != null ? Number(performance.return_since_inception) : null
   const reportDate = new Date().toLocaleDateString('es-UY', { day: '2-digit', month: 'long', year: 'numeric' })
