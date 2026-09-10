@@ -167,23 +167,32 @@ export function computeProjectedIncome12m(cashProjRows: PortfolioCashProjectionR
 export function computePerfValueSeries(
   p: PortfolioPerformanceRow | null
 ): { date: string; value: number; label: string }[] {
-  if (!p) return []
+  if (!p || p.ending_value == null) return []
+  const ending = Number(p.ending_value)
   const end = p.period_end ? new Date(p.period_end + 'T00:00:00') : new Date()
   const bv = p.beginning_value
   const byDate = new Map<string, { date: string; value: number; label: string }>()
   const add = (d: Date, v: number | null | undefined, label: string) => {
-    if (v == null || isNaN(d.getTime())) return
+    if (v == null || !isFinite(v) || isNaN(d.getTime())) return
     byDate.set(d.toISOString().slice(0, 10), { date: d.toISOString().slice(0, 10), value: Number(v), label })
   }
   const back = (years: number) => { const d = new Date(end); d.setFullYear(d.getFullYear() - years); return d }
+  // Si no hay "Beginning Value" real en el reporte, se estima el valor al
+  // inicio del período a partir del retorno: valor_inicio = valor_actual / (1 + ret%/100).
+  // Ignora aportes/retiros, pero alcanza para el gráfico "en cuánto arrancó".
+  const fromRet = (ret: string | number | null) => {
+    if (ret == null) return null
+    const n = Number(ret)
+    return !isFinite(n) || n <= -100 ? null : ending / (1 + n / 100)
+  }
 
-  if (p.inception_date && bv?.sinceInception != null) add(new Date(p.inception_date + 'T00:00:00'), bv.sinceInception, 'Inicio')
-  if (bv?.fiveYear != null) add(back(5), bv.fiveYear, 'Hace 5 años')
-  if (bv?.threeYear != null) add(back(3), bv.threeYear, 'Hace 3 años')
-  if (bv?.oneYear != null) add(back(1), bv.oneYear, 'Hace 1 año')
-  if (bv?.ytd != null) add(new Date(Date.UTC(end.getUTCFullYear(), 0, 1)), bv.ytd, 'Inicio de año')
-  if (p.period_start && bv?.selected != null) add(new Date(p.period_start + 'T00:00:00'), bv.selected, 'Inicio del período')
-  if (p.ending_value != null) add(end, Number(p.ending_value), 'Actual')
+  if (p.inception_date) add(new Date(p.inception_date + 'T00:00:00'), bv?.sinceInception ?? fromRet(p.return_since_inception), 'Inicio')
+  add(back(5), bv?.fiveYear ?? fromRet(p.return_5y), 'Hace 5 años')
+  add(back(3), bv?.threeYear ?? fromRet(p.return_3y), 'Hace 3 años')
+  add(back(1), bv?.oneYear ?? fromRet(p.return_1y), 'Hace 1 año')
+  add(new Date(Date.UTC(end.getUTCFullYear(), 0, 1)), bv?.ytd ?? fromRet(p.return_ytd), 'Inicio de año')
+  if (p.period_start) add(new Date(p.period_start + 'T00:00:00'), bv?.selected ?? fromRet(p.return_selected), 'Inicio del período')
+  add(end, ending, 'Actual')
 
   return Array.from(byDate.values()).sort((a, b) => a.date.localeCompare(b.date))
 }
