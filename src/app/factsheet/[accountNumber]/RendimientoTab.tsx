@@ -98,6 +98,44 @@ export default function RendimientoTab({ accountNumber, history, performance, on
                 </div>
               ))}
             </div>
+
+            {performance.change_in_value && (() => {
+              const civ = performance.change_in_value!
+              const cells: [string, number | null][] = [
+                ['YTD', civ.ytd], ['1 Año', civ.oneYear], ['3 Años', civ.threeYear],
+                ['5 Años', civ.fiveYear], ['Desde inicio', civ.sinceInception],
+              ]
+              if (cells.every(([, v]) => v == null)) return null
+              const nc = performance.net_contribution
+              const bv = performance.beginning_value
+              return (
+                <div className="mt-3">
+                  <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Cuánto creció en dinero</p>
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                    {cells.map(([label, val]) => (
+                      <div key={label} className="bg-[#F3F4F6] rounded-lg p-3 text-center">
+                        <p className="text-[10px] text-gray-400 uppercase tracking-wide">{label}</p>
+                        <p className={`text-base font-bold mt-0.5 ${val == null ? 'text-gray-300' : val >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                          {val == null ? '—' : `${val >= 0 ? '+' : ''}${fmtUSD(val)}`}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                  {(bv?.selected != null || nc?.selected != null) && (
+                    <p className="text-[11px] text-gray-400 mt-2">
+                      Período reportado:
+                      {bv?.selected != null && <> valor inicial <span className="font-semibold text-gray-600">{fmtUSD(bv.selected)}</span></>}
+                      {nc?.selected != null && <> · aportes/retiros netos <span className="font-semibold text-gray-600">{nc.selected >= 0 ? '+' : ''}{fmtUSD(nc.selected)}</span></>}
+                      {civ.selected != null && <> · crecimiento <span className={`font-semibold ${civ.selected >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{civ.selected >= 0 ? '+' : ''}{fmtUSD(civ.selected)}</span></>}
+                      {performance.ending_value != null && <> · valor final <span className="font-semibold text-gray-600">{fmtUSD(Number(performance.ending_value))}</span></>}
+                    </p>
+                  )}
+                  <p className="text-[11px] text-gray-400 mt-1">
+                    Crecimiento en dinero por mercado (sin contar aportes ni retiros) — el equivalente en plata del TWRR de arriba.
+                  </p>
+                </div>
+              )
+            })()}
             {performance.benchmarks.length > 0 && (
               <div className="mt-4 pt-4 border-t border-gray-100">
                 <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-2">Benchmarks (desde inicio)</p>

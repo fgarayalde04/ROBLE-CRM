@@ -62,6 +62,15 @@ export interface PortfolioBenchmarkPerformance {
   sinceInception: number | null
 }
 
+export interface PortfolioPeriodMoney {
+  selected: number | null
+  ytd: number | null
+  oneYear: number | null
+  threeYear: number | null
+  fiveYear: number | null
+  sinceInception: number | null
+}
+
 export interface PortfolioPerformanceRow {
   id: string
   account_number: string
@@ -77,6 +86,10 @@ export interface PortfolioPerformanceRow {
   return_5y: string | null
   return_since_inception: string | null
   benchmarks: PortfolioBenchmarkPerformance[]
+  // Filas de plata del reporte — null en imports viejos previos a esta feature.
+  beginning_value: PortfolioPeriodMoney | null
+  net_contribution: PortfolioPeriodMoney | null
+  change_in_value: PortfolioPeriodMoney | null
   file_name: string | null
   imported_by: string
   created_at: string

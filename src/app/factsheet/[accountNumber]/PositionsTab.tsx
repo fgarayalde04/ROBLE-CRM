@@ -1,11 +1,20 @@
 'use client'
-import { useState, useMemo } from 'react'
+import { useState, useMemo, Fragment } from 'react'
 import type { PortfolioPositionRow, PortfolioUnrealizedGainLossRow } from '@/types/portfolio'
 import { fmtUSD2, fmtPct, fmtDate } from './PortfolioAccountClient'
 import { cleanDisplayName } from '@/lib/portfolio/theme'
 import { ASSET_CLASS_ES } from '@/lib/portfolio/engine'
 
-type SortKey = 'name' | 'asset_class' | 'quantity' | 'price' | 'market_value' | 'weight_pct'
+type SortKey = 'name' | 'quantity' | 'price' | 'market_value' | 'weight_pct'
+
+// Orden de los grupos por clase de activo en la tabla — acciones primero,
+// liquidez y sin clasificar al final. Cualquier clase que no esté acá va
+// después, ordenada por su subtotal.
+const ASSET_CLASS_ORDER = ['Equity', 'ETF', 'Fund', 'Fixed Income', 'Alternatives', 'Real Estate', 'Cash', 'Sin clasificar']
+function assetClassRank(ac: string) {
+  const i = ASSET_CLASS_ORDER.indexOf(ac)
+  return i === -1 ? ASSET_CLASS_ORDER.length : i
+}
 
 function DetailRow({ label, value }: { label: string; value: string | null | undefined }) {
   if (value == null || value === '') return null
@@ -54,12 +63,40 @@ export default function PositionsTab({ positions, totalValue, glByCusip, onImpor
     })
     const dir = sortDir === 'asc' ? 1 : -1
     return filtered.sort((a, b) => {
-      if (sortKey === 'name' || sortKey === 'asset_class') return a[sortKey].localeCompare(b[sortKey]) * dir
+      if (sortKey === 'name') return a.name.localeCompare(b.name) * dir
       const av = sortKey === 'weight_pct' ? a.recalcWeight : Number(a[sortKey] ?? 0)
       const bv = sortKey === 'weight_pct' ? b.recalcWeight : Number(b[sortKey] ?? 0)
       return (av - bv) * dir
     })
   }, [positions, totalValue, q, assetFilter, sortKey, sortDir])
+
+  // Agrupado por clase de activo, con subtotales. El orden interno de cada
+  // grupo respeta el sort elegido (rows ya viene ordenado); los grupos van
+  // en ASSET_CLASS_ORDER y, a igualdad, por subtotal descendente.
+  type Row = typeof rows[number]
+  const groups = useMemo(() => {
+    const byClass = new Map<string, Row[]>()
+    for (const r of rows) {
+      const arr = byClass.get(r.asset_class) ?? []
+      arr.push(r)
+      byClass.set(r.asset_class, arr)
+    }
+    return Array.from(byClass.entries())
+      .map(([assetClass, groupRows]) => {
+        const subtotalValue = groupRows.reduce((s, p) => s + Number(p.market_value), 0)
+        return {
+          assetClass,
+          label: ASSET_CLASS_ES[assetClass] ?? assetClass,
+          rows: groupRows,
+          subtotalValue,
+          subtotalWeight: groupRows.reduce((s, p) => s + p.recalcWeight, 0),
+        }
+      })
+      .sort((a, b) => {
+        const rk = assetClassRank(a.assetClass) - assetClassRank(b.assetClass)
+        return rk !== 0 ? rk : b.subtotalValue - a.subtotalValue
+      })
+  }, [rows])
 
   function toggleSort(key: SortKey) {
     if (sortKey === key) { setSortDir(d => d === 'asc' ? 'desc' : 'asc'); return }
@@ -68,12 +105,12 @@ export default function PositionsTab({ positions, totalValue, glByCusip, onImpor
 
   const cols: { key: SortKey; label: string; align?: 'right' }[] = [
     { key: 'name', label: 'Activo' },
-    { key: 'asset_class', label: 'Clase' },
     { key: 'quantity', label: 'Cantidad', align: 'right' },
     { key: 'price', label: 'Precio', align: 'right' },
     { key: 'market_value', label: 'Market Value', align: 'right' },
     { key: 'weight_pct', label: '% Cartera', align: 'right' },
   ]
+  const totalColSpan = cols.length + (hasGL ? 2 : 0)
 
   return (
     <div className="space-y-4">
@@ -123,47 +160,74 @@ export default function PositionsTab({ positions, totalValue, glByCusip, onImpor
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {rows.map((p, i) => {
-                const clean = cleanDisplayName(p.name, p.isin, p.cusip, p.coupon, p.maturity_date)
-                const gl = p.cusip ? glByCusip.get(p.cusip) : undefined
+              {groups.map(group => {
+                const grpCost = group.rows.reduce((s, p) => s + (p.cusip && glByCusip.get(p.cusip) ? Number(glByCusip.get(p.cusip)!.cost_basis) : 0), 0)
+                const grpGL   = group.rows.reduce((s, p) => s + (p.cusip && glByCusip.get(p.cusip) ? Number(glByCusip.get(p.cusip)!.gain_loss) : 0), 0)
+                const grpGLPct = grpCost > 0 ? (grpGL / grpCost) * 100 : 0
                 return (
-                  <tr key={p.id} onClick={() => setSelected(p)} className={`cursor-pointer transition hover:bg-emerald-50/40 ${i % 2 === 1 ? 'bg-gray-50/60' : ''}`}>
-                    <td className="px-4 py-2.5 max-w-[260px]">
-                      <div className="text-gray-800 font-medium truncate">{clean.name}</div>
-                      {clean.detail && <div className="text-[10px] text-gray-400 truncate">{clean.detail}</div>}
-                      {(p.purchase_date || gl?.purchase_date) && <div className="text-[10px] text-gray-400 truncate">Compra: {p.purchase_date ?? gl?.purchase_date}</div>}
-                    </td>
-                    <td className="px-4 py-2.5 text-gray-500">{ASSET_CLASS_ES[p.asset_class] ?? p.asset_class}</td>
-                    <td className="px-4 py-2.5 text-right text-gray-700 font-mono">{p.quantity != null ? Number(p.quantity).toLocaleString('en-US') : '—'}</td>
-                    <td className="px-4 py-2.5 text-right text-gray-700 font-mono">{p.price != null ? fmtUSD2(Number(p.price)) : '—'}</td>
-                    <td className="px-4 py-2.5 text-right font-semibold font-mono" style={{ color: '#1B3A2B' }}>{fmtUSD2(Number(p.market_value))}</td>
-                    <td className="px-4 py-2.5">
-                      <div className="flex items-center justify-end gap-2">
-                        <div className="w-12 h-1.5 bg-gray-100 rounded-full overflow-hidden hidden sm:block">
-                          <div className="h-full rounded-full" style={{ width: `${Math.min(p.recalcWeight, 100)}%`, background: '#2E7D52' }} />
-                        </div>
-                        <span className="text-gray-500 w-12 text-right shrink-0">{fmtPct(p.recalcWeight)}</span>
-                      </div>
-                    </td>
-                    {hasGL && (
-                      <>
-                        <td className="px-4 py-2.5 text-right text-gray-700 font-mono">{gl ? fmtUSD2(Number(gl.cost_basis)) : '—'}</td>
-                        <td className={`px-4 py-2.5 text-right font-mono font-semibold ${gl ? (Number(gl.gain_loss) >= 0 ? 'text-emerald-600' : 'text-red-600') : 'text-gray-400'}`}>
-                          {gl ? `${Number(gl.gain_loss) >= 0 ? '+' : ''}${fmtUSD2(Number(gl.gain_loss))} (${Number(gl.gain_loss_pct) >= 0 ? '+' : ''}${Number(gl.gain_loss_pct).toFixed(2)}%)` : '—'}
-                        </td>
-                      </>
-                    )}
-                  </tr>
+                  <Fragment key={group.assetClass}>
+                    <tr className="bg-[#EEF2F1] border-y border-[#D8E3DE]">
+                      <td colSpan={totalColSpan} className="px-4 py-2 text-[11px] font-bold uppercase tracking-wide text-[#1B3A2B]">
+                        {group.label}
+                        <span className="ml-1.5 text-gray-400 font-medium normal-case">· {group.rows.length} {group.rows.length === 1 ? 'posición' : 'posiciones'}</span>
+                      </td>
+                    </tr>
+                    {group.rows.map((p, i) => {
+                      const clean = cleanDisplayName(p.name, p.isin, p.cusip, p.coupon, p.maturity_date)
+                      const gl = p.cusip ? glByCusip.get(p.cusip) : undefined
+                      return (
+                        <tr key={p.id} onClick={() => setSelected(p)} className={`cursor-pointer transition hover:bg-emerald-50/40 ${i % 2 === 1 ? 'bg-gray-50/60' : ''}`}>
+                          <td className="px-4 py-2.5 max-w-[260px]">
+                            <div className="text-gray-800 font-medium truncate">{clean.name}</div>
+                            {clean.detail && <div className="text-[10px] text-gray-400 truncate">{clean.detail}</div>}
+                            {(p.purchase_date || gl?.purchase_date) && <div className="text-[10px] text-gray-400 truncate">Compra: {p.purchase_date ?? gl?.purchase_date}</div>}
+                          </td>
+                          <td className="px-4 py-2.5 text-right text-gray-700 font-mono">{p.quantity != null ? Number(p.quantity).toLocaleString('en-US') : '—'}</td>
+                          <td className="px-4 py-2.5 text-right text-gray-700 font-mono">{p.price != null ? fmtUSD2(Number(p.price)) : '—'}</td>
+                          <td className="px-4 py-2.5 text-right font-semibold font-mono" style={{ color: '#1B3A2B' }}>{fmtUSD2(Number(p.market_value))}</td>
+                          <td className="px-4 py-2.5">
+                            <div className="flex items-center justify-end gap-2">
+                              <div className="w-12 h-1.5 bg-gray-100 rounded-full overflow-hidden hidden sm:block">
+                                <div className="h-full rounded-full" style={{ width: `${Math.min(p.recalcWeight, 100)}%`, background: '#2E7D52' }} />
+                              </div>
+                              <span className="text-gray-500 w-12 text-right shrink-0">{fmtPct(p.recalcWeight)}</span>
+                            </div>
+                          </td>
+                          {hasGL && (
+                            <>
+                              <td className="px-4 py-2.5 text-right text-gray-700 font-mono">{gl ? fmtUSD2(Number(gl.cost_basis)) : '—'}</td>
+                              <td className={`px-4 py-2.5 text-right font-mono font-semibold ${gl ? (Number(gl.gain_loss) >= 0 ? 'text-emerald-600' : 'text-red-600') : 'text-gray-400'}`}>
+                                {gl ? `${Number(gl.gain_loss) >= 0 ? '+' : ''}${fmtUSD2(Number(gl.gain_loss))} (${Number(gl.gain_loss_pct) >= 0 ? '+' : ''}${Number(gl.gain_loss_pct).toFixed(2)}%)` : '—'}
+                              </td>
+                            </>
+                          )}
+                        </tr>
+                      )
+                    })}
+                    <tr className="bg-[#F7FAF9] border-b-2 border-[#D8E3DE]">
+                      <td colSpan={3} className="px-4 py-2 text-right text-[11px] font-bold uppercase tracking-wide text-gray-500">Subtotal {group.label}</td>
+                      <td className="px-4 py-2 text-right text-xs font-bold font-mono text-[#1B3A2B]">{fmtUSD2(group.subtotalValue)}</td>
+                      <td className="px-4 py-2 text-right text-xs font-bold text-gray-500">{fmtPct(group.subtotalWeight)}</td>
+                      {hasGL && (
+                        <>
+                          <td className="px-4 py-2 text-right text-xs font-bold font-mono text-gray-500">{grpCost > 0 ? fmtUSD2(grpCost) : '—'}</td>
+                          <td className={`px-4 py-2 text-right text-xs font-bold font-mono ${grpCost > 0 ? (grpGL >= 0 ? 'text-emerald-600' : 'text-red-600') : 'text-gray-400'}`}>
+                            {grpCost > 0 ? `${grpGL >= 0 ? '+' : ''}${fmtUSD2(grpGL)} (${grpGLPct >= 0 ? '+' : ''}${grpGLPct.toFixed(2)}%)` : '—'}
+                          </td>
+                        </>
+                      )}
+                    </tr>
+                  </Fragment>
                 )
               })}
               {rows.length === 0 && (
-                <tr><td colSpan={cols.length + (hasGL ? 2 : 0)} className="px-4 py-10 text-center text-sm text-gray-400">Sin resultados</td></tr>
+                <tr><td colSpan={totalColSpan} className="px-4 py-10 text-center text-sm text-gray-400">Sin resultados</td></tr>
               )}
             </tbody>
             {rows.length > 0 && (
               <tfoot>
                 <tr style={{ background: '#1B2E3C' }}>
-                  <td colSpan={4} className="px-4 py-2.5 text-right text-xs font-bold text-white/80">TOTAL</td>
+                  <td colSpan={3} className="px-4 py-2.5 text-right text-xs font-bold text-white/80">TOTAL</td>
                   <td className="px-4 py-2.5 text-right text-sm font-bold text-white">{fmtUSD2(rows.reduce((s, p) => s + Number(p.market_value), 0))}</td>
                   <td className="px-4 py-2.5" />
                   {hasGL && (

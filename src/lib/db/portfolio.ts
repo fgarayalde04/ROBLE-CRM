@@ -266,8 +266,9 @@ export async function createPerformanceImport(input: {
     `insert into portfolio_performance_imports
       (account_number, report_date, period_start, period_end, inception_date, ending_value,
        return_selected, return_ytd, return_1y, return_3y, return_5y, return_since_inception,
-       benchmarks, file_name, imported_by, imported_by_id, custodian)
-     values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14,$15,$16,$17)
+       benchmarks, file_name, imported_by, imported_by_id, custodian,
+       beginning_value, net_contribution, change_in_value)
+     values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14,$15,$16,$17,$18::jsonb,$19::jsonb,$20::jsonb)
      on conflict (account_number, report_date, custodian) do update set
        period_start = excluded.period_start, period_end = excluded.period_end,
        inception_date = excluded.inception_date, ending_value = excluded.ending_value,
@@ -275,12 +276,17 @@ export async function createPerformanceImport(input: {
        return_1y = excluded.return_1y, return_3y = excluded.return_3y, return_5y = excluded.return_5y,
        return_since_inception = excluded.return_since_inception, benchmarks = excluded.benchmarks,
        file_name = excluded.file_name, imported_by = excluded.imported_by, imported_by_id = excluded.imported_by_id,
+       beginning_value = excluded.beginning_value, net_contribution = excluded.net_contribution,
+       change_in_value = excluded.change_in_value,
        created_at = now()
      returning *`,
     [
       input.accountNumber, p.reportDate, p.periodStart, p.periodEnd, p.inceptionDate, p.endingValue,
       p.returns.selected, p.returns.ytd, p.returns.oneYear, p.returns.threeYear, p.returns.fiveYear, p.returns.sinceInception,
       JSON.stringify(p.benchmarks), input.fileName, input.importedBy, input.importedById, input.custodian ?? 'Pershing',
+      p.beginningValue ? JSON.stringify(p.beginningValue) : null,
+      p.netContribution ? JSON.stringify(p.netContribution) : null,
+      p.changeInValue ? JSON.stringify(p.changeInValue) : null,
     ]
   )
   return rows[0]

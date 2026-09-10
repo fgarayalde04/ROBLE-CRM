@@ -40,6 +40,13 @@ export interface ParsedPerformanceReport {
   inceptionDate:    string | null
   endingValue:      number | null
   returns:          PeriodReturns
+  // Filas de plata del mismo cuadro (una cifra por período). "changeInValue"
+  // es cuánto creció/cayó la cuenta en dinero por mercado, sin contar aportes
+  // ni retiros — el equivalente en plata del TWRR. Null cuando el reporte no
+  // trae la fila (reportes viejos ya importados).
+  beginningValue:   PeriodReturns | null
+  netContribution:  PeriodReturns | null
+  changeInValue:    PeriodReturns | null
   benchmarks:       BenchmarkPerformance[]
   warnings:         string[]
 }
@@ -75,6 +82,30 @@ function readPeriodRow(lines: string[], startIdx: number): { values: (number | n
     const m = line.match(/^[+-]?[\d,]+(?:\.\d+)?%?$/)
     if (!m) break
     values.push(parseFloat(line.replace(/[,%]/g, '')))
+    i++
+  }
+  return { values, nextIdx: i }
+}
+
+// Igual que readPeriodRow pero para las filas de plata (Beginning Value,
+// Net Contribution, Change In Value): los tokens vienen como "$1,234,567",
+// "1,234,567.89" o "(12,345)" para negativos.
+function readMoneyRow(lines: string[], startIdx: number): { values: (number | null)[]; nextIdx: number } {
+  const values: (number | null)[] = []
+  let i = startIdx
+  while (values.length < 6 && i < lines.length) {
+    const line = lines[i]
+    if (line === '--') {
+      values.push(null)
+      i++
+      if (i < lines.length && /^\d{1,2}$/.test(lines[i])) i++ // footnote marker
+      continue
+    }
+    const m = line.match(/^\(?-?\$?[\d,]+(?:\.\d+)?\)?$/)
+    if (!m) break
+    const neg = /^\(.*\)$/.test(line)
+    const num = parseFloat(line.replace(/[$,()]/g, ''))
+    values.push(isNaN(num) ? null : (neg ? -num : num))
     i++
   }
   return { values, nextIdx: i }
@@ -130,6 +161,20 @@ export async function parsePerformancePdf(buffer: Buffer): Promise<ParsedPerform
   const endingValueMatch = summaryLine?.match(/\$([\d,.]+)/)
   const endingValue = endingValueMatch ? parseFloat(endingValueMatch[1].replace(/,/g, '')) : null
 
+  // Filas de plata del cuadro de performance (antes de "Return"). Cada una
+  // trae 6 tokens de plata, uno por período. Si el reporte no las trae
+  // (formato viejo), quedan null y no se muestra el bloque en dinero.
+  function readMoneyLabeledRow(label: string): PeriodReturns | null {
+    const idx = lines.findIndex(l => l.toLowerCase() === label.toLowerCase())
+    if (idx < 0) return null
+    const { values } = readMoneyRow(lines, idx + 1)
+    return values.length === 6 ? toPeriodReturns(values) : null
+  }
+  const beginningValue  = readMoneyLabeledRow('Beginning Value')
+  const netContribution = readMoneyLabeledRow('Net Contribution')
+  const changeInValue   = readMoneyLabeledRow('Change In Value')
+  if (!changeInValue) warnings.push('No se pudo leer "Change In Value" (crecimiento en dinero) — puede ser un reporte de formato viejo')
+
   // Return row — one per report, right before the embedded 2-benchmark preview.
   const returnIdx = lines.findIndex(l => l === 'Return')
   let returns: PeriodReturns = { selected: null, ytd: null, oneYear: null, threeYear: null, fiveYear: null, sinceInception: null }
@@ -169,6 +214,6 @@ export async function parsePerformancePdf(buffer: Buffer): Promise<ParsedPerform
 
   return {
     accountLast4, clientName, reportDate, periodStart, periodEnd, inceptionDate,
-    endingValue, returns, benchmarks, warnings,
+    endingValue, returns, beginningValue, netContribution, changeInValue, benchmarks, warnings,
   }
 }
