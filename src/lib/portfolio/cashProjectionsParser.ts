@@ -1,26 +1,27 @@
 /**
- * Incoming Cash Projections parser — reads the "Incoming Cash
- * Projections_<ACCOUNT>.xlsx" export (Pershing) and normalizes it into
- * a list of projected coupon/interest payments.
+ * "Account.PCF.IncomingCash<...>.xlsx" parser (Pershing) — normaliza el
+ * export en una lista de pagos proyectados.
  *
- * Sheet shape (verified against a real export):
- *   Row 0: "Incoming Cash Projections"
- *   Row 1: "Account: <ACCOUNT_NUMBER>"
- *   Row 2: "Client: ..."
- *   ...metadata rows (Time Period, Total Cash Flow, etc.)
- *   Row with "As of : <date>"
- *   Row with "Total Cash Flow: <amount>"
- *   (blank)
- *   Header row: Pay Date | Security Identifier | Distribution Type | CUSIP | Security Description | Quantity
- *   Data rows, until blank / "Disclaimer" section.
- *
- * The sheet has no per-row dollar amount — "Quantity" is the bond's face
- * value. The estimated cash amount is derived from the coupon rate embedded
- * in the Security Description (e.g. "7.625%"), assuming semi-annual
- * payments — verified to reproduce the sheet's own "Total Cash Flow" total.
+ * Sheet shape (verificado contra un export real):
+ *   Row 0: "Account #                  :" | "<ACCOUNT_NUMBER>"
+ *   Row 1: "Account Short Name:" | "<nickname>"
+ *   Row 2: "Base CCY:" | "USD"
+ *   Header row: PAY DATE | DISTRIBUTION TYPE | CUSIP | SECURITY DESCRIPTION |
+ *     PROJECTED CASH (BASE CCY) | PROJECTED REINVESTED CASH (BASE CCY) |
+ *     AS OF DATE | QUANTITY
+ *   Data rows — el archivo YA trae el monto en dólares por pago en
+ *   "Projected Cash"; no hace falta (ni se debe) derivarlo del % de cupón
+ *   embebido en la descripción — eso rompía las notas a tasa variable,
+ *   que no traen el % en el texto pero sí tienen su monto real en esta
+ *   columna. Cada security trae además una fila "Sub-total:" y cada mes
+ *   una fila "<Mes> <Año> Monthly Sub-total:" (sin Pay Date) y al final
+ *   una fila "Account Total:" — todas se saltean.
+ *   El "Account Total:" de la planilla = suma de "Projected Cash" (no
+ *   incluye "Projected Reinvested Cash").
  */
 import * as XLSX from 'xlsx'
 import { parseDateStr, parseNum, parseStr } from '@/lib/factsheet-parser'
+import { parseMorganProjectedIncomeExcel } from './morganProjectedIncomeParser'
 
 export interface CashProjectionRow {
   payDate:          string   // YYYY-MM-DD
@@ -43,7 +44,7 @@ export interface ParsedCashProjections {
 
 function extractAccountNumber(metaLines: string[]): string | null {
   for (const line of metaLines) {
-    const m = line.match(/^account\s*:?\s*([A-Za-z0-9]+)/i)
+    const m = line.match(/^account\s*#?\s*:?\s*([A-Za-z0-9]+)/i)
     if (m) return m[1].trim().toUpperCase()
   }
   return null
@@ -75,6 +76,8 @@ const HEADER_ALIASES: Record<string, string[]> = {
   cusip:              ['cusip'],
   description:        ['security description'],
   quantity:           ['quantity'],
+  amount:             ['projected cash (base ccy)', 'projected cash', 'estimated amount', 'amount'],
+  asOfDateCol:        ['as of date', 'as of'],
 }
 
 function normalizeHeader(h: string): string {
@@ -89,12 +92,31 @@ function matchCol(header: string): string | null {
   return null
 }
 
+// Dispatcher: el archivo de income proyectado puede venir de Pershing
+// ("Incoming Cash Projections", una fila por pago, sin monto — se deriva
+// del cupón) o de Morgan Stanley ("Projected Income", una fila por
+// security con una grilla de columnas por mes que YA trae el monto — no
+// hay nada que derivar, es sumar esas celdas). Se detecta por la fila de
+// encabezados y se despacha al parser que corresponde.
 export function parseCashProjectionsExcel(buffer: ArrayBuffer): ParsedCashProjections {
-  const warnings: string[] = []
-
   const wb  = XLSX.read(buffer, { type: 'array' })
   const ws  = wb.Sheets[wb.SheetNames[0]]
   const raw = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: '' }) as unknown[][]
+
+  const looksMorgan = raw.slice(0, 15).some(r => {
+    const cells = (r as unknown[]).map(c => String(c).trim().toLowerCase())
+    return cells.includes('security') && cells.includes('payment date')
+  })
+  if (looksMorgan) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { parseMorganProjectedIncomeExcel } = require('./morganProjectedIncomeParser')
+    return parseMorganProjectedIncomeExcel(buffer)
+  }
+  return parsePershingCashProjectionsExcel(raw)
+}
+
+function parsePershingCashProjectionsExcel(raw: unknown[][]): ParsedCashProjections {
+  const warnings: string[] = []
 
   if (!raw || raw.length < 3) {
     return { accountNumber: null, asOfDate: null, totalCashFlow: null, rows: [], warnings: ['Archivo vacío o sin datos'] }
@@ -129,24 +151,35 @@ export function parseCashProjectionsExcel(buffer: ArrayBuffer): ParsedCashProjec
 
   const rows: CashProjectionRow[] = []
   let footerReached = false
+  let asOfFromData: string | null = null
 
   for (let i = headerIdx + 1; i < raw.length; i++) {
     const row = raw[i] as unknown[]
     const description = parseStr(get(row, 'description'))
-
-    if (!description) continue
-    if (/^disclaimer|^disclosures?$/i.test(description)) { footerReached = true; continue }
-    if (footerReached) continue
-
     const payDate = parseDateStr(get(row, 'payDate'))
-    if (!payDate) { warnings.push(`"${description}" — sin fecha de pago válida, se omitió`); continue }
+
+    // Filas de Sub-total (por security), "<Mes> <Año> Monthly Sub-total:"
+    // y "Account Total:" — nunca traen Pay Date. Se saltean sin avisar,
+    // no son pagos omitidos por error.
+    if (!payDate) {
+      if (description && /disclaimer|disclosures?/i.test(description)) footerReached = true
+      continue
+    }
+    if (footerReached) continue
+    if (!description) continue
+
+    if (!asOfFromData) {
+      const d = parseDateStr(get(row, 'asOfDateCol'))
+      if (d) asOfFromData = d
+    }
 
     const quantity = parseNum(get(row, 'quantity'))
     const couponMatch = description.match(/(\d+(?:\.\d+)?)\s*%/)
     const couponPct = couponMatch ? parseFloat(couponMatch[1]) : null
-    const estimatedAmount = quantity != null && couponPct != null
-      ? parseFloat((quantity * (couponPct / 100) / 2).toFixed(2))
-      : null
+    // El monto ya viene calculado por el custodio en "Projected Cash" — no
+    // se deriva del cupón (eso fallaba para notas a tasa variable, que no
+    // traen el % en la descripción pero sí tienen su monto real acá).
+    const estimatedAmount = parseNum(get(row, 'amount'))
 
     rows.push({
       payDate,
@@ -164,5 +197,11 @@ export function parseCashProjectionsExcel(buffer: ArrayBuffer): ParsedCashProjec
 
   rows.sort((a, b) => a.payDate.localeCompare(b.payDate))
 
-  return { accountNumber, asOfDate, totalCashFlow, rows, warnings }
+  return {
+    accountNumber,
+    asOfDate: asOfDate ?? asOfFromData,
+    totalCashFlow: totalCashFlow ?? (rows.length ? rows.reduce((s, r) => s + (r.estimatedAmount ?? 0), 0) : null),
+    rows,
+    warnings,
+  }
 }
