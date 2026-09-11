@@ -93,6 +93,13 @@ function fmtAmt(n: number) {
   return `$ ${n.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 
+// Verde para rendimientos positivos, rojo para negativos — mismo criterio
+// que ya usa el editor para estas columnas.
+function pctColor(n: number | null): string {
+  if (n == null) return '#1a1a1a'
+  return n >= 0 ? '#15803D' : '#B91C1C'
+}
+
 function fmtNum(n: number | null, decimals = 2) {
   if (n == null) return '—'
   return n.toLocaleString('es-AR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })
@@ -287,10 +294,10 @@ export default function ProposalPDFTemplate({
                 {f.isin && <div style={{ fontSize: 7, fontWeight: 400, color: '#9ca3af', marginTop: 1 }}>ISIN: {f.isin}</div>}
               </td>
               {show.categoria && <td style={TD_STYLE}>{f.fund_category ? FUND_CATEGORY_LABEL[f.fund_category] : '—'}</td>}
-              {show.ytd && <td style={TD_STYLE}>{fmtNum(f.return_ytd)}%</td>}
-              {show.y1 && <td style={TD_STYLE}>{fmtNum(f.return_1y)}%</td>}
-              {show.y3 && <td style={TD_STYLE}>{fmtNum(f.return_3y)}%</td>}
-              {show.y5 && <td style={TD_STYLE}>{fmtNum(f.return_5y)}%</td>}
+              {show.ytd && <td style={{ ...TD_STYLE, color: pctColor(f.return_ytd), fontWeight: 600 }}>{fmtNum(f.return_ytd)}%</td>}
+              {show.y1 && <td style={{ ...TD_STYLE, color: pctColor(f.return_1y), fontWeight: 600 }}>{fmtNum(f.return_1y)}%</td>}
+              {show.y3 && <td style={{ ...TD_STYLE, color: pctColor(f.return_3y), fontWeight: 600 }}>{fmtNum(f.return_3y)}%</td>}
+              {show.y5 && <td style={{ ...TD_STYLE, color: pctColor(f.return_5y), fontWeight: 600 }}>{fmtNum(f.return_5y)}%</td>}
               {show.ytm && <td style={TD_STYLE}>{f.ytm_indicative != null ? `${fmtNum(f.ytm_indicative)}%` : '—'}</td>}
               {show.duration && <td style={TD_STYLE}>{f.duration_years != null ? fmtNum(f.duration_years, 1) : '—'}</td>}
               <td style={{ ...TD_STYLE, textAlign: 'right', fontWeight: 600, borderRight: 'none' }}>{fmtAmt(f.amount)}</td>
