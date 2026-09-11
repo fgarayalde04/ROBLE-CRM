@@ -13,11 +13,15 @@ type Operacion = 'compra' | 'venta' | 'aumentar' | 'reducir' | 'mantener'
 function isCompraSide(op: Operacion) { return op === 'compra' || op === 'aumentar' }
 function isVentaSide(op: Operacion) { return op === 'venta' || op === 'reducir' }
 
+type FundCategory = 'acciones' | 'balanceado' | 'bonos'
+const FUND_CATEGORY_LABEL: Record<FundCategory, string> = { acciones: 'Acciones', balanceado: 'Balanceado', bonos: 'Bonos' }
+
 interface Fund {
   id: string
   isin: string | null
   issuer: string | null
   fund_name: string | null
+  fund_category: FundCategory | null
   return_ytd: number | null
   return_1y: number | null
   return_3y: number | null
@@ -75,6 +79,11 @@ interface ProposalPDFTemplateProps {
   disclaimer?: string | null
   date?: string
   settlementDate?: string | null
+  // Columnas opcionales a ocultar del reporte, con clave "tabla.columna"
+  // (ej. "funds.ytd", "bonds.rating") — las columnas núcleo (operación,
+  // nombre del instrumento, moneda del total) nunca están en esta lista
+  // porque no se ofrecen como ocultables.
+  hiddenColumns?: Set<string>
 }
 
 // ─── Number formatter — Latin American style: $19.307,00 ─────────────────────
@@ -201,7 +210,9 @@ export default function ProposalPDFTemplate({
   disclaimer,
   date,
   settlementDate,
+  hiddenColumns,
 }: ProposalPDFTemplateProps) {
+  const isHidden = (key: string) => hiddenColumns?.has(key) ?? false
   const gestoras = getGestoras(funds)
   // Compras y ventas se muestran siempre por separado — sumarlas juntas
   // infla el total (ej: comprar $300 y vender $300 no es "$600").
@@ -235,44 +246,60 @@ export default function ProposalPDFTemplate({
 
   function fundsTable(list: Fund[]) {
     if (list.length === 0) return null
+    const show = {
+      moneda:   !isHidden('funds.moneda'),
+      categoria:!isHidden('funds.categoria'),
+      ytd:      !isHidden('funds.ytd'),
+      y1:       !isHidden('funds.1y'),
+      y3:       !isHidden('funds.3y'),
+      y5:       !isHidden('funds.5y'),
+      ytm:      !isHidden('funds.ytm'),
+      duration: !isHidden('funds.duration'),
+    }
+    // colSpan de la fila de subtotal = todas las columnas visibles menos la
+    // última (INVERSIÓN, que muestra su propio total) — moneda, operación,
+    // fondo y categoría/métricas opcionales que estén visibles.
+    const labelColSpan = 2 + Object.values(show).filter(Boolean).length
     return (
       <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 0 }}>
         <thead>
           <tr>
-            <th style={{ ...TH_STYLE, width: 60 }}>MONEDA</th>
+            {show.moneda && <th style={{ ...TH_STYLE, width: 60 }}>MONEDA</th>}
             <th style={{ ...TH_STYLE, width: 60 }}>OPERACIÓN</th>
             <th style={{ ...TH_STYLE, textAlign: 'left' }}>FONDO DE INVERSIÓN</th>
-            <th style={{ ...TH_STYLE, width: 48 }}>YTD</th>
-            <th style={{ ...TH_STYLE, width: 48 }}>1 AÑO</th>
-            <th style={{ ...TH_STYLE, width: 48 }}>3 AÑOS</th>
-            <th style={{ ...TH_STYLE, width: 48 }}>5 AÑOS</th>
-            <th style={{ ...TH_STYLE, width: 52 }}>YTM IND.</th>
-            <th style={{ ...TH_STYLE, width: 48 }}>DUR. (A)</th>
+            {show.categoria && <th style={{ ...TH_STYLE, width: 64 }}>CATEGORÍA</th>}
+            {show.ytd && <th style={{ ...TH_STYLE, width: 48 }}>YTD</th>}
+            {show.y1 && <th style={{ ...TH_STYLE, width: 48 }}>1 AÑO</th>}
+            {show.y3 && <th style={{ ...TH_STYLE, width: 48 }}>3 AÑOS</th>}
+            {show.y5 && <th style={{ ...TH_STYLE, width: 48 }}>5 AÑOS</th>}
+            {show.ytm && <th style={{ ...TH_STYLE, width: 52 }}>YTM IND.</th>}
+            {show.duration && <th style={{ ...TH_STYLE, width: 48 }}>DUR. (A)</th>}
             <th style={{ ...TH_STYLE, width: 90, borderRight: 'none' }}>INVERSIÓN</th>
           </tr>
         </thead>
         <tbody>
           {list.map((f, i) => (
             <tr key={f.id} style={{ backgroundColor: i % 2 === 0 ? '#FFFFFF' : '#F7F9FB' }}>
-              <td style={TD_STYLE}>{currency}</td>
+              {show.moneda && <td style={TD_STYLE}>{currency}</td>}
               <td style={TD_STYLE}><OperacionBadge value={f.operacion} /></td>
               <td style={{ ...TD_STYLE, textAlign: 'left', fontWeight: 600 }}>
                 {f.fund_name?.toUpperCase() ?? '—'}
                 {f.isin && <div style={{ fontSize: 7, fontWeight: 400, color: '#9ca3af', marginTop: 1 }}>ISIN: {f.isin}</div>}
               </td>
-              <td style={TD_STYLE}>{fmtNum(f.return_ytd)}%</td>
-              <td style={TD_STYLE}>{fmtNum(f.return_1y)}%</td>
-              <td style={TD_STYLE}>{fmtNum(f.return_3y)}%</td>
-              <td style={TD_STYLE}>{fmtNum(f.return_5y)}%</td>
-              <td style={TD_STYLE}>{f.ytm_indicative != null ? `${fmtNum(f.ytm_indicative)}%` : '—'}</td>
-              <td style={TD_STYLE}>{f.duration_years != null ? fmtNum(f.duration_years, 1) : '—'}</td>
+              {show.categoria && <td style={TD_STYLE}>{f.fund_category ? FUND_CATEGORY_LABEL[f.fund_category] : '—'}</td>}
+              {show.ytd && <td style={TD_STYLE}>{fmtNum(f.return_ytd)}%</td>}
+              {show.y1 && <td style={TD_STYLE}>{fmtNum(f.return_1y)}%</td>}
+              {show.y3 && <td style={TD_STYLE}>{fmtNum(f.return_3y)}%</td>}
+              {show.y5 && <td style={TD_STYLE}>{fmtNum(f.return_5y)}%</td>}
+              {show.ytm && <td style={TD_STYLE}>{f.ytm_indicative != null ? `${fmtNum(f.ytm_indicative)}%` : '—'}</td>}
+              {show.duration && <td style={TD_STYLE}>{f.duration_years != null ? fmtNum(f.duration_years, 1) : '—'}</td>}
               <td style={{ ...TD_STYLE, textAlign: 'right', fontWeight: 600, borderRight: 'none' }}>{fmtAmt(f.amount)}</td>
             </tr>
           ))}
         </tbody>
         <tfoot>
           <tr>
-            <td colSpan={9} style={{ ...FOOTER_TD, textAlign: 'left', fontSize: 9, opacity: 0.6, borderRight: 'none' }}>
+            <td colSpan={labelColSpan} style={{ ...FOOTER_TD, textAlign: 'left', fontSize: 9, opacity: 0.6, borderRight: 'none' }}>
               {opSubtotalLabel(list)}
             </td>
             <td style={{ ...FOOTER_TD, textAlign: 'right', borderRight: 'none' }}>{fmtAmt(opCompras(list))}</td>
@@ -287,20 +314,30 @@ export default function ProposalPDFTemplate({
     const accrualsByRow = new Map(list.map(b => [b.id, calculateBondAccrual(b, settlementDate ?? null)]))
     const listAccruedInterest = list.filter(b => isCompraSide(b.operacion)).reduce((s, b) => s + (accrualsByRow.get(b.id)?.accruedInterest ?? 0), 0)
     const listEstimatedCash   = list.filter(b => isCompraSide(b.operacion)).reduce((s, b) => s + (accrualsByRow.get(b.id)?.estimatedCashRequired ?? 0), 0)
+    const show = {
+      moneda:      !isHidden('bonds.moneda'),
+      vencimiento: !isHidden('bonds.vencimiento'),
+      cupon:       !isHidden('bonds.cupon'),
+      rendimiento: !isHidden('bonds.rendimiento'),
+      duration:    !isHidden('bonds.duration'),
+      rating:      !isHidden('bonds.rating'),
+      precio:      !isHidden('bonds.precio'),
+    }
+    const labelColSpan = 2 + Object.values(show).filter(Boolean).length
     return (
       <div style={{ marginTop: 10 }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr>
-              <th style={{ ...TH_STYLE, width: 60 }}>MONEDA</th>
+              {show.moneda && <th style={{ ...TH_STYLE, width: 60 }}>MONEDA</th>}
               <th style={{ ...TH_STYLE, width: 60 }}>OPERACIÓN</th>
               <th style={{ ...TH_STYLE, textAlign: 'left' }}>BONOS</th>
-              <th style={{ ...TH_STYLE, width: 80 }}>VENCIMIENTO</th>
-              <th style={{ ...TH_STYLE, width: 55 }}>CUPÓN</th>
-              <th style={{ ...TH_STYLE, width: 65 }}>RENDIMIENTO</th>
-              <th style={{ ...TH_STYLE, width: 48 }}>DUR. (A)</th>
-              <th style={{ ...TH_STYLE, width: 50 }}>RATING</th>
-              <th style={{ ...TH_STYLE, width: 65 }}>PRECIO (IND)</th>
+              {show.vencimiento && <th style={{ ...TH_STYLE, width: 80 }}>VENCIMIENTO</th>}
+              {show.cupon && <th style={{ ...TH_STYLE, width: 55 }}>CUPÓN</th>}
+              {show.rendimiento && <th style={{ ...TH_STYLE, width: 65 }}>RENDIMIENTO</th>}
+              {show.duration && <th style={{ ...TH_STYLE, width: 48 }}>DUR. (A)</th>}
+              {show.rating && <th style={{ ...TH_STYLE, width: 50 }}>RATING</th>}
+              {show.precio && <th style={{ ...TH_STYLE, width: 65 }}>PRECIO (IND)</th>}
               <th style={{ ...TH_STYLE, width: 80 }}>VALOR COMPRA</th>
               <th style={{ ...TH_STYLE, width: 80 }}>CUPÓN CORRIDO</th>
               <th style={{ ...TH_STYLE, width: 90, borderRight: 'none' }}>DESEMBOLSO EST.</th>
@@ -311,18 +348,18 @@ export default function ProposalPDFTemplate({
               const accrual = accrualsByRow.get(b.id)!
               return (
               <tr key={b.id} style={{ backgroundColor: i % 2 === 0 ? '#FFFFFF' : '#F7F9FB' }}>
-                <td style={TD_STYLE}>{b.currency}</td>
+                {show.moneda && <td style={TD_STYLE}>{b.currency}</td>}
                 <td style={TD_STYLE}><OperacionBadge value={b.operacion} /></td>
                 <td style={{ ...TD_STYLE, textAlign: 'left', fontWeight: 600 }}>
                   {b.issuer?.toUpperCase() ?? '—'}
                   {b.isin && <div style={{ fontSize: 7, fontWeight: 400, color: '#9ca3af', marginTop: 1 }}>ISIN: {b.isin}</div>}
                 </td>
-                <td style={{ ...TD_STYLE, whiteSpace: 'nowrap' }}>{fmtDate(b.maturity_date)}</td>
-                <td style={TD_STYLE}>{b.coupon != null ? fmtNum(b.coupon, 3).replace(/\.?0+$/, '') : '—'}</td>
-                <td style={TD_STYLE}>{b.yield != null ? `${fmtNum(b.yield)}%` : '—'}</td>
-                <td style={TD_STYLE}>{b.duration != null ? fmtNum(b.duration, 1) : '—'}</td>
-                <td style={TD_STYLE}>{b.rating ?? '—'}</td>
-                <td style={TD_STYLE}>{b.price != null ? fmtNum(b.price, 3) : '—'}</td>
+                {show.vencimiento && <td style={{ ...TD_STYLE, whiteSpace: 'nowrap' }}>{fmtDate(b.maturity_date)}</td>}
+                {show.cupon && <td style={TD_STYLE}>{b.coupon != null ? fmtNum(b.coupon, 3).replace(/\.?0+$/, '') : '—'}</td>}
+                {show.rendimiento && <td style={TD_STYLE}>{b.yield != null ? `${fmtNum(b.yield)}%` : '—'}</td>}
+                {show.duration && <td style={TD_STYLE}>{b.duration != null ? fmtNum(b.duration, 1) : '—'}</td>}
+                {show.rating && <td style={TD_STYLE}>{b.rating ?? '—'}</td>}
+                {show.precio && <td style={TD_STYLE}>{b.price != null ? fmtNum(b.price, 3) : '—'}</td>}
                 <td style={{ ...TD_STYLE, textAlign: 'right', fontWeight: 600 }}>{fmtAmt(b.amount)}</td>
                 <td style={{ ...TD_STYLE, textAlign: 'right', fontWeight: 700, backgroundColor: '#FEF3C7' }}>{accrual.accruedInterest > 0 ? fmtAmt(accrual.accruedInterest) : '—'}</td>
                 <td style={{ ...TD_STYLE, textAlign: 'right', fontWeight: 700, borderRight: 'none' }}>{fmtAmt(accrual.estimatedCashRequired)}</td>
@@ -332,7 +369,7 @@ export default function ProposalPDFTemplate({
           </tbody>
           <tfoot>
             <tr>
-              <td colSpan={9} style={{ ...FOOTER_TD, fontSize: 9, opacity: 0.6, borderRight: 'none' }}>
+              <td colSpan={labelColSpan} style={{ ...FOOTER_TD, fontSize: 9, opacity: 0.6, borderRight: 'none' }}>
                 {opSubtotalLabel(list)}
               </td>
               <td style={{ ...FOOTER_TD, textAlign: 'right' }}>{fmtAmt(opCompras(list))}</td>
@@ -347,36 +384,43 @@ export default function ProposalPDFTemplate({
 
   function equitiesTable(list: Equity[]) {
     if (list.length === 0) return null
+    const show = {
+      moneda: !isHidden('equities.moneda'),
+      ticker: !isHidden('equities.ticker'),
+      sector: !isHidden('equities.sector'),
+      pais:   !isHidden('equities.pais'),
+    }
+    const labelColSpan = 2 + Object.values(show).filter(Boolean).length
     return (
       <div style={{ marginTop: 10 }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr>
-              <th style={{ ...TH_STYLE, width: 60 }}>MONEDA</th>
+              {show.moneda && <th style={{ ...TH_STYLE, width: 60 }}>MONEDA</th>}
               <th style={{ ...TH_STYLE, width: 60 }}>OPERACIÓN</th>
-              <th style={{ ...TH_STYLE, width: 70 }}>TICKER</th>
+              {show.ticker && <th style={{ ...TH_STYLE, width: 70 }}>TICKER</th>}
               <th style={{ ...TH_STYLE, textAlign: 'left' }}>EMPRESA</th>
-              <th style={{ ...TH_STYLE, textAlign: 'left' }}>SECTOR</th>
-              <th style={{ ...TH_STYLE, textAlign: 'left' }}>PAÍS</th>
+              {show.sector && <th style={{ ...TH_STYLE, textAlign: 'left' }}>SECTOR</th>}
+              {show.pais && <th style={{ ...TH_STYLE, textAlign: 'left' }}>PAÍS</th>}
               <th style={{ ...TH_STYLE, width: 90, borderRight: 'none' }}>INVERSIÓN</th>
             </tr>
           </thead>
           <tbody>
             {list.map((e, i) => (
               <tr key={e.id} style={{ backgroundColor: i % 2 === 0 ? '#FFFFFF' : '#F7F9FB' }}>
-                <td style={TD_STYLE}>{e.currency}</td>
+                {show.moneda && <td style={TD_STYLE}>{e.currency}</td>}
                 <td style={TD_STYLE}><OperacionBadge value={e.operacion} /></td>
-                <td style={{ ...TD_STYLE, fontWeight: 700 }}>{e.ticker ?? '—'}</td>
+                {show.ticker && <td style={{ ...TD_STYLE, fontWeight: 700 }}>{e.ticker ?? '—'}</td>}
                 <td style={{ ...TD_STYLE, textAlign: 'left', fontWeight: 600 }}>{e.company_name?.toUpperCase() ?? '—'}</td>
-                <td style={{ ...TD_STYLE, textAlign: 'left' }}>{e.sector ?? '—'}</td>
-                <td style={{ ...TD_STYLE, textAlign: 'left' }}>{e.country ?? '—'}</td>
+                {show.sector && <td style={{ ...TD_STYLE, textAlign: 'left' }}>{e.sector ?? '—'}</td>}
+                {show.pais && <td style={{ ...TD_STYLE, textAlign: 'left' }}>{e.country ?? '—'}</td>}
                 <td style={{ ...TD_STYLE, textAlign: 'right', fontWeight: 600, borderRight: 'none' }}>{fmtAmt(e.amount)}</td>
               </tr>
             ))}
           </tbody>
           <tfoot>
             <tr>
-              <td colSpan={6} style={{ ...FOOTER_TD, fontSize: 9, opacity: 0.6, borderRight: 'none' }}>
+              <td colSpan={labelColSpan} style={{ ...FOOTER_TD, fontSize: 9, opacity: 0.6, borderRight: 'none' }}>
                 {opSubtotalLabel(list)}
               </td>
               <td style={{ ...FOOTER_TD, textAlign: 'right', borderRight: 'none' }}>{fmtAmt(opCompras(list))}</td>

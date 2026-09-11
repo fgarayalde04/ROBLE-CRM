@@ -19,6 +19,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       issuer:           body.issuer           ?? null,
       fund_name:        body.fund_name        ?? null,
       fund_class:       body.fund_class       ?? null,
+      fund_category:    body.fund_category    ?? null,
       return_ytd:       body.return_ytd       ?? null,
       return_1y:        body.return_1y        ?? null,
       return_3y:        body.return_3y        ?? null,
@@ -48,7 +49,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     const { fund_id, ...fields } = body
 
     const allowed: Record<string, unknown> = {}
-    const cols = ['isin','issuer','fund_name','fund_class','return_ytd','return_1y','return_3y','return_5y','ytm_indicative','duration_years','pct','amount','operacion','broker','needs_review','data_source']
+    const cols = ['isin','issuer','fund_name','fund_class','fund_category','return_ytd','return_1y','return_3y','return_5y','ytm_indicative','duration_years','pct','amount','operacion','broker','needs_review','data_source']
     for (const c of cols) {
       if (fields[c] !== undefined) allowed[c] = fields[c]
     }

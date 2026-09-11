@@ -494,12 +494,18 @@ type Operacion = 'compra' | 'venta' | 'aumentar' | 'reducir' | 'mantener'
 function isCompraSide(op: Operacion) { return op === 'compra' || op === 'aumentar' }
 function isVentaSide(op: Operacion) { return op === 'venta' || op === 'reducir' }
 
+// Categoría de activo del fondo — a qué tipo de instrumento está expuesto,
+// distinta de fund_class (clase de participación, ej. "A", "Institucional").
+type FundCategory = 'acciones' | 'balanceado' | 'bonos'
+const FUND_CATEGORY_LABEL: Record<FundCategory, string> = { acciones: 'Acciones', balanceado: 'Balanceado', bonos: 'Bonos' }
+
 interface Fund {
   id: string
   isin: string | null
   issuer: string | null
   fund_name: string | null
   fund_class: string | null
+  fund_category: FundCategory | null
   return_ytd: number | null
   return_1y: number | null
   return_3y: number | null
@@ -778,6 +784,24 @@ function OperacionToggle({ value, onChange }: { value: Operacion; onChange: (v: 
   )
 }
 
+// ─── Categoría de fondo (Acciones / Balanceado / Bonos) ────────────────────────
+
+function FundCategorySelect({ value, onChange }: { value: FundCategory | null; onChange: (v: FundCategory | null) => void }) {
+  return (
+    <select
+      value={value ?? ''}
+      onChange={e => onChange((e.target.value || null) as FundCategory | null)}
+      className="text-[10px] px-1.5 py-1 rounded border border-gray-200 bg-white text-gray-600 cursor-pointer outline-none focus:border-[#16A34A]/50"
+      title="Categoría del fondo"
+    >
+      <option value="">—</option>
+      {(Object.keys(FUND_CATEGORY_LABEL) as FundCategory[]).map(c => (
+        <option key={c} value={c}>{FUND_CATEGORY_LABEL[c]}</option>
+      ))}
+    </select>
+  )
+}
+
 function FundsTable({
   proposalId, total, currency, funds, onUpdate,
 }: {
@@ -922,6 +946,7 @@ function FundsTable({
                   <th className={`${TH} text-center w-16`}>OPERACIÓN</th>
                   <th className={`${TH} text-left w-24`}>ISIN</th>
                   <th className={`${TH} text-left`}>ACTIVO</th>
+                  <th className={`${TH} text-left w-24`}>CATEGORÍA</th>
                   {([
                     ['YTD', 'return_ytd', 'w-14'], ['1 AÑO', 'return_1y', 'w-16'], ['3 AÑOS', 'return_3y', 'w-16'],
                     ['5 AÑOS', 'return_5y', 'w-16'], ['YTM IND.', 'ytm_indicative', 'w-20'], ['DUR. (a)', 'duration_years', 'w-16'],
@@ -965,6 +990,9 @@ function FundsTable({
                         {f.needs_review && <span className="text-[9px] text-amber-500 shrink-0" title="Revisar">⚠</span>}
                         {saving === f.id && <span className="w-2.5 h-2.5 border border-gray-300 border-t-gray-500 rounded-full animate-spin shrink-0" />}
                       </div>
+                    </td>
+                    <td className={TD}>
+                      <FundCategorySelect value={f.fund_category} onChange={v => updateField(f, 'fund_category', v ?? '')} />
                     </td>
                     <td className={`${TD} text-right`}>
                       <EditCell value={f.return_ytd} onChange={v => updateField(f, 'return_ytd', v)} placeholder="—" numeric className={`text-right text-xs ${pctColor(f.return_ytd)}`} />
@@ -1443,6 +1471,54 @@ const STATUS_MAP: Record<string, { label: string; color: string; bg: string }> =
   archived: { label: 'Archivada', color: 'text-gray-400',    bg: 'bg-gray-50'    },
 }
 
+// Columnas del reporte que se pueden ocultar antes de descargar el PDF —
+// las columnas núcleo (operación, nombre del instrumento, monto) no se
+// ofrecen porque siempre tienen que estar.
+const HIDEABLE_COLUMNS: { key: string; label: string; group: string }[] = [
+  { key: 'funds.moneda',        label: 'Moneda',         group: 'Fondos' },
+  { key: 'funds.categoria',     label: 'Categoría',      group: 'Fondos' },
+  { key: 'funds.ytd',           label: 'YTD',            group: 'Fondos' },
+  { key: 'funds.1y',            label: '1 año',          group: 'Fondos' },
+  { key: 'funds.3y',            label: '3 años',         group: 'Fondos' },
+  { key: 'funds.5y',            label: '5 años',         group: 'Fondos' },
+  { key: 'funds.ytm',           label: 'YTM indicativo', group: 'Fondos' },
+  { key: 'funds.duration',      label: 'Duración',       group: 'Fondos' },
+  { key: 'bonds.moneda',        label: 'Moneda',         group: 'Bonos' },
+  { key: 'bonds.vencimiento',   label: 'Vencimiento',    group: 'Bonos' },
+  { key: 'bonds.cupon',         label: 'Cupón',          group: 'Bonos' },
+  { key: 'bonds.rendimiento',   label: 'Rendimiento',    group: 'Bonos' },
+  { key: 'bonds.duration',      label: 'Duración',       group: 'Bonos' },
+  { key: 'bonds.rating',        label: 'Rating',         group: 'Bonos' },
+  { key: 'bonds.precio',        label: 'Precio (ind.)',  group: 'Bonos' },
+  { key: 'equities.moneda',     label: 'Moneda',         group: 'Acciones' },
+  { key: 'equities.ticker',     label: 'Ticker',         group: 'Acciones' },
+  { key: 'equities.sector',     label: 'Sector',         group: 'Acciones' },
+  { key: 'equities.pais',       label: 'País',           group: 'Acciones' },
+]
+
+function ColumnPicker({ hidden, onToggle, onClose }: { hidden: Set<string>; onToggle: (key: string) => void; onClose: () => void }) {
+  const groups = Array.from(new Set(HIDEABLE_COLUMNS.map(c => c.group)))
+  return (
+    <>
+      <div className="fixed inset-0 z-[60]" onClick={onClose} />
+      <div className="absolute right-0 top-full mt-2 z-[61] bg-white rounded-xl shadow-2xl border border-gray-200 p-3 w-56 max-h-80 overflow-y-auto">
+        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-2">Columnas a mostrar</p>
+        {groups.map(group => (
+          <div key={group} className="mb-2 last:mb-0">
+            <p className="text-[9px] font-semibold text-gray-400 uppercase mb-1">{group}</p>
+            {HIDEABLE_COLUMNS.filter(c => c.group === group).map(c => (
+              <label key={c.key} className="flex items-center gap-2 py-0.5 text-xs text-gray-700 cursor-pointer">
+                <input type="checkbox" checked={!hidden.has(c.key)} onChange={() => onToggle(c.key)} className="accent-[#16A34A]" />
+                {c.label}
+              </label>
+            ))}
+          </div>
+        ))}
+      </div>
+    </>
+  )
+}
+
 // ─── Main ProposalEditor ──────────────────────────────────────────────────────
 
 export default function ProposalEditor({
@@ -1467,7 +1543,17 @@ export default function ProposalEditor({
   const [titleDraft, setTitleDraft]     = useState('')
   const [showPDF, setShowPDF]           = useState(false)
   const [downloading, setDownloading]   = useState(false)
+  const [hiddenCols, setHiddenCols]     = useState<Set<string>>(new Set())
+  const [showColumnPicker, setShowColumnPicker] = useState(false)
   const pdfRef                          = useRef<HTMLDivElement>(null)
+
+  const toggleCol = (key: string) => {
+    setHiddenCols(prev => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key); else next.add(key)
+      return next
+    })
+  }
 
   const handleDownloadPDF = async () => {
     if (!pdfRef.current) return
@@ -1795,6 +1881,18 @@ export default function ProposalEditor({
                 </div>
               </div>
               <div className="flex items-center gap-2">
+                <div className="relative">
+                  <button
+                    onClick={() => setShowColumnPicker(v => !v)}
+                    className="flex items-center gap-1.5 px-3 py-2 text-sm font-semibold text-gray-600 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 3v18M15 3v18M3 9h18M3 15h18" /></svg>
+                    Columnas
+                  </button>
+                  {showColumnPicker && (
+                    <ColumnPicker hidden={hiddenCols} onToggle={toggleCol} onClose={() => setShowColumnPicker(false)} />
+                  )}
+                </div>
                 <button
                   onClick={handleDownloadPDF}
                   disabled={downloading}
@@ -1825,6 +1923,7 @@ export default function ProposalEditor({
                     equities={equities}
                     disclaimer={proposal.disclaimer}
                     settlementDate={proposal.settlement_date}
+                    hiddenColumns={hiddenCols}
                   />
                 </div>
               </div>
