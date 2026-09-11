@@ -6,7 +6,12 @@ import { ROBLE_DISCLAIMER } from '@/lib/disclaimers'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type Operacion = 'compra' | 'venta'
+type Operacion = 'compra' | 'venta' | 'aumentar' | 'reducir' | 'mantener'
+
+// Mismo criterio que en el editor: 'aumentar' cuenta como compra y
+// 'reducir' como venta; 'mantener' no mueve dinero.
+function isCompraSide(op: Operacion) { return op === 'compra' || op === 'aumentar' }
+function isVentaSide(op: Operacion) { return op === 'venta' || op === 'reducir' }
 
 interface Fund {
   id: string
@@ -159,8 +164,16 @@ const FOOTER_TD: React.CSSProperties = {
   borderRight: '1px solid #2E4155',
 }
 
+const OPERACION_BADGE: Record<Operacion, { label: string; color: string }> = {
+  compra:   { label: 'Compra',   color: '#15803D' },
+  aumentar: { label: 'Aumentar', color: '#0F766E' },
+  venta:    { label: 'Venta',    color: '#B91C1C' },
+  reducir:  { label: 'Reducir',  color: '#B45309' },
+  mantener: { label: 'Mantener', color: '#6B7280' },
+}
+
 function OperacionBadge({ value }: { value: Operacion }) {
-  const isVenta = value === 'venta'
+  const { label, color } = OPERACION_BADGE[value]
   return (
     <span style={{
       display: 'inline-block',
@@ -168,9 +181,9 @@ function OperacionBadge({ value }: { value: Operacion }) {
       fontWeight: 700,
       textTransform: 'uppercase',
       letterSpacing: '0.03em',
-      color: isVenta ? '#B91C1C' : '#15803D',
+      color,
     }}>
-      {isVenta ? 'Venta' : 'Compra'}
+      {label}
     </span>
   )
 }
@@ -193,13 +206,13 @@ export default function ProposalPDFTemplate({
   // Compras y ventas se muestran siempre por separado — sumarlas juntas
   // infla el total (ej: comprar $300 y vender $300 no es "$600").
   const allItems = [...funds, ...bonds, ...equities]
-  const totalCompras = allItems.filter(i => i.operacion !== 'venta').reduce((s, i) => s + (i.amount ?? 0), 0)
-  const totalVentas  = allItems.filter(i => i.operacion === 'venta').reduce((s, i) => s + (i.amount ?? 0), 0)
+  const totalCompras = allItems.filter(i => isCompraSide(i.operacion)).reduce((s, i) => s + (i.amount ?? 0), 0)
+  const totalVentas  = allItems.filter(i => isVentaSide(i.operacion)).reduce((s, i) => s + (i.amount ?? 0), 0)
   const totalAssigned = totalCompras || totalAmount
 
   // Cupón corrido / desembolso estimado — solo bonos en compra, mismo
   // criterio que el resto del PDF.
-  const bondAccruals = bonds.filter(b => b.operacion !== 'venta').map(b => calculateBondAccrual(b, settlementDate ?? null))
+  const bondAccruals = bonds.filter(b => isCompraSide(b.operacion)).map(b => calculateBondAccrual(b, settlementDate ?? null))
   const totalAccruedInterest = bondAccruals.reduce((s, a) => s + a.accruedInterest, 0)
   const totalEstimatedCash   = bondAccruals.reduce((s, a) => s + a.estimatedCashRequired, 0)
 
@@ -210,10 +223,10 @@ export default function ProposalPDFTemplate({
   const grouped = brokers.length > 1 || (brokers.length === 1 && brokers[0] !== null)
 
   function opCompras(list: { operacion: Operacion; amount: number | null }[]) {
-    return list.filter(i => i.operacion !== 'venta').reduce((s, i) => s + (i.amount ?? 0), 0)
+    return list.filter(i => isCompraSide(i.operacion)).reduce((s, i) => s + (i.amount ?? 0), 0)
   }
   function opVentas(list: { operacion: Operacion; amount: number | null }[]) {
-    return list.filter(i => i.operacion === 'venta').reduce((s, i) => s + (i.amount ?? 0), 0)
+    return list.filter(i => isVentaSide(i.operacion)).reduce((s, i) => s + (i.amount ?? 0), 0)
   }
   function opSubtotalLabel(list: { operacion: Operacion; amount: number | null }[]) {
     const v = opVentas(list)
@@ -272,8 +285,8 @@ export default function ProposalPDFTemplate({
   function bondsTable(list: Bond[]) {
     if (list.length === 0) return null
     const accrualsByRow = new Map(list.map(b => [b.id, calculateBondAccrual(b, settlementDate ?? null)]))
-    const listAccruedInterest = list.filter(b => b.operacion !== 'venta').reduce((s, b) => s + (accrualsByRow.get(b.id)?.accruedInterest ?? 0), 0)
-    const listEstimatedCash   = list.filter(b => b.operacion !== 'venta').reduce((s, b) => s + (accrualsByRow.get(b.id)?.estimatedCashRequired ?? 0), 0)
+    const listAccruedInterest = list.filter(b => isCompraSide(b.operacion)).reduce((s, b) => s + (accrualsByRow.get(b.id)?.accruedInterest ?? 0), 0)
+    const listEstimatedCash   = list.filter(b => isCompraSide(b.operacion)).reduce((s, b) => s + (accrualsByRow.get(b.id)?.estimatedCashRequired ?? 0), 0)
     return (
       <div style={{ marginTop: 10 }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>

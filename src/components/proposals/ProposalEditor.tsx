@@ -486,7 +486,13 @@ interface Proposal {
   settlement_date: string | null
 }
 
-type Operacion = 'compra' | 'venta'
+type Operacion = 'compra' | 'venta' | 'aumentar' | 'reducir' | 'mantener'
+
+// 'Aumentar' suma una posición existente (mismo efecto que 'compra' en los
+// totales) y 'reducir' la achica (mismo efecto que 'venta'); 'mantener' no
+// mueve dinero, así que no cuenta ni como compra ni como venta.
+function isCompraSide(op: Operacion) { return op === 'compra' || op === 'aumentar' }
+function isVentaSide(op: Operacion) { return op === 'venta' || op === 'reducir' }
 
 interface Fund {
   id: string
@@ -623,9 +629,9 @@ function AllocationPanel({
   // pct de cada fila quedó solo para lectura en las tablas y ya no se
   // actualiza, así que sumarlo acá directamente daba números viejos/vacíos.
   // Ventas se excluyen (mismo criterio que el resto de la propuesta).
-  const amtFunds    = funds.filter(f => f.operacion !== 'venta').reduce((s, f) => s + (f.amount ?? 0), 0)
-  const amtBonds    = bonds.filter(b => b.operacion !== 'venta').reduce((s, b) => s + (b.amount ?? 0), 0)
-  const amtEquities = equities.filter(e => e.operacion !== 'venta').reduce((s, e) => s + (e.amount ?? 0), 0)
+  const amtFunds    = funds.filter(f => isCompraSide(f.operacion)).reduce((s, f) => s + (f.amount ?? 0), 0)
+  const amtBonds    = bonds.filter(b => isCompraSide(b.operacion)).reduce((s, b) => s + (b.amount ?? 0), 0)
+  const amtEquities = equities.filter(e => isCompraSide(e.operacion)).reduce((s, e) => s + (e.amount ?? 0), 0)
 
   const sumFunds    = total > 0 ? (amtFunds    / total) * 100 : 0
   const sumBonds    = total > 0 ? (amtBonds    / total) * 100 : 0
@@ -638,8 +644,8 @@ function AllocationPanel({
 
   // Yield promedio ponderado por monto invertido (compras)
   const yieldItems: { amount: number; yield: number }[] = [
-    ...funds.filter(f => f.operacion !== 'venta' && f.ytm_indicative != null && f.amount > 0).map(f => ({ amount: f.amount, yield: f.ytm_indicative! })),
-    ...bonds.filter(b => b.operacion !== 'venta' && b.yield         != null && b.amount > 0).map(b => ({ amount: b.amount, yield: b.yield! })),
+    ...funds.filter(f => isCompraSide(f.operacion) && f.ytm_indicative != null && f.amount > 0).map(f => ({ amount: f.amount, yield: f.ytm_indicative! })),
+    ...bonds.filter(b => isCompraSide(b.operacion) && b.yield         != null && b.amount > 0).map(b => ({ amount: b.amount, yield: b.yield! })),
   ]
   const yieldAmtSum = yieldItems.reduce((s, i) => s + i.amount, 0)
   const avgYield    = yieldAmtSum > 0
@@ -648,7 +654,7 @@ function AllocationPanel({
 
   // Cupón corrido y desembolso estimado — solo compras, mismo criterio que
   // el resto del panel.
-  const bondAccruals = bonds.filter(b => b.operacion !== 'venta').map(b => calculateBondAccrual(b, settlementDate))
+  const bondAccruals = bonds.filter(b => isCompraSide(b.operacion)).map(b => calculateBondAccrual(b, settlementDate))
   const totalAccruedInterest = bondAccruals.reduce((s, a) => s + a.accruedInterest, 0)
   const totalEstimatedCash   = bondAccruals.reduce((s, a) => s + a.estimatedCashRequired, 0)
 
@@ -744,22 +750,31 @@ function AllocationPanel({
 const TH = 'px-3 py-2.5 text-[9px] font-bold text-white uppercase tracking-wider whitespace-nowrap'
 const TD = 'px-3 py-2.5 text-xs border-b border-gray-100'
 
-// ─── Operación toggle (Compra / Venta) ─────────────────────────────────────────
+// ─── Operación toggle (Compra / Venta / Aumentar / Reducir / Mantener) ─────────
+
+const OPERACION_LABEL: Record<Operacion, string> = {
+  compra: 'Compra', venta: 'Venta', aumentar: 'Aumentar', reducir: 'Reducir', mantener: 'Mantener',
+}
+const OPERACION_STYLE: Record<Operacion, string> = {
+  compra:   'bg-emerald-50 text-emerald-700 border-emerald-200',
+  aumentar: 'bg-teal-50 text-teal-700 border-teal-200',
+  venta:    'bg-red-50 text-red-600 border-red-200',
+  reducir:  'bg-amber-50 text-amber-700 border-amber-200',
+  mantener: 'bg-gray-100 text-gray-500 border-gray-200',
+}
 
 function OperacionToggle({ value, onChange }: { value: Operacion; onChange: (v: Operacion) => void }) {
   return (
-    <button
-      type="button"
-      onClick={() => onChange(value === 'compra' ? 'venta' : 'compra')}
-      className={`text-[9px] font-bold uppercase tracking-wider px-2 py-1 rounded-full transition-colors ${
-        value === 'venta'
-          ? 'bg-red-50 text-red-600 border border-red-200 hover:bg-red-100'
-          : 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'
-      }`}
-      title="Click para cambiar entre Compra y Venta"
+    <select
+      value={value}
+      onChange={e => onChange(e.target.value as Operacion)}
+      className={`text-[9px] font-bold uppercase tracking-wider pl-2 pr-1 py-1 rounded-full border appearance-none cursor-pointer ${OPERACION_STYLE[value]}`}
+      title="Elegir tipo de operación"
     >
-      {value === 'venta' ? 'Venta' : 'Compra'}
-    </button>
+      {(Object.keys(OPERACION_LABEL) as Operacion[]).map(op => (
+        <option key={op} value={op}>{OPERACION_LABEL[op]}</option>
+      ))}
+    </select>
   )
 }
 
@@ -849,8 +864,8 @@ function FundsTable({
   }
 
   const totalFundsPct = funds.reduce((s, f) => s + (f.pct ?? 0), 0)
-  const totalFundsCompras = funds.filter(f => f.operacion !== 'venta').reduce((s, f) => s + (f.amount ?? 0), 0)
-  const totalFundsVentas  = funds.filter(f => f.operacion === 'venta').reduce((s, f) => s + (f.amount ?? 0), 0)
+  const totalFundsCompras = funds.filter(f => isCompraSide(f.operacion)).reduce((s, f) => s + (f.amount ?? 0), 0)
+  const totalFundsVentas  = funds.filter(f => isVentaSide(f.operacion)).reduce((s, f) => s + (f.amount ?? 0), 0)
 
   return (
     <div>
@@ -1545,8 +1560,8 @@ export default function ProposalEditor({
   // (ej: comprar $300 y vender $300 no es "$600 de inversión").
   useEffect(() => {
     const items = [...funds, ...bonds, ...equities]
-    const compras = items.filter(i => i.operacion !== 'venta').reduce((s, i) => s + (i.amount ?? 0), 0)
-    const ventas  = items.filter(i => i.operacion === 'venta').reduce((s, i) => s + (i.amount ?? 0), 0)
+    const compras = items.filter(i => isCompraSide(i.operacion)).reduce((s, i) => s + (i.amount ?? 0), 0)
+    const ventas  = items.filter(i => isVentaSide(i.operacion)).reduce((s, i) => s + (i.amount ?? 0), 0)
     setProposal(p => {
       if (p.total_amount === compras && p.total_ventas === ventas) return p
       fetch(`/api/proposals/${proposal.id}`, {
