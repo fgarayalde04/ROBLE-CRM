@@ -97,9 +97,13 @@ function readMoneyRow(lines: string[], startIdx: number): { values: (number | nu
   while (values.length < 6 && i < lines.length) {
     const line = lines[i]
     if (line === '--') {
+      // Sin swallow de footnote acá: en este reporte los superíndices de
+      // nota al pie (ej. "6") solo acompañan la fila de Return (%), nunca
+      // las filas en plata — y un valor real chico (ej. "0") pegado
+      // después de un "--" es indistinguible de una nota al pie si se
+      // intenta swallowear genéricamente.
       values.push(null)
       i++
-      if (i < lines.length && /^\d{1,2}$/.test(lines[i])) i++ // footnote marker
       continue
     }
     const m = line.match(/^\(?-?\$?[\d,]+(?:\.\d+)?\)?$/)
