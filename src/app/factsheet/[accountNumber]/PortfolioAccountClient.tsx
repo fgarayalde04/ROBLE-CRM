@@ -408,7 +408,7 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
             cleanedNames={cleanedNames}
             unrealizedGLImport={unrealizedGLImport} unrealizedGLTotals={unrealizedGLTotals}
             gainLossByInvestment={gainLossByInvestment} onUnrealizedGLImported={load}
-            onSeeAll={() => setTab('posiciones')}
+            onSeeAll={() => setTab('posiciones')} performance={performance}
           />
         )}
         {tab === 'posiciones' && (

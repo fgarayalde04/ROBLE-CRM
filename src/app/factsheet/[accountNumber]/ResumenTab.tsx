@@ -1,10 +1,11 @@
 'use client'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
-import type { PortfolioPositionRow, PortfolioCashProjectionRow, PortfolioCashProjectionsImportRow, PortfolioUnrealizedGainLossImportRow } from '@/types/portfolio'
+import type { PortfolioPositionRow, PortfolioCashProjectionRow, PortfolioCashProjectionsImportRow, PortfolioUnrealizedGainLossImportRow, PortfolioPerformanceRow } from '@/types/portfolio'
 import { fmtUSD, fmtPct, fmtDate } from './PortfolioAccountClient'
 import DonutChart from '@/components/portfolio/DonutChart'
 import DocumentUploadButton from '@/components/portfolio/DocumentUploadButton'
 import { COLORS, DONUT_COLORS } from '@/lib/portfolio/theme'
+import { computeInitialAccountValue } from '@/lib/portfolio/engine'
 
 function SectionCard({ title, subtitle, children, className = '' }: { title?: string; subtitle?: string; children: React.ReactNode; className?: string }) {
   return (
@@ -51,6 +52,7 @@ export default function ResumenTab({
   accountNumber, totalValue, snapshotDate, variation, assetAllocation, fixedIncomeBreakdown, currencyExposure,
   liquidity, sortedByValue, maturityBuckets, nextMaturity, cashProjImport, projectedIncome12m, nextPayment,
   cleanedNames, unrealizedGLImport, unrealizedGLTotals, gainLossByInvestment, onUnrealizedGLImported, onSeeAll,
+  performance,
 }: {
   accountNumber: string
   totalValue: number
@@ -73,9 +75,11 @@ export default function ResumenTab({
   gainLossByInvestment: { id: string; name: string; gainLoss: number; gainLossPct: number }[]
   onUnrealizedGLImported: () => void
   onSeeAll: () => void
+  performance: PortfolioPerformanceRow | null
 }) {
   const topHoldings = sortedByValue.slice(0, 6)
   const maxHoldingValue = topHoldings[0] ? Number(topHoldings[0].market_value) : 1
+  const initialValue = computeInitialAccountValue(performance)
 
   return (
     <div className="space-y-5">
@@ -84,6 +88,12 @@ export default function ResumenTab({
         <p className="text-xs font-semibold uppercase tracking-wide text-white/60">Valor del portafolio</p>
         <p className="text-4xl font-bold mt-1.5">{fmtUSD(totalValue)}</p>
         <p className="text-xs text-white/50 mt-1.5">Actualizado al {fmtDate(snapshotDate)}</p>
+        {initialValue != null && (
+          <p className="text-xs text-white/50 mt-1">
+            Valor inicial de la cuenta: <span className="font-semibold text-white/80">{fmtUSD(initialValue)}</span>
+            {performance?.inception_date && ` (${fmtDate(performance.inception_date)})`}
+          </p>
+        )}
         {variation && (
           <div className="mt-4 pt-4 border-t border-white/15">
             <p className="text-[10px] uppercase tracking-wide text-white/50">Variación desde última actualización</p>
