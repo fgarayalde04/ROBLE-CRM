@@ -191,6 +191,28 @@ export async function getPositions(importId: string) {
   return rows
 }
 
+// cusip → cupón vigente, según las posiciones importadas más recientes de
+// la cuenta. Usado para completar el Projected Income cuando la fila del
+// custodio no trae el % de cupón en la descripción (típico de notas a tasa
+// variable/fixed-to-floating, donde el texto solo dice "VARIABLE" sin
+// número) — la posición sí tiene el cupón vigente real.
+export async function getLatestCouponsByCusip(accountNumber: string, custodian?: string): Promise<Map<string, number>> {
+  const params: unknown[] = [accountNumber]
+  let custodianClause = ''
+  if (custodian) { params.push(custodian); custodianClause = 'and custodian = $2' }
+  const { rows: imports } = await pool.query(
+    `select id from portfolio_imports where account_number = $1 ${custodianClause} order by snapshot_date desc limit 1`,
+    params
+  )
+  const importId = imports[0]?.id
+  if (!importId) return new Map()
+  const { rows } = await pool.query(
+    `select cusip, coupon from portfolio_positions_snapshot where import_id = $1 and cusip is not null and coupon is not null`,
+    [importId]
+  )
+  return new Map(rows.map(r => [r.cusip as string, Number(r.coupon)]))
+}
+
 export async function listSnapshotDates(accountNumber: string) {
   const { rows } = await pool.query(
     `select id, snapshot_date, total_market_value, position_count

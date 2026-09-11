@@ -186,7 +186,15 @@ export function computePerfValueSeries(
     return !isFinite(n) || n <= -100 ? null : ending / (1 + n / 100)
   }
 
-  if (p.inception_date) add(new Date(p.inception_date + 'T00:00:00'), bv?.sinceInception ?? fromRet(p.return_since_inception), 'Inicio')
+  // "Beginning Value" de Since Start Date es el valor ANTES de que la
+  // cuenta existiera (0) — el monto inicial real que el cliente ve como
+  // "con cuánto arrancó" es ese 0 más el "Net Contribution" de ese mismo
+  // período (lo que efectivamente depositó al abrir la cuenta).
+  const nc = p.net_contribution
+  const inceptionValue = bv?.sinceInception != null
+    ? bv.sinceInception + (nc?.sinceInception ?? 0)
+    : fromRet(p.return_since_inception)
+  if (p.inception_date) add(new Date(p.inception_date + 'T00:00:00'), inceptionValue, 'Inicio')
   add(back(5), bv?.fiveYear ?? fromRet(p.return_5y), 'Hace 5 años')
   add(back(3), bv?.threeYear ?? fromRet(p.return_3y), 'Hace 3 años')
   add(back(1), bv?.oneYear ?? fromRet(p.return_1y), 'Hace 1 año')

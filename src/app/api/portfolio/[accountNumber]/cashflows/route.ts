@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession, hasPortfolioAccess } from '@/lib/auth'
 import { parseCashProjectionsExcel } from '@/lib/portfolio/cashProjectionsParser'
-import { resolveAccount, createCashProjectionsImport, getLatestCashProjections } from '@/lib/db/portfolio'
+import { resolveAccount, createCashProjectionsImport, getLatestCashProjections, getLatestCouponsByCusip } from '@/lib/db/portfolio'
 
 // GET /api/portfolio/[accountNumber]/cashflows — latest projected cash flows
 // (Incoming Cash Projections Excel). Optional ?custodian= scopes to that
@@ -60,6 +60,27 @@ export async function POST(
   const warnings = [...parsed.warnings]
   if (parsed.accountNumber && parsed.accountNumber !== accountNumber) {
     warnings.push(`El archivo menciona la cuenta ${parsed.accountNumber}, distinta de ${accountNumber} — se guardó igual en esta cuenta.`)
+  }
+
+  // Notas a tasa variable ("FIXED TO FLTG", "VARIABLE") no traen el % de
+  // cupón en la descripción de este archivo — el monto quedaba sin
+  // estimar y el total salía de menos. Se completa con el cupón vigente
+  // de las posiciones ya importadas de la cuenta (mismo CUSIP).
+  const missingCoupon = parsed.rows.filter(r => r.estimatedAmount == null && r.cusip)
+  if (missingCoupon.length > 0) {
+    const coupons = await getLatestCouponsByCusip(accountNumber, account.custodian ?? undefined)
+    let filled = 0
+    for (const r of parsed.rows) {
+      if (r.estimatedAmount != null || !r.cusip) continue
+      const coupon = coupons.get(r.cusip)
+      if (coupon == null || r.quantity == null) continue
+      r.couponPct = coupon
+      r.estimatedAmount = parseFloat((r.quantity * (coupon / 100) / 2).toFixed(2))
+      filled++
+    }
+    if (filled > 0) warnings.push(`${filled} pago(s) de tasa variable se completaron con el cupón vigente de las posiciones importadas.`)
+    const stillMissing = parsed.rows.filter(r => r.estimatedAmount == null).length
+    if (stillMissing > 0) warnings.push(`${stillMissing} pago(s) quedaron sin monto estimado (no se encontró el cupón ni en el archivo ni en las posiciones) — el total puede ser menor al real.`)
   }
 
   try {
