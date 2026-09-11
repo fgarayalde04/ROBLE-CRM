@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/sync",
       "schedule": "0 7 * * *"
+    },
+    {
+      "path": "/api/cron/fund-monitor-sync",
+      "schedule": "0 8 * * *"
     }
   ]
 }
