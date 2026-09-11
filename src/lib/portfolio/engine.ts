@@ -191,9 +191,13 @@ export function computePerfValueSeries(
   // "con cuánto arrancó" es ese 0 más el "Net Contribution" de ese mismo
   // período (lo que efectivamente depositó al abrir la cuenta).
   const nc = p.net_contribution
-  const inceptionValue = bv?.sinceInception != null
-    ? bv.sinceInception + (nc?.sinceInception ?? 0)
-    : fromRet(p.return_since_inception)
+  // Preferir siempre Net Contribution para el punto de arranque — Beginning
+  // Value de Since Start Date casi siempre es 0 y no aporta nada por sí
+  // solo; si tampoco hay Net Contribution (reportes viejos) recién ahí se
+  // cae a la estimación por retorno.
+  const inceptionValue = nc?.sinceInception != null
+    ? (bv?.sinceInception ?? 0) + nc.sinceInception
+    : (bv?.sinceInception ?? fromRet(p.return_since_inception))
   if (p.inception_date) add(new Date(p.inception_date + 'T00:00:00'), inceptionValue, 'Inicio')
   add(back(5), bv?.fiveYear ?? fromRet(p.return_5y), 'Hace 5 años')
   add(back(3), bv?.threeYear ?? fromRet(p.return_3y), 'Hace 3 años')
@@ -203,4 +207,17 @@ export function computePerfValueSeries(
   add(end, ending, 'Actual')
 
   return Array.from(byDate.values()).sort((a, b) => a.date.localeCompare(b.date))
+}
+
+// Valor con el que arrancó la cuenta — el "Beginning Value" de Since Start
+// Date (normalmente 0, el valor antes de que la cuenta existiera) más el
+// "Net Contribution" de ese mismo período: lo que efectivamente se
+// depositó al abrir la cuenta. No depende de tener Beginning Value
+// guardado (columna nueva) — con Net Contribution alcanza.
+export function computeInitialAccountValue(p: PortfolioPerformanceRow | null): number | null {
+  if (!p) return null
+  const nc = p.net_contribution?.sinceInception
+  if (nc == null) return null
+  const bv = p.beginning_value?.sinceInception ?? 0
+  return bv + nc
 }

@@ -2,7 +2,7 @@ import type { PortfolioPositionRow, PortfolioImportRow, PortfolioAccountInfo, Po
 import { fmtUSD, fmtUSD2, fmtPct, fmtDate } from './PortfolioAccountClient'
 import DonutChart from '@/components/portfolio/DonutChart'
 import { COLORS, DONUT_COLORS, monthLabel } from '@/lib/portfolio/theme'
-import { ASSET_CLASS_ES, assetClassRank, computePerfValueSeries } from '@/lib/portfolio/engine'
+import { ASSET_CLASS_ES, assetClassRank, computePerfValueSeries, computeInitialAccountValue } from '@/lib/portfolio/engine'
 import { ROBLE_DISCLAIMER } from '@/lib/disclaimers'
 
 // Off-screen printable layout captured page-by-page (html2canvas + jsPDF) by
@@ -133,16 +133,22 @@ function PdfAreaChart({ points, height = 46 }: { points: { date: string; value: 
   const line = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${x(i).toFixed(1)} ${y(p.value).toFixed(1)}`).join(' ')
   const area = `${line} L ${x(n - 1).toFixed(1)} ${(H - padB).toFixed(1)} L ${x(0).toFixed(1)} ${(H - padB).toFixed(1)} Z`
   const first = points[0], last = points[n - 1]
+  // Etiqueta de valor arriba del punto salvo que esté muy cerca del techo
+  // del gráfico, en cuyo caso va abajo — evita que se corte o se superponga
+  // con el borde. Con solo 2 etiquetas (primer y último punto), en extremos
+  // opuestos del eje x, no llegan a pisarse entre sí.
+  const labelY = (v: number) => (y(v) < padT + 24 ? y(v) + 20 : y(v) - 10)
   return (
     <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: `${height}mm`, display: 'block' }} preserveAspectRatio="none">
       <line x1={padL} y1={H - padB} x2={W - padR} y2={H - padB} stroke={COLORS.border} strokeWidth={1} />
       <path d={area} fill={COLORS.mintGreen} opacity={0.55} />
       <path d={line} fill="none" stroke={COLORS.midGreen} strokeWidth={2.5} />
+      <circle cx={x(0)} cy={y(first.value)} r={4} fill={COLORS.slate} />
       <circle cx={x(n - 1)} cy={y(last.value)} r={4} fill={COLORS.darkGreen} />
+      <text x={x(0)} y={labelY(first.value)} fontSize={14} fontWeight={700} fill={COLORS.slate} textAnchor="start">{fmtUSD(first.value)}</text>
+      <text x={x(n - 1)} y={labelY(last.value)} fontSize={14} fontWeight={700} fill={COLORS.ink} textAnchor="end">{fmtUSD(last.value)}</text>
       <text x={padL} y={H - 6} fontSize={13} fill={COLORS.mutedSlate}>{fmtDate(first.date)}</text>
       <text x={W - padR} y={H - 6} fontSize={13} fill={COLORS.mutedSlate} textAnchor="end">{fmtDate(last.date)}</text>
-      <text x={x(n - 1)} y={y(last.value) - 8} fontSize={14} fontWeight={700} fill={COLORS.ink} textAnchor="end">{fmtUSD(last.value)}</text>
-      <text x={padL} y={y(min) + 4} fontSize={12} fill={COLORS.mutedSlate}>{fmtUSD(min)}</text>
     </svg>
   )
 }
@@ -338,8 +344,17 @@ export default function AccountPdfReport({
           <div style={{ flex: '0 0 38%', borderRadius: 10, padding: '6mm', color: '#fff', background: `linear-gradient(135deg, ${COLORS.darkGreen}, ${COLORS.charcoal})` }}>
             <div style={{ fontSize: 8.5, textTransform: 'uppercase', letterSpacing: 1, opacity: 0.7 }}>Valor de la cuenta</div>
             <div style={{ fontSize: 32, fontWeight: 800, marginTop: '3mm' }}>{fmtUSD(totalValue)}</div>
+            {(() => {
+              const initial = computeInitialAccountValue(performance)
+              if (initial == null) return null
+              return (
+                <div style={{ fontSize: 8.5, marginTop: '3mm', opacity: 0.85 }}>
+                  Valor inicial{performance?.inception_date ? ` (${fmtDate(performance.inception_date)})` : ''}: <span style={{ fontWeight: 700 }}>{fmtUSD(initial)}</span>
+                </div>
+              )
+            })()}
             {sinceMoney != null && (
-              <div style={{ fontSize: 9, marginTop: '4mm', opacity: 0.9 }}>
+              <div style={{ fontSize: 9, marginTop: '2mm', opacity: 0.9 }}>
                 Crecimiento desde inicio:{' '}
                 <span style={{ fontWeight: 800 }}>{sinceMoney >= 0 ? '+' : ''}{fmtUSD(sinceMoney)}{sincePct != null ? ` (${sincePct >= 0 ? '+' : ''}${sincePct.toFixed(2)}%)` : ''}</span>
               </div>

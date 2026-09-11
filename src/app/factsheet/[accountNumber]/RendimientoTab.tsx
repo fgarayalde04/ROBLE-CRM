@@ -3,7 +3,7 @@ import { useState, useMemo } from 'react'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, BarChart, Bar, Cell, LabelList, ReferenceLine } from 'recharts'
 import { fmtUSD, fmtDate } from './PortfolioAccountClient'
 import DocumentUploadButton from '@/components/portfolio/DocumentUploadButton'
-import { computePerfValueSeries } from '@/lib/portfolio/engine'
+import { computePerfValueSeries, computeInitialAccountValue } from '@/lib/portfolio/engine'
 import type { PortfolioPerformanceRow } from '@/types/portfolio'
 
 type Period = '1M' | '3M' | '6M' | 'YTD' | '1Y' | 'ALL'
@@ -86,6 +86,17 @@ export default function RendimientoTab({ accountNumber, history, performance, on
               Rentabilidad real (TWRR) reportada por el custodio — no calculada por el sistema. Reporte al {fmtDate(performance.report_date)}
               {performance.inception_date && <> · Desde {fmtDate(performance.inception_date)}</>}.
             </p>
+            {(() => {
+              const initial = computeInitialAccountValue(performance)
+              if (initial == null) return null
+              return (
+                <div className="flex items-center gap-2 mb-3 bg-[#F3F4F6] rounded-lg px-3 py-2 w-fit">
+                  <span className="text-[10px] text-gray-400 uppercase tracking-wide">Valor inicial de la cuenta</span>
+                  <span className="text-sm font-bold text-gray-800">{fmtUSD(initial)}</span>
+                  {performance.inception_date && <span className="text-[10px] text-gray-400">al {fmtDate(performance.inception_date)}</span>}
+                </div>
+              )
+            })()}
             <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-2">
               {[
                 ['YTD', performance.return_ytd], ['1 Año', performance.return_1y], ['3 Años', performance.return_3y],
