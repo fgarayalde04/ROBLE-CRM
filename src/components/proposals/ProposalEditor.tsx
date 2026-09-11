@@ -939,7 +939,7 @@ function FundsTable({
       ) : (
         <div className="rounded-xl overflow-hidden border border-[#E2E8F0]">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[1060px]">
+            <table className="w-full text-sm min-w-[1160px]">
               <thead>
                 <tr style={{ backgroundColor: '#1B2E3C' }}>
                   <th className={`${TH} text-left w-20`}>PORTAFOLIO</th>
