@@ -208,6 +208,14 @@ export default function RendimientoTab({ accountNumber, history, performance, on
               const usePerf = perfSeries.length >= 2
               const lineData = usePerf ? perfSeries : chartData
               if (!usePerf && sorted.length < 2) return null
+              // Dominio del eje Y en base al rango real de los valores, no
+              // desde 0 — si no, con montos grandes la suba real de la
+              // cuenta queda comprimida arriba del todo y casi no se nota.
+              const vals = lineData.map((d: any) => d.value)
+              const vMin = Math.min(...vals)
+              const vMax = Math.max(...vals)
+              const vPad = (vMax - vMin) * 0.15 || vMax * 0.05 || 1
+              const yDomain: [number, number] = [Math.max(0, vMin - vPad), vMax + vPad]
               return (
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <div className="flex items-center justify-between mb-1">
@@ -232,7 +240,7 @@ export default function RendimientoTab({ accountNumber, history, performance, on
                     <LineChart data={lineData} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
                       <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#6B7280' }} tickFormatter={(v) => fmtDate(v)} />
-                      <YAxis tick={{ fontSize: 10, fill: '#6B7280' }} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
+                      <YAxis domain={yDomain} tick={{ fontSize: 10, fill: '#6B7280' }} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
                       <Tooltip formatter={(v: any) => fmtUSD(Number(v))} labelFormatter={(v) => fmtDate(String(v))} />
                       <Line type="monotone" dataKey="value" stroke="#2E7D52" strokeWidth={2} dot={{ r: 3, fill: '#2E7D52' }} />
                     </LineChart>
