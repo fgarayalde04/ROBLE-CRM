@@ -10,7 +10,7 @@ import { listUsers, createUser, updateUser, getUserPermissions, approveUser, del
 const VALID_PERMISSIONS = new Set([
   'panel','tasks','clients','openings','banco_central','calendar','deadlines',
   'ceo_dashboard','kpis','pagos','impuestos','liquidacion','recursos','claves',
-  'admin','sincronizacion','factsheet','proposals','orders','research',
+  'admin','sincronizacion','factsheet','proposals','orders','fondos_monitor','research',
 ])
 
 function sanitizePermissions(permissions: unknown): string[] | null {

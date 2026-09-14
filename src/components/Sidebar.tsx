@@ -41,7 +41,7 @@ const nav: NavSection[] = [
     items: [
       // HIDDEN: Fondos temporalmente oculto
       // { href: '/fondos',     label: 'Fondos',     subtitle: 'Biblioteca de factsheets',icon: FondosIcon,    permission: 'fondos' },
-      { href: '/fondos-monitor', label: 'Monitor de Fondos', subtitle: 'Rendimientos por ISIN', icon: FondosIcon, permission: 'fondos' },
+      { href: '/fondos-monitor', label: 'Monitor de Fondos', subtitle: 'Rendimientos por ISIN', icon: FondosIcon, permission: 'fondos_monitor' },
       { href: '/factsheet',  label: 'Portafolio',  subtitle: 'Posiciones y valor de cartera',   icon: FactsheetIcon, permission: 'factsheet' },
       { href: '/propuestas', label: 'Propuestas', subtitle: 'Propuestas de inversión', icon: ProposalIcon,  permission: 'proposals' },
     ],
@@ -93,11 +93,11 @@ const nav: NavSection[] = [
 ]
 
 const ROLE_PERMISSIONS: Record<string, Permission[]> = {
-  admin:      ['panel','tasks','clients','openings','banco_central','calendar','deadlines','pagos','impuestos','ceo_dashboard','kpis','liquidacion','recursos','claves','admin','sincronizacion','factsheet','proposals','orders','fondos','research'],
-  ceo:        ['panel','tasks','clients','openings','banco_central','calendar','deadlines','pagos','impuestos','ceo_dashboard','kpis','liquidacion','recursos','claves','factsheet','proposals','orders','fondos','research'],
-  direccion:  ['panel','tasks','clients','openings','banco_central','calendar','deadlines','ceo_dashboard','kpis','liquidacion','recursos','claves','factsheet','proposals','orders','fondos','research'],
-  asesor:     ['panel','tasks','clients','openings','calendar','deadlines','recursos','factsheet','proposals','orders','fondos','research'],
-  asistente:  ['panel','tasks','clients','openings','banco_central','calendar','deadlines','recursos','orders','fondos','research'],
+  admin:      ['panel','tasks','clients','openings','banco_central','calendar','deadlines','pagos','impuestos','ceo_dashboard','kpis','liquidacion','recursos','claves','admin','sincronizacion','factsheet','proposals','orders','fondos_monitor','research'],
+  ceo:        ['panel','tasks','clients','openings','banco_central','calendar','deadlines','pagos','impuestos','ceo_dashboard','kpis','liquidacion','recursos','claves','factsheet','proposals','orders','fondos_monitor','research'],
+  direccion:  ['panel','tasks','clients','openings','banco_central','calendar','deadlines','ceo_dashboard','kpis','liquidacion','recursos','claves','factsheet','proposals','orders','fondos_monitor','research'],
+  asesor:     ['panel','tasks','clients','openings','calendar','deadlines','recursos','factsheet','proposals','orders','fondos_monitor','research'],
+  asistente:  ['panel','tasks','clients','openings','banco_central','calendar','deadlines','recursos','orders','fondos_monitor','research'],
   compliance: ['panel','banco_central','calendar','deadlines','recursos','research'],
 }
 

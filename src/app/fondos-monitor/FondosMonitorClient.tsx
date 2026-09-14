@@ -63,6 +63,13 @@ const COLS: { key: keyof FundRow; label: string }[] = [
   { key: 'y_2021', label: '2021' },
 ]
 
+// Mismo orden que traía el Excel original — no es alfabético.
+const CATEGORY_ORDER = ['RENTA FIJA', 'BALANCEADOS / MULTI-ASSET', 'ALTERNATIVOS', 'RENTA VARIABLE', 'REAL ESTATE', 'COMMODITIES']
+function categoryRank(c: string) {
+  const i = CATEGORY_ORDER.indexOf(c)
+  return i === -1 ? CATEGORY_ORDER.length : i
+}
+
 export default function FondosMonitorClient({ funds }: { funds: FundRow[] }) {
   const [search, setSearch] = useState('')
 
@@ -77,7 +84,7 @@ export default function FondosMonitorClient({ funds }: { funds: FundRow[] }) {
       if (!map.has(key)) map.set(key, [])
       map.get(key)!.push(f)
     }
-    return map
+    return new Map(Array.from(map.entries()).sort(([a], [b]) => categoryRank(a) - categoryRank(b)))
   }, [funds, search])
 
   const lastUpdate = funds

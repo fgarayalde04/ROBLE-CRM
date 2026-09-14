@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 
 type UserRole = 'admin' | 'asesor' | 'asistente' | 'compliance' | 'direccion' | 'ceo'
-type Permission = 'panel' | 'tasks' | 'clients' | 'openings' | 'banco_central' | 'calendar' | 'deadlines' | 'ceo_dashboard' | 'kpis' | 'pagos' | 'impuestos' | 'liquidacion' | 'recursos' | 'claves' | 'admin' | 'sincronizacion' | 'factsheet' | 'proposals' | 'orders' | 'research'
+type Permission = 'panel' | 'tasks' | 'clients' | 'openings' | 'banco_central' | 'calendar' | 'deadlines' | 'ceo_dashboard' | 'kpis' | 'pagos' | 'impuestos' | 'liquidacion' | 'recursos' | 'claves' | 'admin' | 'sincronizacion' | 'factsheet' | 'proposals' | 'orders' | 'fondos_monitor' | 'research'
 
 interface CrmUser {
   id: string
@@ -52,6 +52,7 @@ const PERMISSION_GROUPS: { label: string; items: { key: Permission; label: strin
       { key: 'orders', label: 'Enviar órdenes' },
       { key: 'factsheet', label: 'Factsheet / Portafolio' },
       { key: 'proposals', label: 'Propuestas de inversión' },
+      { key: 'fondos_monitor', label: 'Monitor de Fondos' },
     ],
   },
   {
@@ -90,11 +91,11 @@ const PERMISSION_GROUPS: { label: string; items: { key: Permission; label: strin
 // esas dos son las que realmente rigen qué se ve en el menú de la izquierda;
 // esta lista es la que se le muestra al admin para tocarla.
 const ROLE_DEFAULT_PERMISSIONS: Record<UserRole, Permission[]> = {
-  admin:      ['panel','tasks','clients','openings','banco_central','calendar','deadlines','pagos','impuestos','ceo_dashboard','kpis','liquidacion','recursos','claves','admin','sincronizacion','factsheet','proposals','orders','research'],
-  ceo:        ['panel','tasks','clients','openings','banco_central','calendar','deadlines','pagos','impuestos','ceo_dashboard','kpis','liquidacion','recursos','claves','factsheet','proposals','orders','research'],
-  direccion:  ['panel','tasks','clients','openings','banco_central','calendar','deadlines','ceo_dashboard','kpis','liquidacion','recursos','claves','factsheet','proposals','orders','research'],
-  asesor:     ['panel','tasks','clients','openings','calendar','deadlines','recursos','factsheet','proposals','orders','research'],
-  asistente:  ['panel','tasks','clients','openings','banco_central','calendar','deadlines','recursos','research'],
+  admin:      ['panel','tasks','clients','openings','banco_central','calendar','deadlines','pagos','impuestos','ceo_dashboard','kpis','liquidacion','recursos','claves','admin','sincronizacion','factsheet','proposals','orders','fondos_monitor','research'],
+  ceo:        ['panel','tasks','clients','openings','banco_central','calendar','deadlines','pagos','impuestos','ceo_dashboard','kpis','liquidacion','recursos','claves','factsheet','proposals','orders','fondos_monitor','research'],
+  direccion:  ['panel','tasks','clients','openings','banco_central','calendar','deadlines','ceo_dashboard','kpis','liquidacion','recursos','claves','factsheet','proposals','orders','fondos_monitor','research'],
+  asesor:     ['panel','tasks','clients','openings','calendar','deadlines','recursos','factsheet','proposals','orders','fondos_monitor','research'],
+  asistente:  ['panel','tasks','clients','openings','banco_central','calendar','deadlines','recursos','fondos_monitor','research'],
   compliance: ['panel','banco_central','calendar','deadlines','recursos','research'],
 }
 
