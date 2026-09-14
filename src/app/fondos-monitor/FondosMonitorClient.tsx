@@ -50,8 +50,6 @@ const STATUS_LABEL: Record<string, { label: string; color: string }> = {
 }
 
 const COLS: { key: keyof FundRow; label: string }[] = [
-  { key: 'r_1m', label: '1M' },
-  { key: 'r_3m', label: '3M' },
   { key: 'r_1y', label: '1A' },
   { key: 'r_3y', label: '3A' },
   { key: 'r_5y', label: '5A' },
