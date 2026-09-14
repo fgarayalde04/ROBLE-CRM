@@ -141,6 +141,14 @@ export default function FondosMonitorClient({ funds }: { funds: FundRow[] }) {
         const r = (el as HTMLElement).getBoundingClientRect()
         return { top: (r.top - containerTop) * scale, bottom: (r.bottom - containerTop) * scale }
       })
+      // Bloque "logo + encabezado de columnas" (marcado con data-pdf-header-end
+      // en la plantilla) — se vuelve a pegar arriba de CADA página del PDF, en
+      // vez de aparecer solo en la primera y dejar las siguientes como una
+      // continuación muda de la tabla sin saber qué es cada columna.
+      const headerEl = pdfRef.current.querySelector('[data-pdf-header-end]')
+      const headerEndPx = headerEl
+        ? ((headerEl as HTMLElement).getBoundingClientRect().bottom - containerTop) * scale
+        : 0
       const canvas = await html2canvas(pdfRef.current, {
         scale,
         useCORS: true,
@@ -156,13 +164,14 @@ export default function FondosMonitorClient({ funds }: { funds: FundRow[] }) {
       if (imgH <= pdfH) {
         pdf.addImage(canvas.toDataURL('image/jpeg', 0.97), 'JPEG', 0, 0, pdfW, imgH)
       } else {
-        const maxSliceH = Math.round(canvas.width * pdfH / pdfW)
-        let position = 0
+        const maxPagePx = Math.round(canvas.width * pdfH / pdfW)
+        const contentBudgetPx = maxPagePx - headerEndPx
+        let position = headerEndPx
         while (position < canvas.height) {
-          let sliceH = Math.min(canvas.height - position, maxSliceH)
+          let sliceH = Math.min(canvas.height - position, contentBudgetPx)
           const pageEnd = position + sliceH
           for (const s of keepTogether) {
-            const sectionFits = (s.bottom - s.top) <= maxSliceH
+            const sectionFits = (s.bottom - s.top) <= contentBudgetPx
             const wouldBeCut = s.top < pageEnd && s.bottom > pageEnd
             if (sectionFits && wouldBeCut && s.top > position) {
               sliceH = s.top - position
@@ -170,11 +179,12 @@ export default function FondosMonitorClient({ funds }: { funds: FundRow[] }) {
           }
           const pageCanvas = document.createElement('canvas')
           pageCanvas.width = canvas.width
-          pageCanvas.height = sliceH
+          pageCanvas.height = headerEndPx + sliceH
           const ctx = pageCanvas.getContext('2d')!
-          ctx.drawImage(canvas, 0, position, canvas.width, sliceH, 0, 0, canvas.width, sliceH)
-          if (position > 0) pdf.addPage()
-          const destH = pdfW * (sliceH / canvas.width)
+          ctx.drawImage(canvas, 0, 0, canvas.width, headerEndPx, 0, 0, canvas.width, headerEndPx)
+          ctx.drawImage(canvas, 0, position, canvas.width, sliceH, 0, headerEndPx, canvas.width, sliceH)
+          if (position > headerEndPx) pdf.addPage()
+          const destH = pdfW * (pageCanvas.height / canvas.width)
           pdf.addImage(pageCanvas.toDataURL('image/jpeg', 0.97), 'JPEG', 0, 0, pdfW, destH)
           position += sliceH
         }
@@ -252,7 +262,7 @@ export default function FondosMonitorClient({ funds }: { funds: FundRow[] }) {
         antes (con un overflow-x-auto por tabla) el header nunca llegaba a
         quedar fijo respecto de la página.
       */}
-      <div className="max-h-[70vh] overflow-auto rounded-xl border border-gray-200">
+      <div className="h-[calc(100vh-170px)] overflow-auto rounded-xl border border-gray-200">
         {grouped.map(({ key: categoria, items: catRows }, catIdx) => {
           const subgroups = groupInOrder(catRows, f => f.subcategoria ?? '')
           return (

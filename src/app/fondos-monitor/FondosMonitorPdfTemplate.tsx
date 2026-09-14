@@ -86,7 +86,11 @@ export default function FondosMonitorPdfTemplate({ funds }: { funds: FundRow[] }
 
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 7, border: `0.3mm solid ${BORDER}` }}>
         <thead>
-          <tr style={{ background: HEADER_BG }} data-pdf-keep-together>
+          {/* Marca el final del bloque "logo + encabezado de columnas" que
+              handleDownloadPdf vuelve a dibujar arriba de CADA página del
+              PDF — sin esto, una página nueva arranca en la mitad de la
+              tabla sin dejar claro a qué fondo/columna corresponde cada dato. */}
+          <tr style={{ background: HEADER_BG }} data-pdf-keep-together data-pdf-header-end>
             <th style={{ padding: '1.6mm 2mm', textAlign: 'center', color: '#fff', fontSize: 6.5, fontWeight: 700 }}>NOMBRE</th>
             {COLS.map(c => (
               <th
