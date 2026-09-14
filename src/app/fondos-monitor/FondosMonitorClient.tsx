@@ -192,7 +192,12 @@ export default function FondosMonitorClient({ funds }: { funds: FundRow[] }) {
         <div>
           <h1 className="text-lg font-bold text-gray-900">Monitor de Fondos</h1>
           <p className="text-xs text-gray-400 mt-0.5">
-            {funds.length} fondos · Última actualización: {lastUpdate ? new Date(lastUpdate).toLocaleString('es-UY') : '—'}
+            {funds.length} fondos · Última actualización:{' '}
+            {/* Intl.DateTimeFormat puede diferir en detalles menores (ej.
+                separadores) entre el ICU del server y el del navegador —
+                mismo valor, texto potencialmente distinto: no es un bug de
+                hidratación real, así que se silencia la advertencia acá. */}
+            <span suppressHydrationWarning>{lastUpdate ? new Date(lastUpdate).toLocaleString('es-UY') : '—'}</span>
           </p>
         </div>
         <div className="flex items-center gap-2">
