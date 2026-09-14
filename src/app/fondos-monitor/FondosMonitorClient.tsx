@@ -131,7 +131,7 @@ export default function FondosMonitorClient({ funds }: { funds: FundRow[] }) {
                     <tbody key={subcategoria || '_'}>
                       {subcategoria && (
                         <tr>
-                          <td colSpan={COLS.length + 2} className="px-3 py-1.5 text-[10px] font-bold text-gray-500 uppercase tracking-wide bg-gray-50 border-b border-gray-100">
+                          <td colSpan={COLS.length + 2} className="px-3 py-2 text-xs font-bold text-white uppercase tracking-wide bg-[#2E7D52]">
                             {subcategoria}
                           </td>
                         </tr>
