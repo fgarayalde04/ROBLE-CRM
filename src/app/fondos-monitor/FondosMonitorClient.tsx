@@ -1,5 +1,6 @@
 'use client'
 import { useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
 
 interface FundRow {
   id: string
@@ -76,8 +77,14 @@ function groupInOrder<T>(items: T[], keyFn: (item: T) => string): { key: string;
   return groups
 }
 
+const CATEGORIAS_CONOCIDAS = [
+  'RENTA FIJA', 'BALANCEADOS / MULTI-ASSET', 'ALTERNATIVOS', 'RENTA VARIABLE', 'REAL ESTATE', 'COMMODITIES',
+]
+
 export default function FondosMonitorClient({ funds }: { funds: FundRow[] }) {
+  const router = useRouter()
   const [search, setSearch] = useState('')
+  const [showAdd, setShowAdd] = useState(false)
 
   const grouped = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -86,6 +93,25 @@ export default function FondosMonitorClient({ funds }: { funds: FundRow[] }) {
       : funds
     return groupInOrder(filtered, f => f.categoria ?? 'Sin categoría')
   }, [funds, search])
+
+  // Listas conocidas para los selects del alta: categorías fijas del Excel
+  // primero, más cualquier otra que ya haya aparecido en los datos; las
+  // subcategorías se ordenan por categoría a partir de lo que ya existe.
+  const categoriasDisponibles = useMemo(() => {
+    const existentes = Array.from(new Set(funds.map(f => f.categoria).filter((c): c is string => !!c)))
+    return Array.from(new Set([...CATEGORIAS_CONOCIDAS, ...existentes]))
+  }, [funds])
+
+  const subcategoriasPorCategoria = useMemo(() => {
+    const map = new Map<string, string[]>()
+    for (const f of funds) {
+      if (!f.categoria || !f.subcategoria) continue
+      const arr = map.get(f.categoria) ?? []
+      if (!arr.includes(f.subcategoria)) arr.push(f.subcategoria)
+      map.set(f.categoria, arr)
+    }
+    return map
+  }, [funds])
 
   const lastUpdate = funds
     .map(f => f.fetched_at)
@@ -102,13 +128,34 @@ export default function FondosMonitorClient({ funds }: { funds: FundRow[] }) {
             {funds.length} fondos · Última actualización: {lastUpdate ? new Date(lastUpdate).toLocaleString('es-UY') : '—'}
           </p>
         </div>
-        <input
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          placeholder="Buscar por nombre o ISIN…"
-          className="w-72 text-sm px-3 py-2 rounded-lg border border-gray-200 outline-none focus:border-[#1B3A2B]/50"
-        />
+        <div className="flex items-center gap-2">
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Buscar por nombre o ISIN…"
+            className="w-72 text-sm px-3 py-2 rounded-lg border border-gray-200 outline-none focus:border-[#1B3A2B]/50"
+          />
+          <button
+            onClick={() => setShowAdd(true)}
+            className="text-sm font-medium px-3 py-2 rounded-lg text-white whitespace-nowrap"
+            style={{ backgroundColor: '#1B3A2B' }}
+          >
+            + Agregar fondo
+          </button>
+        </div>
       </div>
+
+      {showAdd && (
+        <AddFundModal
+          categoriasDisponibles={categoriasDisponibles}
+          subcategoriasPorCategoria={subcategoriasPorCategoria}
+          onClose={() => setShowAdd(false)}
+          onCreated={() => {
+            setShowAdd(false)
+            router.refresh()
+          }}
+        />
+      )}
 
       {grouped.map(({ key: categoria, items: catRows }) => {
         const subgroups = groupInOrder(catRows, f => f.subcategoria ?? '')
@@ -166,6 +213,154 @@ export default function FondosMonitorClient({ funds }: { funds: FundRow[] }) {
           </div>
         )
       })}
+    </div>
+  )
+}
+
+const OTRA = '__otra__'
+
+function AddFundModal({
+  categoriasDisponibles,
+  subcategoriasPorCategoria,
+  onClose,
+  onCreated,
+}: {
+  categoriasDisponibles: string[]
+  subcategoriasPorCategoria: Map<string, string[]>
+  onClose: () => void
+  onCreated: () => void
+}) {
+  const [nombre, setNombre] = useState('')
+  const [categoria, setCategoria] = useState(categoriasDisponibles[0] ?? '')
+  const [categoriaOtra, setCategoriaOtra] = useState('')
+  const [subcategoria, setSubcategoria] = useState('')
+  const [subcategoriaOtra, setSubcategoriaOtra] = useState('')
+  const [isin, setIsin] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const subOptions = subcategoriasPorCategoria.get(categoria) ?? []
+  const categoriaFinal = categoria === OTRA ? categoriaOtra.trim() : categoria
+  const subcategoriaFinal = subcategoria === OTRA ? subcategoriaOtra.trim() : subcategoria
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!nombre.trim() || !categoriaFinal || !isin.trim()) return
+    setSaving(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/fund-monitor/funds', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nombre: nombre.trim(),
+          categoria: categoriaFinal,
+          subcategoria: subcategoriaFinal || null,
+          isin: isin.trim(),
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'No se pudo agregar el fondo')
+      onCreated()
+    } catch (err: any) {
+      setError(err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <form
+        onSubmit={handleSubmit}
+        onClick={e => e.stopPropagation()}
+        className="bg-white rounded-xl shadow-xl w-full max-w-md p-5"
+      >
+        <h2 className="text-sm font-bold text-gray-900 mb-4">Agregar fondo</h2>
+
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs font-medium text-gray-500 block mb-1">Nombre del fondo</label>
+            <input
+              value={nombre}
+              onChange={e => setNombre(e.target.value)}
+              autoFocus
+              className="w-full text-sm px-3 py-2 rounded-lg border border-gray-200 outline-none focus:border-[#1B3A2B]/50"
+            />
+          </div>
+
+          <div>
+            <label className="text-xs font-medium text-gray-500 block mb-1">Categoría general</label>
+            <select
+              value={categoria}
+              onChange={e => { setCategoria(e.target.value); setSubcategoria('') }}
+              className="w-full text-sm px-3 py-2 rounded-lg border border-gray-200 outline-none focus:border-[#1B3A2B]/50 bg-white"
+            >
+              {categoriasDisponibles.map(c => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+              <option value={OTRA}>Otra (nueva)…</option>
+            </select>
+            {categoria === OTRA && (
+              <input
+                value={categoriaOtra}
+                onChange={e => setCategoriaOtra(e.target.value)}
+                placeholder="Nombre de la categoría nueva"
+                className="w-full mt-2 text-sm px-3 py-2 rounded-lg border border-gray-200 outline-none focus:border-[#1B3A2B]/50"
+              />
+            )}
+          </div>
+
+          <div>
+            <label className="text-xs font-medium text-gray-500 block mb-1">Subcategoría (opcional)</label>
+            <select
+              value={subcategoria}
+              onChange={e => setSubcategoria(e.target.value)}
+              className="w-full text-sm px-3 py-2 rounded-lg border border-gray-200 outline-none focus:border-[#1B3A2B]/50 bg-white"
+            >
+              <option value="">(sin subcategoría)</option>
+              {subOptions.map(s => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+              <option value={OTRA}>Otra (nueva)…</option>
+            </select>
+            {subcategoria === OTRA && (
+              <input
+                value={subcategoriaOtra}
+                onChange={e => setSubcategoriaOtra(e.target.value)}
+                placeholder="Nombre de la subcategoría nueva"
+                className="w-full mt-2 text-sm px-3 py-2 rounded-lg border border-gray-200 outline-none focus:border-[#1B3A2B]/50"
+              />
+            )}
+          </div>
+
+          <div>
+            <label className="text-xs font-medium text-gray-500 block mb-1">ISIN</label>
+            <input
+              value={isin}
+              onChange={e => setIsin(e.target.value.toUpperCase())}
+              placeholder="Ej: LU0154237225"
+              className="w-full text-sm px-3 py-2 rounded-lg border border-gray-200 outline-none focus:border-[#1B3A2B]/50 font-mono"
+            />
+          </div>
+        </div>
+
+        {error && <p className="text-xs text-red-500 mt-3">{error}</p>}
+
+        <div className="flex justify-end gap-2 mt-5">
+          <button type="button" onClick={onClose} className="text-sm px-3 py-2 rounded-lg text-gray-600 hover:bg-gray-50">
+            Cancelar
+          </button>
+          <button
+            type="submit"
+            disabled={saving || !nombre.trim() || !categoriaFinal || !isin.trim()}
+            className="text-sm font-medium px-4 py-2 rounded-lg text-white disabled:opacity-50"
+            style={{ backgroundColor: '#1B3A2B' }}
+          >
+            {saving ? 'Guardando…' : 'Agregar'}
+          </button>
+        </div>
+      </form>
     </div>
   )
 }
