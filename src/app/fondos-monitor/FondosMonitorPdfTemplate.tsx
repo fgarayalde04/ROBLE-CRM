@@ -8,6 +8,8 @@
 // decimal) — colores y estructura sacados de un PDF de referencia que el
 // usuario adjuntó, pidiendo que la descarga quedara igual.
 
+import { Fragment } from 'react'
+
 const PAGE_PAD_MM = 12
 const PAGE_STYLE: React.CSSProperties = {
   width: '210mm',
@@ -102,12 +104,19 @@ export default function FondosMonitorPdfTemplate({ funds }: { funds: FundRow[] }
         {grouped.map(({ key: categoria, items: catRows }) => {
           const subgroups = groupInOrder(catRows, f => f.subcategoria ?? '')
           return (
-            <tbody key={categoria}>
-              <tr data-pdf-keep-together>
-                <td colSpan={COLS.length + 1} style={{ padding: '1.4mm 2mm', textAlign: 'center', fontWeight: 700, fontSize: 7, color: '#fff', background: CATEGORY_BG, border: `0.3mm solid ${BORDER}` }}>
-                  {categoria}
-                </td>
-              </tr>
+            // Un <tbody> no puede anidar otro <tbody> — HTML lo repara
+            // moviendo el interno a hermano del externo, que es un árbol
+            // distinto al que React armó y dispara errores de hidratación.
+            // Por eso categoría y cada subgrupo son <tbody> HERMANOS bajo
+            // <table>, agrupados solo por un Fragment (que no genera nodo).
+            <Fragment key={categoria}>
+              <tbody data-pdf-keep-together>
+                <tr>
+                  <td colSpan={COLS.length + 1} style={{ padding: '1.4mm 2mm', textAlign: 'center', fontWeight: 700, fontSize: 7, color: '#fff', background: CATEGORY_BG, border: `0.3mm solid ${BORDER}` }}>
+                    {categoria}
+                  </td>
+                </tr>
+              </tbody>
               {subgroups.map(({ key: subcategoria, items: rows }) => (
                 <tbody key={subcategoria || '_'} data-pdf-keep-together={rows.length <= 8 ? true : undefined}>
                   {subcategoria && (
@@ -137,7 +146,7 @@ export default function FondosMonitorPdfTemplate({ funds }: { funds: FundRow[] }
                   ))}
                 </tbody>
               ))}
-            </tbody>
+            </Fragment>
           )
         })}
       </table>
