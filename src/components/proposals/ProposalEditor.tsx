@@ -12,6 +12,22 @@ import {
   calculateBondAccrual,
 } from '@/lib/proposals/bondCalculations'
 
+// Cruce por ISIN contra el Monitor de Fondos (/fondos-monitor) — evita
+// tipear a mano o pasar por el extractor de factsheet cuando el fondo ya
+// tiene rendimientos cargados ahí. Sin match (fondo no cubierto por Davinci,
+// o ISIN inválido) simplemente no completa nada — nunca pisa un valor ya
+// cargado con null.
+async function lookupFundMonitorReturns(isin: string): Promise<{ return_ytd: number | null; return_1y: number | null; return_3y: number | null; return_5y: number | null } | null> {
+  try {
+    const res = await fetch(`/api/fund-monitor/lookup?isin=${encodeURIComponent(isin)}`)
+    if (!res.ok) return null
+    const data = await res.json()
+    return data.found ? data.returns : null
+  } catch {
+    return null
+  }
+}
+
 // ─── FactsheetData (mirrors lib/factsheet-extractor) ─────────────────────────
 
 interface FactsheetData {
@@ -830,11 +846,19 @@ function FundsTable({
   const updateField = useCallback(async (fund: Fund, field: keyof Fund, raw: string) => {
     const isNumeric = ['amount','return_ytd','return_1y','return_3y','return_5y','ytm_indicative','duration_years'].includes(field)
     const value = isNumeric ? (raw === '' ? null : parseFloat(raw.replace(/,/g, ''))) : (raw === '' ? null : raw)
-    const updated = funds.map(f => f.id === fund.id ? { ...f, [field]: value } as Fund : f)
+    let patch: Partial<Fund> = { [field]: value } as Partial<Fund>
+    // Tipear/corregir el ISIN a mano también dispara la búsqueda en el
+    // Monitor de Fondos — mismo criterio que elegir el fondo del maestro
+    // de instrumentos (ver selectFundInstrument más abajo).
+    if (field === 'isin' && typeof value === 'string' && value.trim()) {
+      const returns = await lookupFundMonitorReturns(value.trim())
+      if (returns) patch = { ...patch, ...returns, data_source: 'fund_monitor' }
+    }
+    const updated = funds.map(f => f.id === fund.id ? { ...f, ...patch } as Fund : f)
     onUpdate(updated)
     setSaving(fund.id)
     await fetch(`/api/proposals/${proposalId}/funds`, {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fund_id: fund.id, [field]: value }),
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fund_id: fund.id, ...patch }),
     })
     setSaving(null)
   }, [funds, proposalId, onUpdate])
@@ -847,9 +871,16 @@ function FundsTable({
   }, [funds, proposalId, onUpdate])
 
   // Al elegir un fondo ya cargado en el maestro de instrumentos, autocompleta
-  // nombre/ISIN/emisor — mismo componente/API que ya usa Órdenes.
+  // nombre/ISIN/emisor — mismo componente/API que ya usa Órdenes. Si ese ISIN
+  // ya está en el Monitor de Fondos, de paso completa YTD/1A/3A/5A en vez de
+  // dejarlos para tipear a mano o para el flujo de factsheet.
   const selectFundInstrument = useCallback(async (fund: Fund, inst: Instrument) => {
-    const patch: Partial<Fund> = { fund_name: inst.nombre, isin: inst.isin ?? inst.cusip ?? fund.isin, issuer: inst.emisor ?? fund.issuer }
+    const isin = inst.isin ?? inst.cusip ?? fund.isin
+    let patch: Partial<Fund> = { fund_name: inst.nombre, isin, issuer: inst.emisor ?? fund.issuer }
+    if (isin) {
+      const returns = await lookupFundMonitorReturns(isin)
+      if (returns) patch = { ...patch, ...returns, data_source: 'fund_monitor' }
+    }
     const updated = funds.map(f => f.id === fund.id ? { ...f, ...patch } as Fund : f)
     onUpdate(updated)
     await fetch(`/api/proposals/${proposalId}/funds`, {

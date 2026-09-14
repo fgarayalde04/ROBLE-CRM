@@ -93,6 +93,20 @@ export async function markFundSyncIssue(fundId: string, status: 'no_source' | 'e
   )
 }
 
+// Usado por Propuestas para autocompletar los rendimientos de un fondo al
+// elegirlo (o tipear su ISIN) — mismo ISIN que ya identifica al fondo en el
+// maestro de instrumentos, así que sirve de clave de cruce directa.
+export async function getFundReturnsByIsin(isin: string) {
+  const { rows } = await pool.query(
+    `select r.r_ytd, r.r_1y, r.r_3y, r.r_5y
+     from fund_monitor_funds f
+     join fund_monitor_returns r on r.fund_id = f.id
+     where f.isin = $1 and r.status = 'ok'`,
+    [isin]
+  )
+  return rows[0] ?? null
+}
+
 export async function getFundMonitorCoverage() {
   const { rows } = await pool.query(`
     select
