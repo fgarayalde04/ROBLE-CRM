@@ -268,14 +268,14 @@ export default function FondosMonitorClient({ funds }: { funds: FundRow[] }) {
           return (
             <div key={categoria} className={catIdx > 0 ? 'mt-6 pt-6 border-t-4 border-gray-100' : ''}>
               <p className="text-xs font-bold text-[#1B3A2B] uppercase tracking-wide mb-2 px-3">{categoria}</p>
-              <table className="w-full text-sm min-w-[1100px]">
+              <table className="w-full text-sm min-w-[1100px] table-fixed">
                 <thead>
                   <tr className="sticky top-0 z-10" style={{ backgroundColor: '#1B2E3C' }}>
-                    <th className="px-3 py-2 text-left text-[10px] font-bold text-white uppercase tracking-wide">Nombre</th>
+                    <th className="px-3 py-2 text-left text-[10px] font-bold text-white uppercase tracking-wide w-[30%]">Nombre</th>
                     {COLS.map(c => (
-                      <th key={c.key} className="px-2 py-2 text-right text-[10px] font-bold text-white uppercase tracking-wide w-16">{c.label}</th>
+                      <th key={c.key} className="px-2 py-2 text-right text-[10px] font-bold text-white uppercase tracking-wide w-[7%]">{c.label}</th>
                     ))}
-                    <th className="px-2 py-2 text-center text-[10px] font-bold text-white uppercase tracking-wide w-20">Estado</th>
+                    <th className="px-2 py-2 text-center text-[10px] font-bold text-white uppercase tracking-wide w-[7%]">Estado</th>
                   </tr>
                 </thead>
                 {subgroups.map(({ key: subcategoria, items: rows }) => (
