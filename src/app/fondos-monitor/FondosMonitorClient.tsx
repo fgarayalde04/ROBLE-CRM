@@ -61,11 +61,19 @@ const COLS: { key: keyof FundRow; label: string }[] = [
   { key: 'y_2021', label: '2021' },
 ]
 
-// Mismo orden que traía el Excel original — no es alfabético.
-const CATEGORY_ORDER = ['RENTA FIJA', 'BALANCEADOS / MULTI-ASSET', 'ALTERNATIVOS', 'RENTA VARIABLE', 'REAL ESTATE', 'COMMODITIES']
-function categoryRank(c: string) {
-  const i = CATEGORY_ORDER.indexOf(c)
-  return i === -1 ? CATEGORY_ORDER.length : i
+// Los fondos llegan ya en el orden del Excel (sort_order) — agrupar
+// simplemente por orden de aparición reproduce esa misma estructura de
+// categoría → subcategoría, sin necesidad de un orden fijo a mano.
+function groupInOrder<T>(items: T[], keyFn: (item: T) => string): { key: string; items: T[] }[] {
+  const groups: { key: string; items: T[] }[] = []
+  const byKey = new Map<string, T[]>()
+  for (const item of items) {
+    const key = keyFn(item)
+    let arr = byKey.get(key)
+    if (!arr) { arr = []; byKey.set(key, arr); groups.push({ key, items: arr }) }
+    arr.push(item)
+  }
+  return groups
 }
 
 export default function FondosMonitorClient({ funds }: { funds: FundRow[] }) {
@@ -76,13 +84,7 @@ export default function FondosMonitorClient({ funds }: { funds: FundRow[] }) {
     const filtered = q
       ? funds.filter(f => f.nombre.toLowerCase().includes(q) || f.isin.toLowerCase().includes(q))
       : funds
-    const map = new Map<string, FundRow[]>()
-    for (const f of filtered) {
-      const key = f.categoria ?? 'Sin categoría'
-      if (!map.has(key)) map.set(key, [])
-      map.get(key)!.push(f)
-    }
-    return new Map(Array.from(map.entries()).sort(([a], [b]) => categoryRank(a) - categoryRank(b)))
+    return groupInOrder(filtered, f => f.categoria ?? 'Sin categoría')
   }, [funds, search])
 
   const lastUpdate = funds
@@ -108,51 +110,62 @@ export default function FondosMonitorClient({ funds }: { funds: FundRow[] }) {
         />
       </div>
 
-      {Array.from(grouped.entries()).map(([categoria, rows]) => (
-        <div key={categoria} className="mb-6">
-          <p className="text-xs font-bold text-[#1B3A2B] uppercase tracking-wide mb-2">{categoria}</p>
-          <div className="rounded-xl border border-gray-200 overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm min-w-[1100px]">
-                <thead>
-                  <tr style={{ backgroundColor: '#1B2E3C' }}>
-                    <th className="px-3 py-2 text-left text-[10px] font-bold text-white uppercase tracking-wide">Nombre</th>
-                    {COLS.map(c => (
-                      <th key={c.key} className="px-2 py-2 text-right text-[10px] font-bold text-white uppercase tracking-wide w-16">{c.label}</th>
-                    ))}
-                    <th className="px-2 py-2 text-center text-[10px] font-bold text-white uppercase tracking-wide w-20">Estado</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((f, i) => {
-                    const st = STATUS_LABEL[f.status ?? 'no_source']
-                    return (
-                      <tr key={f.id} className={i % 2 === 1 ? 'bg-gray-50/50' : 'bg-white'} title={f.error_message ?? undefined}>
-                        <td className="px-3 py-2 border-b border-gray-100">
-                          <div className="font-medium text-gray-800 text-xs">{f.nombre}</div>
-                          <div className="text-[10px] text-gray-400 mt-0.5">
-                            {f.isin} · {f.moneda ?? '—'}
-                            {f.subcategoria && ` · ${f.subcategoria}`}
-                            {f.as_of_date && ` · datos al ${fmtDate(f.as_of_date)}`}
-                          </div>
-                        </td>
-                        {COLS.map(c => (
-                          <td key={c.key} className={`px-2 py-2 text-right text-xs border-b border-gray-100 ${pctColor(f[c.key] as number | null)}`}>
-                            {fmtPct(f[c.key] as number | null)}
+      {grouped.map(({ key: categoria, items: catRows }) => {
+        const subgroups = groupInOrder(catRows, f => f.subcategoria ?? '')
+        return (
+          <div key={categoria} className="mb-6">
+            <p className="text-xs font-bold text-[#1B3A2B] uppercase tracking-wide mb-2">{categoria}</p>
+            <div className="rounded-xl border border-gray-200 overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm min-w-[1100px]">
+                  <thead>
+                    <tr style={{ backgroundColor: '#1B2E3C' }}>
+                      <th className="px-3 py-2 text-left text-[10px] font-bold text-white uppercase tracking-wide">Nombre</th>
+                      {COLS.map(c => (
+                        <th key={c.key} className="px-2 py-2 text-right text-[10px] font-bold text-white uppercase tracking-wide w-16">{c.label}</th>
+                      ))}
+                      <th className="px-2 py-2 text-center text-[10px] font-bold text-white uppercase tracking-wide w-20">Estado</th>
+                    </tr>
+                  </thead>
+                  {subgroups.map(({ key: subcategoria, items: rows }) => (
+                    <tbody key={subcategoria || '_'}>
+                      {subcategoria && (
+                        <tr>
+                          <td colSpan={COLS.length + 2} className="px-3 py-1.5 text-[10px] font-bold text-gray-500 uppercase tracking-wide bg-gray-50 border-b border-gray-100">
+                            {subcategoria}
                           </td>
-                        ))}
-                        <td className="px-2 py-2 text-center border-b border-gray-100">
-                          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${st.color}`}>{st.label}</span>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
+                        </tr>
+                      )}
+                      {rows.map((f, i) => {
+                        const st = STATUS_LABEL[f.status ?? 'no_source']
+                        return (
+                          <tr key={f.id} className={i % 2 === 1 ? 'bg-gray-50/50' : 'bg-white'} title={f.error_message ?? undefined}>
+                            <td className="px-3 py-2 border-b border-gray-100">
+                              <div className="font-medium text-gray-800 text-xs">{f.nombre}</div>
+                              <div className="text-[10px] text-gray-400 mt-0.5">
+                                {f.isin} · {f.moneda ?? '—'}
+                                {f.as_of_date && ` · datos al ${fmtDate(f.as_of_date)}`}
+                              </div>
+                            </td>
+                            {COLS.map(c => (
+                              <td key={c.key} className={`px-2 py-2 text-right text-xs border-b border-gray-100 ${pctColor(f[c.key] as number | null)}`}>
+                                {fmtPct(f[c.key] as number | null)}
+                              </td>
+                            ))}
+                            <td className="px-2 py-2 text-center border-b border-gray-100">
+                              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${st.color}`}>{st.label}</span>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  ))}
+                </table>
+              </div>
             </div>
           </div>
-        </div>
-      ))}
+        )
+      })}
     </div>
   )
 }

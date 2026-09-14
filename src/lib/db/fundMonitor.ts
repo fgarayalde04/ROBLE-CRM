@@ -11,6 +11,7 @@ export interface FundMonitorFund {
   categoria: string | null
   subcategoria: string | null
   inception_date: string | null
+  sort_order: number | null
 }
 
 export interface FundMonitorReturns {
@@ -36,7 +37,7 @@ export interface FundMonitorReturns {
 
 export async function listActiveFunds(): Promise<FundMonitorFund[]> {
   const { rows } = await pool.query(
-    `select * from fund_monitor_funds where active = true order by categoria, subcategoria, nombre`
+    `select * from fund_monitor_funds where active = true order by sort_order`
   )
   return rows
 }
@@ -49,7 +50,7 @@ export async function listFundsWithReturns() {
     from fund_monitor_funds f
     left join fund_monitor_returns r on r.fund_id = f.id
     where f.active = true
-    order by f.categoria, f.subcategoria, f.nombre
+    order by f.sort_order
   `)
   return rows
 }
