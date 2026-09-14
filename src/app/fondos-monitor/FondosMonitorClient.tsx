@@ -1,6 +1,7 @@
 'use client'
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import FondosMonitorPdfTemplate from './FondosMonitorPdfTemplate'
 
 interface FundRow {
   id: string
@@ -85,14 +86,17 @@ export default function FondosMonitorClient({ funds }: { funds: FundRow[] }) {
   const router = useRouter()
   const [search, setSearch] = useState('')
   const [showAdd, setShowAdd] = useState(false)
+  const [downloadingPdf, setDownloadingPdf] = useState(false)
+  const pdfRef = useRef<HTMLDivElement>(null)
 
-  const grouped = useMemo(() => {
+  const filteredFunds = useMemo(() => {
     const q = search.trim().toLowerCase()
-    const filtered = q
+    return q
       ? funds.filter(f => f.nombre.toLowerCase().includes(q) || f.isin.toLowerCase().includes(q))
       : funds
-    return groupInOrder(filtered, f => f.categoria ?? 'Sin categoría')
   }, [funds, search])
+
+  const grouped = useMemo(() => groupInOrder(filteredFunds, f => f.categoria ?? 'Sin categoría'), [filteredFunds])
 
   // Listas conocidas para los selects del alta: categorías fijas del Excel
   // primero, más cualquier otra que ya haya aparecido en los datos; las
@@ -119,6 +123,69 @@ export default function FondosMonitorClient({ funds }: { funds: FundRow[] }) {
     .sort()
     .at(-1)
 
+  // Mismo patrón que ProposalEditor.handleDownloadPDF: se captura la
+  // plantilla fuera de pantalla con html2canvas y se pagina el canvas
+  // resultante en jsPDF, cortando en los bloques marcados
+  // data-pdf-keep-together para no partir una subcategoría chica al medio.
+  const handleDownloadPdf = async () => {
+    if (!pdfRef.current) return
+    setDownloadingPdf(true)
+    try {
+      const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
+        import('html2canvas'),
+        import('jspdf'),
+      ])
+      const scale = 3
+      const containerTop = pdfRef.current.getBoundingClientRect().top
+      const keepTogether = Array.from(pdfRef.current.querySelectorAll('[data-pdf-keep-together]')).map(el => {
+        const r = (el as HTMLElement).getBoundingClientRect()
+        return { top: (r.top - containerTop) * scale, bottom: (r.bottom - containerTop) * scale }
+      })
+      const canvas = await html2canvas(pdfRef.current, {
+        scale,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+        logging: false,
+        windowWidth: pdfRef.current.scrollWidth,
+      })
+      const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
+      const pdfW = pdf.internal.pageSize.getWidth()
+      const pdfH = pdf.internal.pageSize.getHeight()
+      const imgRatio = canvas.height / canvas.width
+      const imgH = pdfW * imgRatio
+      if (imgH <= pdfH) {
+        pdf.addImage(canvas.toDataURL('image/jpeg', 0.97), 'JPEG', 0, 0, pdfW, imgH)
+      } else {
+        const maxSliceH = Math.round(canvas.width * pdfH / pdfW)
+        let position = 0
+        while (position < canvas.height) {
+          let sliceH = Math.min(canvas.height - position, maxSliceH)
+          const pageEnd = position + sliceH
+          for (const s of keepTogether) {
+            const sectionFits = (s.bottom - s.top) <= maxSliceH
+            const wouldBeCut = s.top < pageEnd && s.bottom > pageEnd
+            if (sectionFits && wouldBeCut && s.top > position) {
+              sliceH = s.top - position
+            }
+          }
+          const pageCanvas = document.createElement('canvas')
+          pageCanvas.width = canvas.width
+          pageCanvas.height = sliceH
+          const ctx = pageCanvas.getContext('2d')!
+          ctx.drawImage(canvas, 0, position, canvas.width, sliceH, 0, 0, canvas.width, sliceH)
+          if (position > 0) pdf.addPage()
+          const destH = pdfW * (sliceH / canvas.width)
+          pdf.addImage(pageCanvas.toDataURL('image/jpeg', 0.97), 'JPEG', 0, 0, pdfW, destH)
+          position += sliceH
+        }
+      }
+      const dateSlug = new Date().toISOString().slice(0, 10)
+      pdf.save(`Monitor_de_Fondos_${dateSlug}.pdf`)
+    } finally {
+      setDownloadingPdf(false)
+    }
+  }
+
   return (
     <div className="max-w-[1400px] mx-auto p-6">
       <div className="flex items-center justify-between mb-5">
@@ -136,12 +203,25 @@ export default function FondosMonitorClient({ funds }: { funds: FundRow[] }) {
             className="w-72 text-sm px-3 py-2 rounded-lg border border-gray-200 outline-none focus:border-[#1B3A2B]/50"
           />
           <button
+            onClick={handleDownloadPdf}
+            disabled={downloadingPdf}
+            className="text-sm font-medium px-3 py-2 rounded-lg text-[#1B3A2B] border border-[#1B3A2B]/30 whitespace-nowrap disabled:opacity-50"
+          >
+            {downloadingPdf ? 'Generando…' : '⬇ Descargar PDF'}
+          </button>
+          <button
             onClick={() => setShowAdd(true)}
             className="text-sm font-medium px-3 py-2 rounded-lg text-white whitespace-nowrap"
             style={{ backgroundColor: '#1B3A2B' }}
           >
             + Agregar fondo
           </button>
+        </div>
+      </div>
+
+      <div style={{ position: 'fixed', left: -10000, top: 0 }}>
+        <div ref={pdfRef}>
+          <FondosMonitorPdfTemplate funds={filteredFunds} />
         </div>
       </div>
 
@@ -157,62 +237,70 @@ export default function FondosMonitorClient({ funds }: { funds: FundRow[] }) {
         />
       )}
 
-      {grouped.map(({ key: categoria, items: catRows }) => {
-        const subgroups = groupInOrder(catRows, f => f.subcategoria ?? '')
-        return (
-          <div key={categoria} className="mb-6">
-            <p className="text-xs font-bold text-[#1B3A2B] uppercase tracking-wide mb-2">{categoria}</p>
-            <div className="rounded-xl border border-gray-200 overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm min-w-[1100px]">
-                  <thead>
-                    <tr style={{ backgroundColor: '#1B2E3C' }}>
-                      <th className="px-3 py-2 text-left text-[10px] font-bold text-white uppercase tracking-wide">Nombre</th>
-                      {COLS.map(c => (
-                        <th key={c.key} className="px-2 py-2 text-right text-[10px] font-bold text-white uppercase tracking-wide w-16">{c.label}</th>
-                      ))}
-                      <th className="px-2 py-2 text-center text-[10px] font-bold text-white uppercase tracking-wide w-20">Estado</th>
-                    </tr>
-                  </thead>
-                  {subgroups.map(({ key: subcategoria, items: rows }) => (
-                    <tbody key={subcategoria || '_'}>
-                      {subcategoria && (
-                        <tr>
-                          <td colSpan={COLS.length + 2} className="px-3 py-2 text-xs font-bold text-white uppercase tracking-wide bg-[#2E7D52]">
-                            {subcategoria}
+      {/*
+        El encabezado de columnas (período de cada rendimiento) queda fijo
+        con position:sticky. Para que eso funcione tiene que anclarse al
+        contenedor que de verdad hace scroll — por eso todas las categorías
+        viven en ESTE único panel con overflow-auto, en vez de que cada
+        categoría tenga su propio overflow-x-auto: un ancestro con overflow
+        distinto de "visible" más cercano al sticky "atrapa" el anclaje, y
+        antes (con un overflow-x-auto por tabla) el header nunca llegaba a
+        quedar fijo respecto de la página.
+      */}
+      <div className="max-h-[70vh] overflow-auto rounded-xl border border-gray-200">
+        {grouped.map(({ key: categoria, items: catRows }, catIdx) => {
+          const subgroups = groupInOrder(catRows, f => f.subcategoria ?? '')
+          return (
+            <div key={categoria} className={catIdx > 0 ? 'mt-6 pt-6 border-t-4 border-gray-100' : ''}>
+              <p className="text-xs font-bold text-[#1B3A2B] uppercase tracking-wide mb-2 px-3">{categoria}</p>
+              <table className="w-full text-sm min-w-[1100px]">
+                <thead>
+                  <tr className="sticky top-0 z-10" style={{ backgroundColor: '#1B2E3C' }}>
+                    <th className="px-3 py-2 text-left text-[10px] font-bold text-white uppercase tracking-wide">Nombre</th>
+                    {COLS.map(c => (
+                      <th key={c.key} className="px-2 py-2 text-right text-[10px] font-bold text-white uppercase tracking-wide w-16">{c.label}</th>
+                    ))}
+                    <th className="px-2 py-2 text-center text-[10px] font-bold text-white uppercase tracking-wide w-20">Estado</th>
+                  </tr>
+                </thead>
+                {subgroups.map(({ key: subcategoria, items: rows }) => (
+                  <tbody key={subcategoria || '_'}>
+                    {subcategoria && (
+                      <tr>
+                        <td colSpan={COLS.length + 2} className="px-3 py-2 text-xs font-bold text-white uppercase tracking-wide bg-[#2E7D52]">
+                          {subcategoria}
+                        </td>
+                      </tr>
+                    )}
+                    {rows.map((f, i) => {
+                      const st = STATUS_LABEL[f.status ?? 'no_source']
+                      return (
+                        <tr key={f.id} className={i % 2 === 1 ? 'bg-gray-50/50' : 'bg-white'} title={f.error_message ?? undefined}>
+                          <td className="px-3 py-2 border-b border-gray-100">
+                            <div className="font-medium text-gray-800 text-xs">{f.nombre}</div>
+                            <div className="text-[10px] text-gray-400 mt-0.5">
+                              {f.isin} · {f.moneda ?? '—'}
+                              {f.as_of_date && ` · datos al ${fmtDate(f.as_of_date)}`}
+                            </div>
+                          </td>
+                          {COLS.map(c => (
+                            <td key={c.key} className={`px-2 py-2 text-right text-xs border-b border-gray-100 ${pctColor(f[c.key] as number | null)}`}>
+                              {fmtPct(f[c.key] as number | null)}
+                            </td>
+                          ))}
+                          <td className="px-2 py-2 text-center border-b border-gray-100">
+                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${st.color}`}>{st.label}</span>
                           </td>
                         </tr>
-                      )}
-                      {rows.map((f, i) => {
-                        const st = STATUS_LABEL[f.status ?? 'no_source']
-                        return (
-                          <tr key={f.id} className={i % 2 === 1 ? 'bg-gray-50/50' : 'bg-white'} title={f.error_message ?? undefined}>
-                            <td className="px-3 py-2 border-b border-gray-100">
-                              <div className="font-medium text-gray-800 text-xs">{f.nombre}</div>
-                              <div className="text-[10px] text-gray-400 mt-0.5">
-                                {f.isin} · {f.moneda ?? '—'}
-                                {f.as_of_date && ` · datos al ${fmtDate(f.as_of_date)}`}
-                              </div>
-                            </td>
-                            {COLS.map(c => (
-                              <td key={c.key} className={`px-2 py-2 text-right text-xs border-b border-gray-100 ${pctColor(f[c.key] as number | null)}`}>
-                                {fmtPct(f[c.key] as number | null)}
-                              </td>
-                            ))}
-                            <td className="px-2 py-2 text-center border-b border-gray-100">
-                              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${st.color}`}>{st.label}</span>
-                            </td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  ))}
-                </table>
-              </div>
+                      )
+                    })}
+                  </tbody>
+                ))}
+              </table>
             </div>
-          </div>
-        )
-      })}
+          )
+        })}
+      </div>
     </div>
   )
 }

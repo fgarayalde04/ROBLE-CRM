@@ -59,18 +59,3 @@ export async function POST(req: Request) {
     client.release()
   }
 }
-
-// Endpoint puntual para borrar el fondo de prueba QA0000000001 usado para
-// verificar el alta en producción — a borrar apenas se use.
-export async function DELETE(req: Request) {
-  const session = await getSession()
-  if (!session || session.role !== 'admin') {
-    return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
-  }
-  const { isin } = await req.json()
-  if (isin !== 'QA0000000001') {
-    return NextResponse.json({ error: 'Solo permitido para el fondo de prueba' }, { status: 400 })
-  }
-  await pool.query(`delete from fund_monitor_funds where isin = $1`, [isin])
-  return NextResponse.json({ ok: true })
-}
