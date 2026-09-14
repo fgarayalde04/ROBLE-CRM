@@ -148,7 +148,7 @@ export default function FondosMonitorClient({ funds }: { funds: FundRow[] }) {
         logging: false,
         windowWidth: pdfRef.current.scrollWidth,
       })
-      const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
+      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
       const pdfW = pdf.internal.pageSize.getWidth()
       const pdfH = pdf.internal.pageSize.getHeight()
       const imgRatio = canvas.height / canvas.width
@@ -187,7 +187,7 @@ export default function FondosMonitorClient({ funds }: { funds: FundRow[] }) {
   }
 
   return (
-    <div className="max-w-[1400px] mx-auto p-6">
+    <div className="max-w-[1900px] mx-auto p-6">
       <div className="flex items-center justify-between mb-5">
         <div>
           <h1 className="text-lg font-bold text-gray-900">Monitor de Fondos</h1>
