@@ -122,16 +122,22 @@ export default function FondosMonitorPdfTemplate({ funds }: { funds: FundRow[] }
                 </tr>
               </tbody>
               {subgroups.map(({ key: subcategoria, items: rows }) => (
-                <tbody key={subcategoria || '_'} data-pdf-keep-together={rows.length <= 8 ? true : undefined}>
+                // Antes solo se protegía el subgrupo COMPLETO, y solo si tenía
+                // 8 filas o menos — un subgrupo más grande (la mayoría) no
+                // tenía ninguna protección, así que el corte de página podía
+                // caer justo en medio de una fila. Ahora cada FILA se marca
+                // individual: no importa el tamaño del subgrupo, el corte
+                // nunca cae dentro de una fila, como mucho entre dos filas.
+                <tbody key={subcategoria || '_'} data-pdf-keep-together>
                   {subcategoria && (
-                    <tr>
+                    <tr data-pdf-keep-together>
                       <td colSpan={COLS.length + 1} style={{ padding: '1mm 2mm', fontWeight: 700, fontSize: 7, color: '#000', border: `0.3mm solid ${BORDER}` }}>
                         {subcategoria}
                       </td>
                     </tr>
                   )}
                   {rows.map(f => (
-                    <tr key={f.id}>
+                    <tr key={f.id} data-pdf-keep-together>
                       <td style={{ padding: '1mm 2mm', color: '#000', fontSize: 6.8, borderBottom: `0.15mm solid #ddd` }}>
                         {f.nombre}
                       </td>
