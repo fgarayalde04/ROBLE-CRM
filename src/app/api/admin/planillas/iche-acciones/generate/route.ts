@@ -113,7 +113,7 @@ export async function POST(req: NextRequest) {
       clientFolder.driveId,
       clientFolder.itemId,
       fileName,
-      buffer,
+      buffer.buffer as ArrayBuffer,
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       token
     )
