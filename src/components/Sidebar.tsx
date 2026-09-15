@@ -86,8 +86,9 @@ const nav: NavSection[] = [
   {
     label: 'Admin',
     items: [
-      { href: '/admin/users',     label: 'Usuarios',        subtitle: 'Gestión de acceso',     icon: AdminIcon, permission: 'admin' },
-      { href: '/sincronizacion',  label: 'Sincronización',  subtitle: 'SharePoint y OneDrive', icon: SyncIcon,  permission: 'sincronizacion' },
+      { href: '/admin/users',     label: 'Usuarios',        subtitle: 'Gestión de acceso',     icon: AdminIcon,    permission: 'admin' },
+      { href: '/admin/planillas', label: 'Planillas',       subtitle: 'Herramientas especiales', icon: TemplateIcon, permission: 'admin' },
+      { href: '/sincronizacion',  label: 'Sincronización',  subtitle: 'SharePoint y OneDrive', icon: SyncIcon,     permission: 'sincronizacion' },
     ],
   },
 ]
