@@ -1,0 +1,34 @@
+name: Fund Monitor Sync
+
+on:
+  schedule:
+    - cron: '0 11 * * 1-5'   # 8am Uruguay (UTC-3), lunes a viernes
+  workflow_dispatch:          # disparo manual desde la UI de GitHub
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Trigger Davinci sync
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          status=$(curl -s -o response.json -w "%{http_code}" --max-time 320 \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "https://roble-crm-production.up.railway.app/api/cron/fund-monitor-sync")
+          echo "HTTP status: $status"
+          cat response.json
+          if [ "$status" != "200" ]; then
+            echo "::error::Fund monitor sync failed with HTTP $status"
+            exit 1
+          fi
+
+      - name: Upload sync result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fund-monitor-sync-${{ github.run_id }}
+          path: response.json
+          retention-days: 14
