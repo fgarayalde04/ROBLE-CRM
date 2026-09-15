@@ -81,7 +81,7 @@ export default function PreviewTables({ preview, fileName, uploadedItem, fileBas
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="name" fontSize={11} />
               <YAxis fontSize={11} />
-              <Tooltip formatter={(v: number) => money(v)} />
+              <Tooltip formatter={(v) => money(typeof v === 'number' ? v : Number(v ?? 0))} />
               <Bar dataKey="ganancia" fill="#597C40" />
             </BarChart>
           </ResponsiveContainer>
@@ -93,7 +93,7 @@ export default function PreviewTables({ preview, fileName, uploadedItem, fileBas
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="name" fontSize={11} />
               <YAxis fontSize={11} />
-              <Tooltip formatter={(v: number) => money(v)} />
+              <Tooltip formatter={(v) => money(typeof v === 'number' ? v : Number(v ?? 0))} />
               <Legend />
               <Bar dataKey="Costo" fill="#77787B" />
               <Bar dataKey="Valor de mercado" fill="#597C40" />
