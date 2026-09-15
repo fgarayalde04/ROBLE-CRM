@@ -3,8 +3,13 @@
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import type { GenerateResponse } from '@/lib/icheAcciones/types'
 
-const money = (n: number) => n.toLocaleString('es-UY', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
-const pct = (n: number | null) => (n == null ? '—' : `${(n * 100).toFixed(2)}%`)
+// Defensivo: un valor null/NaN acá no debe tumbar toda la página de preview
+// (el archivo ya se generó y subió a OneDrive en este punto — un problema de
+// datos en una fila no puede impedir ver el resto). NaN llega como null
+// después de pasar por JSON, así que null == NaN a todos los efectos.
+const money = (n: number | null) => (n == null || Number.isNaN(n) ? '—' : n.toLocaleString('es-UY', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }))
+const pct = (n: number | null) => (n == null || Number.isNaN(n) ? '—' : `${(n * 100).toFixed(2)}%`)
+const qty = (n: number | null) => (n == null || Number.isNaN(n) ? '—' : n.toLocaleString('es-UY'))
 
 function downloadXlsx(fileName: string, fileBase64: string) {
   const bytes = Uint8Array.from(atob(fileBase64), c => c.charCodeAt(0))
@@ -130,7 +135,7 @@ function PositionsTable({ title, rows }: { title: string; rows: GenerateResponse
           {rows.map(r => (
             <tr key={r.ticker} className="border-b border-gray-100">
               <td className="py-1 font-medium">{r.ticker}</td>
-              <td>{r.quantity.toLocaleString('es-UY')}</td>
+              <td>{qty(r.quantity)}</td>
               <td>{money(r.originalTotalCost)}</td>
               <td>{money(r.marketValue)}</td>
               <td className={r.gainLoss >= 0 ? 'text-green-700' : 'text-red-700'}>{money(r.gainLoss)}</td>
