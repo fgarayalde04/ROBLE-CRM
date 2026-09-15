@@ -44,6 +44,7 @@ const nav: NavSection[] = [
       { href: '/fondos-monitor', label: 'Monitor de Fondos', subtitle: 'Rendimientos por ISIN', icon: FondosIcon, permission: 'fondos_monitor' },
       { href: '/factsheet',  label: 'Portafolio',  subtitle: 'Posiciones y valor de cartera',   icon: FactsheetIcon, permission: 'factsheet' },
       { href: '/propuestas', label: 'Propuestas', subtitle: 'Propuestas de inversión', icon: ProposalIcon,  permission: 'proposals' },
+      { href: '/admin/planillas', label: 'Planillas', subtitle: 'Herramientas especiales', icon: TemplateIcon, permission: 'admin' },
     ],
   },
   {
@@ -87,7 +88,6 @@ const nav: NavSection[] = [
     label: 'Admin',
     items: [
       { href: '/admin/users',     label: 'Usuarios',        subtitle: 'Gestión de acceso',     icon: AdminIcon,    permission: 'admin' },
-      { href: '/admin/planillas', label: 'Planillas',       subtitle: 'Herramientas especiales', icon: TemplateIcon, permission: 'admin' },
       { href: '/sincronizacion',  label: 'Sincronización',  subtitle: 'SharePoint y OneDrive', icon: SyncIcon,     permission: 'sincronizacion' },
     ],
   },
