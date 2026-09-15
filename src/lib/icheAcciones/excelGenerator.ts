@@ -74,7 +74,12 @@ function styleTotalCell(cell: ExcelJS.Cell, numFmt?: string) {
 }
 
 function resetView(ws: ExcelJS.Worksheet) {
-  ws.views = [{ state: 'normal', topLeftCell: 'A1' }]
+  // El workbook siempre se arma de cero (nunca releyendo un .xlsx anterior),
+  // así que una hoja recién creada ya arranca en A1 sin scroll ni panes
+  // heredados — alcanza con fijar el estado 'normal'. topLeftCell no es una
+  // propiedad válida para ese estado en los tipos de exceljs (solo existe en
+  // las variantes 'frozen'/'split'), por eso tiraba error de compilación.
+  ws.views = [{ state: 'normal' }]
 }
 
 interface RenderedRow {
