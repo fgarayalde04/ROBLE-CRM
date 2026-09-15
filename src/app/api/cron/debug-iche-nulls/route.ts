@@ -10,22 +10,33 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
   }
 
-  const { rows } = await pool.query(`
-    select id, analyst, ticker, description, source, lots, last_price, updated_at
-    from iche_open_positions
-    where exists (
-      select 1 from jsonb_array_elements(lots) as lot
-      where lot->'quantity' is null or lot->>'quantity' = 'null'
-    )
-    order by updated_at desc
-  `)
-
-  const { rows: recent } = await pool.query(`
+  const { rows: allOpen } = await pool.query(`
     select id, analyst, ticker, description, source, lots, last_price, updated_at
     from iche_open_positions
     order by updated_at desc
-    limit 10
   `)
 
-  return NextResponse.json({ nullQuantityPositions: rows, mostRecentlyUpdated: recent })
+  // Cualquier lote con algún campo null/faltante, no solo quantity.
+  const suspect = allOpen.filter((p: any) =>
+    p.lots.some((l: any) =>
+      l.quantity == null || l.unitCost === undefined || l.unit_cost === undefined
+        ? true
+        : false
+    ) || p.last_price == null
+  )
+
+  const { rows: recentUpdatedTogether } = await pool.query(`
+    select updated_at, count(*) as n
+    from iche_open_positions
+    group by updated_at
+    order by updated_at desc
+    limit 5
+  `)
+
+  return NextResponse.json({
+    totalOpen: allOpen.length,
+    suspect,
+    updateBatches: recentUpdatedTogether,
+    sampleFirstThree: allOpen.slice(0, 3),
+  })
 }
