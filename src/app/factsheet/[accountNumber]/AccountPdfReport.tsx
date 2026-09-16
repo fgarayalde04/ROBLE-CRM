@@ -48,13 +48,27 @@ function truncateName(s: string, maxChars: number): string {
 }
 
 // Encabezado de cada hoja: logo Roble a la izquierda, título de la sección a
-// la derecha. Sin recuadro de datos (ese se sacó del reporte).
+// la derecha, línea azul institucional abajo (mismo tratamiento que el PDF
+// de Propuestas — COLORS.charcoal). Todas las hojas del reporte lo llevan,
+// portada incluida (ver PdfCoverHeader).
 function PdfHeader({ title }: { title: string }) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', borderBottom: `2px solid ${COLORS.darkGreen}`, paddingBottom: '2.5mm', marginBottom: '5mm' }}>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', borderBottom: `3px solid ${COLORS.charcoal}`, paddingBottom: '2.5mm', marginBottom: '5mm' }}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src="/download.png" alt="Roble Capital" style={{ height: '9mm', objectFit: 'contain' }} />
       <div style={{ fontSize: 13, fontWeight: 800, color: COLORS.darkGreen }}>{title}</div>
+    </div>
+  )
+}
+
+// Portada: mismo logo + línea azul de PdfHeader, pero con el logo del
+// custodio a la derecha en vez de un título de sección.
+function PdfCoverHeader({ children }: { children: React.ReactNode }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `3px solid ${COLORS.charcoal}`, paddingBottom: '2.5mm' }}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/download.png" alt="Roble Capital" style={{ height: '15mm', objectFit: 'contain' }} />
+      {children}
     </div>
   )
 }
@@ -319,11 +333,9 @@ export default function AccountPdfReport({
       {/* ── Página 1: Portada ── */}
       <div className="pdf-page" style={PAGE_STYLE}>
         <div style={{ position: 'absolute', inset: `${PAGE_PAD_MM}mm`, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/download.png" alt="Roble Capital" style={{ height: '15mm', objectFit: 'contain' }} />
+          <PdfCoverHeader>
             <BnyLogo height={16} />
-          </div>
+          </PdfCoverHeader>
           <div style={{ textAlign: 'center' }}>
             <div style={{ fontSize: 12, color: COLORS.midGreen, textTransform: 'uppercase', letterSpacing: 8, fontWeight: 700 }}>Portfolio Report</div>
             <div style={{ width: '42mm', height: '2.5px', background: COLORS.darkGreen, margin: '6mm auto' }} />

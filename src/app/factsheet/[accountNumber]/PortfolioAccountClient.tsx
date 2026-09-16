@@ -331,14 +331,23 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
           while (position < canvas.height) {
             let sliceH = Math.min(canvas.height - position, maxSliceH)
             const pageEnd = position + sliceH
+            // Entre todas las secciones que quedarían cortadas por este
+            // límite de página, hay que respetar la que empieza ANTES
+            // (achicar el slice hasta ahí) — no la última que se evalúe en
+            // el loop. Si se usa la última, una sección más abajo en la
+            // página (o una fila anidada dentro de otra sección) puede
+            // pisar el achique correcto de una anterior y terminar
+            // cortándola al medio igual, que es justo lo que esto evita.
+            let cutBefore = Infinity
             for (const s of keepTogether) {
               const sTop = s.top * scale, sBottom = s.bottom * scale
               const sectionFits = (sBottom - sTop) <= maxSliceH
               const wouldBeCut = sTop < pageEnd && sBottom > pageEnd
               if (sectionFits && wouldBeCut && sTop > position) {
-                sliceH = sTop - position
+                cutBefore = Math.min(cutBefore, sTop)
               }
             }
+            if (cutBefore < Infinity) sliceH = cutBefore - position
             const pageCanvas = document.createElement('canvas')
             pageCanvas.width = canvas.width
             pageCanvas.height = sliceH
