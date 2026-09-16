@@ -325,6 +325,23 @@ export async function getLatestPerformance(accountNumber: string, custodian?: st
   return rows[0] ?? null
 }
 
+// Carga a mano el valor inicial de la cuenta cuando el cálculo automático
+// (beginning value + net contribution desde el inicio) no coincide con el
+// depósito real — se guarda sobre el reporte de performance más reciente,
+// que es el que alimenta tanto el tile como el punto "Inicio" del gráfico.
+export async function setManualInitialValue(accountNumber: string, custodian: string | undefined, value: number | null) {
+  const params: unknown[] = [value, accountNumber]
+  let custodianClause = ''
+  if (custodian) { params.push(custodian); custodianClause = `and custodian = $3` }
+  const { rows } = await pool.query(
+    `update portfolio_performance_imports set manual_initial_value = $1
+     where id = (select id from portfolio_performance_imports where account_number = $2 ${custodianClause} order by report_date desc limit 1)
+     returning *`,
+    params
+  )
+  return rows[0] ?? null
+}
+
 // ── Cash projections (Incoming Cash Projections Excel) ─────────────────────
 
 export async function createCashProjectionsImport(input: {

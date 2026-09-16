@@ -78,6 +78,10 @@ export interface PortfolioPerformanceRow {
   period_start: string | null
   period_end: string | null
   inception_date: string | null
+  // Cargado a mano por el asesor — pisa el cálculo automático (beginning
+  // value + net contribution desde el inicio, ver computeInitialAccountValue)
+  // cuando ese cálculo no coincide con el depósito inicial real de la cuenta.
+  manual_initial_value: number | null
   ending_value: string | null
   return_selected: string | null
   return_ytd: string | null

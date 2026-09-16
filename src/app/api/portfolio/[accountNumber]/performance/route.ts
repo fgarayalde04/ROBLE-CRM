@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession, hasPortfolioAccess } from '@/lib/auth'
 import { parsePerformancePdf } from '@/lib/portfolio/performancePdfParser'
-import { resolveAccount, createPerformanceImport, getLatestPerformance } from '@/lib/db/portfolio'
+import { resolveAccount, createPerformanceImport, getLatestPerformance, setManualInitialValue } from '@/lib/db/portfolio'
 
 // GET /api/portfolio/[accountNumber]/performance — latest reported
 // performance (Pershing PDF). Optional ?custodian= scopes to that
@@ -73,4 +73,31 @@ export async function POST(
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 })
   }
+}
+
+// PATCH /api/portfolio/[accountNumber]/performance — carga a mano el valor
+// inicial de la cuenta, pisando el cálculo automático (ver
+// computeInitialAccountValue) cuando no coincide con el depósito real.
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: { accountNumber: string } }
+) {
+  const session = await getSession()
+  if (!session) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+
+  const accountNumber = decodeURIComponent(params.accountNumber)
+  const account = await resolveAccount(accountNumber)
+  if (!hasPortfolioAccess(session, account)) {
+    return NextResponse.json({ error: 'Sin permiso' }, { status: 403 })
+  }
+
+  const custodian = req.nextUrl.searchParams.get('custodian') || undefined
+  const body = await req.json() as { manual_initial_value?: number | null }
+  if (body.manual_initial_value !== undefined && body.manual_initial_value !== null && !isFinite(Number(body.manual_initial_value))) {
+    return NextResponse.json({ error: 'Valor inválido' }, { status: 400 })
+  }
+
+  const performance = await setManualInitialValue(accountNumber, custodian, body.manual_initial_value ?? null)
+  if (!performance) return NextResponse.json({ error: 'No hay un reporte de performance importado para esta cuenta' }, { status: 404 })
+  return NextResponse.json({ ok: true, performance })
 }

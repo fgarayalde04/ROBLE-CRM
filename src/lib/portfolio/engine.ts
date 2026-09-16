@@ -211,9 +211,12 @@ export function computePerfValueSeries(
   // Value de Since Start Date casi siempre es 0 y no aporta nada por sí
   // solo; si tampoco hay Net Contribution (reportes viejos) recién ahí se
   // cae a la estimación por retorno.
-  const inceptionValue = nc?.sinceInception != null
+  // Un valor cargado a mano por el asesor pisa el cálculo automático — el
+  // punto de "Inicio" del gráfico tiene que coincidir con el tile "Valor
+  // inicial de la cuenta" (computeInitialAccountValue), no mostrar otro número.
+  const inceptionValue = p.manual_initial_value ?? (nc?.sinceInception != null
     ? (bv?.sinceInception ?? 0) + nc.sinceInception
-    : (bv?.sinceInception ?? fromRet(p.return_since_inception))
+    : (bv?.sinceInception ?? fromRet(p.return_since_inception)))
   if (p.inception_date) add(new Date(p.inception_date + 'T00:00:00'), inceptionValue, 'Inicio')
   add(back(5), bv?.fiveYear ?? fromRetAnnualized(p.return_5y, 5), 'Hace 5 años')
   add(back(3), bv?.threeYear ?? fromRetAnnualized(p.return_3y, 3), 'Hace 3 años')
@@ -232,6 +235,7 @@ export function computePerfValueSeries(
 // guardado (columna nueva) — con Net Contribution alcanza.
 export function computeInitialAccountValue(p: PortfolioPerformanceRow | null): number | null {
   if (!p) return null
+  if (p.manual_initial_value != null) return p.manual_initial_value
   const nc = p.net_contribution?.sinceInception
   if (nc == null) return null
   const bv = p.beginning_value?.sinceInception ?? 0

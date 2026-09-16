@@ -48,6 +48,24 @@ export default function RendimientoTab({ accountNumber, history, performance, on
   const [comparing, setComparing] = useState(false)
   const [compareResult, setCompareResult] = useState<CompareResult | null>(null)
   const [compareError, setCompareError] = useState('')
+  const [editingInitial, setEditingInitial] = useState(false)
+  const [savingInitial, setSavingInitial] = useState(false)
+
+  async function handleSaveInitialValue(raw: string) {
+    const trimmed = raw.trim()
+    const value = trimmed === '' ? null : Number(trimmed.replace(/,/g, ''))
+    if (value != null && !isFinite(value)) return
+    setSavingInitial(true)
+    try {
+      await fetch(`/api/portfolio/${encodeURIComponent(accountNumber)}/performance`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ manual_initial_value: value }),
+      })
+      onPerformanceImported()
+    } finally {
+      setSavingInitial(false)
+      setEditingInitial(false)
+    }
+  }
 
   const sorted = useMemo(() => [...history].sort((a, b) => a.snapshot_date.localeCompare(b.snapshot_date)), [history])
 
@@ -88,12 +106,27 @@ export default function RendimientoTab({ accountNumber, history, performance, on
             </p>
             {(() => {
               const initial = computeInitialAccountValue(performance)
-              if (initial == null) return null
               return (
                 <div className="flex items-center gap-2 mb-3 bg-[#F3F4F6] rounded-lg px-3 py-2 w-fit">
                   <span className="text-[10px] text-gray-400 uppercase tracking-wide">Valor inicial de la cuenta</span>
-                  <span className="text-sm font-bold text-gray-800">{fmtUSD(initial)}</span>
+                  {editingInitial ? (
+                    <input
+                      autoFocus
+                      type="number"
+                      step="0.01"
+                      disabled={savingInitial}
+                      defaultValue={performance.manual_initial_value ?? initial ?? ''}
+                      onBlur={e => handleSaveInitialValue(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+                      className="text-sm font-bold text-gray-800 border border-gray-300 rounded px-1.5 py-0.5 w-32 outline-none"
+                    />
+                  ) : (
+                    <button onClick={() => setEditingInitial(true)} className="text-sm font-bold text-gray-800 hover:underline" title="Click para editar a mano">
+                      {initial != null ? fmtUSD(initial) : 'Completar a mano'}
+                    </button>
+                  )}
                   {performance.inception_date && <span className="text-[10px] text-gray-400">al {fmtDate(performance.inception_date)}</span>}
+                  {performance.manual_initial_value != null && <span className="text-[9px] text-emerald-600 font-semibold">(cargado a mano)</span>}
                 </div>
               )
             })()}
