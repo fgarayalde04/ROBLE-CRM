@@ -179,9 +179,19 @@ export function findFundPositionValue(
 ): number | null {
   const isinNorm = isin?.trim().toUpperCase()
   const nameNorm = fundName.trim().toLowerCase()
-  const matches = positions.filter(p =>
-    isinNorm ? p.isin?.trim().toUpperCase() === isinNorm : p.name.trim().toLowerCase() === nameNorm
-  )
-  if (matches.length === 0) return null
-  return matches.reduce((s, p) => s + Number(p.market_value), 0)
+  if (isinNorm) {
+    const byIsin = positions.filter(p => p.isin?.trim().toUpperCase() === isinNorm)
+    if (byIsin.length > 0) return byIsin.reduce((s, p) => s + Number(p.market_value), 0)
+  }
+  // El nombre cargado en Dividendos suele ser más corto que el de la
+  // posición real (que trae clase/ticker, ej. "AB American Income Fund"
+  // vs. "AB American Income Fund Class A2 (ACFAX)") — exigir igualdad
+  // exacta hacía que nunca se encontrara. Alcanza con que uno contenga al
+  // otro para considerarlo el mismo fondo.
+  const byName = positions.filter(p => {
+    const posName = p.name.trim().toLowerCase()
+    return posName === nameNorm || posName.includes(nameNorm) || nameNorm.includes(posName)
+  })
+  if (byName.length === 0) return null
+  return byName.reduce((s, p) => s + Number(p.market_value), 0)
 }
