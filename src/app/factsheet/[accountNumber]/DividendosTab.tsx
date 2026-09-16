@@ -6,7 +6,7 @@ interface LedgerEntry {
   id: string
   account_number: string
   fund_name: string
-  entry_type: 'compra' | 'dividendo'
+  entry_type: 'compra' | 'dividendo' | 'dividendo_total'
   entry_date: string | null
   amount: string | null
   notes: string | null
@@ -34,7 +34,7 @@ export default function DividendosTab({ accountNumber }: { accountNumber: string
 
   useEffect(() => { load() }, [accountNumber])
 
-  async function addRow(fundName: string, entryType: 'compra' | 'dividendo'): Promise<boolean> {
+  async function addRow(fundName: string, entryType: 'compra' | 'dividendo' | 'dividendo_total'): Promise<boolean> {
     const trimmed = fundName.trim()
     if (!trimmed) return false
     const res = await fetch(`/api/portfolio/${encodeURIComponent(accountNumber)}/dividends`, {
@@ -113,7 +113,15 @@ export default function DividendosTab({ accountNumber }: { accountNumber: string
         fundNames.map(fundName => {
           const rows = entries.filter(e => e.fund_name === fundName)
           const totalCompra = rows.filter(r => r.entry_type === 'compra').reduce((s, r) => s + Number(r.amount ?? 0), 0)
-          const totalDividendo = rows.filter(r => r.entry_type === 'dividendo').reduce((s, r) => s + Number(r.amount ?? 0), 0)
+          const totalRows = rows.filter(r => r.entry_type === 'dividendo_total')
+          const itemizedRows = rows.filter(r => r.entry_type === 'dividendo')
+          // Si hay un "total acumulado" cargado, se usa ese en vez de sumar
+          // los cobros sueltos — permite cargar un solo número en vez de
+          // tener que anotar cada cobro por separado.
+          const usesTotal = totalRows.length > 0
+          const totalDividendo = usesTotal
+            ? totalRows.reduce((s, r) => s + Number(r.amount ?? 0), 0)
+            : itemizedRows.reduce((s, r) => s + Number(r.amount ?? 0), 0)
           const rendimiento = totalCompra > 0 ? (totalDividendo / totalCompra) * 100 : null
           return (
             <div key={fundName} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
@@ -125,6 +133,11 @@ export default function DividendosTab({ accountNumber }: { accountNumber: string
                   {rendimiento != null && <span>Rendimiento: <strong className="text-emerald-300">{rendimiento.toFixed(2)}%</strong></span>}
                 </div>
               </div>
+              {usesTotal && itemizedRows.length > 0 && (
+                <p className="px-4 py-1.5 text-[10px] text-amber-700 bg-amber-50 border-b border-amber-100">
+                  Usando el total acumulado cargado a mano — las filas de dividendo cobrado sueltas no se suman al total de arriba.
+                </p>
+              )}
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-gray-100 text-left text-gray-400">
@@ -143,10 +156,11 @@ export default function DividendosTab({ accountNumber }: { accountNumber: string
                           defaultValue={r.entry_type}
                           disabled={saving === r.id}
                           onChange={e => patchRow(r.id, { entry_type: e.target.value })}
-                          className={`text-xs font-semibold rounded px-1.5 py-0.5 border-0 outline-none ${r.entry_type === 'compra' ? 'bg-gray-100 text-gray-600' : 'bg-emerald-50 text-emerald-700'}`}
+                          className={`text-xs font-semibold rounded px-1.5 py-0.5 border-0 outline-none ${r.entry_type === 'compra' ? 'bg-gray-100 text-gray-600' : r.entry_type === 'dividendo_total' ? 'bg-blue-50 text-blue-700' : 'bg-emerald-50 text-emerald-700'}`}
                         >
                           <option value="compra">Compra</option>
                           <option value="dividendo">Dividendo</option>
+                          <option value="dividendo_total">Total acumulado</option>
                         </select>
                       </td>
                       <td className="px-3 py-1.5">
@@ -192,6 +206,11 @@ export default function DividendosTab({ accountNumber }: { accountNumber: string
                       <div className="flex gap-2">
                         <button onClick={() => addRow(fundName, 'compra')} className="text-[11px] font-medium text-gray-500 hover:text-[#2E7D52]">+ compra</button>
                         <button onClick={() => addRow(fundName, 'dividendo')} className="text-[11px] font-medium text-gray-500 hover:text-[#2E7D52]">+ dividendo</button>
+                        {!usesTotal && (
+                          <button onClick={() => addRow(fundName, 'dividendo_total')} className="text-[11px] font-medium text-gray-500 hover:text-blue-600" title="Cargar un solo monto acumulado en vez de fila por fila">
+                            + total acumulado
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

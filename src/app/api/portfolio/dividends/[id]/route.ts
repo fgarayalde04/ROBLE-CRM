@@ -17,8 +17,8 @@ export async function PATCH(
   if (body.fund_name !== undefined && !body.fund_name.trim()) {
     return NextResponse.json({ error: 'El nombre del fondo no puede quedar vacío' }, { status: 400 })
   }
-  if (body.entry_type !== undefined && body.entry_type !== 'compra' && body.entry_type !== 'dividendo') {
-    return NextResponse.json({ error: 'entry_type debe ser "compra" o "dividendo"' }, { status: 400 })
+  if (body.entry_type !== undefined && !['compra', 'dividendo', 'dividendo_total'].includes(body.entry_type)) {
+    return NextResponse.json({ error: 'entry_type debe ser "compra", "dividendo" o "dividendo_total"' }, { status: 400 })
   }
 
   const patch: Record<string, unknown> = {}

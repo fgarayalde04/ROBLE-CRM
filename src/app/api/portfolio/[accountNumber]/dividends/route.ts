@@ -39,14 +39,14 @@ export async function POST(
   const body = await req.json() as { fund_name?: string; entry_type?: string; entry_date?: string | null; amount?: number | null; notes?: string | null }
   const fundName = body.fund_name?.trim()
   if (!fundName) return NextResponse.json({ error: 'Falta el nombre del fondo' }, { status: 400 })
-  if (body.entry_type !== 'compra' && body.entry_type !== 'dividendo') {
-    return NextResponse.json({ error: 'entry_type debe ser "compra" o "dividendo"' }, { status: 400 })
+  if (!body.entry_type || !['compra', 'dividendo', 'dividendo_total'].includes(body.entry_type)) {
+    return NextResponse.json({ error: 'entry_type debe ser "compra", "dividendo" o "dividendo_total"' }, { status: 400 })
   }
 
   const entry = await createDividendLedgerEntry({
     accountNumber,
     fundName,
-    entryType: body.entry_type,
+    entryType: body.entry_type as 'compra' | 'dividendo' | 'dividendo_total',
     entryDate: body.entry_date?.trim() || null,
     amount: body.amount ?? null,
     notes: body.notes?.trim() || null,

@@ -579,7 +579,7 @@ export async function listDividendLedger(accountNumber: string) {
 export async function createDividendLedgerEntry(input: {
   accountNumber: string
   fundName: string
-  entryType: 'compra' | 'dividendo'
+  entryType: 'compra' | 'dividendo' | 'dividendo_total'
   entryDate: string | null
   amount: number | null
   notes: string | null
