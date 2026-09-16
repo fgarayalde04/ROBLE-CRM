@@ -23,6 +23,7 @@ export async function GET(req: Request) {
 
   return NextResponse.json({
     found: true,
+    nombre: row.nombre,
     returns: {
       return_ytd: row.r_ytd != null ? Number(row.r_ytd) : null,
       return_1y: row.r_1y != null ? Number(row.r_1y) : null,

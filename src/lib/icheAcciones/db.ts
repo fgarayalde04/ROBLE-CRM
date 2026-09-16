@@ -1,5 +1,5 @@
 import { pool } from '@/lib/db/pool'
-import type { Analyst, ClosedPosition, Lot, OpenPosition, Source } from './types'
+import type { Analyst, ClosedPosition, GenerateResponse, Lot, OpenPosition, Source } from './types'
 
 interface OpenRow {
   id: string
@@ -118,10 +118,38 @@ export async function closePosition(ticker: string, analyst: Analyst, year: numb
   }
 }
 
-export async function logGeneration(fileName: string, item: { id: string; webUrl: string | null }, userId: string | null): Promise<void> {
+export async function logGeneration(
+  fileName: string,
+  item: { id: string; webUrl: string | null },
+  userId: string | null,
+  preview: GenerateResponse['preview'],
+  warnings: string[]
+): Promise<void> {
   await pool.query(
-    `insert into iche_generation_log (file_name, onedrive_item_id, onedrive_web_url, generated_by)
-     values ($1, $2, $3, $4)`,
-    [fileName, item.id, item.webUrl, userId]
+    `insert into iche_generation_log (file_name, onedrive_item_id, onedrive_web_url, generated_by, preview, warnings)
+     values ($1, $2, $3, $4, $5, $6)`,
+    [fileName, item.id || null, item.webUrl, userId, JSON.stringify(preview), JSON.stringify(warnings)]
   )
+}
+
+// Última planilla generada, para poder mostrar el preview de nuevo al
+// entrar a la página (sin volver a subir los Excel) — el .xlsx en sí no se
+// guarda acá, ya vive en OneDrive y se linkea con onedrive_web_url.
+export async function getLatestGeneration(): Promise<Omit<GenerateResponse, 'fileBase64'> & { generatedAt: string } | null> {
+  const { rows } = await pool.query(
+    `select file_name, onedrive_item_id, onedrive_web_url, preview, warnings, created_at
+     from iche_generation_log
+     where preview is not null
+     order by created_at desc
+     limit 1`
+  )
+  const row = rows[0]
+  if (!row) return null
+  return {
+    fileName: row.file_name,
+    uploadedItem: { id: row.onedrive_item_id ?? '', webUrl: row.onedrive_web_url },
+    preview: row.preview,
+    warnings: row.warnings ?? [],
+    generatedAt: row.created_at,
+  }
 }

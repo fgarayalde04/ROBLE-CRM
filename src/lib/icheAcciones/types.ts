@@ -151,7 +151,11 @@ export interface PreviewSummaryRow {
 export interface GenerateResponse {
   fileName: string
   uploadedItem: { id: string; webUrl: string | null }
-  fileBase64: string // el mismo .xlsx ya subido a OneDrive, para descarga directa desde el navegador
+  // El mismo .xlsx ya subido a OneDrive, para descarga directa desde el
+  // navegador — solo viene en la respuesta recién generada; un preview
+  // recuperado de iche_generation_log no lo guarda (ya está en OneDrive) y
+  // ofrece el link a "Abrir en Office Online" en su lugar.
+  fileBase64?: string
   preview: {
     resumen: PreviewSummaryRow[]
     abiertasIndio: PreviewRow[]

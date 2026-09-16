@@ -86,6 +86,7 @@ export default function FondosMonitorClient({ funds }: { funds: FundRow[] }) {
   const router = useRouter()
   const [search, setSearch] = useState('')
   const [showAdd, setShowAdd] = useState(false)
+  const [editingFund, setEditingFund] = useState<FundRow | null>(null)
   const [downloadingPdf, setDownloadingPdf] = useState(false)
   const pdfRef = useRef<HTMLDivElement>(null)
 
@@ -252,6 +253,23 @@ export default function FondosMonitorClient({ funds }: { funds: FundRow[] }) {
         />
       )}
 
+      {editingFund && (
+        <EditFundModal
+          fund={editingFund}
+          categoriasDisponibles={categoriasDisponibles}
+          subcategoriasPorCategoria={subcategoriasPorCategoria}
+          onClose={() => setEditingFund(null)}
+          onSaved={() => {
+            setEditingFund(null)
+            router.refresh()
+          }}
+          onDeactivated={() => {
+            setEditingFund(null)
+            router.refresh()
+          }}
+        />
+      )}
+
       {/*
         El encabezado de columnas (período de cada rendimiento) queda fijo
         con position:sticky. Para que eso funcione tiene que anclarse al
@@ -290,9 +308,18 @@ export default function FondosMonitorClient({ funds }: { funds: FundRow[] }) {
                     {rows.map((f, i) => {
                       const st = STATUS_LABEL[f.status ?? 'no_source']
                       return (
-                        <tr key={f.id} className={i % 2 === 1 ? 'bg-gray-50/50' : 'bg-white'} title={f.error_message ?? undefined}>
+                        <tr key={f.id} className={`group ${i % 2 === 1 ? 'bg-gray-50/50' : 'bg-white'}`} title={f.error_message ?? undefined}>
                           <td className="px-3 py-2 border-b border-gray-100">
-                            <div className="font-medium text-gray-800 text-xs">{f.nombre}</div>
+                            <div className="flex items-center gap-1.5">
+                              <div className="font-medium text-gray-800 text-xs">{f.nombre}</div>
+                              <button
+                                onClick={() => setEditingFund(f)}
+                                title="Editar fondo"
+                                className="opacity-0 group-hover:opacity-100 text-[10px] text-gray-400 hover:text-[#1B3A2B] transition-opacity"
+                              >
+                                ✏️
+                              </button>
+                            </div>
                             <div className="text-[10px] text-gray-400 mt-0.5">
                               {f.isin} · {f.moneda ?? '—'}
                               {f.as_of_date && ` · datos al ${fmtDate(f.as_of_date)}`}
@@ -462,6 +489,201 @@ function AddFundModal({
           >
             {saving ? 'Guardando…' : 'Agregar'}
           </button>
+        </div>
+      </form>
+    </div>
+  )
+}
+
+function EditFundModal({
+  fund,
+  categoriasDisponibles,
+  subcategoriasPorCategoria,
+  onClose,
+  onSaved,
+  onDeactivated,
+}: {
+  fund: FundRow
+  categoriasDisponibles: string[]
+  subcategoriasPorCategoria: Map<string, string[]>
+  onClose: () => void
+  onSaved: () => void
+  onDeactivated: () => void
+}) {
+  const [nombre, setNombre] = useState(fund.nombre)
+  const [categoria, setCategoria] = useState(
+    fund.categoria && categoriasDisponibles.includes(fund.categoria) ? fund.categoria : OTRA
+  )
+  const [categoriaOtra, setCategoriaOtra] = useState(
+    fund.categoria && !categoriasDisponibles.includes(fund.categoria) ? fund.categoria : ''
+  )
+  const [subcategoria, setSubcategoria] = useState(fund.subcategoria ?? '')
+  const [subcategoriaOtra, setSubcategoriaOtra] = useState('')
+  const [isin, setIsin] = useState(fund.isin)
+  const [moneda, setMoneda] = useState(fund.moneda ?? '')
+  const [saving, setSaving] = useState(false)
+  const [deactivating, setDeactivating] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const subOptions = subcategoriasPorCategoria.get(categoria) ?? []
+  const categoriaFinal = categoria === OTRA ? categoriaOtra.trim() : categoria
+  const subcategoriaFinal = subcategoria === OTRA ? subcategoriaOtra.trim() : subcategoria
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!nombre.trim() || !categoriaFinal || !isin.trim()) return
+    setSaving(true)
+    setError(null)
+    try {
+      const res = await fetch(`/api/fund-monitor/funds/${fund.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nombre: nombre.trim(),
+          categoria: categoriaFinal,
+          subcategoria: subcategoriaFinal || null,
+          isin: isin.trim(),
+          moneda: moneda.trim() || null,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'No se pudo guardar el fondo')
+      onSaved()
+    } catch (err: any) {
+      setError(err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleDeactivate() {
+    if (!confirm(`¿Quitar "${fund.nombre}" del monitor? Podés volver a agregarlo más adelante.`)) return
+    setDeactivating(true)
+    setError(null)
+    try {
+      const res = await fetch(`/api/fund-monitor/funds/${fund.id}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error ?? 'No se pudo quitar el fondo')
+      }
+      onDeactivated()
+    } catch (err: any) {
+      setError(err.message)
+      setDeactivating(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <form
+        onSubmit={handleSubmit}
+        onClick={e => e.stopPropagation()}
+        className="bg-white rounded-xl shadow-xl w-full max-w-md p-5"
+      >
+        <h2 className="text-sm font-bold text-gray-900 mb-4">Editar fondo</h2>
+
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs font-medium text-gray-500 block mb-1">Nombre del fondo</label>
+            <input
+              value={nombre}
+              onChange={e => setNombre(e.target.value)}
+              autoFocus
+              className="w-full text-sm px-3 py-2 rounded-lg border border-gray-200 outline-none focus:border-[#1B3A2B]/50"
+            />
+          </div>
+
+          <div>
+            <label className="text-xs font-medium text-gray-500 block mb-1">Categoría general</label>
+            <select
+              value={categoria}
+              onChange={e => { setCategoria(e.target.value); setSubcategoria('') }}
+              className="w-full text-sm px-3 py-2 rounded-lg border border-gray-200 outline-none focus:border-[#1B3A2B]/50 bg-white"
+            >
+              {categoriasDisponibles.map(c => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+              <option value={OTRA}>Otra (nueva)…</option>
+            </select>
+            {categoria === OTRA && (
+              <input
+                value={categoriaOtra}
+                onChange={e => setCategoriaOtra(e.target.value)}
+                placeholder="Nombre de la categoría nueva"
+                className="w-full mt-2 text-sm px-3 py-2 rounded-lg border border-gray-200 outline-none focus:border-[#1B3A2B]/50"
+              />
+            )}
+          </div>
+
+          <div>
+            <label className="text-xs font-medium text-gray-500 block mb-1">Subcategoría (opcional)</label>
+            <select
+              value={subcategoria}
+              onChange={e => setSubcategoria(e.target.value)}
+              className="w-full text-sm px-3 py-2 rounded-lg border border-gray-200 outline-none focus:border-[#1B3A2B]/50 bg-white"
+            >
+              <option value="">(sin subcategoría)</option>
+              {subOptions.map(s => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+              <option value={OTRA}>Otra (nueva)…</option>
+            </select>
+            {subcategoria === OTRA && (
+              <input
+                value={subcategoriaOtra}
+                onChange={e => setSubcategoriaOtra(e.target.value)}
+                placeholder="Nombre de la subcategoría nueva"
+                className="w-full mt-2 text-sm px-3 py-2 rounded-lg border border-gray-200 outline-none focus:border-[#1B3A2B]/50"
+              />
+            )}
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-medium text-gray-500 block mb-1">ISIN</label>
+              <input
+                value={isin}
+                onChange={e => setIsin(e.target.value.toUpperCase())}
+                placeholder="Ej: LU0154237225"
+                className="w-full text-sm px-3 py-2 rounded-lg border border-gray-200 outline-none focus:border-[#1B3A2B]/50 font-mono"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-gray-500 block mb-1">Moneda</label>
+              <input
+                value={moneda}
+                onChange={e => setMoneda(e.target.value.toUpperCase())}
+                placeholder="Ej: USD"
+                className="w-full text-sm px-3 py-2 rounded-lg border border-gray-200 outline-none focus:border-[#1B3A2B]/50 font-mono"
+              />
+            </div>
+          </div>
+        </div>
+
+        {error && <p className="text-xs text-red-500 mt-3">{error}</p>}
+
+        <div className="flex items-center justify-between mt-5">
+          <button
+            type="button"
+            onClick={handleDeactivate}
+            disabled={deactivating || saving}
+            className="text-xs font-medium px-3 py-2 rounded-lg text-red-500 hover:bg-red-50 disabled:opacity-50"
+          >
+            {deactivating ? 'Quitando…' : 'Quitar del monitor'}
+          </button>
+          <div className="flex gap-2">
+            <button type="button" onClick={onClose} className="text-sm px-3 py-2 rounded-lg text-gray-600 hover:bg-gray-50">
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={saving || deactivating || !nombre.trim() || !categoriaFinal || !isin.trim()}
+              className="text-sm font-medium px-4 py-2 rounded-lg text-white disabled:opacity-50"
+              style={{ backgroundColor: '#1B3A2B' }}
+            >
+              {saving ? 'Guardando…' : 'Guardar cambios'}
+            </button>
+          </div>
         </div>
       </form>
     </div>

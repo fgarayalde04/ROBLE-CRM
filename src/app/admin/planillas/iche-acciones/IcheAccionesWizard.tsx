@@ -8,10 +8,12 @@ import type { GenerateResponse, QuestionAnswer, ReconcilePlan } from '@/lib/iche
 
 type Step = 'upload' | 'questions' | 'preview'
 
-export default function IcheAccionesWizard() {
-  const [step, setStep] = useState<Step>('upload')
+type PersistedResult = Omit<GenerateResponse, 'fileBase64'> & { generatedAt: string }
+
+export default function IcheAccionesWizard({ initialResult }: { initialResult: PersistedResult | null }) {
+  const [step, setStep] = useState<Step>(initialResult ? 'preview' : 'upload')
   const [plan, setPlan] = useState<ReconcilePlan | null>(null)
-  const [result, setResult] = useState<GenerateResponse | null>(null)
+  const [result, setResult] = useState<GenerateResponse | PersistedResult | null>(initialResult)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -74,7 +76,24 @@ export default function IcheAccionesWizard() {
         />
       )}
 
-      {step === 'preview' && result && <PreviewTables {...result} />}
+      {step === 'preview' && result && (
+        <>
+          <div className="mb-4 flex items-center justify-between">
+            <p className="text-xs text-gray-400">
+              {'generatedAt' in result
+                ? `Última planilla generada el ${new Date(result.generatedAt).toLocaleString('es-UY')}`
+                : 'Recién generada'}
+            </p>
+            <button
+              onClick={() => { setStep('upload'); setPlan(null); setError(null) }}
+              className="text-xs font-medium text-[#1B4332] underline"
+            >
+              Subir archivos de un mes nuevo
+            </button>
+          </div>
+          <PreviewTables {...result} />
+        </>
+      )}
     </div>
   )
 }

@@ -118,7 +118,6 @@ export async function POST(req: NextRequest) {
       token
     )
     uploadedItem = { id: item.id, webUrl: item.webUrl ?? null }
-    await logGeneration(fileName, uploadedItem, session.id ?? null)
   } catch (err: any) {
     warnings.push(`No se pudo subir el archivo a OneDrive: ${err.message}`)
   }
@@ -134,12 +133,17 @@ export async function POST(req: NextRequest) {
       gainLoss: c.saleProceeds - c.costBasis,
       gainLossPct: c.costBasis !== 0 ? (c.saleProceeds - c.costBasis) / c.costBasis : 0,
     }))
+  const fullPreview = { ...preview, nuevosCierres }
+
+  // Se guarda el preview aunque falle la subida a OneDrive: los cambios en
+  // la base ya se aplicaron, así que igual conviene poder verlo después.
+  await logGeneration(fileName, uploadedItem, session.id ?? null, fullPreview, warnings)
 
   const response: GenerateResponse = {
     fileName,
     uploadedItem,
     fileBase64: buffer.toString('base64'),
-    preview: { ...preview, nuevosCierres },
+    preview: fullPreview,
     warnings,
   }
   return NextResponse.json(response)

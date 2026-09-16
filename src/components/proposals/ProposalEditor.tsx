@@ -28,6 +28,24 @@ async function lookupFundMonitorReturns(isin: string): Promise<{ return_ytd: num
   }
 }
 
+// Igual que arriba pero además trae el nombre del fondo — se usa para
+// completar filas que quedaron con el ISIN cargado pero sin nombre y/o sin
+// rendimientos (por un import o un cruce anterior), y donde antes no había
+// forma de saber qué fondo era ni cómo venía rindiendo sin buscarlo a mano.
+async function lookupFundMonitorInfo(isin: string): Promise<{
+  nombre: string | null
+  return_ytd: number | null; return_1y: number | null; return_3y: number | null; return_5y: number | null
+} | null> {
+  try {
+    const res = await fetch(`/api/fund-monitor/lookup?isin=${encodeURIComponent(isin)}`)
+    if (!res.ok) return null
+    const data = await res.json()
+    return data.found ? { nombre: data.nombre ?? null, ...data.returns } : null
+  } catch {
+    return null
+  }
+}
+
 // ─── FactsheetData (mirrors lib/factsheet-extractor) ─────────────────────────
 
 interface FactsheetData {
@@ -828,6 +846,37 @@ function FundsTable({
   const [showFactsheet, setShowFactsheet] = useState(false)
   const [sortKey, setSortKey] = useState<keyof Fund | null>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+  const backfilledInfo = useRef<Set<string>>(new Set())
+
+  // Filas que quedaron con el ISIN cargado pero sin nombre y/o sin
+  // rendimientos (de un import o cruce anterior) — se completa buscando por
+  // ISIN en el Monitor de Fondos, para poder ver de qué fondo se trata y
+  // cómo viene rindiendo sin tener que buscarlo a mano. Nunca pisa un
+  // nombre o rendimiento que ya esté cargado.
+  useEffect(() => {
+    const candidates = funds.filter(f => {
+      if (!f.isin?.trim() || backfilledInfo.current.has(f.id)) return false
+      return !f.fund_name?.trim() || f.return_ytd == null || f.return_1y == null || f.return_3y == null || f.return_5y == null
+    })
+    if (candidates.length === 0) return
+    candidates.forEach(async f => {
+      backfilledInfo.current.add(f.id)
+      const info = await lookupFundMonitorInfo(f.isin!.trim())
+      if (!info) return
+      const patch: Partial<Fund> = {}
+      if (!f.fund_name?.trim() && info.nombre) patch.fund_name = info.nombre
+      if (f.return_ytd == null && info.return_ytd != null) patch.return_ytd = info.return_ytd
+      if (f.return_1y == null && info.return_1y != null) patch.return_1y = info.return_1y
+      if (f.return_3y == null && info.return_3y != null) patch.return_3y = info.return_3y
+      if (f.return_5y == null && info.return_5y != null) patch.return_5y = info.return_5y
+      if (Object.keys(patch).length === 0) return
+      onUpdate(funds.map(x => x.id === f.id ? { ...x, ...patch } : x))
+      await fetch(`/api/proposals/${proposalId}/funds`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fund_id: f.id, ...patch }),
+      })
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [funds])
 
   const toggleSort = (key: keyof Fund) => {
     if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
