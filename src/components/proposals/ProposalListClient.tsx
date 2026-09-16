@@ -327,6 +327,23 @@ export default function ProposalListClient({
   const router                      = useRouter()
   const [proposals, setProposals]   = useState<Proposal[]>(initialProposals)
   const [filter, setFilter]         = useState<string>('all')
+  // 'all' | 'mine' | un advisor_id puntual — se guarda en localStorage para
+  // que cada usuario (ej. un admin que ve las de todos) recuerde su elección
+  // entre visitas, sin afectar el default de nadie más.
+  const [advisorFilter, setAdvisorFilter] = useState<string>('all')
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('propuestas_advisor_filter')
+      if (saved) setAdvisorFilter(saved)
+    } catch { /* localStorage no disponible */ }
+  }, [])
+  const setAdvisorFilterPersisted = (v: string) => {
+    setAdvisorFilter(v)
+    try { localStorage.setItem('propuestas_advisor_filter', v) } catch { /* ignorar */ }
+  }
+  const advisors = Array.from(
+    new Map(proposals.filter(p => p.advisor_id).map(p => [p.advisor_id as string, p.advisor_name ?? 'Sin nombre'])).entries()
+  ).sort((a, b) => a[1].localeCompare(b[1]))
   const [showCreate, setShowCreate] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [sharingId, setSharingId]   = useState<string | null>(null)
@@ -341,7 +358,12 @@ export default function ProposalListClient({
       .catch(() => {})
   }, [])
 
-  const filtered = filter === 'all' ? proposals : proposals.filter(p => p.status === filter)
+  const byAdvisor = advisorFilter === 'all'
+    ? proposals
+    : advisorFilter === 'mine'
+      ? proposals.filter(p => p.advisor_id === currentUserId)
+      : proposals.filter(p => p.advisor_id === advisorFilter)
+  const filtered = filter === 'all' ? byAdvisor : byAdvisor.filter(p => p.status === filter)
 
   const patchProposal = useCallback(async (id: string, body: Record<string, unknown>) => {
     const res = await fetch(`/api/proposals/${id}`, {
@@ -382,10 +404,10 @@ export default function ProposalListClient({
   }
 
   const tabs = [
-    { key: 'all',      label: 'Todas',     count: proposals.length },
-    { key: 'draft',    label: 'Borrador',  count: proposals.filter(p => p.status === 'draft').length },
-    { key: 'sent',     label: 'Enviadas',  count: proposals.filter(p => p.status === 'sent').length },
-    { key: 'accepted', label: 'Aceptadas', count: proposals.filter(p => p.status === 'accepted').length },
+    { key: 'all',      label: 'Todas',     count: byAdvisor.length },
+    { key: 'draft',    label: 'Borrador',  count: byAdvisor.filter(p => p.status === 'draft').length },
+    { key: 'sent',     label: 'Enviadas',  count: byAdvisor.filter(p => p.status === 'sent').length },
+    { key: 'accepted', label: 'Aceptadas', count: byAdvisor.filter(p => p.status === 'accepted').length },
   ]
 
   return (
@@ -403,13 +425,28 @@ export default function ProposalListClient({
             </button>
           ))}
         </div>
-        <button onClick={() => setShowCreate(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-[#2D3F52] text-white text-sm font-medium rounded-lg hover:bg-[#1f2d3d] transition-colors">
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-          </svg>
-          Nueva propuesta
-        </button>
+        <div className="flex items-center gap-2">
+          {advisors.length > 1 && (
+            <select
+              value={advisorFilter}
+              onChange={e => setAdvisorFilterPersisted(e.target.value)}
+              className="text-sm px-3 py-2 rounded-lg border border-gray-200 bg-white text-gray-600 outline-none focus:border-[#16A34A]/50"
+            >
+              <option value="all">Todos los asesores</option>
+              <option value="mine">Solo las mías</option>
+              {advisors.map(([id, name]) => (
+                <option key={id} value={id}>{name}</option>
+              ))}
+            </select>
+          )}
+          <button onClick={() => setShowCreate(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-[#2D3F52] text-white text-sm font-medium rounded-lg hover:bg-[#1f2d3d] transition-colors">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+            </svg>
+            Nueva propuesta
+          </button>
+        </div>
       </div>
 
       {/* Table */}

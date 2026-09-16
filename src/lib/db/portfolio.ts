@@ -270,7 +270,7 @@ export async function listAccounts(advisorFilter: string[] | null, sharedClientN
   )
   return rows
     .map(r => ({ ...r, total_market_value: r.combined_total }))
-    .sort((a, b) => (a.client_name ?? a.account_number).localeCompare(b.client_name ?? b.account_number))
+    .sort((a, b) => b.snapshot_date.localeCompare(a.snapshot_date))
 }
 
 // ── Performance (Portfolio Performance PDF — real TWRR, never calculated) ──

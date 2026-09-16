@@ -28,6 +28,19 @@ export default function PortfolioLandingClient() {
   const [showNewReport, setShowNewReport] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
+  // Se guarda en localStorage para que cada usuario (ej. un admin que ve
+  // las cuentas de todos los asesores) recuerde su elección entre visitas.
+  const [advisorFilter, setAdvisorFilter] = useState('all')
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('portafolio_advisor_filter')
+      if (saved) setAdvisorFilter(saved)
+    } catch { /* localStorage no disponible */ }
+  }, [])
+  const setAdvisorFilterPersisted = (v: string) => {
+    setAdvisorFilter(v)
+    try { localStorage.setItem('portafolio_advisor_filter', v) } catch { /* ignorar */ }
+  }
 
   async function handleDelete(accountNumber: string) {
     setDeleting(true)
@@ -54,15 +67,21 @@ export default function PortfolioLandingClient() {
 
   useEffect(() => { load() }, [])
 
+  const advisors = useMemo(() =>
+    Array.from(new Set(accounts.map(a => a.advisor).filter((a): a is string => !!a))).sort(),
+    [accounts]
+  )
+
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase()
-    if (!term) return accounts
-    return accounts.filter(a =>
-      (a.client_name ?? '').toLowerCase().includes(term) ||
-      a.account_number.toLowerCase().includes(term) ||
-      (a.client_number ?? '').toLowerCase().includes(term)
-    )
-  }, [accounts, q])
+    return accounts.filter(a => {
+      if (advisorFilter !== 'all' && a.advisor !== advisorFilter) return false
+      if (!term) return true
+      return (a.client_name ?? '').toLowerCase().includes(term) ||
+        a.account_number.toLowerCase().includes(term) ||
+        (a.client_number ?? '').toLowerCase().includes(term)
+    })
+  }, [accounts, q, advisorFilter])
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -86,12 +105,26 @@ export default function PortfolioLandingClient() {
       </div>
 
       <div className="max-w-5xl mx-auto p-6 space-y-4">
-        <input
-          value={q}
-          onChange={e => setQ(e.target.value)}
-          placeholder="Buscar por cliente, cuenta o número…"
-          className="w-full text-sm border border-gray-200 rounded-lg px-4 py-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-[#2E7D52]/20 focus:border-[#2E7D52]/40"
-        />
+        <div className="flex items-center gap-2">
+          <input
+            value={q}
+            onChange={e => setQ(e.target.value)}
+            placeholder="Buscar por cliente, cuenta o número…"
+            className="flex-1 text-sm border border-gray-200 rounded-lg px-4 py-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-[#2E7D52]/20 focus:border-[#2E7D52]/40"
+          />
+          {advisors.length > 1 && (
+            <select
+              value={advisorFilter}
+              onChange={e => setAdvisorFilterPersisted(e.target.value)}
+              className="text-sm px-3 py-2.5 rounded-lg border border-gray-200 bg-white text-gray-600 outline-none focus:border-[#2E7D52]/40"
+            >
+              <option value="all">Todos los asesores</option>
+              {advisors.map(name => (
+                <option key={name} value={name}>{name}</option>
+              ))}
+            </select>
+          )}
+        </div>
 
         {loading ? (
           <div className="text-center py-16 text-sm text-gray-400">Cargando…</div>
