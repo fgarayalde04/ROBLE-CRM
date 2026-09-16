@@ -673,31 +673,32 @@ export default function AccountPdfReport({
         </div>
       )}
 
-      {/* ── Página 6: Dividendos cobrados (planilla manual de Dividendos) ── */}
+      {/* ── Página 6: Dividendos cobrados (planilla manual de Dividendos) ──
+          Tabla resumen, una fila por fondo — sin detalle individual, tal
+          como en la pantalla. */}
       {hasDividendPage && (
         <div className="pdf-page" style={PAGE_STYLE}>
           <PdfHeader title="Dividendos" />
-          {dividendResults!.map(d => (
-            <div key={d.fundName} data-pdf-keep-together style={{ border: `1px solid ${COLORS.border}`, borderRadius: 8, padding: '3mm 4mm', marginBottom: '4mm' }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.ink, marginBottom: '2mm' }}>{d.fundName}</div>
-              <div style={{ display: 'flex', gap: '6mm' }}>
-                <div>
-                  <div style={{ fontSize: 7, color: COLORS.mutedSlate, textTransform: 'uppercase' }}>Valor del fondo</div>
-                  <div style={{ fontSize: 13, fontWeight: 800, color: COLORS.ink, marginTop: '0.5mm' }}>{fmtUSD2(d.fundValue)}</div>
-                </div>
-                <div>
-                  <div style={{ fontSize: 7, color: COLORS.mutedSlate, textTransform: 'uppercase' }}>Dividendos cobrados</div>
-                  <div style={{ fontSize: 13, fontWeight: 800, color: COLORS.ink, marginTop: '0.5mm' }}>{fmtUSD2(d.totalCollected)}</div>
-                </div>
-                <div>
-                  <div style={{ fontSize: 7, color: COLORS.mutedSlate, textTransform: 'uppercase' }}>Tasa anualizada{d.isEstimate ? ' estimada' : ''}</div>
-                  <div style={{ fontSize: 13, fontWeight: 800, color: COLORS.darkGreen, marginTop: '0.5mm' }}>
-                    {d.annualizedYieldPct != null ? `${d.annualizedYieldPct.toFixed(2)}%` : '—'}
-                  </div>
-                </div>
-              </div>
-            </div>
-          ))}
+          <table style={{ width: '100%', fontSize: 9, borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ background: COLORS.charcoal }}>
+                <th style={{ textAlign: 'left', padding: '2.5mm 3mm', color: '#fff', fontWeight: 700 }}>Fondo</th>
+                <th style={{ textAlign: 'right', padding: '2.5mm 3mm', color: '#fff', fontWeight: 700 }}>Dividendos cobrados</th>
+                <th style={{ textAlign: 'right', padding: '2.5mm 3mm', color: '#fff', fontWeight: 700 }}>Tasa anualizada</th>
+              </tr>
+            </thead>
+            <tbody>
+              {dividendResults!.map((d, i) => (
+                <tr key={d.fundName} data-pdf-keep-together style={{ background: i % 2 === 1 ? COLORS.bgSofter : '#fff' }}>
+                  <td style={{ padding: '2.2mm 3mm', fontWeight: 600, color: COLORS.ink, borderBottom: `1px solid ${COLORS.border}` }}>{d.fundName}</td>
+                  <td style={{ padding: '2.2mm 3mm', textAlign: 'right', fontWeight: 700, color: COLORS.ink, borderBottom: `1px solid ${COLORS.border}` }}>{fmtUSD2(d.totalCollected)}</td>
+                  <td style={{ padding: '2.2mm 3mm', textAlign: 'right', fontWeight: 700, color: COLORS.darkGreen, borderBottom: `1px solid ${COLORS.border}` }}>
+                    {d.annualizedYieldPct != null ? `${d.annualizedYieldPct.toFixed(2)}%${d.isEstimate ? '*' : ''}` : '—'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
           <PdfDisclosure />
           <PdfFooter clientName={clientName} />
         </div>

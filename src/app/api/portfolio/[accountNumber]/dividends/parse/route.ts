@@ -33,14 +33,23 @@ export async function POST(
   } catch (err: any) {
     return NextResponse.json({ error: 'No se pudo leer el archivo: ' + err.message }, { status: 400 })
   }
-  if (parsed.rows.length === 0) {
-    return NextResponse.json({ error: parsed.warnings[0] ?? 'No se encontraron movimientos', warnings: parsed.warnings }, { status: 400 })
+  // El Activity solo se usa para detectar dividendos/distribuciones — las
+  // compras siempre se cargan a mano (con su fecha real), así que una
+  // compra o venta que aparezca en el archivo se descarta acá, no se
+  // ofrece para importar.
+  const nonDividendCount = parsed.rows.filter(r => r.type !== 'dividendo').length
+  const dividendRows = parsed.rows.filter(r => r.type === 'dividendo')
+  if (dividendRows.length === 0) {
+    return NextResponse.json({
+      error: parsed.rows.length === 0 ? (parsed.warnings[0] ?? 'No se encontraron movimientos') : 'El archivo no tiene dividendos/distribuciones detectados (las compras se cargan a mano).',
+      warnings: parsed.warnings,
+    }, { status: 400 })
   }
 
   const existing = await listDividendLedger(accountNumber)
   const existingRefs = new Set(existing.map(e => e.external_ref).filter(Boolean))
 
-  const rowsWithRefs = parsed.rows.map(r => ({
+  const rowsWithRefs = dividendRows.map(r => ({
     r,
     externalRef: buildExternalRef({ fundKey: fundGroupKey(r.isin, r.fundName), date: r.date, type: r.type!, amount: r.amount, currency: r.currency }),
   }))
@@ -68,6 +77,7 @@ export async function POST(
   return NextResponse.json({
     rows: preview,
     ignoredCount: parsed.ignoredCount,
+    nonDividendCount,
     warnings: parsed.warnings,
   })
 }

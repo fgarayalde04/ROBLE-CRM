@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { fmtUSD2 } from './PortfolioAccountClient'
 import { computeFundDividends, fundGroupKey, findFundPositionValue, type DividendTxn } from '@/lib/portfolio/dividendEngine'
 
@@ -22,7 +22,7 @@ interface PreviewRow {
   date: string | null
   fundName: string
   isin: string | null
-  type: 'compra' | 'venta' | 'dividendo'
+  type: 'dividendo'
   amount: number | null
   quantity: number | null
   price: number | null
@@ -35,11 +35,18 @@ interface PreviewRow {
 interface PositionForValue { isin: string | null; name: string; market_value: string | number }
 
 const fmtPct = (n: number | null) => n == null ? '—' : `${n.toFixed(2)}%`
+const fmtDate = (iso: string | null) => {
+  if (!iso) return '—'
+  const [y, m, d] = iso.split('-')
+  return `${d}/${m}/${y}`
+}
 
-// Los movimientos (compras/ventas/dividendos) se usan solo para CALCULAR —
-// se cargan a mano o importando el Activity del custodio, pero el cliente
-// nunca ve ese listado. Lo único que se muestra es, por cada fondo
-// distribuidor: valor del fondo, dividendos cobrados y tasa anualizada.
+// Flujo fijo: el Activity solo aporta dividendos/distribuciones (se
+// detectan y leen del archivo); las compras SIEMPRE se cargan a mano, con
+// su fecha real. El sistema cruza esas fechas para saber qué capital
+// generó cada dividendo, y de ahí saca la tasa anualizada. El cliente ve
+// únicamente Fondo + Dividendos cobrados + Tasa anualizada — el detalle
+// fecha por fecha queda oculto salvo que lo despliegue a propósito.
 export default function DividendosTab({ accountNumber, positions }: { accountNumber: string; positions: PositionForValue[] }) {
   const [entries, setEntries] = useState<LedgerEntry[]>([])
   const [loading, setLoading] = useState(true)
@@ -51,8 +58,9 @@ export default function DividendosTab({ accountNumber, positions }: { accountNum
   const [preview, setPreview] = useState<PreviewRow[] | null>(null)
   const [previewChecked, setPreviewChecked] = useState<boolean[]>([])
   const [previewWarnings, setPreviewWarnings] = useState<string[]>([])
-  const [previewIgnored, setPreviewIgnored] = useState(0)
+  const [previewNonDividendCount, setPreviewNonDividendCount] = useState(0)
   const [importError, setImportError] = useState('')
+  const [expandedKey, setExpandedKey] = useState<string | null>(null)
   const [editingGroupKey, setEditingGroupKey] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -130,7 +138,7 @@ export default function DividendosTab({ accountNumber, positions }: { accountNum
       setPreview(data.rows)
       setPreviewChecked((data.rows as PreviewRow[]).map(r => !r.isDuplicate))
       setPreviewWarnings(data.warnings ?? [])
-      setPreviewIgnored(data.ignoredCount ?? 0)
+      setPreviewNonDividendCount(data.nonDividendCount ?? 0)
     } finally {
       setImporting(false)
       if (fileInputRef.current) fileInputRef.current.value = ''
@@ -150,18 +158,18 @@ export default function DividendosTab({ accountNumber, positions }: { accountNum
       if (!res.ok) { alert(data.error ?? 'No se pudo importar.'); return }
       setPreview(null)
       await load()
-      alert(`Se importaron ${data.imported} movimiento(s).${data.skippedDuplicates > 0 ? ` ${data.skippedDuplicates} se saltearon por ser duplicados.` : ''}`)
+      alert(`Se importaron ${data.imported} dividendo(s).${data.skippedDuplicates > 0 ? ` ${data.skippedDuplicates} se saltearon por ser duplicados.` : ''}`)
     } finally {
       setImporting(false)
     }
   }
 
   const groups = useMemo(() => {
-    // Una compra importada de Activity suele traer ISIN; un dividendo
-    // cargado a mano para el mismo fondo puede no tenerlo — sin este cruce
-    // quedarían en grupos distintos (mismo fondo, "no toma" las compras al
-    // calcular el rendimiento). Se aprende ISIN↔nombre de cualquier fila que
-    // tenga los dos, y con eso se reubican las filas que solo tienen el nombre.
+    // Una compra cargada a mano puede no tener ISIN; un dividendo importado
+    // de Activity suele traerlo — sin cruzarlos por nombre quedarían en
+    // grupos distintos (mismo fondo, pero el dividendo no encuentra la
+    // compra para calcular su capital). Se aprende ISIN↔nombre de cualquier
+    // fila que tenga los dos, y se reubican las que solo tienen el nombre.
     const nameToIsin = new Map<string, string>()
     for (const e of entries) {
       if (e.isin?.trim()) nameToIsin.set(e.fund_name.trim().toLowerCase(), e.isin.trim().toUpperCase())
@@ -177,10 +185,6 @@ export default function DividendosTab({ accountNumber, positions }: { accountNum
     return Array.from(byKey.values()).sort((a, b) => a.label.localeCompare(b.label))
   }, [entries])
 
-  // Único cálculo por fondo: cuánto cobró, y a qué tasa equivale (motor
-  // interno reconstruye el capital histórico — ver dividendEngine). El
-  // "valor del fondo" que se muestra es la posición REAL que ya tiene
-  // Portafolio, no una suma aparte de las compras cargadas acá.
   const results = useMemo(() => {
     return groups.map(g => {
       const txns: DividendTxn[] = g.entries.map(e => ({ id: e.id, date: e.entry_date, type: e.entry_type, amount: e.amount != null ? Number(e.amount) : null }))
@@ -241,20 +245,20 @@ export default function DividendosTab({ accountNumber, positions }: { accountNum
             disabled={importing}
             className="text-xs font-semibold px-3 py-2 rounded-lg text-[#1B3A2B] border border-[#1B3A2B]/30 disabled:opacity-50"
           >
-            {importing ? 'Leyendo…' : '📄 Importar Activity'}
+            {importing ? 'Leyendo…' : '📄 Importar Activity (dividendos)'}
           </button>
         </div>
-        <p className="text-[10px] text-gray-400 mt-1.5">La fecha y el monto son opcionales acá — sin ellos podés completarlos después desde "Editar movimientos".</p>
+        <p className="text-[10px] text-gray-400 mt-1.5">El Activity solo trae dividendos/distribuciones — las compras se cargan a mano, con su fecha real.</p>
       </div>
       {importError && <p className="text-xs text-red-600">{importError}</p>}
 
       {preview && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setPreview(null)}>
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[85vh] overflow-y-auto p-5" onClick={e => e.stopPropagation()}>
-            <p className="text-sm font-bold text-gray-900 mb-1">Movimientos detectados</p>
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-y-auto p-5" onClick={e => e.stopPropagation()}>
+            <p className="text-sm font-bold text-gray-900 mb-1">Dividendos detectados</p>
             <p className="text-xs text-gray-400 mb-3">
               Revisá y corregí antes de confirmar. Las filas en gris ya parecen estar cargadas — no se van a importar salvo que las marques a mano.
-              {previewIgnored > 0 && ` Se ignoraron ${previewIgnored} fila(s) que no son compra, venta ni dividendo.`}
+              {previewNonDividendCount > 0 && ` El archivo tenía ${previewNonDividendCount} compra(s)/venta(s) — se ignoran, cargalas a mano.`}
             </p>
             {previewWarnings.map((w, i) => <p key={i} className="text-xs text-amber-700 mb-2">{w}</p>)}
             <table className="w-full text-xs">
@@ -263,7 +267,6 @@ export default function DividendosTab({ accountNumber, positions }: { accountNum
                   <th className="py-1 w-6" />
                   <th className="py-1">Fecha</th>
                   <th className="py-1">Fondo</th>
-                  <th className="py-1 w-24">Tipo</th>
                   <th className="py-1 text-right">Monto</th>
                   <th className="py-1 w-14">Moneda</th>
                   <th className="py-1"></th>
@@ -280,14 +283,6 @@ export default function DividendosTab({ accountNumber, positions }: { accountNum
                     <td className="py-1">
                       <input defaultValue={r.fundName} onBlur={e => setPreview(prev => prev!.map((row, j) => j === i ? { ...row, fundName: e.target.value } : row))}
                         className="border border-transparent hover:border-gray-200 rounded px-1 outline-none w-full" />
-                    </td>
-                    <td className="py-1">
-                      <select defaultValue={r.type} onChange={e => setPreview(prev => prev!.map((row, j) => j === i ? { ...row, type: e.target.value as PreviewRow['type'] } : row))}
-                        className="border border-transparent hover:border-gray-200 rounded px-1 outline-none">
-                        <option value="compra">Compra</option>
-                        <option value="venta">Venta</option>
-                        <option value="dividendo">Dividendo</option>
-                      </select>
                     </td>
                     <td className="py-1 text-right">
                       <input type="number" step="0.01" defaultValue={r.amount ?? ''} onBlur={e => setPreview(prev => prev!.map((row, j) => j === i ? { ...row, amount: e.target.value === '' ? null : Number(e.target.value) } : row))}
@@ -311,39 +306,86 @@ export default function DividendosTab({ accountNumber, positions }: { accountNum
         </div>
       )}
 
-      {/* ── Único resumen visible por fondo: valor, cobrado y tasa. Nada más. ── */}
+      {/* ── Vista predeterminada: UNA fila por fondo, nada más. El detalle
+          fecha por fecha va oculto salvo que se despliegue a propósito. ── */}
       {results.length === 0 ? (
         <div className="border-2 border-dashed border-gray-200 rounded-xl p-10 text-center">
           <p className="text-sm text-gray-400">Sin fondos cargados. Escribí un nombre arriba y agregalo, o importá el Activity del custodio.</p>
         </div>
       ) : (
-        results.map(({ group, result, fundValue }) => (
-          <div key={group.key} className="bg-[#1B2E3C] rounded-xl p-4">
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-sm font-bold text-white">{group.label}</p>
-              <button onClick={() => setEditingGroupKey(group.key)} className="text-[11px] font-medium text-white/50 hover:text-white">
-                Editar movimientos
-              </button>
-            </div>
-            <div className="grid grid-cols-3 gap-3">
-              <div>
-                <p className="text-[10px] text-white/50 uppercase">Valor del fondo</p>
-                <p className="text-xl font-bold text-white">{fmtUSD2(fundValue)}</p>
-              </div>
-              <div>
-                <p className="text-[10px] text-white/50 uppercase">Dividendos cobrados</p>
-                <p className="text-xl font-bold text-white">{fmtUSD2(result.totalCollected)}</p>
-              </div>
-              <div>
-                <p className="text-[10px] text-white/50 uppercase">Tasa anualizada</p>
-                <p className="text-xl font-bold text-emerald-300">{fmtPct(result.annualizedYieldPct)}</p>
-              </div>
-            </div>
-          </div>
-        ))
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-[#1B2E3C] text-left">
+                <th className="px-4 py-2.5 text-[10px] font-semibold uppercase text-white">Fondo</th>
+                <th className="px-4 py-2.5 text-[10px] font-semibold uppercase text-white text-right">Dividendos cobrados</th>
+                <th className="px-4 py-2.5 text-[10px] font-semibold uppercase text-white text-right">Tasa anualizada</th>
+                <th className="w-8" />
+              </tr>
+            </thead>
+            <tbody>
+              {results.map(({ group, result, fundValue }) => {
+                const isOpen = expandedKey === group.key
+                return (
+                  <Fragment key={group.key}>
+                    <tr
+                      onClick={() => setExpandedKey(isOpen ? null : group.key)}
+                      className="border-b border-gray-100 cursor-pointer hover:bg-gray-50"
+                    >
+                      <td className="px-4 py-2.5 font-medium text-gray-800">
+                        <span className="inline-block w-3 text-gray-400">{isOpen ? '▾' : '▸'}</span> {group.label}
+                      </td>
+                      <td className="px-4 py-2.5 text-right font-semibold text-gray-900">{fmtUSD2(result.totalCollected)}</td>
+                      <td className="px-4 py-2.5 text-right font-semibold text-emerald-600">{fmtPct(result.annualizedYieldPct)}</td>
+                      <td />
+                    </tr>
+                    {isOpen && (
+                      <tr key={group.key + '-detail'} className="border-b border-gray-100 bg-gray-50/60">
+                        <td colSpan={4} className="px-4 py-3">
+                          <div className="flex items-center justify-between mb-2">
+                            <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Detalle por dividendo — control y auditoría</p>
+                            <button onClick={e => { e.stopPropagation(); setEditingGroupKey(group.key) }} className="text-[11px] font-medium text-[#2E7D52] hover:underline">
+                              Editar movimientos
+                            </button>
+                          </div>
+                          {result.history.length === 0 ? (
+                            <p className="text-xs text-gray-400">Sin dividendos cargados para este fondo. Valor del fondo (posición actual): {fmtUSD2(fundValue)}.</p>
+                          ) : (
+                            <table className="w-full text-xs">
+                              <thead>
+                                <tr className="text-left text-gray-400 border-b border-gray-200">
+                                  <th className="py-1">Fecha</th>
+                                  <th className="py-1 text-right">Dividendo</th>
+                                  <th className="py-1 text-right">Capital correspondiente</th>
+                                  <th className="py-1 text-right">Yield</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {result.history.map(h => (
+                                  <tr key={h.id} className="border-b border-gray-100">
+                                    <td className="py-1 text-gray-600">{fmtDate(h.date)}</td>
+                                    <td className="py-1 text-right font-semibold text-gray-800">{fmtUSD2(h.collected)}</td>
+                                    <td className="py-1 text-right text-gray-500">{h.capitalAtPayment != null ? fmtUSD2(h.capitalAtPayment) : '—'}</td>
+                                    <td className="py-1 text-right">
+                                      {h.yieldPct != null ? <span className="font-semibold text-emerald-600">{fmtPct(h.yieldPct)}</span> : <span className="text-amber-600 text-[10px]">pendiente de revisar</span>}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          )}
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
       )}
 
-      {/* ── Editar movimientos: modal, nunca visible por defecto ── */}
+      {/* ── Editar movimientos: modal, solo se abre desde el detalle ── */}
       {editingGroup && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setEditingGroupKey(null)}>
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[85vh] overflow-y-auto p-5" onClick={e => e.stopPropagation()}>
