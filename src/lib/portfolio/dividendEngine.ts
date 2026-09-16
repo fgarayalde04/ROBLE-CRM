@@ -150,7 +150,10 @@ export function computeFundDividends(transactions: DividendTxn[], today: Date = 
 // (permite juntar el mismo fondo entre custodios), si no el nombre tal cual
 // se cargó.
 export function fundGroupKey(isin: string | null | undefined, fundName: string): string {
-  return isin?.trim() ? isin.trim().toUpperCase() : fundName.trim()
+  // Sin ISIN, agrupa por nombre — pero mayúsculas/minúsculas distintas entre
+  // un dividendo importado del Activity y una compra tipeada a mano para el
+  // mismo fondo no deben separarlos en dos grupos.
+  return isin?.trim() ? isin.trim().toUpperCase() : fundName.trim().toLowerCase()
 }
 
 // Huella para detectar "posible duplicado" al importar Activity — mismo
