@@ -185,6 +185,15 @@ export function computePerfValueSeries(
     const n = Number(ret)
     return !isFinite(n) || n <= -100 ? null : ending / (1 + n / 100)
   }
+  // return_3y/return_5y vienen ANUALIZADOS (ver "Rentabilidad por período"
+  // en RendimientoTab) — dividir una sola vez como en fromRet subestima o
+  // sobreestima brutalmente el valor de hace 3/5 años; hay que componer el
+  // retorno anual esa cantidad de años, igual que se anualizó al calcularlo.
+  const fromRetAnnualized = (ret: string | number | null, years: number) => {
+    if (ret == null) return null
+    const n = Number(ret)
+    return !isFinite(n) || n <= -100 ? null : ending / Math.pow(1 + n / 100, years)
+  }
 
   // "Beginning Value" de Since Start Date es el valor ANTES de que la
   // cuenta existiera (0) — el monto inicial real que el cliente ve como
@@ -199,8 +208,8 @@ export function computePerfValueSeries(
     ? (bv?.sinceInception ?? 0) + nc.sinceInception
     : (bv?.sinceInception ?? fromRet(p.return_since_inception))
   if (p.inception_date) add(new Date(p.inception_date + 'T00:00:00'), inceptionValue, 'Inicio')
-  add(back(5), bv?.fiveYear ?? fromRet(p.return_5y), 'Hace 5 años')
-  add(back(3), bv?.threeYear ?? fromRet(p.return_3y), 'Hace 3 años')
+  add(back(5), bv?.fiveYear ?? fromRetAnnualized(p.return_5y, 5), 'Hace 5 años')
+  add(back(3), bv?.threeYear ?? fromRetAnnualized(p.return_3y, 3), 'Hace 3 años')
   add(back(1), bv?.oneYear ?? fromRet(p.return_1y), 'Hace 1 año')
   add(new Date(Date.UTC(end.getUTCFullYear(), 0, 1)), bv?.ytd ?? fromRet(p.return_ytd), 'Inicio de año')
   if (p.period_start) add(new Date(p.period_start + 'T00:00:00'), bv?.selected ?? fromRet(p.return_selected), 'Inicio del período')
