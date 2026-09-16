@@ -331,23 +331,27 @@ export default function ProposalPDFTemplate({
       precio:      !isHidden('bonds.precio'),
     }
     const labelColSpan = 2 + Object.values(show).filter(Boolean).length
+    // La tabla de bonos puede llegar a 12 columnas a la vez — con el tamaño
+    // de letra normal de fondos/acciones no entraban bien; se achica solo acá.
+    const bondTh: React.CSSProperties = { ...TH_STYLE, fontSize: 8, padding: '5px 5px' }
+    const bondTd: React.CSSProperties = { ...TD_STYLE, fontSize: 8.5, padding: '4px 5px' }
     return (
       <div style={{ marginTop: 10 }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr>
-              {show.moneda && <th style={{ ...TH_STYLE, width: 60 }}>MONEDA</th>}
-              <th style={{ ...TH_STYLE, width: 60 }}>OPERACIÓN</th>
-              <th style={{ ...TH_STYLE, textAlign: 'left' }}>BONOS</th>
-              {show.vencimiento && <th style={{ ...TH_STYLE, width: 80 }}>VENCIMIENTO</th>}
-              {show.cupon && <th style={{ ...TH_STYLE, width: 55 }}>CUPÓN</th>}
-              {show.rendimiento && <th style={{ ...TH_STYLE, width: 65 }}>RENDIMIENTO</th>}
-              {show.duration && <th style={{ ...TH_STYLE, width: 48 }}>DUR. (A)</th>}
-              {show.rating && <th style={{ ...TH_STYLE, width: 50 }}>RATING</th>}
-              {show.precio && <th style={{ ...TH_STYLE, width: 65 }}>PRECIO (IND)</th>}
-              <th style={{ ...TH_STYLE, width: 80 }}>VALOR COMPRA</th>
-              <th style={{ ...TH_STYLE, width: 80 }}>CUPÓN CORRIDO</th>
-              <th style={{ ...TH_STYLE, width: 90, borderRight: 'none' }}>DESEMBOLSO EST.</th>
+              {show.moneda && <th style={{ ...bondTh, width: 55 }}>MONEDA</th>}
+              <th style={{ ...bondTh, width: 55 }}>OPERACIÓN</th>
+              <th style={{ ...bondTh, textAlign: 'left' }}>BONOS</th>
+              {show.vencimiento && <th style={{ ...bondTh, width: 72 }}>VENCIMIENTO</th>}
+              {show.cupon && <th style={{ ...bondTh, width: 48 }}>CUPÓN</th>}
+              {show.rendimiento && <th style={{ ...bondTh, width: 58 }}>RENDIMIENTO</th>}
+              {show.duration && <th style={{ ...bondTh, width: 42 }}>DUR. (A)</th>}
+              {show.rating && <th style={{ ...bondTh, width: 44 }}>RATING</th>}
+              {show.precio && <th style={{ ...bondTh, width: 58 }}>PRECIO (IND)</th>}
+              <th style={{ ...bondTh, width: 72 }}>VALOR COMPRA</th>
+              <th style={{ ...bondTh, width: 72 }}>CUPÓN CORRIDO</th>
+              <th style={{ ...bondTh, width: 80, borderRight: 'none' }}>DESEMBOLSO EST.</th>
             </tr>
           </thead>
           <tbody>
@@ -355,21 +359,20 @@ export default function ProposalPDFTemplate({
               const accrual = accrualsByRow.get(b.id)!
               return (
               <tr key={b.id} data-pdf-keep-together style={{ backgroundColor: i % 2 === 0 ? '#FFFFFF' : '#F7F9FB' }}>
-                {show.moneda && <td style={TD_STYLE}>{b.currency}</td>}
-                <td style={TD_STYLE}><OperacionBadge value={b.operacion} /></td>
-                <td style={{ ...TD_STYLE, textAlign: 'left', fontWeight: 600 }}>
+                {show.moneda && <td style={bondTd}>{b.currency}</td>}
+                <td style={bondTd}><OperacionBadge value={b.operacion} /></td>
+                <td style={{ ...bondTd, textAlign: 'left', fontWeight: 600 }}>
                   {b.issuer?.toUpperCase() ?? '—'}
-                  {b.isin && <div style={{ fontSize: 7, fontWeight: 400, color: '#9ca3af', marginTop: 1 }}>ISIN: {b.isin}</div>}
                 </td>
-                {show.vencimiento && <td style={{ ...TD_STYLE, whiteSpace: 'nowrap' }}>{fmtDate(b.maturity_date)}</td>}
-                {show.cupon && <td style={TD_STYLE}>{b.coupon != null ? fmtNum(b.coupon, 3).replace(/\.?0+$/, '') : '—'}</td>}
-                {show.rendimiento && <td style={TD_STYLE}>{b.yield != null ? `${fmtNum(b.yield)}%` : '—'}</td>}
-                {show.duration && <td style={TD_STYLE}>{b.duration != null ? fmtNum(b.duration, 1) : '—'}</td>}
-                {show.rating && <td style={TD_STYLE}>{b.rating ?? '—'}</td>}
-                {show.precio && <td style={TD_STYLE}>{b.price != null ? fmtNum(b.price, 3) : '—'}</td>}
-                <td style={{ ...TD_STYLE, textAlign: 'right', fontWeight: 600 }}>{fmtAmt(b.amount)}</td>
-                <td style={{ ...TD_STYLE, textAlign: 'right', fontWeight: 700, backgroundColor: '#FEF3C7' }}>{accrual.accruedInterest > 0 ? fmtAmt(accrual.accruedInterest) : '—'}</td>
-                <td style={{ ...TD_STYLE, textAlign: 'right', fontWeight: 700, borderRight: 'none' }}>{fmtAmt(accrual.estimatedCashRequired)}</td>
+                {show.vencimiento && <td style={{ ...bondTd, whiteSpace: 'nowrap' }}>{fmtDate(b.maturity_date)}</td>}
+                {show.cupon && <td style={bondTd}>{b.coupon != null ? fmtNum(b.coupon, 3).replace(/\.?0+$/, '') : '—'}</td>}
+                {show.rendimiento && <td style={bondTd}>{b.yield != null ? `${fmtNum(b.yield)}%` : '—'}</td>}
+                {show.duration && <td style={bondTd}>{b.duration != null ? fmtNum(b.duration, 1) : '—'}</td>}
+                {show.rating && <td style={bondTd}>{b.rating ?? '—'}</td>}
+                {show.precio && <td style={bondTd}>{b.price != null ? fmtNum(b.price, 3) : '—'}</td>}
+                <td style={{ ...bondTd, textAlign: 'right', fontWeight: 600 }}>{fmtAmt(b.amount)}</td>
+                <td style={{ ...bondTd, textAlign: 'right', fontWeight: 700, backgroundColor: '#FEF3C7' }}>{accrual.accruedInterest > 0 ? fmtAmt(accrual.accruedInterest) : '—'}</td>
+                <td style={{ ...bondTd, textAlign: 'right', fontWeight: 700, borderRight: 'none' }}>{fmtAmt(accrual.estimatedCashRequired)}</td>
               </tr>
               )
             })}
