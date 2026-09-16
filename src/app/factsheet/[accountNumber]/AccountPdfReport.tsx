@@ -303,15 +303,11 @@ export default function AccountPdfReport({
   const reportDate = new Date().toLocaleDateString('es-UY', { day: '2-digit', month: 'long', year: 'numeric' })
 
   // Rendimiento estimado del Projected Income: income proyectado a 12 meses
-  // dividido el market value de las posiciones que efectivamente generan
-  // renta (bonos con cupón, liquidez, fondos y las que pagan dividendo).
-  const incomeProducingMV = sortedByValue.reduce((s, p) => {
-    const pays = (p.coupon != null && Number(p.coupon) > 0) ||
-      !!p.dividend_policy ||
-      ['Fixed Income', 'Cash', 'Fund'].includes(p.asset_class)
-    return pays ? s + Number(p.market_value) : s
-  }, 0)
-  const incomeYield = hasIncomePage && incomeProducingMV > 0 ? (projectedIncome12m / incomeProducingMV) * 100 : null
+  // dividido el market value de los BONOS (Fixed Income) solamente — dividir
+  // por todo el portafolio (incluyendo liquidez y fondos, que no generan un
+  // cupón fijo) diluye el número y lo muestra artificialmente bajo.
+  const bondsMV = sortedByValue.reduce((s, p) => p.asset_class === 'Fixed Income' ? s + Number(p.market_value) : s, 0)
+  const incomeYield = hasIncomePage && bondsMV > 0 ? (projectedIncome12m / bondsMV) * 100 : null
 
   return (
     <div id="account-pdf-report" style={{ position: 'fixed', left: -10000, top: 0 }}>
@@ -452,7 +448,7 @@ export default function AccountPdfReport({
           <StatTile
             label="Rendimiento estimado del income"
             value={incomeYield != null ? `${incomeYield.toFixed(2)}%` : '—'}
-            sub={incomeYield != null ? `Income 12m ÷ ${fmtUSD(incomeProducingMV)} en posiciones que generan renta` : 'Requiere Projected Income'}
+            sub={incomeYield != null ? `Income 12m ÷ ${fmtUSD(bondsMV)} en bonos` : 'Requiere Projected Income'}
             color={COLORS.darkGreen}
           />
           <StatTile
@@ -530,8 +526,13 @@ export default function AccountPdfReport({
             </tr>
           </thead>
           {holdingGroups.map(group => (
+              // El grupo entero se marca keep-together para el caso común (entra
+              // en una página), pero cuando tiene tantas posiciones que no entra
+              // en ninguna página esa marca deja de aplicar (no "sectionFits") —
+              // por eso además cada fila se marca individualmente, así el corte
+              // entre páginas siempre cae entre filas y nunca a mitad de una.
               <tbody data-pdf-keep-together key={group.assetClass}>
-                <tr style={{ background: COLORS.bgSofter }}>
+                <tr data-pdf-keep-together style={{ background: COLORS.bgSofter }}>
                   <td colSpan={holdingColSpan} style={{ padding: '1.8mm 1.5mm', fontWeight: 700, color: COLORS.ink, textTransform: 'uppercase', letterSpacing: 0.4, fontSize: 6.8 }}>
                     {group.label} · {group.rows.length} {group.rows.length === 1 ? 'posición' : 'posiciones'}
                   </td>
@@ -541,7 +542,7 @@ export default function AccountPdfReport({
                   const clean = cleanedNames.get(p.id)
                   const gl = p.cusip ? glByCusip.get(p.cusip) : undefined
                   return (
-                    <tr key={p.id} style={{ background: i % 2 === 0 ? '#fff' : COLORS.bgSofter }}>
+                    <tr key={p.id} data-pdf-keep-together style={{ background: i % 2 === 0 ? '#fff' : COLORS.bgSofter }}>
                       <td style={{ padding: '2.2mm 1.5mm', maxWidth: '58mm' }}>
                         <div style={{ color: COLORS.ink, fontWeight: 600, lineHeight: 1.6, fontFamily: 'Arial, sans-serif' }}>{truncateName(clean?.name ?? p.name, 46)}</div>
                         {clean?.detail && <div style={{ fontSize: 6, lineHeight: 1.6, color: COLORS.mutedSlate, fontFamily: 'Arial, sans-serif' }}>{clean.detail}</div>}
@@ -567,7 +568,7 @@ export default function AccountPdfReport({
                 {(() => {
                   const glPct = group.subtotalCost > 0 ? (group.subtotalGL / group.subtotalCost) * 100 : 0
                   return (
-                    <tr style={{ background: '#EEF2F1', borderBottom: `1.5px solid ${COLORS.border}` }}>
+                    <tr data-pdf-keep-together style={{ background: '#EEF2F1', borderBottom: `1.5px solid ${COLORS.border}` }}>
                       <td colSpan={3} style={{ padding: '1.8mm 1.5mm', textAlign: 'right', fontWeight: 700, color: COLORS.slate, fontSize: 6.8 }}>Subtotal {group.label}</td>
                       <td style={{ padding: '1.8mm 1.5mm', textAlign: 'right', fontWeight: 700, color: COLORS.ink }}>{fmtUSD2(group.subtotalValue)}</td>
                       <td style={{ padding: '1.8mm 1.5mm', textAlign: 'right', fontWeight: 700, color: COLORS.slate }}>{fmtPct(group.subtotalPct)}</td>
