@@ -563,3 +563,55 @@ export async function listImportHistory(advisorFilter: string[] | null, accountN
   )
   return rows
 }
+
+// ── Planilla manual de dividendos (compras + dividendos cobrados por fondo) ──
+// Nunca se completa sola — la carga el asesor a mano, no depende de ningún import.
+
+export async function listDividendLedger(accountNumber: string) {
+  const { rows } = await pool.query(
+    `select * from portfolio_dividend_ledger where account_number = $1
+     order by fund_name, entry_date asc nulls last, created_at asc`,
+    [accountNumber]
+  )
+  return rows
+}
+
+export async function createDividendLedgerEntry(input: {
+  accountNumber: string
+  fundName: string
+  entryType: 'compra' | 'dividendo'
+  entryDate: string | null
+  amount: number | null
+  notes: string | null
+  createdBy: string | null
+}) {
+  const { rows } = await pool.query(
+    `insert into portfolio_dividend_ledger (account_number, fund_name, entry_type, entry_date, amount, notes, created_by)
+     values ($1,$2,$3,$4,$5,$6,$7) returning *`,
+    [input.accountNumber, input.fundName, input.entryType, input.entryDate, input.amount, input.notes, input.createdBy]
+  )
+  return rows[0]
+}
+
+const DIVIDEND_LEDGER_COLUMNS = ['fund_name', 'entry_type', 'entry_date', 'amount', 'notes'] as const
+
+export async function updateDividendLedgerEntry(id: string, patch: Partial<Record<typeof DIVIDEND_LEDGER_COLUMNS[number], unknown>>) {
+  const sets: string[] = []
+  const values: unknown[] = []
+  for (const col of DIVIDEND_LEDGER_COLUMNS) {
+    if (patch[col] === undefined) continue
+    values.push(patch[col])
+    sets.push(`${col} = $${values.length}`)
+  }
+  if (sets.length === 0) return null
+  values.push(id)
+  const { rows } = await pool.query(
+    `update portfolio_dividend_ledger set ${sets.join(', ')} where id = $${values.length} returning *`,
+    values
+  )
+  return rows[0] ?? null
+}
+
+export async function deleteDividendLedgerEntry(id: string) {
+  await pool.query(`delete from portfolio_dividend_ledger where id = $1`, [id])
+}

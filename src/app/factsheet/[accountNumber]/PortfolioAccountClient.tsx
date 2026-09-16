@@ -8,6 +8,7 @@ import PositionsTab from './PositionsTab'
 import RendimientoTab from './RendimientoTab'
 import MovimientosTab from './MovimientosTab'
 import ResumenTab from './ResumenTab'
+import DividendosTab from './DividendosTab'
 import ImportHistoryModal from '@/components/portfolio/ImportHistoryModal'
 import AccountPdfReport from './AccountPdfReport'
 import PdfOptionsModal, { type PdfSections, DEFAULT_PDF_SECTIONS } from '@/components/portfolio/PdfOptionsModal'
@@ -27,7 +28,7 @@ export const fmtUSD2 = (n: number) => new Intl.NumberFormat('en-US', { style: 'c
 export const fmtPct = (n: number, decimals = 1) => `${n.toFixed(decimals)}%`
 export const fmtDate = (iso: string) => new Date(iso + 'T00:00:00').toLocaleDateString('es-UY', { day: '2-digit', month: 'short', year: 'numeric' })
 
-type Tab = 'resumen' | 'posiciones' | 'rendimiento' | 'movimientos'
+type Tab = 'resumen' | 'posiciones' | 'rendimiento' | 'movimientos' | 'dividendos'
 
 export default function PortfolioAccountClient({ accountNumber }: { accountNumber: string }) {
   const router = useRouter()
@@ -397,7 +398,7 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
       <div className="bg-white border-b border-gray-200 px-6">
         <div className="max-w-6xl mx-auto flex gap-1">
           {([
-            ['resumen', 'Resumen'], ['posiciones', 'Posiciones'], ['rendimiento', 'Rendimiento'], ['movimientos', 'Movimientos'],
+            ['resumen', 'Resumen'], ['posiciones', 'Posiciones'], ['rendimiento', 'Rendimiento'], ['movimientos', 'Movimientos'], ['dividendos', 'Dividendos'],
           ] as [Tab, string][]).map(([key, label]) => (
             <button key={key} onClick={() => setTab(key)}
               className={`px-4 py-3 text-sm font-semibold border-b-2 transition ${tab === key ? 'border-[#2E7D52] text-[#1B3A2B]' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>
@@ -432,6 +433,7 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
           <MovimientosTab accountNumber={accountNumber} cashProjImport={cashProjImport} cashProjRows={cashProjRows} onCashProjImported={load}
             activityImport={activityImport} activityRows={activityRows} onActivityImported={load} />
         )}
+        {tab === 'dividendos' && <DividendosTab accountNumber={accountNumber} />}
       </div>
 
       {showImport && <ImportPositionsModal accountNumber={accountNumber} onClose={() => setShowImport(false)} onImported={() => { setShowImport(false); load() }} />}
