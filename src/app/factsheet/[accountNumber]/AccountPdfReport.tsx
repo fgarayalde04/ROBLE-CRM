@@ -341,7 +341,7 @@ export default function AccountPdfReport({
       <div className="pdf-page" style={PAGE_STYLE}>
         <PdfHeader title="Performance" />
 
-        <div style={{ display: 'flex', gap: '4mm', marginBottom: '7mm' }}>
+        <div data-pdf-keep-together style={{ display: 'flex', gap: '4mm', marginBottom: '7mm' }}>
           <div style={{ flex: '0 0 38%', borderRadius: 10, padding: '6mm', color: '#fff', background: `linear-gradient(135deg, ${COLORS.darkGreen}, ${COLORS.charcoal})` }}>
             <div style={{ fontSize: 8.5, textTransform: 'uppercase', letterSpacing: 1, opacity: 0.7 }}>Valor de la cuenta</div>
             <div style={{ fontSize: 32, fontWeight: 800, marginTop: '3mm' }}>{fmtUSD(totalValue)}</div>
@@ -406,7 +406,7 @@ export default function AccountPdfReport({
         </div>
 
         {growthPoints.length >= 2 && (
-          <div style={{ border: `1px solid ${COLORS.border}`, borderRadius: 10, padding: '5mm 6mm', marginBottom: '5mm' }}>
+          <div data-pdf-keep-together style={{ border: `1px solid ${COLORS.border}`, borderRadius: 10, padding: '5mm 6mm', marginBottom: '5mm' }}>
             <div style={{ fontSize: 9.5, fontWeight: 700, color: COLORS.ink, marginBottom: '2mm' }}>Evolución del valor de la cuenta</div>
             <PdfAreaChart points={growthPoints} height={50} />
             <div style={{ fontSize: 6.4, color: COLORS.mutedSlate, marginTop: '2mm' }}>
@@ -416,7 +416,7 @@ export default function AccountPdfReport({
         )}
 
         {performance && (
-          <div style={{ border: `1px solid ${COLORS.border}`, borderRadius: 10, padding: '5mm 6mm' }}>
+          <div data-pdf-keep-together style={{ border: `1px solid ${COLORS.border}`, borderRadius: 10, padding: '5mm 6mm' }}>
             <div style={{ fontSize: 9.5, fontWeight: 700, color: COLORS.ink, marginBottom: '3mm' }}>Rentabilidad por período (Net of Fees)</div>
             <PdfPerfBarChart series={[
               { label: 'YTD', value: performance.return_ytd != null ? Number(performance.return_ytd) : null },
