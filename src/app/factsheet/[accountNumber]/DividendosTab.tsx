@@ -412,6 +412,7 @@ export default function DividendosTab({ accountNumber }: { accountNumber: string
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-gray-100 text-left text-gray-400">
+                    <th className="px-3 py-1.5 text-[10px] font-semibold uppercase w-40" title="Si esta fila quedó con el nombre tipeado distinto a las demás del mismo fondo, corregilo acá para que se agrupen juntas.">Fondo</th>
                     <th className="px-3 py-1.5 text-[10px] font-semibold uppercase w-28">Tipo</th>
                     <th className="px-3 py-1.5 text-[10px] font-semibold uppercase w-32">Fecha</th>
                     <th className="px-3 py-1.5 text-[10px] font-semibold uppercase w-32 text-right">Monto</th>
@@ -423,6 +424,16 @@ export default function DividendosTab({ accountNumber }: { accountNumber: string
                 <tbody>
                   {rows.map(r => (
                     <tr key={r.id} className="border-b border-gray-50 last:border-0">
+                      <td className="px-3 py-1.5">
+                        <input
+                          key={r.id + r.fund_name}
+                          type="text"
+                          disabled={saving === r.id}
+                          defaultValue={r.fund_name}
+                          onBlur={e => { const v = e.target.value.trim(); if (v && v !== r.fund_name) patchRow(r.id, { fund_name: v }) }}
+                          className="text-xs text-gray-700 border border-transparent hover:border-gray-200 focus:border-[#2E7D52]/50 rounded px-1 py-0.5 outline-none w-full"
+                        />
+                      </td>
                       <td className="px-3 py-1.5">
                         <select
                           defaultValue={r.entry_type}
@@ -481,7 +492,7 @@ export default function DividendosTab({ accountNumber }: { accountNumber: string
                     </tr>
                   ))}
                   <tr>
-                    <td colSpan={6} className="px-3 py-1.5">
+                    <td colSpan={7} className="px-3 py-1.5">
                       <div className="flex gap-2">
                         <button onClick={() => addRow(fundName, 'compra')} className="text-[11px] font-medium text-gray-500 hover:text-[#2E7D52]">+ compra</button>
                         <button onClick={() => addRow(fundName, 'venta')} className="text-[11px] font-medium text-gray-500 hover:text-red-600">+ venta</button>
