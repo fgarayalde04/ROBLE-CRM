@@ -156,9 +156,19 @@ export default function DividendosTab({ accountNumber }: { accountNumber: string
   }
 
   const groups = useMemo(() => {
+    // Una compra importada de Activity suele traer ISIN; un dividendo
+    // cargado a mano para el mismo fondo puede no tenerlo — sin este cruce
+    // quedarían en grupos distintos (mismo fondo, "no toma" las compras al
+    // calcular el rendimiento). Se aprende ISIN↔nombre de cualquier fila que
+    // tenga los dos, y con eso se reubican las filas que solo tienen el nombre.
+    const nameToIsin = new Map<string, string>()
+    for (const e of entries) {
+      if (e.isin?.trim()) nameToIsin.set(e.fund_name.trim().toLowerCase(), e.isin.trim().toUpperCase())
+    }
     const byKey = new Map<string, { key: string; label: string; entries: LedgerEntry[] }>()
     for (const e of entries) {
-      const key = fundGroupKey(e.isin, e.fund_name)
+      const isin = e.isin?.trim() || nameToIsin.get(e.fund_name.trim().toLowerCase()) || null
+      const key = fundGroupKey(isin, e.fund_name)
       let g = byKey.get(key)
       if (!g) { g = { key, label: e.fund_name, entries: [] }; byKey.set(key, g) }
       g.entries.push(e)

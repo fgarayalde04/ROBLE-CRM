@@ -252,9 +252,17 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
       const res = await fetch(`/api/portfolio/${encodeURIComponent(accountNumber)}/dividends`)
       const data = await res.json()
       const entries: { fund_name: string; isin: string | null; entry_type: string; entry_date: string | null; amount: string | null }[] = data.entries ?? []
+      // Mismo cruce ISIN↔nombre que la pestaña Dividendos, para que el PDF
+      // no separe en dos fondos una compra importada (con ISIN) de un
+      // dividendo cargado a mano para el mismo fondo (sin ISIN).
+      const nameToIsin = new Map<string, string>()
+      for (const e of entries) {
+        if (e.isin?.trim()) nameToIsin.set(e.fund_name.trim().toLowerCase(), e.isin.trim().toUpperCase())
+      }
       const byKey = new Map<string, { label: string; txns: DividendTxn[] }>()
       for (const e of entries) {
-        const key = fundGroupKey(e.isin, e.fund_name)
+        const isin = e.isin?.trim() || nameToIsin.get(e.fund_name.trim().toLowerCase()) || null
+        const key = fundGroupKey(isin, e.fund_name)
         let g = byKey.get(key)
         if (!g) { g = { label: e.fund_name, txns: [] }; byKey.set(key, g) }
         g.txns.push({ id: key, date: e.entry_date, type: e.entry_type as DividendTxn['type'], amount: e.amount != null ? Number(e.amount) : null })
