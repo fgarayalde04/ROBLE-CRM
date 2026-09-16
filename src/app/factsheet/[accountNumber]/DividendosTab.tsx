@@ -44,6 +44,8 @@ export default function DividendosTab({ accountNumber }: { accountNumber: string
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState<string | null>(null)
   const [newFundName, setNewFundName] = useState('')
+  const [newFundDate, setNewFundDate] = useState('')
+  const [newFundAmount, setNewFundAmount] = useState('')
   const [importing, setImporting] = useState(false)
   const [preview, setPreview] = useState<PreviewRow[] | null>(null)
   const [previewChecked, setPreviewChecked] = useState<boolean[]>([])
@@ -66,12 +68,16 @@ export default function DividendosTab({ accountNumber }: { accountNumber: string
 
   useEffect(() => { load() }, [accountNumber])
 
-  async function addRow(fundName: string, entryType: 'compra' | 'venta' | 'dividendo' | 'dividendo_total'): Promise<boolean> {
+  async function addRow(
+    fundName: string,
+    entryType: 'compra' | 'venta' | 'dividendo' | 'dividendo_total',
+    extra?: { entry_date?: string | null; amount?: number | null }
+  ): Promise<boolean> {
     const trimmed = fundName.trim()
     if (!trimmed) return false
     const res = await fetch(`/api/portfolio/${encodeURIComponent(accountNumber)}/dividends`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ fund_name: trimmed, entry_type: entryType }),
+      body: JSON.stringify({ fund_name: trimmed, entry_type: entryType, ...extra }),
     })
     if (!res.ok) {
       const data = await res.json().catch(() => ({}))
@@ -178,45 +184,81 @@ export default function DividendosTab({ accountNumber }: { accountNumber: string
       </div>
 
       {results.length > 0 && (
-        <div className="bg-[#1B3A2B] rounded-xl p-4 flex items-center justify-between">
-          <div>
-            <p className="text-[10px] text-white/60 uppercase tracking-wide">Dividendos totales cobrados</p>
-            <p className="text-2xl font-bold text-white mt-0.5">{fmtUSD2(portfolioTotal)}</p>
-          </div>
-          <div className="text-right text-[11px] text-white/70 space-y-0.5 max-w-xs">
-            {results.filter(r => r.result.totalCollected > 0).map(r => (
-              <div key={r.group.key} className="flex justify-between gap-3">
-                <span className="truncate">{r.group.label}</span>
-                <span className="font-semibold text-white">{fmtUSD2(r.result.totalCollected)}</span>
-              </div>
-            ))}
-          </div>
+        <div className="bg-[#1B3A2B] rounded-xl p-4">
+          <p className="text-[10px] text-white/60 uppercase tracking-wide">Dividendos totales cobrados</p>
+          <p className="text-2xl font-bold text-white mt-0.5">{fmtUSD2(portfolioTotal)}</p>
+          {results.some(r => r.result.totalCollected > 0) && (
+            <table className="w-full text-xs mt-3 pt-3 border-t border-white/10">
+              <thead>
+                <tr className="text-white/50 text-left">
+                  <th className="pb-1 font-medium">Fondo</th>
+                  <th className="pb-1 font-medium text-right">Dividendos cobrados</th>
+                  <th className="pb-1 font-medium text-right">Rendimiento</th>
+                </tr>
+              </thead>
+              <tbody>
+                {results.filter(r => r.result.totalCollected > 0).map(r => (
+                  <tr key={r.group.key} className="text-white/80">
+                    <td className="py-0.5 truncate max-w-[160px]">{r.group.label}</td>
+                    <td className="py-0.5 text-right font-semibold text-white">{fmtUSD2(r.result.totalCollected)}</td>
+                    <td className="py-0.5 text-right font-semibold text-emerald-300">{fmtPct(r.result.averageYieldPct)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       )}
 
-      <div className="flex flex-wrap items-center gap-2">
-        <input
-          value={newFundName}
-          onChange={e => setNewFundName(e.target.value)}
-          placeholder="Nombre del fondo…"
-          className="text-sm px-3 py-2 rounded-lg border border-gray-200 outline-none focus:border-[#2E7D52]/50 flex-1 max-w-xs"
-        />
-        <button
-          onClick={async () => { if (await addRow(newFundName, 'compra')) setNewFundName('') }}
-          disabled={!newFundName.trim()}
-          className="text-xs font-semibold px-3 py-2 rounded-lg text-white bg-[#2E7D52] disabled:opacity-40"
-        >
-          + Agregar fondo
-        </button>
-        <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden"
-          onChange={e => { const f = e.target.files?.[0]; if (f) handleFileSelected(f) }} />
-        <button
-          onClick={() => fileInputRef.current?.click()}
-          disabled={importing}
-          className="text-xs font-semibold px-3 py-2 rounded-lg text-[#1B3A2B] border border-[#1B3A2B]/30 disabled:opacity-50"
-        >
-          {importing ? 'Leyendo…' : '📄 Importar Activity'}
-        </button>
+      <div className="bg-white border border-gray-200 rounded-lg p-3">
+        <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-2">Agregar fondo — fecha y monto de la primera compra</p>
+        <div className="flex flex-wrap items-end gap-2">
+          <input
+            value={newFundName}
+            onChange={e => setNewFundName(e.target.value)}
+            placeholder="Nombre del fondo…"
+            className="text-sm px-3 py-2 rounded-lg border border-gray-200 outline-none focus:border-[#2E7D52]/50 flex-1 max-w-xs"
+          />
+          <input
+            type="date"
+            value={newFundDate}
+            onChange={e => setNewFundDate(e.target.value)}
+            title="Fecha de compra"
+            className="text-sm px-3 py-2 rounded-lg border border-gray-200 outline-none focus:border-[#2E7D52]/50"
+          />
+          <input
+            type="number"
+            step="0.01"
+            value={newFundAmount}
+            onChange={e => setNewFundAmount(e.target.value)}
+            placeholder="Monto comprado"
+            title="Monto comprado"
+            className="text-sm px-3 py-2 rounded-lg border border-gray-200 outline-none focus:border-[#2E7D52]/50 w-36"
+          />
+          <button
+            onClick={async () => {
+              const ok = await addRow(newFundName, 'compra', {
+                entry_date: newFundDate || null,
+                amount: newFundAmount.trim() === '' ? null : Number(newFundAmount),
+              })
+              if (ok) { setNewFundName(''); setNewFundDate(''); setNewFundAmount('') }
+            }}
+            disabled={!newFundName.trim()}
+            className="text-xs font-semibold px-3 py-2 rounded-lg text-white bg-[#2E7D52] disabled:opacity-40"
+          >
+            + Agregar fondo
+          </button>
+          <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden"
+            onChange={e => { const f = e.target.files?.[0]; if (f) handleFileSelected(f) }} />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={importing}
+            className="text-xs font-semibold px-3 py-2 rounded-lg text-[#1B3A2B] border border-[#1B3A2B]/30 disabled:opacity-50"
+          >
+            {importing ? 'Leyendo…' : '📄 Importar Activity'}
+          </button>
+        </div>
+        <p className="text-[10px] text-gray-400 mt-1.5">La fecha y el monto son opcionales acá — sin ellos podés completarlos después en la fila, pero el rendimiento no se puede calcular hasta tenerlos.</p>
       </div>
       {importError && <p className="text-xs text-red-600">{importError}</p>}
 
