@@ -34,17 +34,21 @@ export default function DividendosTab({ accountNumber }: { accountNumber: string
 
   useEffect(() => { load() }, [accountNumber])
 
-  async function addRow(fundName: string, entryType: 'compra' | 'dividendo') {
+  async function addRow(fundName: string, entryType: 'compra' | 'dividendo'): Promise<boolean> {
     const trimmed = fundName.trim()
-    if (!trimmed) return
+    if (!trimmed) return false
     const res = await fetch(`/api/portfolio/${encodeURIComponent(accountNumber)}/dividends`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ fund_name: trimmed, entry_type: entryType }),
     })
-    if (res.ok) {
-      const data = await res.json()
-      setEntries(prev => [...prev, data.entry])
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      alert(data.error ?? 'No se pudo agregar la fila.')
+      return false
     }
+    const data = await res.json()
+    setEntries(prev => [...prev, data.entry])
+    return true
   }
 
   async function patchRow(id: string, patch: Record<string, unknown>) {
@@ -53,10 +57,13 @@ export default function DividendosTab({ accountNumber }: { accountNumber: string
       const res = await fetch(`/api/portfolio/dividends/${id}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch),
       })
-      if (res.ok) {
-        const data = await res.json()
-        setEntries(prev => prev.map(e => e.id === id ? data.entry : e))
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        alert(data.error ?? 'No se pudo guardar el cambio.')
+        return
       }
+      const data = await res.json()
+      setEntries(prev => prev.map(e => e.id === id ? data.entry : e))
     } finally {
       setSaving(null)
     }
@@ -64,7 +71,11 @@ export default function DividendosTab({ accountNumber }: { accountNumber: string
 
   async function deleteRow(id: string) {
     if (!confirm('¿Borrar esta fila?')) return
-    await fetch(`/api/portfolio/dividends/${id}`, { method: 'DELETE' })
+    const res = await fetch(`/api/portfolio/dividends/${id}`, { method: 'DELETE' })
+    if (!res.ok) {
+      alert('No se pudo borrar la fila.')
+      return
+    }
     setEntries(prev => prev.filter(e => e.id !== id))
   }
 
@@ -86,7 +97,7 @@ export default function DividendosTab({ accountNumber }: { accountNumber: string
           className="text-sm px-3 py-2 rounded-lg border border-gray-200 outline-none focus:border-[#2E7D52]/50 flex-1 max-w-xs"
         />
         <button
-          onClick={async () => { await addRow(newFundName, 'compra'); setNewFundName('') }}
+          onClick={async () => { if (await addRow(newFundName, 'compra')) setNewFundName('') }}
           disabled={!newFundName.trim()}
           className="text-xs font-semibold px-3 py-2 rounded-lg text-white bg-[#2E7D52] disabled:opacity-40"
         >
