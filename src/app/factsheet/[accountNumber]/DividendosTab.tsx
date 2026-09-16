@@ -187,6 +187,17 @@ export default function DividendosTab({ accountNumber }: { accountNumber: string
         <div className="bg-[#1B3A2B] rounded-xl p-4">
           <p className="text-[10px] text-white/60 uppercase tracking-wide">Dividendos totales cobrados (todos los fondos)</p>
           <p className="text-2xl font-bold text-white mt-0.5">{fmtUSD2(portfolioTotal)}</p>
+          {/* Rendimiento de cada fondo de un vistazo, sin repetir los montos
+              (esos ya están en la tarjeta de cada fondo, abajo). */}
+          <div className="flex flex-wrap gap-x-5 gap-y-1 mt-3 pt-3 border-t border-white/10">
+            {results.map(r => (
+              <div key={r.group.key} className="text-xs text-white/80">
+                {r.group.label}: <span className="font-bold text-emerald-300">
+                  {fmtPct(r.result.annualizedYieldPct)}{r.result.isEstimate && r.result.annualizedYieldPct != null ? '*' : ''}
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
@@ -347,6 +358,11 @@ export default function DividendosTab({ accountNumber }: { accountNumber: string
                     </p>
                   </div>
                 </div>
+                {result.annualizedYieldPct == null && result.totalCollected > 0 && (
+                  <p className="text-[10px] text-amber-300 mt-2">
+                    No se puede calcular la tasa todavía — revisá que las compras tengan fecha cargada (sin fecha no se puede saber qué capital generó cada dividendo).
+                  </p>
+                )}
               </div>
 
               {result.history.length > 0 && (
