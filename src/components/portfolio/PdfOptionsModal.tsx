@@ -6,6 +6,7 @@ export interface PdfSections {
   composicion: boolean
   holdings: boolean
   income: boolean
+  dividendos: boolean
 }
 
 export const DEFAULT_PDF_SECTIONS: PdfSections = {
@@ -13,6 +14,7 @@ export const DEFAULT_PDF_SECTIONS: PdfSections = {
   composicion: true,
   holdings: true,
   income: true,
+  dividendos: true,
 }
 
 const ITEMS: { key: keyof PdfSections; label: string; desc: string }[] = [
@@ -20,6 +22,7 @@ const ITEMS: { key: keyof PdfSections; label: string; desc: string }[] = [
   { key: 'composicion', label: 'Composición y renta', desc: 'Asset allocation, monedas, liquidez, unrealized y rendimiento del income.' },
   { key: 'holdings',    label: 'Posiciones', desc: 'Listado completo de holdings agrupado por clase de activo.' },
   { key: 'income',      label: 'Cupones y dividendos', desc: 'Projected income — próximos cobros estimados por instrumento.' },
+  { key: 'dividendos',  label: 'Dividendos cobrados', desc: 'Resumen de la planilla manual de Dividendos: total cobrado y rendimiento anualizado por fondo.' },
 ]
 
 export default function PdfOptionsModal({

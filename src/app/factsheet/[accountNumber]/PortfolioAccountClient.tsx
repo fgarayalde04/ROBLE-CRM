@@ -13,6 +13,7 @@ import ImportHistoryModal from '@/components/portfolio/ImportHistoryModal'
 import AccountPdfReport from './AccountPdfReport'
 import PdfOptionsModal, { type PdfSections, DEFAULT_PDF_SECTIONS } from '@/components/portfolio/PdfOptionsModal'
 import { cleanDisplayName } from '@/lib/portfolio/theme'
+import { computeFundDividends, fundGroupKey, type DividendTxn } from '@/lib/portfolio/dividendEngine'
 import {
   ASSET_CLASS_ES,
   computeAssetAllocation, computeLiquidity, computeFixedIncomeBreakdown, computeCurrencyExposure,
@@ -242,6 +243,30 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
   // a mano y lo tipea acá antes de generar el PDF; queda "—" si no lo completa.
   const [manualIncomeYieldPct, setManualIncomeYieldPct] = useState('')
   const [pendingPdf, setPendingPdf] = useState(false)
+  // Se trae fresco recién al generar el PDF (no en cada visita a la página)
+  // — la planilla de Dividendos se autofetchea aparte en su propia pestaña.
+  const [dividendResults, setDividendResults] = useState<{ fundName: string; totalCollected: number; currentCapital: number; annualizedYieldPct: number | null; isEstimate: boolean }[]>([])
+
+  async function loadDividendResultsForPdf() {
+    try {
+      const res = await fetch(`/api/portfolio/${encodeURIComponent(accountNumber)}/dividends`)
+      const data = await res.json()
+      const entries: { fund_name: string; isin: string | null; entry_type: string; entry_date: string | null; amount: string | null }[] = data.entries ?? []
+      const byKey = new Map<string, { label: string; txns: DividendTxn[] }>()
+      for (const e of entries) {
+        const key = fundGroupKey(e.isin, e.fund_name)
+        let g = byKey.get(key)
+        if (!g) { g = { label: e.fund_name, txns: [] }; byKey.set(key, g) }
+        g.txns.push({ id: key, date: e.entry_date, type: e.entry_type as DividendTxn['type'], amount: e.amount != null ? Number(e.amount) : null })
+      }
+      setDividendResults(Array.from(byKey.values()).map(g => {
+        const r = computeFundDividends(g.txns)
+        return { fundName: g.label, totalCollected: r.totalCollected, currentCapital: r.currentCapital, annualizedYieldPct: r.annualizedYieldPct, isEstimate: r.isEstimate }
+      }))
+    } catch {
+      setDividendResults([])
+    }
+  }
 
   // El reporte se genera después de un re-render con las secciones elegidas
   // aplicadas al DOM oculto — por eso pasa por un flag en vez de llamarse
@@ -379,13 +404,18 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
           initial={pdfSections}
           initialIncomeYieldPct={manualIncomeYieldPct}
           onCancel={() => setShowPdfOptions(false)}
-          onGenerate={(s, incomeYieldPct) => { setPdfSections(s); setManualIncomeYieldPct(incomeYieldPct); setShowPdfOptions(false); setPendingPdf(true) }}
+          onGenerate={async (s, incomeYieldPct) => {
+            setPdfSections(s); setManualIncomeYieldPct(incomeYieldPct); setShowPdfOptions(false)
+            if (s.dividendos) await loadDividendResultsForPdf()
+            setPendingPdf(true)
+          }}
         />
       )}
 
       <AccountPdfReport account={account} accountNumber={accountNumber} importRow={importRow} sortedByValue={sortedByValue}
         sections={pdfSections}
         manualIncomeYieldPct={manualIncomeYieldPct.trim() === '' ? null : Number(manualIncomeYieldPct)}
+        dividendResults={dividendResults}
         history={history}
         assetAllocation={assetAllocation} fixedIncomeBreakdown={fixedIncomeBreakdown} currencyExposure={currencyExposure}
         liquidity={liquidity} maturityBuckets={maturityBuckets} nextMaturity={nextMaturity}

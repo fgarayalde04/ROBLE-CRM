@@ -207,14 +207,14 @@ export default function AccountPdfReport({
   account, accountNumber, importRow, sortedByValue, history, sections, assetAllocation, fixedIncomeBreakdown, currencyExposure,
   liquidity, maturityBuckets, nextMaturity, cashProjImport, cashProjRows, projectedIncome12m, nextPayment,
   cleanedNames, performance, unrealizedGLTotals, glByCusip,
-  isConsolidated, custodianByPositionId, custodianBreakdown, manualIncomeYieldPct,
+  isConsolidated, custodianByPositionId, custodianBreakdown, manualIncomeYieldPct, dividendResults,
 }: {
   account: PortfolioAccountInfo | null
   accountNumber: string
   importRow: PortfolioImportRow
   sortedByValue: PortfolioPositionRow[]
   history: { snapshot_date: string; total_market_value: string }[]
-  sections?: { performance: boolean; composicion: boolean; holdings: boolean; income: boolean }
+  sections?: { performance: boolean; composicion: boolean; holdings: boolean; income: boolean; dividendos?: boolean }
   assetAllocation: { assetClass: string; label: string; value: number; pct: number }[]
   fixedIncomeBreakdown: { label: string; value: number; pct: number }[]
   currencyExposure: { label: string; value: number; pct: number }[]
@@ -235,6 +235,9 @@ export default function AccountPdfReport({
   // Se calcula a mano (el asesor decide qué posiciones corresponde tomar) y
   // se tipea en el diálogo de generación — nunca se infiere del portafolio.
   manualIncomeYieldPct?: number | null
+  // Resumen de la planilla de Dividendos (ver DividendosTab) — se trae
+  // fresco recién al generar el PDF, no vive en el resto del reporte.
+  dividendResults?: { fundName: string; totalCollected: number; currentCapital: number; annualizedYieldPct: number | null; isEstimate: boolean }[]
 }) {
   const totalValue = Number(importRow.total_market_value)
   const clientName = account?.clientName || account?.accountName || accountNumber
@@ -288,10 +291,11 @@ export default function AccountPdfReport({
   })()
   const holdingColSpan = 5 + (hasGL ? 2 : 0) + (hasMaturityCols ? 1 : 0) + (isConsolidated ? 1 : 0)
 
-  const sec = { performance: true, composicion: true, holdings: true, income: true, ...(sections ?? {}) }
+  const sec = { performance: true, composicion: true, holdings: true, income: true, dividendos: true, ...(sections ?? {}) }
   const hasIncomePage = sec.income && !!cashProjImport && cashProjRows.length > 0
+  const hasDividendPage = sec.dividendos && !!dividendResults && dividendResults.length > 0
   // El disclosure va al pie de la última hoja de contenido que se muestre.
-  const disclosureOn = hasIncomePage ? 'income' : sec.holdings ? 'holdings' : sec.composicion ? 'composicion' : 'performance'
+  const disclosureOn = hasDividendPage ? 'dividendos' : hasIncomePage ? 'income' : sec.holdings ? 'holdings' : sec.composicion ? 'composicion' : 'performance'
   // Preferimos la serie reconstruida del reporte de performance (arranque,
   // valores intermedios y valor actual) — no necesita historial de
   // snapshots. Si no hay performance, caemos al historial de importaciones.
@@ -664,6 +668,36 @@ export default function AccountPdfReport({
 
           {/* Bond Maturity Schedule — sacado por ahora a pedido. */}
 
+          {!hasDividendPage && <PdfDisclosure />}
+          <PdfFooter clientName={clientName} />
+        </div>
+      )}
+
+      {/* ── Página 6: Dividendos cobrados (planilla manual de Dividendos) ── */}
+      {hasDividendPage && (
+        <div className="pdf-page" style={PAGE_STYLE}>
+          <PdfHeader title="Dividendos" />
+          {dividendResults!.map(d => (
+            <div key={d.fundName} data-pdf-keep-together style={{ border: `1px solid ${COLORS.border}`, borderRadius: 8, padding: '3mm 4mm', marginBottom: '4mm' }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.ink, marginBottom: '2mm' }}>{d.fundName}</div>
+              <div style={{ display: 'flex', gap: '6mm' }}>
+                <div>
+                  <div style={{ fontSize: 7, color: COLORS.mutedSlate, textTransform: 'uppercase' }}>Total cobrado</div>
+                  <div style={{ fontSize: 13, fontWeight: 800, color: COLORS.ink, marginTop: '0.5mm' }}>{fmtUSD2(d.totalCollected)}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 7, color: COLORS.mutedSlate, textTransform: 'uppercase' }}>Posición considerada</div>
+                  <div style={{ fontSize: 13, fontWeight: 800, color: COLORS.ink, marginTop: '0.5mm' }}>{fmtUSD2(d.currentCapital)}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 7, color: COLORS.mutedSlate, textTransform: 'uppercase' }}>Tasa anualizada{d.isEstimate ? ' estimada' : ''}</div>
+                  <div style={{ fontSize: 13, fontWeight: 800, color: COLORS.darkGreen, marginTop: '0.5mm' }}>
+                    {d.annualizedYieldPct != null ? `${d.annualizedYieldPct.toFixed(2)}%` : '—'}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
           <PdfDisclosure />
           <PdfFooter clientName={clientName} />
         </div>

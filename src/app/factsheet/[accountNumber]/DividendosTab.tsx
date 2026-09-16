@@ -191,8 +191,9 @@ export default function DividendosTab({ accountNumber }: { accountNumber: string
             <thead>
               <tr className="text-white/50 text-left">
                 <th className="pb-1 font-medium">Fondo</th>
-                <th className="pb-1 font-medium text-right">Dividendos cobrados</th>
-                <th className="pb-1 font-medium text-right">Rendimiento</th>
+                <th className="pb-1 font-medium text-right">Total cobrado</th>
+                <th className="pb-1 font-medium text-right">Posición</th>
+                <th className="pb-1 font-medium text-right">Tasa anualizada</th>
               </tr>
             </thead>
             <tbody>
@@ -200,7 +201,10 @@ export default function DividendosTab({ accountNumber }: { accountNumber: string
                 <tr key={r.group.key} className="text-white/80">
                   <td className="py-0.5 truncate max-w-[160px]">{r.group.label}</td>
                   <td className="py-0.5 text-right font-semibold text-white">{fmtUSD2(r.result.totalCollected)}</td>
-                  <td className="py-0.5 text-right font-semibold text-emerald-300">{fmtPct(r.result.averageYieldPct)}</td>
+                  <td className="py-0.5 text-right text-white/70">{fmtUSD2(r.result.currentCapital)}</td>
+                  <td className="py-0.5 text-right font-semibold text-emerald-300">
+                    {fmtPct(r.result.annualizedYieldPct)}{r.result.isEstimate && r.result.annualizedYieldPct != null ? '*' : ''}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -343,27 +347,27 @@ export default function DividendosTab({ accountNumber }: { accountNumber: string
                     </span>
                   )}
                 </div>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
+                {/* Los tres números que importan: cuánto cobró, sobre qué
+                    posición, y a qué tasa anual equivale. El historial de
+                    pagos (abajo) es solo el respaldo de estos tres números —
+                    sin gráficos ni métricas adicionales. */}
+                <div className="grid grid-cols-3 gap-3 mt-3">
                   <div>
                     <p className="text-[10px] text-white/50 uppercase">Total cobrado</p>
-                    <p className="text-lg font-bold text-white">{fmtUSD2(result.totalCollected)}</p>
+                    <p className="text-xl font-bold text-white">{fmtUSD2(result.totalCollected)}</p>
                   </div>
                   <div>
-                    <p className="text-[10px] text-white/50 uppercase">Rendimiento</p>
-                    <p className="text-lg font-bold text-emerald-300">{fmtPct(result.averageYieldPct)}</p>
+                    <p className="text-[10px] text-white/50 uppercase" title="Capital actualmente invertido en el fondo (compras menos ventas a la fecha).">Posición considerada</p>
+                    <p className="text-xl font-bold text-white">{fmtUSD2(result.currentCapital)}</p>
                   </div>
-                  {result.last12mCollected > 0 && (
-                    <>
-                      <div>
-                        <p className="text-[10px] text-white/50 uppercase">Últimos 12 meses</p>
-                        <p className="text-sm font-semibold text-white">{fmtUSD2(result.last12mCollected)}</p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] text-white/50 uppercase">Rendimiento 12m</p>
-                        <p className="text-sm font-semibold text-emerald-300">{fmtPct(result.last12mYieldPct)}</p>
-                      </div>
-                    </>
-                  )}
+                  <div>
+                    <p className="text-[10px] text-white/50 uppercase" title="Tasa simple (no compuesta) de la distribución en efectivo — no es la rentabilidad del fondo, no incluye suba/baja del NAV.">
+                      Tasa anualizada{result.isEstimate ? ' estimada' : ''}
+                    </p>
+                    <p className="text-xl font-bold text-emerald-300">
+                      {fmtPct(result.annualizedYieldPct)} <span className="text-xs font-normal text-emerald-300/70">anual</span>
+                    </p>
+                  </div>
                 </div>
               </div>
 
@@ -378,8 +382,8 @@ export default function DividendosTab({ accountNumber }: { accountNumber: string
                       <thead>
                         <tr className="text-left text-gray-400 border-b border-gray-100">
                           <th className="py-1">Fecha</th>
-                          <th className="py-1 text-right">Cobrado</th>
-                          <th className="py-1 text-right">Capital utilizado</th>
+                          <th className="py-1 text-right">Dividendo cobrado</th>
+                          <th className="py-1 text-right">Posición en ese momento</th>
                           <th className="py-1 text-right">Rendimiento</th>
                         </tr>
                       </thead>
@@ -399,6 +403,7 @@ export default function DividendosTab({ accountNumber }: { accountNumber: string
                   )}
                 </div>
               )}
+
 
               <table className="w-full text-sm">
                 <thead>
