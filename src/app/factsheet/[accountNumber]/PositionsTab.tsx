@@ -27,6 +27,7 @@ export default function PositionsTab({ positions, totalValue, glByCusip, onImpor
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [selected, setSelected] = useState<PortfolioPositionRow | null>(null)
   const [reclassifying, setReclassifying] = useState(false)
+  const [savingPurchaseDate, setSavingPurchaseDate] = useState(false)
 
   async function handleReclassify(positionId: string, assetClass: string) {
     setReclassifying(true)
@@ -37,6 +38,19 @@ export default function PositionsTab({ positions, totalValue, glByCusip, onImpor
       onReclassified?.()
     } finally {
       setReclassifying(false)
+    }
+  }
+
+  async function handleEditPurchaseDate(positionId: string, purchaseDate: string) {
+    setSavingPurchaseDate(true)
+    try {
+      await fetch(`/api/portfolio/positions/${positionId}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ purchase_date: purchaseDate || null }),
+      })
+      setSelected(s => s && s.id === positionId ? { ...s, purchase_date: purchaseDate || null } : s)
+      onReclassified?.()
+    } finally {
+      setSavingPurchaseDate(false)
     }
   }
 
@@ -311,7 +325,17 @@ export default function PositionsTab({ positions, totalValue, glByCusip, onImpor
               <DetailRow label="Precio" value={selected.price != null ? fmtUSD2(Number(selected.price)) : null} />
               <DetailRow label="ISIN" value={selected.isin} />
               <DetailRow label="CUSIP" value={selected.cusip} />
-              <DetailRow label="Fecha de compra" value={selected.purchase_date ?? (selected.cusip ? glByCusip.get(selected.cusip)?.purchase_date : null) ?? null} />
+              <div className="flex items-center justify-between gap-3 py-2 border-b border-gray-50">
+                <span className="text-xs text-gray-400">Fecha de compra</span>
+                <input
+                  key={selected.id}
+                  type="date"
+                  disabled={savingPurchaseDate}
+                  defaultValue={selected.purchase_date ?? (selected.cusip ? glByCusip.get(selected.cusip)?.purchase_date : null) ?? ''}
+                  onBlur={e => { if (e.target.value !== (selected.purchase_date ?? '')) handleEditPurchaseDate(selected.id, e.target.value) }}
+                  className="text-xs font-semibold text-gray-800 text-right border border-transparent hover:border-gray-200 focus:border-[#2E7D52]/50 rounded px-1.5 py-0.5 outline-none"
+                />
+              </div>
               <DetailRow label="Vencimiento" value={selected.maturity_date ? fmtDate(selected.maturity_date) : null} />
               <DetailRow label="Cupón" value={selected.coupon != null ? `${Number(selected.coupon).toFixed(2)}%` : null} />
               <DetailRow label="Interés devengado" value={selected.accrued_interest != null ? fmtUSD2(Number(selected.accrued_interest)) : null} />
