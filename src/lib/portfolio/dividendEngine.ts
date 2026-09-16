@@ -167,3 +167,21 @@ export function buildExternalRef(input: {
 }): string {
   return [input.fundKey.toUpperCase(), input.date ?? '', input.type, (input.amount ?? '').toString(), input.currency ?? ''].join('|')
 }
+
+// "Valor del fondo" que se muestra al lado de los dividendos cobrados: la
+// posición REAL que ya tiene Portafolio (del último import), no una suma de
+// las compras/ventas cargadas a mano en la planilla de dividendos — evita
+// mostrar dos números distintos para "cuánto tengo invertido" en la misma app.
+export function findFundPositionValue(
+  isin: string | null | undefined,
+  fundName: string,
+  positions: { isin: string | null; name: string; market_value: string | number }[]
+): number | null {
+  const isinNorm = isin?.trim().toUpperCase()
+  const nameNorm = fundName.trim().toLowerCase()
+  const matches = positions.filter(p =>
+    isinNorm ? p.isin?.trim().toUpperCase() === isinNorm : p.name.trim().toLowerCase() === nameNorm
+  )
+  if (matches.length === 0) return null
+  return matches.reduce((s, p) => s + Number(p.market_value), 0)
+}

@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { fmtUSD2 } from './PortfolioAccountClient'
-import { computeFundDividends, fundGroupKey, type DividendTxn } from '@/lib/portfolio/dividendEngine'
+import { computeFundDividends, fundGroupKey, findFundPositionValue, type DividendTxn } from '@/lib/portfolio/dividendEngine'
 
 interface LedgerEntry {
   id: string
@@ -32,14 +32,15 @@ interface PreviewRow {
   isDuplicate: boolean
 }
 
+interface PositionForValue { isin: string | null; name: string; market_value: string | number }
+
 const fmtPct = (n: number | null) => n == null ? '—' : `${n.toFixed(2)}%`
 
-// Planilla 100% manual (o importada de Activity) — nunca se completa sola
-// sin confirmación. El asesor la usa para llevar, fondo por fondo, qué
-// compró/vendió y qué dividendos fue cobrando; el motor de cálculo
-// (dividendEngine) reconstruye el capital invertido en la fecha de cada
-// dividendo para sacar el rendimiento real de cada distribución.
-export default function DividendosTab({ accountNumber }: { accountNumber: string }) {
+// Los movimientos (compras/ventas/dividendos) se usan solo para CALCULAR —
+// se cargan a mano o importando el Activity del custodio, pero el cliente
+// nunca ve ese listado. Lo único que se muestra es, por cada fondo
+// distribuidor: valor del fondo, dividendos cobrados y tasa anualizada.
+export default function DividendosTab({ accountNumber, positions }: { accountNumber: string; positions: PositionForValue[] }) {
   const [entries, setEntries] = useState<LedgerEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState<string | null>(null)
@@ -52,7 +53,7 @@ export default function DividendosTab({ accountNumber }: { accountNumber: string
   const [previewWarnings, setPreviewWarnings] = useState<string[]>([])
   const [previewIgnored, setPreviewIgnored] = useState(0)
   const [importError, setImportError] = useState('')
-  const [expandedHistory, setExpandedHistory] = useState<Set<string>>(new Set())
+  const [editingGroupKey, setEditingGroupKey] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   async function load() {
@@ -165,52 +166,36 @@ export default function DividendosTab({ accountNumber }: { accountNumber: string
     for (const e of entries) {
       if (e.isin?.trim()) nameToIsin.set(e.fund_name.trim().toLowerCase(), e.isin.trim().toUpperCase())
     }
-    const byKey = new Map<string, { key: string; label: string; entries: LedgerEntry[] }>()
+    const byKey = new Map<string, { key: string; label: string; isin: string | null; entries: LedgerEntry[] }>()
     for (const e of entries) {
       const isin = e.isin?.trim() || nameToIsin.get(e.fund_name.trim().toLowerCase()) || null
       const key = fundGroupKey(isin, e.fund_name)
       let g = byKey.get(key)
-      if (!g) { g = { key, label: e.fund_name, entries: [] }; byKey.set(key, g) }
+      if (!g) { g = { key, label: e.fund_name, isin, entries: [] }; byKey.set(key, g) }
       g.entries.push(e)
     }
     return Array.from(byKey.values()).sort((a, b) => a.label.localeCompare(b.label))
   }, [entries])
 
+  // Único cálculo por fondo: cuánto cobró, y a qué tasa equivale (motor
+  // interno reconstruye el capital histórico — ver dividendEngine). El
+  // "valor del fondo" que se muestra es la posición REAL que ya tiene
+  // Portafolio, no una suma aparte de las compras cargadas acá.
   const results = useMemo(() => {
     return groups.map(g => {
       const txns: DividendTxn[] = g.entries.map(e => ({ id: e.id, date: e.entry_date, type: e.entry_type, amount: e.amount != null ? Number(e.amount) : null }))
-      return { group: g, result: computeFundDividends(txns) }
+      const result = computeFundDividends(txns)
+      const fundValue = findFundPositionValue(g.isin, g.label, positions) ?? result.currentCapital
+      return { group: g, result, fundValue }
     })
-  }, [groups])
+  }, [groups, positions])
 
-  const portfolioTotal = results.reduce((s, r) => s + r.result.totalCollected, 0)
+  const editingGroup = results.find(r => r.group.key === editingGroupKey)
 
   if (loading) return <div className="text-center py-16 text-sm text-gray-400">Cargando…</div>
 
   return (
     <div className="space-y-5">
-      <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-2.5 text-xs text-amber-800">
-        Compras, ventas y dividendos cobrados por fondo — a mano o importando el Activity del custodio. El rendimiento de cada dividendo se calcula sobre el capital invertido en esa fecha, nunca sobre la posición actual.
-      </div>
-
-      {results.length > 0 && (
-        <div className="bg-[#1B3A2B] rounded-xl p-4">
-          <p className="text-[10px] text-white/60 uppercase tracking-wide">Dividendos totales cobrados (todos los fondos)</p>
-          <p className="text-2xl font-bold text-white mt-0.5">{fmtUSD2(portfolioTotal)}</p>
-          {/* Rendimiento de cada fondo de un vistazo, sin repetir los montos
-              (esos ya están en la tarjeta de cada fondo, abajo). */}
-          <div className="flex flex-wrap gap-x-5 gap-y-1 mt-3 pt-3 border-t border-white/10">
-            {results.map(r => (
-              <div key={r.group.key} className="text-xs text-white/80">
-                {r.group.label}: <span className="font-bold text-emerald-300">
-                  {fmtPct(r.result.annualizedYieldPct)}{r.result.isEstimate && r.result.annualizedYieldPct != null ? '*' : ''}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
       <div className="bg-white border border-gray-200 rounded-lg p-3">
         <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-2">Agregar fondo — fecha y monto de la primera compra</p>
         <div className="flex flex-wrap items-end gap-2">
@@ -259,7 +244,7 @@ export default function DividendosTab({ accountNumber }: { accountNumber: string
             {importing ? 'Leyendo…' : '📄 Importar Activity'}
           </button>
         </div>
-        <p className="text-[10px] text-gray-400 mt-1.5">La fecha y el monto son opcionales acá — sin ellos podés completarlos después en la fila, pero el rendimiento no se puede calcular hasta tenerlos.</p>
+        <p className="text-[10px] text-gray-400 mt-1.5">La fecha y el monto son opcionales acá — sin ellos podés completarlos después desde "Editar movimientos".</p>
       </div>
       {importError && <p className="text-xs text-red-600">{importError}</p>}
 
@@ -326,190 +311,146 @@ export default function DividendosTab({ accountNumber }: { accountNumber: string
         </div>
       )}
 
+      {/* ── Único resumen visible por fondo: valor, cobrado y tasa. Nada más. ── */}
       {results.length === 0 ? (
         <div className="border-2 border-dashed border-gray-200 rounded-xl p-10 text-center">
           <p className="text-sm text-gray-400">Sin fondos cargados. Escribí un nombre arriba y agregalo, o importá el Activity del custodio.</p>
         </div>
       ) : (
-        results.map(({ group, result }) => {
-          const fundName = group.label
-          const rows = group.entries
-          const isExpanded = expandedHistory.has(group.key)
-          return (
-            <div key={group.key} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-              <div className="px-4 py-3 bg-[#1B2E3C]">
-                <div className="flex items-center justify-between">
-                  <p className="text-sm font-bold text-white">{fundName}</p>
-                  {result.pendingReviewCount > 0 && (
-                    <span className="text-[10px] font-semibold text-amber-300" title="Hay dividendos sin capital invertido determinable">
-                      {result.pendingReviewCount} rendimiento(s) pendiente(s) de revisar
-                    </span>
-                  )}
-                </div>
-                {/* Los tres números que importan: cuánto cobró, sobre qué
-                    posición, y a qué tasa anual equivale. El historial de
-                    pagos (abajo) es solo el respaldo de estos tres números —
-                    sin gráficos ni métricas adicionales. */}
-                <div className="grid grid-cols-3 gap-3 mt-3">
-                  <div>
-                    <p className="text-[10px] text-white/50 uppercase">Total cobrado</p>
-                    <p className="text-xl font-bold text-white">{fmtUSD2(result.totalCollected)}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-white/50 uppercase" title="Capital actualmente invertido en el fondo (compras menos ventas a la fecha).">Posición considerada</p>
-                    <p className="text-xl font-bold text-white">{fmtUSD2(result.currentCapital)}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-white/50 uppercase" title="Tasa simple (no compuesta) de la distribución en efectivo — no es la rentabilidad del fondo, no incluye suba/baja del NAV.">
-                      Tasa anualizada{result.isEstimate ? ' estimada' : ''}
-                    </p>
-                    <p className="text-xl font-bold text-emerald-300">
-                      {fmtPct(result.annualizedYieldPct)} <span className="text-xs font-normal text-emerald-300/70">anual</span>
-                    </p>
-                  </div>
-                </div>
-                {result.annualizedYieldPct == null && result.totalCollected > 0 && (
-                  <p className="text-[10px] text-amber-300 mt-2">
-                    No se puede calcular la tasa todavía — revisá que las compras tengan fecha cargada (sin fecha no se puede saber qué capital generó cada dividendo).
-                  </p>
-                )}
+        results.map(({ group, result, fundValue }) => (
+          <div key={group.key} className="bg-[#1B2E3C] rounded-xl p-4">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-sm font-bold text-white">{group.label}</p>
+              <button onClick={() => setEditingGroupKey(group.key)} className="text-[11px] font-medium text-white/50 hover:text-white">
+                Editar movimientos
+              </button>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <p className="text-[10px] text-white/50 uppercase">Valor del fondo</p>
+                <p className="text-xl font-bold text-white">{fmtUSD2(fundValue)}</p>
               </div>
+              <div>
+                <p className="text-[10px] text-white/50 uppercase">Dividendos cobrados</p>
+                <p className="text-xl font-bold text-white">{fmtUSD2(result.totalCollected)}</p>
+              </div>
+              <div>
+                <p className="text-[10px] text-white/50 uppercase">Tasa anualizada</p>
+                <p className="text-xl font-bold text-emerald-300">{fmtPct(result.annualizedYieldPct)}</p>
+              </div>
+            </div>
+          </div>
+        ))
+      )}
 
-              {result.history.length > 0 && (
-                <div className="px-4 py-2 border-b border-gray-100">
-                  <button onClick={() => setExpandedHistory(prev => { const n = new Set(prev); n.has(group.key) ? n.delete(group.key) : n.add(group.key); return n })}
-                    className="text-[11px] font-semibold text-gray-500 hover:text-[#2E7D52]">
-                    {isExpanded ? '▾' : '▸'} Historial de dividendos ({result.history.length})
-                  </button>
-                  {isExpanded && (
-                    <table className="w-full text-xs mt-2">
-                      <thead>
-                        <tr className="text-left text-gray-400 border-b border-gray-100">
-                          <th className="py-1">Fecha</th>
-                          <th className="py-1 text-right">Dividendo cobrado</th>
-                          <th className="py-1 text-right">Posición en ese momento</th>
-                          <th className="py-1 text-right">Rendimiento</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {result.history.map(h => (
-                          <tr key={h.id} className="border-b border-gray-50">
-                            <td className="py-1 text-gray-600">{h.date ?? '—'}</td>
-                            <td className="py-1 text-right font-semibold text-gray-800">{fmtUSD2(h.collected)}</td>
-                            <td className="py-1 text-right text-gray-500">{h.capitalAtPayment != null ? fmtUSD2(h.capitalAtPayment) : '—'}</td>
-                            <td className="py-1 text-right">
-                              {h.yieldPct != null ? <span className="font-semibold text-emerald-600">{fmtPct(h.yieldPct)}</span> : <span className="text-amber-600 text-[10px]">pendiente de revisar</span>}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  )}
-                </div>
-              )}
-
-
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-gray-100 text-left text-gray-400">
-                    <th className="px-3 py-1.5 text-[10px] font-semibold uppercase w-40" title="Si esta fila quedó con el nombre tipeado distinto a las demás del mismo fondo, corregilo acá para que se agrupen juntas.">Fondo</th>
-                    <th className="px-3 py-1.5 text-[10px] font-semibold uppercase w-28">Tipo</th>
-                    <th className="px-3 py-1.5 text-[10px] font-semibold uppercase w-32">Fecha</th>
-                    <th className="px-3 py-1.5 text-[10px] font-semibold uppercase w-32 text-right">Monto</th>
-                    <th className="px-3 py-1.5 text-[10px] font-semibold uppercase">Notas</th>
-                    <th className="px-3 py-1.5 text-[10px] font-semibold uppercase w-16">Origen</th>
-                    <th className="w-8" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map(r => (
-                    <tr key={r.id} className="border-b border-gray-50 last:border-0">
-                      <td className="px-3 py-1.5">
-                        <input
-                          key={r.id + r.fund_name}
-                          type="text"
-                          disabled={saving === r.id}
-                          defaultValue={r.fund_name}
-                          onBlur={e => { const v = e.target.value.trim(); if (v && v !== r.fund_name) patchRow(r.id, { fund_name: v }) }}
-                          className="text-xs text-gray-700 border border-transparent hover:border-gray-200 focus:border-[#2E7D52]/50 rounded px-1 py-0.5 outline-none w-full"
-                        />
-                      </td>
-                      <td className="px-3 py-1.5">
-                        <select
-                          defaultValue={r.entry_type}
-                          disabled={saving === r.id}
-                          onChange={e => patchRow(r.id, { entry_type: e.target.value })}
-                          className={`text-xs font-semibold rounded px-1.5 py-0.5 border-0 outline-none ${
-                            r.entry_type === 'compra' ? 'bg-gray-100 text-gray-600'
-                            : r.entry_type === 'venta' ? 'bg-red-50 text-red-600'
-                            : r.entry_type === 'dividendo_total' ? 'bg-blue-50 text-blue-700'
-                            : 'bg-emerald-50 text-emerald-700'
-                          }`}
-                        >
-                          <option value="compra">Compra</option>
-                          <option value="venta">Venta</option>
-                          <option value="dividendo">Dividendo</option>
-                          <option value="dividendo_total">Total acumulado</option>
-                        </select>
-                      </td>
-                      <td className="px-3 py-1.5">
-                        <input
-                          key={r.id + (r.entry_date ?? '')}
-                          type="date"
-                          disabled={saving === r.id}
-                          defaultValue={r.entry_date ?? ''}
-                          onBlur={e => { if (e.target.value !== (r.entry_date ?? '')) patchRow(r.id, { entry_date: e.target.value || null }) }}
-                          className="text-xs text-gray-700 border border-transparent hover:border-gray-200 focus:border-[#2E7D52]/50 rounded px-1 py-0.5 outline-none w-full"
-                        />
-                      </td>
-                      <td className="px-3 py-1.5 text-right">
-                        <input
-                          key={r.id + (r.amount ?? '')}
-                          type="number"
-                          step="0.01"
-                          disabled={saving === r.id}
-                          defaultValue={r.amount ?? ''}
-                          placeholder="—"
-                          onBlur={e => { const v = e.target.value.trim(); patchRow(r.id, { amount: v === '' ? null : Number(v) }) }}
-                          className="text-xs font-semibold text-gray-800 text-right border border-transparent hover:border-gray-200 focus:border-[#2E7D52]/50 rounded px-1 py-0.5 outline-none w-full"
-                        />
-                      </td>
-                      <td className="px-3 py-1.5">
-                        <input
-                          key={r.id + (r.notes ?? '')}
-                          type="text"
-                          disabled={saving === r.id}
-                          defaultValue={r.notes ?? ''}
-                          placeholder="—"
-                          onBlur={e => { if (e.target.value !== (r.notes ?? '')) patchRow(r.id, { notes: e.target.value }) }}
-                          className="text-xs text-gray-600 border border-transparent hover:border-gray-200 focus:border-[#2E7D52]/50 rounded px-1 py-0.5 outline-none w-full"
-                        />
-                      </td>
-                      <td className="px-3 py-1.5 text-[10px] text-gray-400">{r.custodian ? `${r.custodian}` : ''}</td>
-                      <td className="px-1">
-                        <button onClick={() => deleteRow(r.id)} title="Borrar fila" className="text-gray-300 hover:text-red-500 text-sm px-1">×</button>
-                      </td>
-                    </tr>
-                  ))}
-                  <tr>
-                    <td colSpan={7} className="px-3 py-1.5">
-                      <div className="flex gap-2">
-                        <button onClick={() => addRow(fundName, 'compra')} className="text-[11px] font-medium text-gray-500 hover:text-[#2E7D52]">+ compra</button>
-                        <button onClick={() => addRow(fundName, 'venta')} className="text-[11px] font-medium text-gray-500 hover:text-red-600">+ venta</button>
-                        <button onClick={() => addRow(fundName, 'dividendo')} className="text-[11px] font-medium text-gray-500 hover:text-[#2E7D52]">+ dividendo</button>
-                        {rows.every(r => r.entry_type !== 'dividendo_total') && (
-                          <button onClick={() => addRow(fundName, 'dividendo_total')} className="text-[11px] font-medium text-gray-500 hover:text-blue-600" title="Cargar un solo monto acumulado en vez de fila por fila">
-                            + total acumulado
-                          </button>
-                        )}
-                      </div>
+      {/* ── Editar movimientos: modal, nunca visible por defecto ── */}
+      {editingGroup && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setEditingGroupKey(null)}>
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[85vh] overflow-y-auto p-5" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-sm font-bold text-gray-900">Movimientos — {editingGroup.group.label}</p>
+              <button onClick={() => setEditingGroupKey(null)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
+            </div>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-100 text-left text-gray-400">
+                  <th className="px-3 py-1.5 text-[10px] font-semibold uppercase w-40" title="Si esta fila quedó con el nombre tipeado distinto a las demás del mismo fondo, corregilo acá para que se agrupen juntas.">Fondo</th>
+                  <th className="px-3 py-1.5 text-[10px] font-semibold uppercase w-28">Tipo</th>
+                  <th className="px-3 py-1.5 text-[10px] font-semibold uppercase w-32">Fecha</th>
+                  <th className="px-3 py-1.5 text-[10px] font-semibold uppercase w-32 text-right">Monto</th>
+                  <th className="px-3 py-1.5 text-[10px] font-semibold uppercase">Notas</th>
+                  <th className="px-3 py-1.5 text-[10px] font-semibold uppercase w-16">Origen</th>
+                  <th className="w-8" />
+                </tr>
+              </thead>
+              <tbody>
+                {editingGroup.group.entries.map(r => (
+                  <tr key={r.id} className="border-b border-gray-50 last:border-0">
+                    <td className="px-3 py-1.5">
+                      <input
+                        key={r.id + r.fund_name}
+                        type="text"
+                        disabled={saving === r.id}
+                        defaultValue={r.fund_name}
+                        onBlur={e => { const v = e.target.value.trim(); if (v && v !== r.fund_name) patchRow(r.id, { fund_name: v }) }}
+                        className="text-xs text-gray-700 border border-transparent hover:border-gray-200 focus:border-[#2E7D52]/50 rounded px-1 py-0.5 outline-none w-full"
+                      />
+                    </td>
+                    <td className="px-3 py-1.5">
+                      <select
+                        defaultValue={r.entry_type}
+                        disabled={saving === r.id}
+                        onChange={e => patchRow(r.id, { entry_type: e.target.value })}
+                        className={`text-xs font-semibold rounded px-1.5 py-0.5 border-0 outline-none ${
+                          r.entry_type === 'compra' ? 'bg-gray-100 text-gray-600'
+                          : r.entry_type === 'venta' ? 'bg-red-50 text-red-600'
+                          : r.entry_type === 'dividendo_total' ? 'bg-blue-50 text-blue-700'
+                          : 'bg-emerald-50 text-emerald-700'
+                        }`}
+                      >
+                        <option value="compra">Compra</option>
+                        <option value="venta">Venta</option>
+                        <option value="dividendo">Dividendo</option>
+                        <option value="dividendo_total">Total acumulado</option>
+                      </select>
+                    </td>
+                    <td className="px-3 py-1.5">
+                      <input
+                        key={r.id + (r.entry_date ?? '')}
+                        type="date"
+                        disabled={saving === r.id}
+                        defaultValue={r.entry_date ?? ''}
+                        onBlur={e => { if (e.target.value !== (r.entry_date ?? '')) patchRow(r.id, { entry_date: e.target.value || null }) }}
+                        className="text-xs text-gray-700 border border-transparent hover:border-gray-200 focus:border-[#2E7D52]/50 rounded px-1 py-0.5 outline-none w-full"
+                      />
+                    </td>
+                    <td className="px-3 py-1.5 text-right">
+                      <input
+                        key={r.id + (r.amount ?? '')}
+                        type="number"
+                        step="0.01"
+                        disabled={saving === r.id}
+                        defaultValue={r.amount ?? ''}
+                        placeholder="—"
+                        onBlur={e => { const v = e.target.value.trim(); patchRow(r.id, { amount: v === '' ? null : Number(v) }) }}
+                        className="text-xs font-semibold text-gray-800 text-right border border-transparent hover:border-gray-200 focus:border-[#2E7D52]/50 rounded px-1 py-0.5 outline-none w-full"
+                      />
+                    </td>
+                    <td className="px-3 py-1.5">
+                      <input
+                        key={r.id + (r.notes ?? '')}
+                        type="text"
+                        disabled={saving === r.id}
+                        defaultValue={r.notes ?? ''}
+                        placeholder="—"
+                        onBlur={e => { if (e.target.value !== (r.notes ?? '')) patchRow(r.id, { notes: e.target.value }) }}
+                        className="text-xs text-gray-600 border border-transparent hover:border-gray-200 focus:border-[#2E7D52]/50 rounded px-1 py-0.5 outline-none w-full"
+                      />
+                    </td>
+                    <td className="px-3 py-1.5 text-[10px] text-gray-400">{r.custodian ? `${r.custodian}` : ''}</td>
+                    <td className="px-1">
+                      <button onClick={() => deleteRow(r.id)} title="Borrar fila" className="text-gray-300 hover:text-red-500 text-sm px-1">×</button>
                     </td>
                   </tr>
-                </tbody>
-              </table>
-            </div>
-          )
-        })
+                ))}
+                <tr>
+                  <td colSpan={7} className="px-3 py-1.5">
+                    <div className="flex gap-2">
+                      <button onClick={() => addRow(editingGroup.group.label, 'compra')} className="text-[11px] font-medium text-gray-500 hover:text-[#2E7D52]">+ compra</button>
+                      <button onClick={() => addRow(editingGroup.group.label, 'venta')} className="text-[11px] font-medium text-gray-500 hover:text-red-600">+ venta</button>
+                      <button onClick={() => addRow(editingGroup.group.label, 'dividendo')} className="text-[11px] font-medium text-gray-500 hover:text-[#2E7D52]">+ dividendo</button>
+                      {editingGroup.group.entries.every(r => r.entry_type !== 'dividendo_total') && (
+                        <button onClick={() => addRow(editingGroup.group.label, 'dividendo_total')} className="text-[11px] font-medium text-gray-500 hover:text-blue-600" title="Cargar un solo monto acumulado en vez de fila por fila">
+                          + total acumulado
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
       )}
     </div>
   )

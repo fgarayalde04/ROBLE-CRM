@@ -237,7 +237,7 @@ export default function AccountPdfReport({
   manualIncomeYieldPct?: number | null
   // Resumen de la planilla de Dividendos (ver DividendosTab) — se trae
   // fresco recién al generar el PDF, no vive en el resto del reporte.
-  dividendResults?: { fundName: string; totalCollected: number; currentCapital: number; annualizedYieldPct: number | null; isEstimate: boolean }[]
+  dividendResults?: { fundName: string; totalCollected: number; fundValue: number; annualizedYieldPct: number | null; isEstimate: boolean }[]
 }) {
   const totalValue = Number(importRow.total_market_value)
   const clientName = account?.clientName || account?.accountName || accountNumber
@@ -682,12 +682,12 @@ export default function AccountPdfReport({
               <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.ink, marginBottom: '2mm' }}>{d.fundName}</div>
               <div style={{ display: 'flex', gap: '6mm' }}>
                 <div>
-                  <div style={{ fontSize: 7, color: COLORS.mutedSlate, textTransform: 'uppercase' }}>Total cobrado</div>
-                  <div style={{ fontSize: 13, fontWeight: 800, color: COLORS.ink, marginTop: '0.5mm' }}>{fmtUSD2(d.totalCollected)}</div>
+                  <div style={{ fontSize: 7, color: COLORS.mutedSlate, textTransform: 'uppercase' }}>Valor del fondo</div>
+                  <div style={{ fontSize: 13, fontWeight: 800, color: COLORS.ink, marginTop: '0.5mm' }}>{fmtUSD2(d.fundValue)}</div>
                 </div>
                 <div>
-                  <div style={{ fontSize: 7, color: COLORS.mutedSlate, textTransform: 'uppercase' }}>Posición considerada</div>
-                  <div style={{ fontSize: 13, fontWeight: 800, color: COLORS.ink, marginTop: '0.5mm' }}>{fmtUSD2(d.currentCapital)}</div>
+                  <div style={{ fontSize: 7, color: COLORS.mutedSlate, textTransform: 'uppercase' }}>Dividendos cobrados</div>
+                  <div style={{ fontSize: 13, fontWeight: 800, color: COLORS.ink, marginTop: '0.5mm' }}>{fmtUSD2(d.totalCollected)}</div>
                 </div>
                 <div>
                   <div style={{ fontSize: 7, color: COLORS.mutedSlate, textTransform: 'uppercase' }}>Tasa anualizada{d.isEstimate ? ' estimada' : ''}</div>

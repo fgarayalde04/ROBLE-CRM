@@ -13,7 +13,7 @@ import ImportHistoryModal from '@/components/portfolio/ImportHistoryModal'
 import AccountPdfReport from './AccountPdfReport'
 import PdfOptionsModal, { type PdfSections, DEFAULT_PDF_SECTIONS } from '@/components/portfolio/PdfOptionsModal'
 import { cleanDisplayName } from '@/lib/portfolio/theme'
-import { computeFundDividends, fundGroupKey, type DividendTxn } from '@/lib/portfolio/dividendEngine'
+import { computeFundDividends, fundGroupKey, findFundPositionValue, type DividendTxn } from '@/lib/portfolio/dividendEngine'
 import {
   ASSET_CLASS_ES,
   computeAssetAllocation, computeLiquidity, computeFixedIncomeBreakdown, computeCurrencyExposure,
@@ -245,7 +245,7 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
   const [pendingPdf, setPendingPdf] = useState(false)
   // Se trae fresco recién al generar el PDF (no en cada visita a la página)
   // — la planilla de Dividendos se autofetchea aparte en su propia pestaña.
-  const [dividendResults, setDividendResults] = useState<{ fundName: string; totalCollected: number; currentCapital: number; annualizedYieldPct: number | null; isEstimate: boolean }[]>([])
+  const [dividendResults, setDividendResults] = useState<{ fundName: string; totalCollected: number; fundValue: number; annualizedYieldPct: number | null; isEstimate: boolean }[]>([])
 
   async function loadDividendResultsForPdf() {
     try {
@@ -259,17 +259,20 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
       for (const e of entries) {
         if (e.isin?.trim()) nameToIsin.set(e.fund_name.trim().toLowerCase(), e.isin.trim().toUpperCase())
       }
-      const byKey = new Map<string, { label: string; txns: DividendTxn[] }>()
+      const byKey = new Map<string, { label: string; isin: string | null; txns: DividendTxn[] }>()
       for (const e of entries) {
         const isin = e.isin?.trim() || nameToIsin.get(e.fund_name.trim().toLowerCase()) || null
         const key = fundGroupKey(isin, e.fund_name)
         let g = byKey.get(key)
-        if (!g) { g = { label: e.fund_name, txns: [] }; byKey.set(key, g) }
+        if (!g) { g = { label: e.fund_name, isin, txns: [] }; byKey.set(key, g) }
         g.txns.push({ id: key, date: e.entry_date, type: e.entry_type as DividendTxn['type'], amount: e.amount != null ? Number(e.amount) : null })
       }
       setDividendResults(Array.from(byKey.values()).map(g => {
         const r = computeFundDividends(g.txns)
-        return { fundName: g.label, totalCollected: r.totalCollected, currentCapital: r.currentCapital, annualizedYieldPct: r.annualizedYieldPct, isEstimate: r.isEstimate }
+        // "Valor del fondo" en el PDF es la misma posición real que ya usa
+        // Portafolio, no una suma aparte de las compras de esta planilla.
+        const fundValue = findFundPositionValue(g.isin, g.label, sortedByValue) ?? r.currentCapital
+        return { fundName: g.label, totalCollected: r.totalCollected, fundValue, annualizedYieldPct: r.annualizedYieldPct, isEstimate: r.isEstimate }
       }))
     } catch {
       setDividendResults([])
@@ -471,7 +474,7 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
           <MovimientosTab accountNumber={accountNumber} cashProjImport={cashProjImport} cashProjRows={cashProjRows} onCashProjImported={load}
             activityImport={activityImport} activityRows={activityRows} onActivityImported={load} />
         )}
-        {tab === 'dividendos' && <DividendosTab accountNumber={accountNumber} />}
+        {tab === 'dividendos' && <DividendosTab accountNumber={accountNumber} positions={sortedByValue} />}
       </div>
 
       {showImport && <ImportPositionsModal accountNumber={accountNumber} onClose={() => setShowImport(false)} onImported={() => { setShowImport(false); load() }} />}
