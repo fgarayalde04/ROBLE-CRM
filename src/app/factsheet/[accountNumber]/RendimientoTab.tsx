@@ -57,9 +57,14 @@ export default function RendimientoTab({ accountNumber, history, performance, on
     if (value != null && !isFinite(value)) return
     setSavingInitial(true)
     try {
-      await fetch(`/api/portfolio/${encodeURIComponent(accountNumber)}/performance`, {
+      const res = await fetch(`/api/portfolio/${encodeURIComponent(accountNumber)}/performance`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ manual_initial_value: value }),
       })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        alert(data.error ?? 'No se pudo guardar el valor inicial.')
+        return
+      }
       onPerformanceImported()
     } finally {
       setSavingInitial(false)

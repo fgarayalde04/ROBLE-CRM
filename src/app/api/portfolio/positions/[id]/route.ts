@@ -4,8 +4,9 @@ import { pool } from '@/lib/db/pool'
 
 // PATCH /api/portfolio/positions/[id] — corrige a mano un dato puntual de una
 // posición: la clase de activo (Morgan Stanley no trae security-type, así que
-// el heurístico automático a veces deja "Sin clasificar") o la fecha de
-// compra (el custodio a veces no la trae, o viene mal en el import).
+// el heurístico automático a veces deja "Sin clasificar"), la fecha de
+// compra (el custodio a veces no la trae, o viene mal en el import), o el
+// interés/dividendo recibido de un fondo (no viene en ningún import).
 export async function PATCH(
   req: NextRequest,
   { params }: { params: { id: string } }
@@ -13,7 +14,7 @@ export async function PATCH(
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
-  const body = await req.json() as { asset_class?: string; purchase_date?: string | null }
+  const body = await req.json() as { asset_class?: string; purchase_date?: string | null; manual_dividend_received?: number | null }
   const sets: string[] = []
   const values: unknown[] = []
 
@@ -30,6 +31,14 @@ export async function PATCH(
     }
     values.push(purchaseDate)
     sets.push(`purchase_date = $${values.length}`)
+  }
+  if (body.manual_dividend_received !== undefined) {
+    const amount = body.manual_dividend_received
+    if (amount !== null && !isFinite(Number(amount))) {
+      return NextResponse.json({ error: 'Monto inválido' }, { status: 400 })
+    }
+    values.push(amount)
+    sets.push(`manual_dividend_received = $${values.length}`)
   }
   if (sets.length === 0) return NextResponse.json({ error: 'Nada para actualizar' }, { status: 400 })
 

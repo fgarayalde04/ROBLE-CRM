@@ -28,6 +28,7 @@ export default function PositionsTab({ positions, totalValue, glByCusip, onImpor
   const [selected, setSelected] = useState<PortfolioPositionRow | null>(null)
   const [reclassifying, setReclassifying] = useState(false)
   const [savingPurchaseDate, setSavingPurchaseDate] = useState(false)
+  const [savingDividend, setSavingDividend] = useState(false)
 
   async function handleReclassify(positionId: string, assetClass: string) {
     setReclassifying(true)
@@ -44,13 +45,38 @@ export default function PositionsTab({ positions, totalValue, glByCusip, onImpor
   async function handleEditPurchaseDate(positionId: string, purchaseDate: string) {
     setSavingPurchaseDate(true)
     try {
-      await fetch(`/api/portfolio/positions/${positionId}`, {
+      const res = await fetch(`/api/portfolio/positions/${positionId}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ purchase_date: purchaseDate || null }),
       })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        alert(data.error ?? 'No se pudo guardar la fecha de compra.')
+        return
+      }
       setSelected(s => s && s.id === positionId ? { ...s, purchase_date: purchaseDate || null } : s)
       onReclassified?.()
     } finally {
       setSavingPurchaseDate(false)
+    }
+  }
+
+  async function handleEditDividendReceived(positionId: string, raw: string) {
+    const amount = raw.trim() === '' ? null : Number(raw.replace(/,/g, ''))
+    if (amount != null && !isFinite(amount)) return
+    setSavingDividend(true)
+    try {
+      const res = await fetch(`/api/portfolio/positions/${positionId}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ manual_dividend_received: amount }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        alert(data.error ?? 'No se pudo guardar el dividendo recibido.')
+        return
+      }
+      setSelected(s => s && s.id === positionId ? { ...s, manual_dividend_received: amount } : s)
+      onReclassified?.()
+    } finally {
+      setSavingDividend(false)
     }
   }
 
@@ -341,6 +367,29 @@ export default function PositionsTab({ positions, totalValue, glByCusip, onImpor
               <DetailRow label="Interés devengado" value={selected.accrued_interest != null ? fmtUSD2(Number(selected.accrued_interest)) : null} />
               <DetailRow label="Familia de fondo" value={selected.fund_family} />
               <DetailRow label="Política de dividendos" value={selected.dividend_policy} />
+              {['Fund', 'Fixed Income Fund'].includes(selected.asset_class) && (
+                <>
+                  <div className="flex items-center justify-between gap-3 py-2 border-b border-gray-50">
+                    <span className="text-xs text-gray-400">Interés/dividendo recibido</span>
+                    <input
+                      key={selected.id}
+                      type="number"
+                      step="0.01"
+                      disabled={savingDividend}
+                      defaultValue={selected.manual_dividend_received ?? ''}
+                      placeholder="Cargar a mano"
+                      onBlur={e => handleEditDividendReceived(selected.id, e.target.value)}
+                      className="text-xs font-semibold text-gray-800 text-right border border-transparent hover:border-gray-200 focus:border-[#2E7D52]/50 rounded px-1.5 py-0.5 w-28 outline-none"
+                    />
+                  </div>
+                  {selected.manual_dividend_received != null && Number(selected.market_value) > 0 && (
+                    <DetailRow
+                      label="Rendimiento sobre este dividendo"
+                      value={`${((Number(selected.manual_dividend_received) / Number(selected.market_value)) * 100).toFixed(2)}% del market value`}
+                    />
+                  )}
+                </>
+              )}
             </div>
           </div>
         </div>

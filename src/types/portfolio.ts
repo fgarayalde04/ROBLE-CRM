@@ -22,6 +22,10 @@ export interface PortfolioPositionRow {
   accrued_interest: string | null
   fund_family: string | null
   dividend_policy: string | null
+  // Cargado a mano por el asesor — cuánto interés/dividendo recibió
+  // efectivamente de este fondo. Distinto de accrued_interest (que es del
+  // custodio, para bonos) para no pisar ese dato real al editar este.
+  manual_dividend_received: number | null
 }
 
 export interface PortfolioImportRow {
