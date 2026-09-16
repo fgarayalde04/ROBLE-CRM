@@ -15,9 +15,12 @@ function mapFundByName(name: string): string {
   if (/private.?credit|private.?debt|private.?equity|bdc\b|business.?develop/i.test(n))
     return 'Alternatives'
 
-  // Fixed income funds (credit, bonds, contingent capital, target maturity)
+  // Fixed income funds (credit, bonds, contingent capital, target maturity) —
+  // clase distinta de 'Fixed Income' (bonos individuales): un fondo que
+  // invierte en bonos no es lo mismo que tener el bono directo, y mezclarlos
+  // en el mismo grupo de holdings confunde más de lo que ayuda.
   if (/credit|bond|income.*fund|fixed|debt\b|contingent.?capital|coco\b|at1\b|millesima|maturity|duration|high.?yield|investment.?grade|treasury|sovereign/i.test(n))
-    return 'Fixed Income'
+    return 'Fixed Income Fund'
 
   // Equity funds
   if (/equit|stock|franchise|growth|dividend|emerging.?market|market.*emerging|global.*fund|world|international|small.?cap|large.?cap|mid.?cap/i.test(n))

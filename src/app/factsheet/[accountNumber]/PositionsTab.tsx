@@ -17,7 +17,7 @@ function DetailRow({ label, value }: { label: string; value: string | null | und
   )
 }
 
-const RECLASSIFY_OPTIONS = ['Cash', 'Fixed Income', 'Fund', 'Equity', 'ETF', 'Alternatives', 'Real Estate']
+const RECLASSIFY_OPTIONS = ['Cash', 'Fixed Income', 'Fixed Income Fund', 'Fund', 'Equity', 'ETF', 'Alternatives', 'Real Estate']
 
 export default function PositionsTab({ positions, totalValue, glByCusip, onImport, onReclassified }: { positions: PortfolioPositionRow[]; totalValue: number; glByCusip: Map<string, PortfolioUnrealizedGainLossRow>; onImport?: () => void; onReclassified?: () => void }) {
   const hasGL = glByCusip.size > 0

@@ -384,7 +384,7 @@ function ConcentrationSection({ data }: { data: FactsheetData }) {
 }
 
 function FixedIncomeOverviewSection({ data }: { data: FactsheetData }) {
-  const fi = data.positions.filter(p => p.assetClass === 'Fixed Income')
+  const fi = data.positions.filter(p => p.assetClass === 'Fixed Income' || p.assetClass === 'Fixed Income Fund')
   if (!fi.length) return null
 
   const totalMV = fi.reduce((s, p) => s + p.marketValue, 0)
@@ -828,7 +828,7 @@ function A4Page({ children }: { children: React.ReactNode }) {
 
 export default function FactsheetPreview({ data }: { data: FactsheetData }) {
   const hasCommentary = Object.values(data.commentary).some(v => v?.trim())
-  const hasFixedIncome = data.positions.some(p => p.assetClass === 'Fixed Income')
+  const hasFixedIncome = data.positions.some(p => p.assetClass === 'Fixed Income' || p.assetClass === 'Fixed Income Fund')
   const hasMaturities = data.positions.some(p => p.maturityDate)
   const showPage3 = true // concentration always applies when there's ≥1 position
   const hasPositions = data.positions.length > 0

@@ -1669,8 +1669,11 @@ export default function ProposalEditor({
         // Fits in one page
         pdf.addImage(canvas.toDataURL('image/jpeg', 0.97), 'JPEG', 0, 0, pdfW, imgH)
       } else {
-        // Multi-page
-        const maxSliceH = Math.round(canvas.width * pdfH / pdfW)
+        // Multi-page — se reserva un margen abajo de cada hoja física: sin
+        // esto, una fila que justo entraba al límite quedaba pegada al
+        // borde de la página, sin aire.
+        const marginMM = 10
+        const maxSliceH = Math.round((canvas.width * pdfH / pdfW) - (canvas.width * marginMM / pdfW))
         let position = 0
         while (position < canvas.height) {
           let sliceH = Math.min(canvas.height - position, maxSliceH)

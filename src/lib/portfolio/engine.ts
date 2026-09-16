@@ -11,7 +11,8 @@ import type { PortfolioPositionRow, PortfolioUnrealizedGainLossRow, PortfolioCas
 export const ASSET_CLASS_ES: Record<string, string> = {
   'Equity': 'Renta Variable',
   'ETF': 'Renta Variable (ETF)',
-  'Fixed Income': 'Fondos de Renta Fija / Crédito',
+  'Fixed Income': 'Bonos',
+  'Fixed Income Fund': 'Fondos de Renta Fija',
   'Alternatives': 'Otros',
   'Real Estate': 'Otros',
   'Cash': 'Liquidez',
@@ -20,8 +21,10 @@ export const ASSET_CLASS_ES: Record<string, string> = {
 
 // Orden de los grupos por clase de activo al listar posiciones (pantalla y
 // PDF): renta variable primero, liquidez y sin clasificar al final. Una
-// clase que no esté acá va después, ordenada por su subtotal.
-export const ASSET_CLASS_ORDER = ['Equity', 'ETF', 'Fund', 'Fixed Income', 'Alternatives', 'Real Estate', 'Cash', 'Sin clasificar']
+// clase que no esté acá va después, ordenada por su subtotal. Bonos
+// individuales y fondos de renta fija son clases separadas a propósito —
+// nunca se mezclan en el mismo grupo aunque ambos inviertan en deuda.
+export const ASSET_CLASS_ORDER = ['Equity', 'ETF', 'Fund', 'Fixed Income', 'Fixed Income Fund', 'Alternatives', 'Real Estate', 'Cash', 'Sin clasificar']
 export function assetClassRank(ac: string): number {
   const i = ASSET_CLASS_ORDER.indexOf(ac)
   return i === -1 ? ASSET_CLASS_ORDER.length : i
@@ -84,7 +87,11 @@ export interface FixedIncomeSlice { label: string; value: number; pct: number }
 // Percentage denominator here is the Fixed-Income subtotal, not the account
 // total — intentionally different from every other breakdown in this file.
 export function computeFixedIncomeBreakdown(positions: PortfolioPositionRow[]): FixedIncomeSlice[] {
-  const fi = positions.filter(p => p.asset_class === 'Fixed Income')
+  // Incluye bonos individuales Y fondos de renta fija — son clases de
+  // holdings distintas (ver ASSET_CLASS_ORDER) pero este breakdown es sobre
+  // la exposición total a renta fija, y fixedIncomeBucket ya los separa en
+  // sub-buckets propios ("Fixed Income Funds" vs "Corporate/Sovereign Bonds").
+  const fi = positions.filter(p => p.asset_class === 'Fixed Income' || p.asset_class === 'Fixed Income Fund')
   const map = new Map<string, number>()
   for (const p of fi) {
     const bucket = fixedIncomeBucket(p.security_type ?? '')

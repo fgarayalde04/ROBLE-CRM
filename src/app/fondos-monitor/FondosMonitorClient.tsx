@@ -165,7 +165,10 @@ export default function FondosMonitorClient({ funds }: { funds: FundRow[] }) {
       if (imgH <= pdfH) {
         pdf.addImage(canvas.toDataURL('image/jpeg', 0.97), 'JPEG', 0, 0, pdfW, imgH)
       } else {
-        const maxPagePx = Math.round(canvas.width * pdfH / pdfW)
+        // Margen abajo de cada hoja física — sin esto, una fila que justo
+        // entraba al límite quedaba pegada al borde de la página, sin aire.
+        const marginPx = Math.round(canvas.width * 10 / pdfW)
+        const maxPagePx = Math.round(canvas.width * pdfH / pdfW) - marginPx
         const contentBudgetPx = maxPagePx - headerEndPx
         let position = headerEndPx
         while (position < canvas.height) {

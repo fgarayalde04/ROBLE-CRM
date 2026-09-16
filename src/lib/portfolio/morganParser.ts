@@ -287,8 +287,14 @@ export function mapMorganProductType(pt: string): string {
   const t = pt.toLowerCase()
   if (!t || t === '-') return 'Sin clasificar'
   if (/etf|exchange[- ]traded/.test(t)) return 'ETF'
+  // El chequeo de fondo va ANTES que el de renta fija: un "Open End Fund"
+  // cuyo Product Type también menciona "bond"/"fixed income" es un fondo que
+  // invierte en bonos, no un bono individual — si el de renta fija fuera
+  // primero, un fondo así quedaría mezclado con los bonos sueltos.
+  if (/mutual fund|open.?end|closed.?end|\bfund\b/.test(t)) {
+    return /fixed income|bond|treasury|govt|government|municipal|credit/.test(t) ? 'Fixed Income Fund' : 'Fund'
+  }
   if (/fixed income|bond|treasury|govt|government|municipal|structured|note|preferred/.test(t)) return 'Fixed Income'
-  if (/mutual fund|open.?end|closed.?end|fund/.test(t)) return 'Fund'
   if (/cash|mmf|bdp|money market|deposit/.test(t)) return 'Cash'
   if (/equit|common stock|adr|stock|shares/.test(t)) return 'Equity'
   if (/alternative|hedge|private/.test(t)) return 'Alternatives'

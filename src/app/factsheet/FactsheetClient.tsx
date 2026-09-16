@@ -6,8 +6,9 @@ import { mapAssetClass, mapRegion, mapSector } from '@/lib/factsheet-parser'
 
 // ── Brand colors ──────────────────────────────────────────────────────────────
 const ASSET_CLASS_COLORS: Record<string, string> = {
-  'Cash':         '#6B7280',
-  'Fixed Income': '#2E7D52',
+  'Cash':               '#6B7280',
+  'Fixed Income':       '#2E7D52',
+  'Fixed Income Fund':  '#5FA37B',
   'Equity':       '#1B3A2B',
   'ETF':          '#4CAF72',
   'Alternatives': '#A5D6B7',
