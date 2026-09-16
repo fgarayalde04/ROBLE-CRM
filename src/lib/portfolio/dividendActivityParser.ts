@@ -50,10 +50,15 @@ const ALIASES: Record<Field, string[]> = {
   symbol:       ['symbol', 'ticker'],
   cusip:        ['cusip'],
   activityType: ['activity', 'activity type', 'transaction type', 'type', 'transaction', 'action', 'tipo'],
-  amount:       ['amount', 'net amount', 'net amt', 'net amt trans ccy', 'net amount trans ccy', 'transaction amount', 'net cash', 'value', 'credit debit', 'gross amount', 'total amount', 'monto'],
+  // "net amount base currency" (Pershing: "Net Amount (Base Currency)") es
+  // el único alias de monto en la moneda base de la cuenta — a propósito NO
+  // se agrega "net amount transaction currency" como alias de amount, para
+  // que en cuentas con movimientos en moneda extranjera siempre se tome el
+  // monto ya convertido a la moneda base, nunca el de la moneda original.
+  amount:       ['amount', 'net amount', 'net amt', 'net amt trans ccy', 'net amount trans ccy', 'net amount base currency', 'transaction amount', 'net cash', 'value', 'credit debit', 'gross amount', 'total amount', 'monto'],
   quantity:     ['quantity', 'shares', 'qty', 'units', 'cantidad'],
   price:        ['price', 'unit price', 'trade price', 'precio'],
-  currency:     ['currency', 'ccy', 'base ccy', 'moneda'],
+  currency:     ['currency', 'ccy', 'base ccy', 'base currency', 'moneda'],
   account:      ['account', 'account number', 'account #', 'cuenta'],
   custodian:    ['custodian', 'custodio'],
 }

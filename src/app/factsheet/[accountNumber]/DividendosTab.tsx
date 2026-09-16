@@ -22,7 +22,7 @@ interface PreviewRow {
   date: string | null
   fundName: string
   isin: string | null
-  type: 'dividendo'
+  type: 'compra' | 'venta' | 'dividendo'
   amount: number | null
   quantity: number | null
   price: number | null
@@ -35,18 +35,26 @@ interface PreviewRow {
 interface PositionForValue { isin: string | null; name: string; market_value: string | number }
 
 const fmtPct = (n: number | null) => n == null ? '—' : `${n.toFixed(2)}%`
+// Un dividendo cobrado sin ninguna compra anterior que permita ubicar el
+// capital de referencia cuenta igual en "Dividendos cobrados", pero nunca
+// debe mostrar una tasa inventada — se avisa explícitamente que falta el
+// dato, en vez de un 0,00% falso o un guion ambiguo.
+const fmtYield = (annualizedYieldPct: number | null, totalCollected: number) =>
+  annualizedYieldPct != null ? fmtPct(annualizedYieldPct) : totalCollected > 0 ? 'Falta posición inicial' : '—'
 const fmtDate = (iso: string | null) => {
   if (!iso) return '—'
   const [y, m, d] = iso.split('-')
   return `${d}/${m}/${y}`
 }
 
-// Flujo fijo: el Activity solo aporta dividendos/distribuciones (se
-// detectan y leen del archivo); las compras SIEMPRE se cargan a mano, con
-// su fecha real. El sistema cruza esas fechas para saber qué capital
-// generó cada dividendo, y de ahí saca la tasa anualizada. El cliente ve
-// únicamente Fondo + Dividendos cobrados + Tasa anualizada — el detalle
-// fecha por fecha queda oculto salvo que lo despliegue a propósito.
+// Flujo: el Activity aporta compras Y dividendos/distribuciones (se
+// detectan y leen del archivo, revisables antes de confirmar). Agregar una
+// compra a mano queda como complemento para cuando el Activity empieza
+// después de la compra real del cliente (si no, esa distribución quedaría
+// sin capital de referencia). El sistema cruza fechas para saber qué
+// capital generó cada dividendo, y de ahí saca la tasa anualizada. El
+// cliente ve únicamente Fondo + Dividendos cobrados + Tasa anualizada — el
+// detalle fecha por fecha queda oculto salvo que lo despliegue a propósito.
 export default function DividendosTab({ accountNumber, positions }: { accountNumber: string; positions: PositionForValue[] }) {
   const [entries, setEntries] = useState<LedgerEntry[]>([])
   const [loading, setLoading] = useState(true)
@@ -58,7 +66,7 @@ export default function DividendosTab({ accountNumber, positions }: { accountNum
   const [preview, setPreview] = useState<PreviewRow[] | null>(null)
   const [previewChecked, setPreviewChecked] = useState<boolean[]>([])
   const [previewWarnings, setPreviewWarnings] = useState<string[]>([])
-  const [previewNonDividendCount, setPreviewNonDividendCount] = useState(0)
+  const [previewOtherAccountCount, setPreviewOtherAccountCount] = useState(0)
   const [importError, setImportError] = useState('')
   const [expandedKey, setExpandedKey] = useState<string | null>(null)
   const [editingGroupKey, setEditingGroupKey] = useState<string | null>(null)
@@ -138,7 +146,7 @@ export default function DividendosTab({ accountNumber, positions }: { accountNum
       setPreview(data.rows)
       setPreviewChecked((data.rows as PreviewRow[]).map(r => !r.isDuplicate))
       setPreviewWarnings(data.warnings ?? [])
-      setPreviewNonDividendCount(data.nonDividendCount ?? 0)
+      setPreviewOtherAccountCount(data.otherAccountCount ?? 0)
     } finally {
       setImporting(false)
       if (fileInputRef.current) fileInputRef.current.value = ''
@@ -158,7 +166,7 @@ export default function DividendosTab({ accountNumber, positions }: { accountNum
       if (!res.ok) { alert(data.error ?? 'No se pudo importar.'); return }
       setPreview(null)
       await load()
-      alert(`Se importaron ${data.imported} dividendo(s).${data.skippedDuplicates > 0 ? ` ${data.skippedDuplicates} se saltearon por ser duplicados.` : ''}`)
+      alert(`Se importaron ${data.imported} movimiento(s).${data.skippedDuplicates > 0 ? ` ${data.skippedDuplicates} se saltearon por ser duplicados.` : ''}`)
     } finally {
       setImporting(false)
     }
@@ -245,20 +253,20 @@ export default function DividendosTab({ accountNumber, positions }: { accountNum
             disabled={importing}
             className="text-xs font-semibold px-3 py-2 rounded-lg text-[#1B3A2B] border border-[#1B3A2B]/30 disabled:opacity-50"
           >
-            {importing ? 'Leyendo…' : '📄 Importar Activity (dividendos)'}
+            {importing ? 'Leyendo…' : '📄 Importar Activity'}
           </button>
         </div>
-        <p className="text-[10px] text-gray-400 mt-1.5">El Activity solo trae dividendos/distribuciones — las compras se cargan a mano, con su fecha real.</p>
+        <p className="text-[10px] text-gray-400 mt-1.5">El Activity aporta compras y dividendos/distribuciones. Agregá una compra a mano solo si el Activity empieza después de la compra real del cliente.</p>
       </div>
       {importError && <p className="text-xs text-red-600">{importError}</p>}
 
       {preview && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setPreview(null)}>
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-y-auto p-5" onClick={e => e.stopPropagation()}>
-            <p className="text-sm font-bold text-gray-900 mb-1">Dividendos detectados</p>
+            <p className="text-sm font-bold text-gray-900 mb-1">Movimientos detectados</p>
             <p className="text-xs text-gray-400 mb-3">
               Revisá y corregí antes de confirmar. Las filas en gris ya parecen estar cargadas — no se van a importar salvo que las marques a mano.
-              {previewNonDividendCount > 0 && ` El archivo tenía ${previewNonDividendCount} compra(s)/venta(s) — se ignoran, cargalas a mano.`}
+              {previewOtherAccountCount > 0 && ` Se ignoraron ${previewOtherAccountCount} fila(s) que pertenecen a otra cuenta dentro del mismo archivo.`}
             </p>
             {previewWarnings.map((w, i) => <p key={i} className="text-xs text-amber-700 mb-2">{w}</p>)}
             <table className="w-full text-xs">
@@ -267,6 +275,7 @@ export default function DividendosTab({ accountNumber, positions }: { accountNum
                   <th className="py-1 w-6" />
                   <th className="py-1">Fecha</th>
                   <th className="py-1">Fondo</th>
+                  <th className="py-1 w-24">Tipo</th>
                   <th className="py-1 text-right">Monto</th>
                   <th className="py-1 w-14">Moneda</th>
                   <th className="py-1"></th>
@@ -283,6 +292,19 @@ export default function DividendosTab({ accountNumber, positions }: { accountNum
                     <td className="py-1">
                       <input defaultValue={r.fundName} onBlur={e => setPreview(prev => prev!.map((row, j) => j === i ? { ...row, fundName: e.target.value } : row))}
                         className="border border-transparent hover:border-gray-200 rounded px-1 outline-none w-full" />
+                    </td>
+                    <td className="py-1">
+                      <select
+                        defaultValue={r.type}
+                        onChange={e => setPreview(prev => prev!.map((row, j) => j === i ? { ...row, type: e.target.value as PreviewRow['type'] } : row))}
+                        className={`text-xs font-semibold rounded px-1 py-0.5 border-0 outline-none ${
+                          r.type === 'compra' ? 'bg-gray-100 text-gray-600' : r.type === 'venta' ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-700'
+                        }`}
+                      >
+                        <option value="compra">Compra</option>
+                        <option value="venta">Venta</option>
+                        <option value="dividendo">Dividendo</option>
+                      </select>
                     </td>
                     <td className="py-1 text-right">
                       <input type="number" step="0.01" defaultValue={r.amount ?? ''} onBlur={e => setPreview(prev => prev!.map((row, j) => j === i ? { ...row, amount: e.target.value === '' ? null : Number(e.target.value) } : row))}
@@ -336,7 +358,7 @@ export default function DividendosTab({ accountNumber, positions }: { accountNum
                         <span className="inline-block w-3 text-gray-400">{isOpen ? '▾' : '▸'}</span> {group.label}
                       </td>
                       <td className="px-4 py-2.5 text-right font-semibold text-gray-900">{fmtUSD2(result.totalCollected)}</td>
-                      <td className="px-4 py-2.5 text-right font-semibold text-emerald-600">{fmtPct(result.annualizedYieldPct)}</td>
+                      <td className={`px-4 py-2.5 text-right font-semibold ${result.annualizedYieldPct != null ? 'text-emerald-600' : 'text-amber-600 text-xs'}`}>{fmtYield(result.annualizedYieldPct, result.totalCollected)}</td>
                       <td />
                     </tr>
                     {isOpen && (

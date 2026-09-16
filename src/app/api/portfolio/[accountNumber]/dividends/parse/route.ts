@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSession, hasPortfolioAccess } from '@/lib/auth'
 import { resolveAccount, listDividendLedger } from '@/lib/db/portfolio'
 import { parseDividendActivityExcel } from '@/lib/portfolio/dividendActivityParser'
-import { fundGroupKey, buildExternalRef } from '@/lib/portfolio/dividendEngine'
+import { fundGroupKey, buildExternalRef, normalizeAccountNumber } from '@/lib/portfolio/dividendEngine'
 
 // POST /api/portfolio/[accountNumber]/dividends/parse — sube un Activity
 // (.xlsx/.xls/.csv), lo interpreta y devuelve el preview SIN guardar nada
@@ -33,15 +33,19 @@ export async function POST(
   } catch (err: any) {
     return NextResponse.json({ error: 'No se pudo leer el archivo: ' + err.message }, { status: 400 })
   }
-  // El Activity solo se usa para detectar dividendos/distribuciones — las
-  // compras siempre se cargan a mano (con su fecha real), así que una
-  // compra o venta que aparezca en el archivo se descarta acá, no se
-  // ofrece para importar.
-  const nonDividendCount = parsed.rows.filter(r => r.type !== 'dividendo').length
-  const dividendRows = parsed.rows.filter(r => r.type === 'dividendo')
-  if (dividendRows.length === 0) {
+  // El Activity puede traer compras y dividendos de MÁS de una cuenta
+  // mezcladas (ej. distintas titularidades del mismo cliente en el mismo
+  // export) — si una fila trae un número de cuenta detectado y no coincide
+  // con la cuenta destino, se descarta para no mezclar movimientos de otra
+  // cuenta en esta planilla. Las filas sin cuenta detectable se mantienen
+  // (no se puede filtrar lo que el archivo no distingue).
+  const targetAccountNorm = normalizeAccountNumber(accountNumber)
+  const ownAccountRows = parsed.rows.filter(r => !r.account || normalizeAccountNumber(r.account) === targetAccountNorm)
+  const otherAccountCount = parsed.rows.length - ownAccountRows.length
+
+  if (ownAccountRows.length === 0) {
     return NextResponse.json({
-      error: parsed.rows.length === 0 ? (parsed.warnings[0] ?? 'No se encontraron movimientos') : 'El archivo no tiene dividendos/distribuciones detectados (las compras se cargan a mano).',
+      error: parsed.rows.length === 0 ? (parsed.warnings[0] ?? 'No se encontraron movimientos') : 'El archivo no tiene compras, ventas ni dividendos detectados para esta cuenta.',
       warnings: parsed.warnings,
     }, { status: 400 })
   }
@@ -49,9 +53,9 @@ export async function POST(
   const existing = await listDividendLedger(accountNumber)
   const existingRefs = new Set(existing.map(e => e.external_ref).filter(Boolean))
 
-  const rowsWithRefs = dividendRows.map(r => ({
+  const rowsWithRefs = ownAccountRows.map(r => ({
     r,
-    externalRef: buildExternalRef({ fundKey: fundGroupKey(r.isin, r.fundName), date: r.date, type: r.type!, amount: r.amount, currency: r.currency }),
+    externalRef: buildExternalRef({ fundKey: fundGroupKey(r.isin, r.fundName), date: r.date, type: r.type!, amount: r.amount, currency: r.currency, account: accountNumber }),
   }))
   // Chequea también contra otras filas del MISMO archivo (el mismo Activity
   // puede traer la misma línea repetida en distintas hojas, por ejemplo).
@@ -77,7 +81,7 @@ export async function POST(
   return NextResponse.json({
     rows: preview,
     ignoredCount: parsed.ignoredCount,
-    nonDividendCount,
+    otherAccountCount,
     warnings: parsed.warnings,
   })
 }

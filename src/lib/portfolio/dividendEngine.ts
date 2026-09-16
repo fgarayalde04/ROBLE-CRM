@@ -44,7 +44,6 @@ export interface FundDividendResult {
   isEstimate: boolean
   frequency: DistributionFrequency | null
   currentCapital: number // compras - ventas a la fecha de hoy (0 si nunca hubo compras registradas)
-  last12mCollected: number
   history: DividendHistoryEntry[] // más reciente primero, información secundaria
   pendingReviewCount: number // dividendos con rendimiento no determinado
 }
@@ -104,36 +103,28 @@ export function computeFundDividends(transactions: DividendTxn[], today: Date = 
   const todayIso = today.toISOString().slice(0, 10)
   const currentCapital = capitalAt(todayIso) ?? capitalMoves.reduce((s, m) => s + (m.type === 'compra' ? Number(m.amount) : -Number(m.amount)), 0)
 
-  const cutoff = new Date(today)
-  cutoff.setFullYear(cutoff.getFullYear() - 1)
-  const cutoffIso = cutoff.toISOString().slice(0, 10)
-  const last12mCollected = history.filter(h => h.date && h.date >= cutoffIso).reduce((s, h) => s + h.collected, 0)
-
-  // Tasa anualizada: se prioriza la evidencia de los últimos 12 meses para
-  // que refleje el nivel ACTUAL de distribución, sin que dividendos viejos
-  // (de una época en que el fondo pagaba distinto) la distorsionen. Si no
-  // hay suficiente historial reciente, se cae a todo el historial
-  // disponible y se marca como estimada.
+  // Tasa anualizada: promedio SIMPLE de todos los yields con capital
+  // determinado (todo el historial disponible, sin ventana de recencia —
+  // no hay que inventar un recorte que no se pidió), multiplicado por la
+  // frecuencia de distribución detectada por la separación real entre
+  // fechas.
   const withYieldAsc = [...withYield].sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''))
-  const recent = withYieldAsc.filter(h => h.date && h.date >= cutoffIso)
-  const usingRecent = recent.length >= 2
-  const sample = usingRecent ? recent : withYieldAsc
 
   let annualizedYieldPct: number | null = null
   let frequency: DistributionFrequency | null = null
-  let isEstimate = !usingRecent
+  let isEstimate = false
 
-  if (sample.length > 0) {
-    const avgRatePct = sample.reduce((s, h) => s + (h.yieldPct as number), 0) / sample.length
-    if (sample.length >= 2) {
-      const dates = sample.map(h => h.date as string)
+  if (withYieldAsc.length > 0) {
+    const avgRatePct = withYieldAsc.reduce((s, h) => s + (h.yieldPct as number), 0) / withYieldAsc.length
+    if (withYieldAsc.length >= 2) {
+      const dates = withYieldAsc.map(h => h.date as string)
       const gaps: number[] = []
       for (let i = 1; i < dates.length; i++) {
         gaps.push(Math.round((new Date(dates[i] + 'T00:00:00').getTime() - new Date(dates[i - 1] + 'T00:00:00').getTime()) / 86400000))
       }
       frequency = detectFrequency(median(gaps))
       annualizedYieldPct = avgRatePct * FREQUENCY_MULTIPLIER[frequency]
-      if (sample.length < 3) isEstimate = true
+      if (withYieldAsc.length < 3) isEstimate = true
     } else {
       // Una sola distribución conocida: no hay separación para detectar
       // frecuencia — se muestra el número más conservador (sin multiplicar)
@@ -143,7 +134,7 @@ export function computeFundDividends(transactions: DividendTxn[], today: Date = 
     }
   }
 
-  return { totalCollected, annualizedYieldPct, isEstimate, frequency, currentCapital, last12mCollected, history, pendingReviewCount }
+  return { totalCollected, annualizedYieldPct, isEstimate, frequency, currentCapital, history, pendingReviewCount }
 }
 
 // Clave de fondo para agrupar/consolidar — ISIN cuando está disponible
@@ -156,10 +147,17 @@ export function fundGroupKey(isin: string | null | undefined, fundName: string):
   return isin?.trim() ? isin.trim().toUpperCase() : fundName.trim().toLowerCase()
 }
 
+// Un mismo archivo de Activity puede traer varias cuentas mezcladas (ej.
+// distintas titularidades del mismo cliente) — normaliza para comparar la
+// cuenta detectada en una fila contra la cuenta destino del import.
+export function normalizeAccountNumber(v: string | null | undefined): string {
+  return (v ?? '').replace(/-/g, '').trim().toUpperCase()
+}
+
 // Huella para detectar "posible duplicado" al importar Activity — mismo
-// fondo/ISIN, fecha, tipo, monto y moneda. No usa un transaction ID porque
-// la mayoría de los exports de Activity no lo traen; con estos campos
-// alcanza para el caso real (resubir el mismo archivo, o uno que se
+// fondo/ISIN, fecha, tipo, monto, moneda y cuenta. No usa un transaction ID
+// porque la mayoría de los exports de Activity no lo traen; con estos
+// campos alcanza para el caso real (resubir el mismo archivo, o uno que se
 // superpone en fechas con uno ya cargado).
 export function buildExternalRef(input: {
   fundKey: string
@@ -167,8 +165,9 @@ export function buildExternalRef(input: {
   type: string
   amount: number | null
   currency?: string | null
+  account?: string | null
 }): string {
-  return [input.fundKey.toUpperCase(), input.date ?? '', input.type, (input.amount ?? '').toString(), input.currency ?? ''].join('|')
+  return [input.fundKey.toUpperCase(), input.date ?? '', input.type, (input.amount ?? '').toString(), input.currency ?? '', (input.account ?? '').toUpperCase()].join('|')
 }
 
 // "Valor del fondo" que se muestra al lado de los dividendos cobrados: la

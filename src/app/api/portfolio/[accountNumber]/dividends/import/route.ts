@@ -39,7 +39,7 @@ export async function POST(
 
   const withRefs = rows.map(r => ({
     row: r,
-    externalRef: buildExternalRef({ fundKey: fundGroupKey(r.isin, r.fundName), date: r.date, type: r.type, amount: r.amount, currency: r.currency }),
+    externalRef: buildExternalRef({ fundKey: fundGroupKey(r.isin, r.fundName), date: r.date, type: r.type, amount: r.amount, currency: r.currency, account: accountNumber }),
   }))
   const alreadyExisting = await findExistingExternalRefs(accountNumber, withRefs.map(w => w.externalRef))
 

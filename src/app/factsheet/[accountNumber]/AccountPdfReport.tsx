@@ -692,8 +692,8 @@ export default function AccountPdfReport({
                 <tr key={d.fundName} data-pdf-keep-together style={{ background: i % 2 === 1 ? COLORS.bgSofter : '#fff' }}>
                   <td style={{ padding: '2.2mm 3mm', fontWeight: 600, color: COLORS.ink, borderBottom: `1px solid ${COLORS.border}` }}>{d.fundName}</td>
                   <td style={{ padding: '2.2mm 3mm', textAlign: 'right', fontWeight: 700, color: COLORS.ink, borderBottom: `1px solid ${COLORS.border}` }}>{fmtUSD2(d.totalCollected)}</td>
-                  <td style={{ padding: '2.2mm 3mm', textAlign: 'right', fontWeight: 700, color: COLORS.darkGreen, borderBottom: `1px solid ${COLORS.border}` }}>
-                    {d.annualizedYieldPct != null ? `${d.annualizedYieldPct.toFixed(2)}%${d.isEstimate ? '*' : ''}` : '—'}
+                  <td style={{ padding: '2.2mm 3mm', textAlign: 'right', fontWeight: 700, color: d.annualizedYieldPct != null ? COLORS.darkGreen : COLORS.slate, borderBottom: `1px solid ${COLORS.border}` }}>
+                    {d.annualizedYieldPct != null ? `${d.annualizedYieldPct.toFixed(2)}%${d.isEstimate ? '*' : ''}` : (d.totalCollected > 0 ? 'Falta posición inicial' : '—')}
                   </td>
                 </tr>
               ))}
