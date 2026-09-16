@@ -13,12 +13,13 @@ export async function PATCH(
 
   const body = await req.json() as {
     fund_name?: string; entry_type?: string; entry_date?: string | null; amount?: number | null; notes?: string | null
+    isin?: string | null; currency?: string | null; quantity?: number | null; price?: number | null
   }
   if (body.fund_name !== undefined && !body.fund_name.trim()) {
     return NextResponse.json({ error: 'El nombre del fondo no puede quedar vacío' }, { status: 400 })
   }
-  if (body.entry_type !== undefined && !['compra', 'dividendo', 'dividendo_total'].includes(body.entry_type)) {
-    return NextResponse.json({ error: 'entry_type debe ser "compra", "dividendo" o "dividendo_total"' }, { status: 400 })
+  if (body.entry_type !== undefined && !['compra', 'venta', 'dividendo', 'dividendo_total'].includes(body.entry_type)) {
+    return NextResponse.json({ error: 'entry_type debe ser "compra", "venta", "dividendo" o "dividendo_total"' }, { status: 400 })
   }
 
   const patch: Record<string, unknown> = {}
@@ -27,6 +28,10 @@ export async function PATCH(
   if (body.entry_date !== undefined) patch.entry_date = body.entry_date?.trim() || null
   if (body.amount !== undefined) patch.amount = body.amount
   if (body.notes !== undefined) patch.notes = body.notes?.trim() || null
+  if (body.isin !== undefined) patch.isin = body.isin?.trim() || null
+  if (body.currency !== undefined) patch.currency = body.currency?.trim() || null
+  if (body.quantity !== undefined) patch.quantity = body.quantity
+  if (body.price !== undefined) patch.price = body.price
 
   const entry = await updateDividendLedgerEntry(params.id, patch)
   if (!entry) return NextResponse.json({ error: 'Fila no encontrada o nada para actualizar' }, { status: 404 })

@@ -579,21 +579,47 @@ export async function listDividendLedger(accountNumber: string) {
 export async function createDividendLedgerEntry(input: {
   accountNumber: string
   fundName: string
-  entryType: 'compra' | 'dividendo' | 'dividendo_total'
+  entryType: 'compra' | 'venta' | 'dividendo' | 'dividendo_total'
   entryDate: string | null
   amount: number | null
   notes: string | null
   createdBy: string | null
+  isin?: string | null
+  currency?: string | null
+  quantity?: number | null
+  price?: number | null
+  custodian?: string | null
+  source?: 'activity_import' | 'manual'
+  externalRef?: string | null
 }) {
   const { rows } = await pool.query(
-    `insert into portfolio_dividend_ledger (account_number, fund_name, entry_type, entry_date, amount, notes, created_by)
-     values ($1,$2,$3,$4,$5,$6,$7) returning *`,
-    [input.accountNumber, input.fundName, input.entryType, input.entryDate, input.amount, input.notes, input.createdBy]
+    `insert into portfolio_dividend_ledger
+       (account_number, fund_name, entry_type, entry_date, amount, notes, created_by,
+        isin, currency, quantity, price, custodian, source, external_ref)
+     values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) returning *`,
+    [
+      input.accountNumber, input.fundName, input.entryType, input.entryDate, input.amount, input.notes, input.createdBy,
+      input.isin ?? null, input.currency ?? null, input.quantity ?? null, input.price ?? null, input.custodian ?? null,
+      input.source ?? 'manual', input.externalRef ?? null,
+    ]
   )
   return rows[0]
 }
 
-const DIVIDEND_LEDGER_COLUMNS = ['fund_name', 'entry_type', 'entry_date', 'amount', 'notes'] as const
+// Movimientos ya cargados con la misma external_ref (fecha+tipo+monto+fondo,
+// ver buildExternalRef) — se usa para marcar "posible duplicado" en el
+// preview de un import de Activity, sin bloquear el alta si el asesor
+// confirma que corresponde igual.
+export async function findExistingExternalRefs(accountNumber: string, refs: string[]): Promise<Set<string>> {
+  if (refs.length === 0) return new Set()
+  const { rows } = await pool.query(
+    `select distinct external_ref from portfolio_dividend_ledger where account_number = $1 and external_ref = any($2::text[])`,
+    [accountNumber, refs]
+  )
+  return new Set(rows.map(r => r.external_ref as string))
+}
+
+const DIVIDEND_LEDGER_COLUMNS = ['fund_name', 'entry_type', 'entry_date', 'amount', 'notes', 'isin', 'currency', 'quantity', 'price', 'custodian'] as const
 
 export async function updateDividendLedgerEntry(id: string, patch: Partial<Record<typeof DIVIDEND_LEDGER_COLUMNS[number], unknown>>) {
   const sets: string[] = []
