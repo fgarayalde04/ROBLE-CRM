@@ -185,30 +185,8 @@ export default function DividendosTab({ accountNumber }: { accountNumber: string
 
       {results.length > 0 && (
         <div className="bg-[#1B3A2B] rounded-xl p-4">
-          <p className="text-[10px] text-white/60 uppercase tracking-wide">Dividendos totales cobrados</p>
+          <p className="text-[10px] text-white/60 uppercase tracking-wide">Dividendos totales cobrados (todos los fondos)</p>
           <p className="text-2xl font-bold text-white mt-0.5">{fmtUSD2(portfolioTotal)}</p>
-          <table className="w-full text-xs mt-3 pt-3 border-t border-white/10">
-            <thead>
-              <tr className="text-white/50 text-left">
-                <th className="pb-1 font-medium">Fondo</th>
-                <th className="pb-1 font-medium text-right">Total cobrado</th>
-                <th className="pb-1 font-medium text-right">Posición</th>
-                <th className="pb-1 font-medium text-right">Tasa anualizada</th>
-              </tr>
-            </thead>
-            <tbody>
-              {results.map(r => (
-                <tr key={r.group.key} className="text-white/80">
-                  <td className="py-0.5 truncate max-w-[160px]">{r.group.label}</td>
-                  <td className="py-0.5 text-right font-semibold text-white">{fmtUSD2(r.result.totalCollected)}</td>
-                  <td className="py-0.5 text-right text-white/70">{fmtUSD2(r.result.currentCapital)}</td>
-                  <td className="py-0.5 text-right font-semibold text-emerald-300">
-                    {fmtPct(r.result.annualizedYieldPct)}{r.result.isEstimate && r.result.annualizedYieldPct != null ? '*' : ''}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
         </div>
       )}
 
