@@ -23,13 +23,15 @@ const ITEMS: { key: keyof PdfSections; label: string; desc: string }[] = [
 ]
 
 export default function PdfOptionsModal({
-  initial, onCancel, onGenerate,
+  initial, initialIncomeYieldPct, onCancel, onGenerate,
 }: {
   initial: PdfSections
+  initialIncomeYieldPct?: string
   onCancel: () => void
-  onGenerate: (sections: PdfSections) => void
+  onGenerate: (sections: PdfSections, incomeYieldPct: string) => void
 }) {
   const [sections, setSections] = useState<PdfSections>(initial)
+  const [incomeYieldPct, setIncomeYieldPct] = useState(initialIncomeYieldPct ?? '')
   const toggle = (k: keyof PdfSections) => setSections(s => ({ ...s, [k]: !s[k] }))
   const anyOn = Object.values(sections).some(Boolean)
 
@@ -55,13 +57,27 @@ export default function PdfOptionsModal({
               </span>
             </label>
           ))}
+          {sections.composicion && (
+            <div className="mt-1 p-2.5 rounded-lg bg-gray-50">
+              <label className="block text-sm font-medium text-gray-800 mb-1">Rendimiento estimado del income (%)</label>
+              <input
+                type="number"
+                step="0.01"
+                value={incomeYieldPct}
+                onChange={e => setIncomeYieldPct(e.target.value)}
+                placeholder="Calculalo a mano y completalo acá"
+                className="w-full text-sm px-2.5 py-1.5 rounded-lg border border-gray-200 outline-none focus:border-[#2E7D52]/50"
+              />
+              <p className="text-[11px] text-gray-400 leading-snug mt-1">Va tal cual en el reporte — no se calcula automáticamente. Dejalo vacío para que salga &quot;—&quot;.</p>
+            </div>
+          )}
         </div>
         <div className="px-5 py-3 border-t border-gray-100 flex justify-end gap-2">
           <button onClick={onCancel} className="px-3 py-2 text-xs font-semibold text-gray-500 rounded-lg hover:bg-gray-100">
             Cancelar
           </button>
           <button
-            onClick={() => onGenerate(sections)}
+            onClick={() => onGenerate(sections, incomeYieldPct)}
             disabled={!anyOn}
             className="px-4 py-2 text-xs font-bold text-white bg-[#2E7D52] rounded-lg hover:bg-[#256841] transition disabled:opacity-40"
           >

@@ -207,7 +207,7 @@ export default function AccountPdfReport({
   account, accountNumber, importRow, sortedByValue, history, sections, assetAllocation, fixedIncomeBreakdown, currencyExposure,
   liquidity, maturityBuckets, nextMaturity, cashProjImport, cashProjRows, projectedIncome12m, nextPayment,
   cleanedNames, performance, unrealizedGLTotals, glByCusip,
-  isConsolidated, custodianByPositionId, custodianBreakdown,
+  isConsolidated, custodianByPositionId, custodianBreakdown, manualIncomeYieldPct,
 }: {
   account: PortfolioAccountInfo | null
   accountNumber: string
@@ -232,6 +232,9 @@ export default function AccountPdfReport({
   isConsolidated?: boolean
   custodianByPositionId?: Map<string, string> | null
   custodianBreakdown?: { label: string; value: number; pct: number }[]
+  // Se calcula a mano (el asesor decide qué posiciones corresponde tomar) y
+  // se tipea en el diálogo de generación — nunca se infiere del portafolio.
+  manualIncomeYieldPct?: number | null
 }) {
   const totalValue = Number(importRow.total_market_value)
   const clientName = account?.clientName || account?.accountName || accountNumber
@@ -302,12 +305,10 @@ export default function AccountPdfReport({
   const sincePct = performance?.return_since_inception != null ? Number(performance.return_since_inception) : null
   const reportDate = new Date().toLocaleDateString('es-UY', { day: '2-digit', month: 'long', year: 'numeric' })
 
-  // Rendimiento estimado del Projected Income: income proyectado a 12 meses
-  // dividido el market value de los BONOS (Fixed Income) solamente — dividir
-  // por todo el portafolio (incluyendo liquidez y fondos, que no generan un
-  // cupón fijo) diluye el número y lo muestra artificialmente bajo.
-  const bondsMV = sortedByValue.reduce((s, p) => p.asset_class === 'Fixed Income' ? s + Number(p.market_value) : s, 0)
-  const incomeYield = hasIncomePage && bondsMV > 0 ? (projectedIncome12m / bondsMV) * 100 : null
+  // El rendimiento estimado del income NO se calcula automáticamente —
+  // depende de qué posiciones corresponde tomar en cada cuenta, y eso lo
+  // decide el asesor a mano en el diálogo de generación del PDF.
+  const incomeYield = manualIncomeYieldPct ?? null
 
   return (
     <div id="account-pdf-report" style={{ position: 'fixed', left: -10000, top: 0 }}>
@@ -448,7 +449,7 @@ export default function AccountPdfReport({
           <StatTile
             label="Rendimiento estimado del income"
             value={incomeYield != null ? `${incomeYield.toFixed(2)}%` : '—'}
-            sub={incomeYield != null ? `Income 12m ÷ ${fmtUSD(bondsMV)} en bonos` : 'Requiere Projected Income'}
+            sub={incomeYield != null ? 'Calculado a mano por el asesor' : 'Completar a mano al generar el PDF'}
             color={COLORS.darkGreen}
           />
           <StatTile

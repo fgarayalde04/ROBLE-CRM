@@ -286,7 +286,7 @@ export default function ProposalPDFTemplate({
         </thead>
         <tbody>
           {list.map((f, i) => (
-            <tr key={f.id} style={{ backgroundColor: i % 2 === 0 ? '#FFFFFF' : '#F7F9FB' }}>
+            <tr key={f.id} data-pdf-keep-together style={{ backgroundColor: i % 2 === 0 ? '#FFFFFF' : '#F7F9FB' }}>
               {show.moneda && <td style={TD_STYLE}>{currency}</td>}
               <td style={TD_STYLE}><OperacionBadge value={f.operacion} /></td>
               <td style={{ ...TD_STYLE, textAlign: 'left', fontWeight: 600 }}>
@@ -305,7 +305,7 @@ export default function ProposalPDFTemplate({
           ))}
         </tbody>
         <tfoot>
-          <tr>
+          <tr data-pdf-keep-together>
             <td colSpan={labelColSpan} style={{ ...FOOTER_TD, textAlign: 'left', fontSize: 9, opacity: 0.6, borderRight: 'none' }}>
               {opSubtotalLabel(list)}
             </td>
@@ -354,7 +354,7 @@ export default function ProposalPDFTemplate({
             {list.map((b, i) => {
               const accrual = accrualsByRow.get(b.id)!
               return (
-              <tr key={b.id} style={{ backgroundColor: i % 2 === 0 ? '#FFFFFF' : '#F7F9FB' }}>
+              <tr key={b.id} data-pdf-keep-together style={{ backgroundColor: i % 2 === 0 ? '#FFFFFF' : '#F7F9FB' }}>
                 {show.moneda && <td style={TD_STYLE}>{b.currency}</td>}
                 <td style={TD_STYLE}><OperacionBadge value={b.operacion} /></td>
                 <td style={{ ...TD_STYLE, textAlign: 'left', fontWeight: 600 }}>
@@ -375,7 +375,7 @@ export default function ProposalPDFTemplate({
             })}
           </tbody>
           <tfoot>
-            <tr>
+            <tr data-pdf-keep-together>
               <td colSpan={labelColSpan} style={{ ...FOOTER_TD, fontSize: 9, opacity: 0.6, borderRight: 'none' }}>
                 {opSubtotalLabel(list)}
               </td>
@@ -414,7 +414,7 @@ export default function ProposalPDFTemplate({
           </thead>
           <tbody>
             {list.map((e, i) => (
-              <tr key={e.id} style={{ backgroundColor: i % 2 === 0 ? '#FFFFFF' : '#F7F9FB' }}>
+              <tr key={e.id} data-pdf-keep-together style={{ backgroundColor: i % 2 === 0 ? '#FFFFFF' : '#F7F9FB' }}>
                 {show.moneda && <td style={TD_STYLE}>{e.currency}</td>}
                 <td style={TD_STYLE}><OperacionBadge value={e.operacion} /></td>
                 {show.ticker && <td style={{ ...TD_STYLE, fontWeight: 700 }}>{e.ticker ?? '—'}</td>}
@@ -426,7 +426,7 @@ export default function ProposalPDFTemplate({
             ))}
           </tbody>
           <tfoot>
-            <tr>
+            <tr data-pdf-keep-together>
               <td colSpan={labelColSpan} style={{ ...FOOTER_TD, fontSize: 9, opacity: 0.6, borderRight: 'none' }}>
                 {opSubtotalLabel(list)}
               </td>

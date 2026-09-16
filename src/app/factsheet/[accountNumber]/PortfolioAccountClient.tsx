@@ -236,6 +236,10 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
   const [downloadingPdf, setDownloadingPdf] = useState(false)
   const [showPdfOptions, setShowPdfOptions] = useState(false)
   const [pdfSections, setPdfSections] = useState<PdfSections>(DEFAULT_PDF_SECTIONS)
+  // El "Rendimiento estimado del income" no se calcula más automáticamente
+  // (mezclaba posiciones que no correspondía tomar) — el asesor lo calcula
+  // a mano y lo tipea acá antes de generar el PDF; queda "—" si no lo completa.
+  const [manualIncomeYieldPct, setManualIncomeYieldPct] = useState('')
   const [pendingPdf, setPendingPdf] = useState(false)
 
   // El reporte se genera después de un re-render con las secciones elegidas
@@ -367,13 +371,15 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
       {showPdfOptions && (
         <PdfOptionsModal
           initial={pdfSections}
+          initialIncomeYieldPct={manualIncomeYieldPct}
           onCancel={() => setShowPdfOptions(false)}
-          onGenerate={(s) => { setPdfSections(s); setShowPdfOptions(false); setPendingPdf(true) }}
+          onGenerate={(s, incomeYieldPct) => { setPdfSections(s); setManualIncomeYieldPct(incomeYieldPct); setShowPdfOptions(false); setPendingPdf(true) }}
         />
       )}
 
       <AccountPdfReport account={account} accountNumber={accountNumber} importRow={importRow} sortedByValue={sortedByValue}
         sections={pdfSections}
+        manualIncomeYieldPct={manualIncomeYieldPct.trim() === '' ? null : Number(manualIncomeYieldPct)}
         history={history}
         assetAllocation={assetAllocation} fixedIncomeBreakdown={fixedIncomeBreakdown} currencyExposure={currencyExposure}
         liquidity={liquidity} maturityBuckets={maturityBuckets} nextMaturity={nextMaturity}
