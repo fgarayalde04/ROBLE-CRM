@@ -456,16 +456,16 @@ export default function ProposalPDFTemplate({
       }}
     >
       {/* ── Letterhead ── */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '3px solid #1B2E3C', paddingBottom: 8, marginBottom: 10 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #1B2E3C', paddingBottom: 5, marginBottom: 6 }}>
         <div>
-          <div style={{ fontSize: 21, fontWeight: 800, color: '#1B2E3C', letterSpacing: '0.01em' }}>Propuesta de Inversión</div>
-          <div style={{ fontSize: 9.5, color: '#9ca3af', marginTop: 3, textTransform: 'uppercase', letterSpacing: '0.12em' }}>Investment Proposal · Documento confidencial</div>
+          <div style={{ fontSize: 14, fontWeight: 800, color: '#1B2E3C', letterSpacing: '0.01em' }}>Propuesta de Inversión</div>
+          <div style={{ fontSize: 7, color: '#9ca3af', marginTop: 1, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Investment Proposal · Documento confidencial</div>
         </div>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src="/download.png"
           alt="Roble Capital"
-          style={{ height: 46, objectFit: 'contain' }}
+          style={{ height: 26, objectFit: 'contain' }}
         />
       </div>
 
