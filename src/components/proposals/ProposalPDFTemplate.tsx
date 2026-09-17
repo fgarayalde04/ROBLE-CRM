@@ -155,6 +155,7 @@ const TH_STYLE: React.CSSProperties = {
   textTransform: 'uppercase',
   padding: '4px 6px',
   textAlign: 'center',
+  verticalAlign: 'middle',
   borderRight: '1px solid #2E4155',
   whiteSpace: 'nowrap',
   letterSpacing: '0.04em',
@@ -165,6 +166,7 @@ const TD_STYLE: React.CSSProperties = {
   padding: '3px 7px',
   lineHeight: 1.3,
   textAlign: 'center',
+  verticalAlign: 'middle',
   borderRight: '1px solid #E8ECF0',
   borderBottom: '1px solid #E8ECF0',
   color: '#1a1a1a',
@@ -194,6 +196,7 @@ function OperacionBadge({ value }: { value: Operacion }) {
   return (
     <span style={{
       display: 'inline-block',
+      verticalAlign: 'middle',
       fontSize: 9,
       fontWeight: 700,
       textTransform: 'uppercase',
@@ -332,10 +335,11 @@ export default function ProposalPDFTemplate({
       precio:      !isHidden('bonds.precio'),
     }
     const labelColSpan = 2 + Object.values(show).filter(Boolean).length
-    // La tabla de bonos puede llegar a 12 columnas a la vez — con el tamaño
-    // de letra normal de fondos/acciones no entraban bien; se achica solo acá.
-    const bondTh: React.CSSProperties = { ...TH_STYLE, fontSize: 7.5, padding: '3px 5px' }
-    const bondTd: React.CSSProperties = { ...TD_STYLE, fontSize: 8, padding: '3px 5px' }
+    // Misma letra, tamaño y alineado que fondos/acciones — solo el padding
+    // horizontal se recorta un poco para que las hasta 12 columnas de
+    // bonos entren, sin tocar fuente ni alto de fila.
+    const bondTh: React.CSSProperties = { ...TH_STYLE, padding: '4px 4px' }
+    const bondTd: React.CSSProperties = { ...TD_STYLE, padding: '3px 4px' }
     return (
       <div style={{ marginTop: 4 }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
