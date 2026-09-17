@@ -162,8 +162,8 @@ const TH_STYLE: React.CSSProperties = {
 
 const TD_STYLE: React.CSSProperties = {
   fontSize: 9.5,
-  padding: '2px 7px',
-  lineHeight: 1.15,
+  padding: '3px 7px',
+  lineHeight: 1.3,
   textAlign: 'center',
   borderRight: '1px solid #E8ECF0',
   borderBottom: '1px solid #E8ECF0',
@@ -292,7 +292,7 @@ export default function ProposalPDFTemplate({
               <td style={TD_STYLE}><OperacionBadge value={f.operacion} /></td>
               <td style={{ ...TD_STYLE, textAlign: 'left', fontWeight: 600 }}>
                 {f.fund_name?.toUpperCase() ?? '—'}
-                {f.isin && <div style={{ fontSize: 6.5, fontWeight: 400, color: '#9ca3af', lineHeight: 1.1 }}>ISIN: {f.isin}</div>}
+                {f.isin && <div style={{ fontSize: 6.5, fontWeight: 400, color: '#9ca3af', lineHeight: 1.3, marginTop: 1 }}>ISIN: {f.isin}</div>}
               </td>
               {show.categoria && <td style={TD_STYLE}>{f.fund_category ? FUND_CATEGORY_LABEL[f.fund_category] : '—'}</td>}
               {show.ytd && <td style={{ ...TD_STYLE, color: pctColor(f.return_ytd), fontWeight: 600 }}>{fmtNum(f.return_ytd)}%</td>}
@@ -335,7 +335,7 @@ export default function ProposalPDFTemplate({
     // La tabla de bonos puede llegar a 12 columnas a la vez — con el tamaño
     // de letra normal de fondos/acciones no entraban bien; se achica solo acá.
     const bondTh: React.CSSProperties = { ...TH_STYLE, fontSize: 8, padding: '4px 5px' }
-    const bondTd: React.CSSProperties = { ...TD_STYLE, fontSize: 8, padding: '2px 5px' }
+    const bondTd: React.CSSProperties = { ...TD_STYLE, fontSize: 8, padding: '3px 5px' }
     return (
       <div style={{ marginTop: 10 }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -469,8 +469,10 @@ export default function ProposalPDFTemplate({
         />
       </div>
 
-      {/* ── Info bar: Cliente / Asesor / Fecha / Monto ── */}
-      <div style={{ display: 'flex', border: '1px solid #E2E8F0', borderRadius: 8, overflow: 'hidden', marginBottom: 12 }}>
+      {/* ── Info bar: Cliente / Asesor / Fecha / Monto — una sola línea por
+          campo (etiqueta + valor lado a lado), no dos líneas apiladas como
+          antes. */}
+      <div style={{ display: 'flex', border: '1px solid #E2E8F0', borderRadius: 6, overflow: 'hidden', marginBottom: 10 }}>
         {[
           ['Cliente', clientName ?? '—', 1.5],
           ['Asesor', advisorName ?? '—', 1],
@@ -479,24 +481,27 @@ export default function ProposalPDFTemplate({
         ].map(([label, value, flex], i, arr) => (
           <div key={label as string} style={{
             flex: flex as number,
-            padding: '8px 16px 10px',
+            padding: '5px 12px',
             borderRight: i < arr.length - 1 ? '1px solid #E2E8F0' : 'none',
             backgroundColor: '#F7F9FB',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
           }}>
-            <div style={{ fontSize: 8.5, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4, lineHeight: 1.4 }}>{label}</div>
-            <div style={{ fontSize: 12.5, fontWeight: 700, color: '#1B2E3C', lineHeight: 1.5 }}>{value}</div>
+            <span style={{ fontSize: 7.5, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}: </span>
+            <span style={{ fontSize: 9.5, fontWeight: 700, color: '#1B2E3C' }}>{value}</span>
           </div>
         ))}
         {totalVentas > 0 && (
-          <div style={{ flex: 1, padding: '8px 16px 10px', backgroundColor: '#F7F9FB' }}>
-            <div style={{ fontSize: 8.5, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4, lineHeight: 1.4 }}>Ventas</div>
-            <div style={{ fontSize: 12.5, fontWeight: 700, color: '#1B2E3C', lineHeight: 1.5 }}>{`${currency} ${fmtAmt(totalVentas)}`.replace(`${currency} $`, `${currency} `)}</div>
+          <div style={{ flex: 1, padding: '5px 12px', backgroundColor: '#F7F9FB', whiteSpace: 'nowrap' }}>
+            <span style={{ fontSize: 7.5, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Ventas: </span>
+            <span style={{ fontSize: 9.5, fontWeight: 700, color: '#1B2E3C' }}>{`${currency} ${fmtAmt(totalVentas)}`.replace(`${currency} $`, `${currency} `)}</span>
           </div>
         )}
         {totalAccruedInterest > 0 && (
-          <div style={{ flex: 1, padding: '8px 16px 10px', backgroundColor: '#F7F9FB' }}>
-            <div style={{ fontSize: 8.5, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4, lineHeight: 1.4 }}>Cupón Corrido</div>
-            <div style={{ fontSize: 12.5, fontWeight: 700, color: '#1B2E3C', lineHeight: 1.5 }}>{`${currency} ${fmtAmt(totalAccruedInterest)}`.replace(`${currency} $`, `${currency} `)}</div>
+          <div style={{ flex: 1, padding: '5px 12px', backgroundColor: '#F7F9FB', whiteSpace: 'nowrap' }}>
+            <span style={{ fontSize: 7.5, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Cupón Corrido: </span>
+            <span style={{ fontSize: 9.5, fontWeight: 700, color: '#1B2E3C' }}>{`${currency} ${fmtAmt(totalAccruedInterest)}`.replace(`${currency} $`, `${currency} `)}</span>
           </div>
         )}
       </div>
