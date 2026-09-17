@@ -569,26 +569,26 @@ export default function ProposalPDFTemplate({
 
       {/* ── Grand total (if multiple sections) ── */}
       {(bonds.length > 0 || equities.length > 0) && funds.length > 0 && (
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 4 }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 5, marginTop: 3 }}>
           {totalVentas > 0 && (
             <div style={{
-              backgroundColor: '#6b7280', color: '#fff', fontWeight: 700, fontSize: 12,
-              padding: '7px 16px', borderRadius: 4,
+              backgroundColor: '#6b7280', color: '#fff', fontWeight: 700, fontSize: 9,
+              padding: '4px 10px', borderRadius: 3,
             }}>
               VENTAS: {fmtAmt(totalVentas)}
             </div>
           )}
           {bonds.length > 0 && totalEstimatedCash > totalAssigned && (
             <div style={{
-              backgroundColor: '#1B2E3C', color: '#fff', fontWeight: 700, fontSize: 12,
-              padding: '7px 16px', borderRadius: 4, opacity: 0.85,
+              backgroundColor: '#1B2E3C', color: '#fff', fontWeight: 700, fontSize: 9,
+              padding: '4px 10px', borderRadius: 3, opacity: 0.85,
             }}>
               DESEMBOLSO ESTIMADO: {fmtAmt(totalEstimatedCash)}
             </div>
           )}
           <div style={{
-            backgroundColor: '#1B2E3C', color: '#fff', fontWeight: 700, fontSize: 12,
-            padding: '7px 16px', borderRadius: 4,
+            backgroundColor: '#1B2E3C', color: '#fff', fontWeight: 700, fontSize: 9,
+            padding: '4px 10px', borderRadius: 3,
           }}>
             COMPRAS: {fmtAmt(totalAssigned)}
           </div>
