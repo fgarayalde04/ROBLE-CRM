@@ -10,6 +10,10 @@
 export async function register() {
   if (process.env.NEXT_RUNTIME !== 'nodejs') return
 
+  // Independiente del sync de Microsoft/SharePoint de abajo — no debe
+  // quedar sin registrarse solo porque esa integración no está configurada.
+  await registerFundMonitorSync()
+
   const tenantId = process.env.MICROSOFT_TENANT_ID
   const clientId = process.env.MICROSOFT_CLIENT_ID
   const clientSecret = process.env.MICROSOFT_CLIENT_SECRET
@@ -69,4 +73,39 @@ export async function register() {
   console.log(
     `[auto-sync] Scheduled — interval: ${intervalMins} min, startup sync: ${runOnStartup}`
   )
+}
+
+// El Monitor de Fondos (Davinci) tenía su corrida diaria definida como cron
+// de Vercel en vercel.json — pero la app corre en Railway, que no lee ese
+// archivo, así que esa corrida nunca se disparaba sola. Se resuelve igual
+// que el resto de los jobs recurrentes de este archivo: un intervalo que
+// chequea la hora y llama a la sincronización, que internamente ya se
+// autolimita a una vez por día.
+async function registerFundMonitorSync() {
+  if (!process.env.DAVINCI_EMAIL || !process.env.DAVINCI_PASSWORD) {
+    console.log('[fund-monitor] Davinci no configurado — auto-sync del Monitor de Fondos deshabilitado')
+    return
+  }
+
+  const { syncFundMonitor } = await import('@/lib/fundMonitor/sync')
+  const SYNC_HOUR_UTC = 8 // 05:00 en Montevideo (UTC-3) — antes de que abran los mercados
+
+  async function maybeSync() {
+    if (new Date().getUTCHours() < SYNC_HOUR_UTC) return
+    try {
+      const result = await syncFundMonitor()
+      if (!('skipped' in result)) {
+        console.log(`[fund-monitor] Sync diario: ${result.ok}/${result.total} ok, ${result.no_source} sin fuente, ${result.error} con error`)
+      }
+    } catch (e: any) {
+      console.error('[fund-monitor] Error en el sync diario:', e.message)
+    }
+  }
+
+  // Chequea cada 15 minutos si ya pasó la hora de corrida y todavía no se
+  // hizo hoy — si un intento falla (ej. Davinci caído), el próximo chequeo
+  // reintenta solo, sin esperar al día siguiente.
+  setTimeout(() => maybeSync(), 15000)
+  setInterval(() => maybeSync(), 15 * 60 * 1000)
+  console.log(`[fund-monitor] Auto-sync programado — corre una vez por día después de las ${SYNC_HOUR_UTC}:00 UTC`)
 }
