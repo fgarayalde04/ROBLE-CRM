@@ -166,7 +166,14 @@ const TD_STYLE: React.CSSProperties = {
   padding: '3px 7px',
   lineHeight: 1.3,
   textAlign: 'center',
-  verticalAlign: 'middle',
+  // 'top', no 'middle': cuando una fila tiene una celda de varias líneas
+  // (emisor de bono largo, o fondo + su ISIN debajo), centrar verticalmente
+  // empuja el resto de las celdas de esa fila hacia abajo, corridas
+  // respecto a la primera línea de la celda más alta — exactamente el "los
+  // valores quedan por debajo" que se reportó. Alineando arriba, todas las
+  // celdas de una fila arrancan a la misma altura sin importar cuántas
+  // líneas tenga la más alta.
+  verticalAlign: 'top',
   borderRight: '1px solid #E8ECF0',
   borderBottom: '1px solid #E8ECF0',
   color: '#1a1a1a',
@@ -277,7 +284,7 @@ export default function ProposalPDFTemplate({
           <tr data-pdf-keep-together>
             {show.moneda && <th style={{ ...TH_STYLE, width: 60 }}>MONEDA</th>}
             <th style={{ ...TH_STYLE, width: 60 }}>OPERACIÓN</th>
-            <th style={{ ...TH_STYLE, textAlign: 'left' }}>FONDO DE INVERSIÓN</th>
+            <th style={{ ...TH_STYLE, textAlign: 'left', whiteSpace: 'nowrap', color: '#FFFFFF' }}>FONDO DE INVERSIÓN</th>
             {show.categoria && <th style={{ ...TH_STYLE, width: 64 }}>CATEGORÍA</th>}
             {show.ytd && <th style={{ ...TH_STYLE, width: 48 }}>YTD</th>}
             {show.y1 && <th style={{ ...TH_STYLE, width: 48 }}>1 AÑO</th>}
