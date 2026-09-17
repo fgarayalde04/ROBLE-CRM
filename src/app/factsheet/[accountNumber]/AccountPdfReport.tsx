@@ -190,7 +190,7 @@ export default function AccountPdfReport({
   importRow: PortfolioImportRow
   sortedByValue: PortfolioPositionRow[]
   history: { snapshot_date: string; total_market_value: string }[]
-  sections?: { performance: boolean; composicion: boolean; holdings: boolean; income: boolean; dividendos?: boolean }
+  sections?: { performance: boolean; composicion: boolean; holdings: boolean; income: boolean; dividendos?: boolean; performancePeriods?: Record<'ytd' | 'oneYear' | 'threeYear' | 'fiveYear' | 'sinceInception', boolean> }
   assetAllocation: { assetClass: string; label: string; value: number; pct: number }[]
   fixedIncomeBreakdown: { label: string; value: number; pct: number }[]
   currencyExposure: { label: string; value: number; pct: number }[]
@@ -268,6 +268,7 @@ export default function AccountPdfReport({
   const holdingColSpan = 5 + (hasGL ? 2 : 0) + (hasMaturityCols ? 1 : 0) + (isConsolidated ? 1 : 0)
 
   const sec = { performance: true, composicion: true, holdings: true, income: true, dividendos: true, ...(sections ?? {}) }
+  const periodsOn = { ytd: true, oneYear: true, threeYear: true, fiveYear: true, sinceInception: true, ...(sections?.performancePeriods ?? {}) }
   const hasIncomePage = sec.income && !!cashProjImport && cashProjRows.length > 0
   const hasDividendPage = sec.dividendos && !!dividendResults && dividendResults.length > 0
   // El disclosure va al pie de la última hoja de contenido que se muestre.
@@ -341,10 +342,10 @@ export default function AccountPdfReport({
             </div>
             {performance ? (
               <div style={{ display: 'flex', gap: '3mm' }}>
-                {[
-                  ['YTD', performance.return_ytd], ['1 Año', performance.return_1y], ['3 Años', performance.return_3y],
-                  ['5 Años', performance.return_5y], ['Desde inicio', performance.return_since_inception],
-                ].map(([label, val]) => (
+                {([
+                  ['YTD', performance.return_ytd, periodsOn.ytd], ['1 Año', performance.return_1y, periodsOn.oneYear], ['3 Años', performance.return_3y, periodsOn.threeYear],
+                  ['5 Años', performance.return_5y, periodsOn.fiveYear], ['Desde inicio', performance.return_since_inception, periodsOn.sinceInception],
+                ] as [string, string | number | null, boolean][]).filter(([, , on]) => on).map(([label, val]) => (
                   <div key={label as string} style={{ flex: 1, textAlign: 'center', background: COLORS.bgSofter, borderRadius: 8, padding: '4mm 1mm' }}>
                     <div style={{ fontSize: 7.5, color: COLORS.mutedSlate, textTransform: 'uppercase', letterSpacing: 0.4 }}>{label}</div>
                     <div style={{ fontSize: 17, fontWeight: 800, marginTop: '2mm', color: val == null ? COLORS.mutedSlate : Number(val) >= 0 ? COLORS.gain : COLORS.loss }}>
@@ -358,9 +359,10 @@ export default function AccountPdfReport({
             )}
             {performance?.change_in_value && (() => {
               const civ = performance.change_in_value!
-              const cells: [string, number | null][] = [
-                ['YTD', civ.ytd], ['1 Año', civ.oneYear], ['3 Años', civ.threeYear], ['5 Años', civ.fiveYear], ['Desde inicio', civ.sinceInception],
-              ]
+              const cells: [string, number | null][] = ([
+                ['YTD', civ.ytd, periodsOn.ytd], ['1 Año', civ.oneYear, periodsOn.oneYear], ['3 Años', civ.threeYear, periodsOn.threeYear],
+                ['5 Años', civ.fiveYear, periodsOn.fiveYear], ['Desde inicio', civ.sinceInception, periodsOn.sinceInception],
+              ] as [string, number | null, boolean][]).filter(([, , on]) => on).map(([label, v]) => [label, v])
               if (cells.every(([, v]) => v == null)) return null
               return (
                 <>

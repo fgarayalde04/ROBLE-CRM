@@ -1,12 +1,17 @@
 'use client'
 import { useState } from 'react'
 
+export type PerformancePeriodKey = 'ytd' | 'oneYear' | 'threeYear' | 'fiveYear' | 'sinceInception'
+
 export interface PdfSections {
   performance: boolean
   composicion: boolean
   holdings: boolean
   income: boolean
   dividendos: boolean
+  // Qué períodos de rentabilidad (TWRR) mostrar dentro de Performance —
+  // solo afecta este PDF puntual, nunca la pestaña Rendimiento en pantalla.
+  performancePeriods: Record<PerformancePeriodKey, boolean>
 }
 
 export const DEFAULT_PDF_SECTIONS: PdfSections = {
@@ -15,14 +20,23 @@ export const DEFAULT_PDF_SECTIONS: PdfSections = {
   holdings: true,
   income: true,
   dividendos: true,
+  performancePeriods: { ytd: true, oneYear: true, threeYear: true, fiveYear: true, sinceInception: true },
 }
 
-const ITEMS: { key: keyof PdfSections; label: string; desc: string }[] = [
+const ITEMS: { key: keyof Omit<PdfSections, 'performancePeriods'>; label: string; desc: string }[] = [
   { key: 'performance', label: 'Performance', desc: 'Valor de la cuenta, rentabilidad (TWRR) y gráficos de evolución.' },
   { key: 'composicion', label: 'Composición y renta', desc: 'Asset allocation, monedas, liquidez, unrealized y rendimiento del income.' },
   { key: 'holdings',    label: 'Posiciones', desc: 'Listado completo de holdings agrupado por clase de activo.' },
   { key: 'income',      label: 'Cupones y dividendos', desc: 'Projected income — próximos cobros estimados por instrumento.' },
   { key: 'dividendos',  label: 'Dividendos cobrados', desc: 'Resumen de la planilla manual de Dividendos: total cobrado y rendimiento anualizado por fondo.' },
+]
+
+const PERIOD_ITEMS: { key: PerformancePeriodKey; label: string }[] = [
+  { key: 'ytd', label: 'YTD' },
+  { key: 'oneYear', label: '1 Año' },
+  { key: 'threeYear', label: '3 Años' },
+  { key: 'fiveYear', label: '5 Años' },
+  { key: 'sinceInception', label: 'Desde inicio' },
 ]
 
 export default function PdfOptionsModal({
@@ -35,8 +49,9 @@ export default function PdfOptionsModal({
 }) {
   const [sections, setSections] = useState<PdfSections>(initial)
   const [incomeYieldPct, setIncomeYieldPct] = useState(initialIncomeYieldPct ?? '')
-  const toggle = (k: keyof PdfSections) => setSections(s => ({ ...s, [k]: !s[k] }))
-  const anyOn = Object.values(sections).some(Boolean)
+  const toggle = (k: keyof Omit<PdfSections, 'performancePeriods'>) => setSections(s => ({ ...s, [k]: !s[k] }))
+  const togglePeriod = (k: PerformancePeriodKey) => setSections(s => ({ ...s, performancePeriods: { ...s.performancePeriods, [k]: !s.performancePeriods[k] } }))
+  const anyOn = ITEMS.some(it => sections[it.key])
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onCancel}>
@@ -60,6 +75,25 @@ export default function PdfOptionsModal({
               </span>
             </label>
           ))}
+          {sections.performance && (
+            <div className="mt-1 p-2.5 rounded-lg bg-gray-50">
+              <label className="block text-sm font-medium text-gray-800 mb-1.5">Períodos de rentabilidad (TWRR) a mostrar</label>
+              <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+                {PERIOD_ITEMS.map(p => (
+                  <label key={p.key} className="flex items-center gap-1.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={sections.performancePeriods[p.key]}
+                      onChange={() => togglePeriod(p.key)}
+                      className="w-3.5 h-3.5 rounded accent-[#2E7D52]"
+                    />
+                    <span className="text-xs text-gray-700">{p.label}</span>
+                  </label>
+                ))}
+              </div>
+              <p className="text-[11px] text-gray-400 leading-snug mt-1.5">Solo afecta este PDF — la pestaña Rendimiento en pantalla sigue mostrando todos los períodos.</p>
+            </div>
+          )}
           {sections.composicion && (
             <div className="mt-1 p-2.5 rounded-lg bg-gray-50">
               <label className="block text-sm font-medium text-gray-800 mb-1">Rendimiento estimado del income (%)</label>
