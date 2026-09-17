@@ -151,9 +151,9 @@ const TH_STYLE: React.CSSProperties = {
   backgroundColor: '#1B2E3C',
   color: '#FFFFFF',
   fontWeight: 700,
-  fontSize: 9.5,
+  fontSize: 9,
   textTransform: 'uppercase',
-  padding: '6px 7px',
+  padding: '4px 6px',
   textAlign: 'center',
   borderRight: '1px solid #2E4155',
   whiteSpace: 'nowrap',
@@ -334,10 +334,10 @@ export default function ProposalPDFTemplate({
     const labelColSpan = 2 + Object.values(show).filter(Boolean).length
     // La tabla de bonos puede llegar a 12 columnas a la vez — con el tamaño
     // de letra normal de fondos/acciones no entraban bien; se achica solo acá.
-    const bondTh: React.CSSProperties = { ...TH_STYLE, fontSize: 8, padding: '4px 5px' }
+    const bondTh: React.CSSProperties = { ...TH_STYLE, fontSize: 7.5, padding: '3px 5px' }
     const bondTd: React.CSSProperties = { ...TD_STYLE, fontSize: 8, padding: '3px 5px' }
     return (
-      <div style={{ marginTop: 10 }}>
+      <div style={{ marginTop: 4 }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr>
@@ -403,7 +403,7 @@ export default function ProposalPDFTemplate({
     }
     const labelColSpan = 2 + Object.values(show).filter(Boolean).length
     return (
-      <div style={{ marginTop: 10 }}>
+      <div style={{ marginTop: 4 }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr>
@@ -547,14 +547,14 @@ export default function ProposalPDFTemplate({
         <>
           {fundsTable(funds)}
           {bonds.length > 0 && (
-            <div style={{ marginTop: funds.length > 0 ? 24 : 0 }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: '#1B2E3C', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Bonos</div>
+            <div style={{ marginTop: funds.length > 0 ? 10 : 0 }}>
+              <div style={{ fontSize: 9, fontWeight: 700, color: '#1B2E3C', marginBottom: 3, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Bonos</div>
               {bondsTable(bonds)}
             </div>
           )}
           {equities.length > 0 && (
-            <div style={{ marginTop: 24 }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: '#1B2E3C', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Acciones</div>
+            <div style={{ marginTop: 10 }}>
+              <div style={{ fontSize: 9, fontWeight: 700, color: '#1B2E3C', marginBottom: 3, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Acciones</div>
               {equitiesTable(equities)}
             </div>
           )}
