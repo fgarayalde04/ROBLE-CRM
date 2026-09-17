@@ -43,6 +43,14 @@ export default function ClientLayout({ user, children }: Props) {
     setSidebarOpen((v) => !v)
   }
 
+  // Hojas "para imprimir" (ej. /propuestas/[id]/print, capturadas por un
+  // browser headless para generar el PDF) van sin sidebar/header/bottom
+  // nav — solo el contenido, a página completa, tal como lo necesita
+  // page.pdf() para paginar.
+  if (pathname?.endsWith('/print')) {
+    return <>{children}</>
+  }
+
   // Content area classes:
   // - Advisor mode: always pt-14 (MobileHeader) + pb-16 (BottomNav), no left offset
   // - Standard mode: mobile = pt-14 pb-16, desktop = md:pl-64 no top/bottom

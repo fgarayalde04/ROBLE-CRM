@@ -1625,7 +1625,6 @@ export default function ProposalEditor({
   const [downloading, setDownloading]   = useState(false)
   const [hiddenCols, setHiddenCols]     = useState<Set<string>>(new Set())
   const [showColumnPicker, setShowColumnPicker] = useState(false)
-  const pdfRef                          = useRef<HTMLDivElement>(null)
 
   const toggleCol = (key: string) => {
     setHiddenCols(prev => {
@@ -1635,42 +1634,31 @@ export default function ProposalEditor({
     })
   }
 
+  // El PDF se genera server-side (Playwright abre /propuestas/[id]/print y
+  // llama a page.pdf()) — así la paginación es la nativa del navegador: si
+  // una tabla no entra en una hoja, sigue en la siguiente con su <thead>
+  // repetido solo, sin recortar/componer nada a mano. hiddenCols viaja por
+  // query string para que el PDF respete las mismas columnas ocultas que
+  // se ven en esta preview.
   const handleDownloadPDF = async () => {
-    if (!pdfRef.current) return
     setDownloading(true)
     try {
-      const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
-        import('html2canvas'),
-        import('jspdf'),
-      ])
-      const canvas = await html2canvas(pdfRef.current, {
-        scale: 3,
-        useCORS: true,
-        backgroundColor: '#ffffff',
-        logging: false,
-        windowWidth: pdfRef.current.scrollWidth,
-      })
-      // A4 landscape: 297mm × 210mm — la propuesta SIEMPRE tiene que entrar
-      // completa en una sola hoja, nunca paginarse. Si el contenido no
-      // entra tal cual a lo ancho de la hoja, se achica todo (ancho y
-      // alto) en la misma proporción hasta que entre, y se centra.
-      const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
-      const pdfW = pdf.internal.pageSize.getWidth()
-      const pdfH = pdf.internal.pageSize.getHeight()
-      const imgRatio = canvas.height / canvas.width
-      let drawW = pdfW
-      let drawH = pdfW * imgRatio
-      if (drawH > pdfH) {
-        const shrink = pdfH / drawH
-        drawW *= shrink
-        drawH = pdfH
+      const qs = hiddenCols.size > 0 ? `?hidden=${encodeURIComponent(Array.from(hiddenCols).join(','))}` : ''
+      const res = await fetch(`/api/proposals/${proposal.id}/pdf${qs}`)
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        alert(data.error ?? 'No se pudo generar el PDF.')
+        return
       }
-      const offsetX = (pdfW - drawW) / 2
-      const offsetY = (pdfH - drawH) / 2
-      pdf.addImage(canvas.toDataURL('image/jpeg', 0.97), 'JPEG', offsetX, offsetY, drawW, drawH)
+      const blob = await res.blob()
       const clientSlug = (proposal.client_name ?? 'propuesta').replace(/\s+/g, '_')
       const dateSlug   = new Date().toISOString().slice(0, 10)
-      pdf.save(`Propuesta_${clientSlug}_${dateSlug}.pdf`)
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `Propuesta_${clientSlug}_${dateSlug}.pdf`
+      a.click()
+      URL.revokeObjectURL(url)
     } finally {
       setDownloading(false)
     }
@@ -1962,20 +1950,18 @@ export default function ProposalEditor({
             <div className="flex-1 overflow-auto bg-gray-100 p-6">
               {/* Shadow box simulating paper */}
               <div className="mx-auto shadow-2xl" style={{ width: 1050 }}>
-                <div ref={pdfRef}>
-                  <ProposalPDFTemplate
-                    clientName={proposal.client_name}
-                    advisorName={proposal.advisor_name}
-                    totalAmount={proposal.total_amount}
-                    currency={proposal.currency}
-                    funds={funds}
-                    bonds={bonds}
-                    equities={equities}
-                    disclaimer={proposal.disclaimer}
-                    settlementDate={proposal.settlement_date}
-                    hiddenColumns={hiddenCols}
-                  />
-                </div>
+                <ProposalPDFTemplate
+                  clientName={proposal.client_name}
+                  advisorName={proposal.advisor_name}
+                  totalAmount={proposal.total_amount}
+                  currency={proposal.currency}
+                  funds={funds}
+                  bonds={bonds}
+                  equities={equities}
+                  disclaimer={proposal.disclaimer}
+                  settlementDate={proposal.settlement_date}
+                  hiddenColumns={hiddenCols}
+                />
               </div>
             </div>
           </div>
