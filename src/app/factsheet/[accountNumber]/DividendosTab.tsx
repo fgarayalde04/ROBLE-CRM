@@ -1,7 +1,7 @@
 'use client'
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { fmtUSD2 } from './PortfolioAccountClient'
-import { computeFundDividends, fundGroupKey, findFundPositionValue, type DividendTxn } from '@/lib/portfolio/dividendEngine'
+import { computeFundDividends, fundGroupKey, findFundPositionValue, fuzzyNameMatch, type DividendTxn } from '@/lib/portfolio/dividendEngine'
 
 interface LedgerEntry {
   id: string
@@ -190,7 +190,21 @@ export default function DividendosTab({ accountNumber, positions }: { accountNum
       if (!g) { g = { key, label: e.fund_name, isin, entries: [] }; byKey.set(key, g) }
       g.entries.push(e)
     }
-    return Array.from(byKey.values()).sort((a, b) => a.label.localeCompare(b.label))
+    // Segunda pasada: sin ISIN, dos grupos pueden ser el mismo fondo escrito
+    // distinto (ej. "AB American Income" cargado a mano vs "AB AMERICAN
+    // INCOME FUND CLASS A (USD)" tal cual lo trae el Activity) — se
+    // fusionan si el nombre de uno contiene al del otro. Los grupos CON
+    // ISIN no se tocan: ahí ya no hay ambigüedad.
+    const merged: { key: string; label: string; isin: string | null; entries: LedgerEntry[] }[] = []
+    for (const g of Array.from(byKey.values()).sort((a, b) => b.label.length - a.label.length)) {
+      const match = !g.isin ? merged.find(m => !m.isin && fuzzyNameMatch(m.label, g.label)) : undefined
+      if (match) {
+        match.entries.push(...g.entries)
+      } else {
+        merged.push(g)
+      }
+    }
+    return merged.sort((a, b) => a.label.localeCompare(b.label))
   }, [entries])
 
   const results = useMemo(() => {

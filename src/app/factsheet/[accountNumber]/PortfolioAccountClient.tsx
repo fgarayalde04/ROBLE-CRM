@@ -13,7 +13,7 @@ import ImportHistoryModal from '@/components/portfolio/ImportHistoryModal'
 import AccountPdfReport from './AccountPdfReport'
 import PdfOptionsModal, { type PdfSections, DEFAULT_PDF_SECTIONS } from '@/components/portfolio/PdfOptionsModal'
 import { cleanDisplayName } from '@/lib/portfolio/theme'
-import { computeFundDividends, fundGroupKey, findFundPositionValue, type DividendTxn } from '@/lib/portfolio/dividendEngine'
+import { computeFundDividends, fundGroupKey, findFundPositionValue, fuzzyNameMatch, type DividendTxn } from '@/lib/portfolio/dividendEngine'
 import {
   ASSET_CLASS_ES,
   computeAssetAllocation, computeLiquidity, computeFixedIncomeBreakdown, computeCurrencyExposure,
@@ -267,7 +267,16 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
         if (!g) { g = { label: e.fund_name, isin, txns: [] }; byKey.set(key, g) }
         g.txns.push({ id: key, date: e.entry_date, type: e.entry_type as DividendTxn['type'], amount: e.amount != null ? Number(e.amount) : null })
       }
-      setDividendResults(Array.from(byKey.values()).map(g => {
+      // Misma fusión que la pestaña Dividendos: sin ISIN, un nombre cargado
+      // a mano y el nombre largo del Activity para el mismo fondo no deben
+      // aparecer como dos fondos distintos en el PDF.
+      const groups: { label: string; isin: string | null; txns: DividendTxn[] }[] = []
+      for (const g of Array.from(byKey.values()).sort((a, b) => b.label.length - a.label.length)) {
+        const match = !g.isin ? groups.find(m => !m.isin && fuzzyNameMatch(m.label, g.label)) : undefined
+        if (match) match.txns.push(...g.txns)
+        else groups.push(g)
+      }
+      setDividendResults(groups.map(g => {
         const r = computeFundDividends(g.txns)
         // "Valor del fondo" en el PDF es la misma posición real que ya usa
         // Portafolio, no una suma aparte de las compras de esta planilla.
@@ -326,10 +335,22 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
           // sin aire, y se sentía "cortado" aunque ninguna fila se partiera
           // a mitad. Se resta del alto útil antes de decidir dónde corta cada slice.
           const marginMM = 10
+          const pxPerMM = canvas.width / pdfW
           const maxSliceH = Math.round((canvas.width * pdfH / pdfW) - (canvas.width * marginMM / pdfW))
+          // La PRIMERA hoja física de cada página lógica ya trae su propio
+          // padding (PAGE_PAD_MM) dibujado dentro del canvas — pero una hoja
+          // de CONTINUACIÓN (ej. cuando el grupo de Bonos entero pasa a la
+          // siguiente hoja física) arranca justo donde el contenido anterior
+          // cortó, pegada al borde superior sin aire. Se le reserva un
+          // margen arriba solo a esas, y se descuenta del alto disponible
+          // para que el slice no termine pasándose del borde de abajo.
+          const topContinuationMM = 8
+          const topContinuationPx = Math.round(pxPerMM * topContinuationMM)
           let position = 0
           while (position < canvas.height) {
-            let sliceH = Math.min(canvas.height - position, maxSliceH)
+            const isContinuation = position > 0
+            const budget = isContinuation ? maxSliceH - topContinuationPx : maxSliceH
+            let sliceH = Math.min(canvas.height - position, budget)
             const pageEnd = position + sliceH
             // Entre todas las secciones que quedarían cortadas por este
             // límite de página, hay que respetar la que empieza ANTES
@@ -356,7 +377,7 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
             if (!firstPdfPage) pdf.addPage()
             firstPdfPage = false
             const destH = pdfW * (sliceH / canvas.width)
-            pdf.addImage(pageCanvas.toDataURL('image/png'), 'PNG', 0, 0, pdfW, destH)
+            pdf.addImage(pageCanvas.toDataURL('image/png'), 'PNG', 0, isContinuation ? topContinuationMM : 0, pdfW, destH)
             position += sliceH
           }
         }

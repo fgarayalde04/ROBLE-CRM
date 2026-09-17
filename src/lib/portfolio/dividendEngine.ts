@@ -147,6 +147,17 @@ export function fundGroupKey(isin: string | null | undefined, fundName: string):
   return isin?.trim() ? isin.trim().toUpperCase() : fundName.trim().toLowerCase()
 }
 
+// Dos nombres de fondo "son el mismo" si son iguales o si uno contiene al
+// otro (ej. "AB American Income" tipeado a mano vs "AB AMERICAN INCOME
+// FUND CLASS A (USD)" tal cual lo trae el Activity) — exigir igualdad
+// exacta separaba en grupos distintos algo que para el cliente es un solo
+// fondo. Se usa tanto para fusionar grupos sin ISIN como para matchear
+// contra las posiciones reales de Portafolio.
+export function fuzzyNameMatch(a: string, b: string): boolean {
+  const an = a.trim().toLowerCase(), bn = b.trim().toLowerCase()
+  return an === bn || an.includes(bn) || bn.includes(an)
+}
+
 // Un mismo archivo de Activity puede traer varias cuentas mezcladas (ej.
 // distintas titularidades del mismo cliente) — normaliza para comparar la
 // cuenta detectada en una fila contra la cuenta destino del import.
@@ -190,10 +201,7 @@ export function findFundPositionValue(
   // vs. "AB American Income Fund Class A2 (ACFAX)") — exigir igualdad
   // exacta hacía que nunca se encontrara. Alcanza con que uno contenga al
   // otro para considerarlo el mismo fondo.
-  const byName = positions.filter(p => {
-    const posName = p.name.trim().toLowerCase()
-    return posName === nameNorm || posName.includes(nameNorm) || nameNorm.includes(posName)
-  })
+  const byName = positions.filter(p => fuzzyNameMatch(p.name, nameNorm))
   if (byName.length === 0) return null
   return byName.reduce((s, p) => s + Number(p.market_value), 0)
 }
