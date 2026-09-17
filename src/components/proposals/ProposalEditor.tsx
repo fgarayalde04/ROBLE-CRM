@@ -1681,13 +1681,20 @@ export default function ProposalEditor({
           // If this slice would cut through a keep-together section (and the
           // section itself fits within one page), end the page right before
           // it so the whole section starts fresh on the next page instead.
+          // Entre todas las secciones/filas que quedarían cortadas, hay que
+          // respetar la que empieza ANTES (achicar hasta ahí) — no la
+          // última que evalúe el loop, porque una fila más abajo en la
+          // página puede pisar el achique correcto de una anterior y
+          // terminar cortándola al medio igual.
+          let cutBefore = Infinity
           for (const s of keepTogether) {
             const sectionFits = (s.bottom - s.top) <= maxSliceH
             const wouldBeCut = s.top < pageEnd && s.bottom > pageEnd
             if (sectionFits && wouldBeCut && s.top > position) {
-              sliceH = s.top - position
+              cutBefore = Math.min(cutBefore, s.top)
             }
           }
+          if (cutBefore < Infinity) sliceH = cutBefore - position
           const pageCanvas = document.createElement('canvas')
           pageCanvas.width = canvas.width
           pageCanvas.height = sliceH

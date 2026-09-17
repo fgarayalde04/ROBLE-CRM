@@ -161,8 +161,9 @@ const TH_STYLE: React.CSSProperties = {
 }
 
 const TD_STYLE: React.CSSProperties = {
-  fontSize: 10,
-  padding: '4px 7px',
+  fontSize: 9.5,
+  padding: '2px 7px',
+  lineHeight: 1.15,
   textAlign: 'center',
   borderRight: '1px solid #E8ECF0',
   borderBottom: '1px solid #E8ECF0',
@@ -291,7 +292,7 @@ export default function ProposalPDFTemplate({
               <td style={TD_STYLE}><OperacionBadge value={f.operacion} /></td>
               <td style={{ ...TD_STYLE, textAlign: 'left', fontWeight: 600 }}>
                 {f.fund_name?.toUpperCase() ?? '—'}
-                {f.isin && <div style={{ fontSize: 7, fontWeight: 400, color: '#9ca3af', marginTop: 1 }}>ISIN: {f.isin}</div>}
+                {f.isin && <div style={{ fontSize: 6.5, fontWeight: 400, color: '#9ca3af', lineHeight: 1.1 }}>ISIN: {f.isin}</div>}
               </td>
               {show.categoria && <td style={TD_STYLE}>{f.fund_category ? FUND_CATEGORY_LABEL[f.fund_category] : '—'}</td>}
               {show.ytd && <td style={{ ...TD_STYLE, color: pctColor(f.return_ytd), fontWeight: 600 }}>{fmtNum(f.return_ytd)}%</td>}
@@ -333,8 +334,8 @@ export default function ProposalPDFTemplate({
     const labelColSpan = 2 + Object.values(show).filter(Boolean).length
     // La tabla de bonos puede llegar a 12 columnas a la vez — con el tamaño
     // de letra normal de fondos/acciones no entraban bien; se achica solo acá.
-    const bondTh: React.CSSProperties = { ...TH_STYLE, fontSize: 8, padding: '5px 5px' }
-    const bondTd: React.CSSProperties = { ...TD_STYLE, fontSize: 8.5, padding: '4px 5px' }
+    const bondTh: React.CSSProperties = { ...TH_STYLE, fontSize: 8, padding: '4px 5px' }
+    const bondTd: React.CSSProperties = { ...TD_STYLE, fontSize: 8, padding: '2px 5px' }
     return (
       <div style={{ marginTop: 10 }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
