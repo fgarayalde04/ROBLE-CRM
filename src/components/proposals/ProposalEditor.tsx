@@ -1643,71 +1643,31 @@ export default function ProposalEditor({
         import('html2canvas'),
         import('jspdf'),
       ])
-      const scale = 3
-      // Sections marked "keep together" (e.g. the Distribución del Portafolio
-      // chart) must never be sliced across a page boundary — capture their
-      // pixel bounds up front, in canvas coordinates, before slicing.
-      const containerTop = pdfRef.current.getBoundingClientRect().top
-      const keepTogether = Array.from(pdfRef.current.querySelectorAll('[data-pdf-keep-together]')).map(el => {
-        const r = (el as HTMLElement).getBoundingClientRect()
-        return { top: (r.top - containerTop) * scale, bottom: (r.bottom - containerTop) * scale }
-      })
       const canvas = await html2canvas(pdfRef.current, {
-        scale,
+        scale: 3,
         useCORS: true,
         backgroundColor: '#ffffff',
         logging: false,
         windowWidth: pdfRef.current.scrollWidth,
       })
-      // A4 landscape: 297mm × 210mm
+      // A4 landscape: 297mm × 210mm — la propuesta SIEMPRE tiene que entrar
+      // completa en una sola hoja, nunca paginarse. Si el contenido no
+      // entra tal cual a lo ancho de la hoja, se achica todo (ancho y
+      // alto) en la misma proporción hasta que entre, y se centra.
       const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
       const pdfW = pdf.internal.pageSize.getWidth()
       const pdfH = pdf.internal.pageSize.getHeight()
       const imgRatio = canvas.height / canvas.width
-      const imgH = pdfW * imgRatio
-      if (imgH <= pdfH) {
-        // Fits in one page
-        pdf.addImage(canvas.toDataURL('image/jpeg', 0.97), 'JPEG', 0, 0, pdfW, imgH)
-      } else {
-        // Multi-page — se reserva un margen abajo de cada hoja física: sin
-        // esto, una fila que justo entraba al límite quedaba pegada al
-        // borde de la página, sin aire.
-        const marginMM = 10
-        const maxSliceH = Math.round((canvas.width * pdfH / pdfW) - (canvas.width * marginMM / pdfW))
-        let position = 0
-        while (position < canvas.height) {
-          let sliceH = Math.min(canvas.height - position, maxSliceH)
-          const pageEnd = position + sliceH
-          // If this slice would cut through a keep-together section (and the
-          // section itself fits within one page), end the page right before
-          // it so the whole section starts fresh on the next page instead.
-          // Entre todas las secciones/filas que quedarían cortadas, hay que
-          // respetar la que empieza ANTES (achicar hasta ahí) — no la
-          // última que evalúe el loop, porque una fila más abajo en la
-          // página puede pisar el achique correcto de una anterior y
-          // terminar cortándola al medio igual.
-          let cutBefore = Infinity
-          for (const s of keepTogether) {
-            const sectionFits = (s.bottom - s.top) <= maxSliceH
-            const wouldBeCut = s.top < pageEnd && s.bottom > pageEnd
-            if (sectionFits && wouldBeCut && s.top > position) {
-              cutBefore = Math.min(cutBefore, s.top)
-            }
-          }
-          if (cutBefore < Infinity) sliceH = cutBefore - position
-          const pageCanvas = document.createElement('canvas')
-          pageCanvas.width = canvas.width
-          pageCanvas.height = sliceH
-          const ctx = pageCanvas.getContext('2d')!
-          ctx.drawImage(canvas, 0, position, canvas.width, sliceH, 0, 0, canvas.width, sliceH)
-          if (position > 0) pdf.addPage()
-          // A short last slice must keep its own aspect ratio — stretching it
-          // to the full page height (like a complete page) distorts the text.
-          const destH = pdfW * (sliceH / canvas.width)
-          pdf.addImage(pageCanvas.toDataURL('image/jpeg', 0.97), 'JPEG', 0, 0, pdfW, destH)
-          position += sliceH
-        }
+      let drawW = pdfW
+      let drawH = pdfW * imgRatio
+      if (drawH > pdfH) {
+        const shrink = pdfH / drawH
+        drawW *= shrink
+        drawH = pdfH
       }
+      const offsetX = (pdfW - drawW) / 2
+      const offsetY = (pdfH - drawH) / 2
+      pdf.addImage(canvas.toDataURL('image/jpeg', 0.97), 'JPEG', offsetX, offsetY, drawW, drawH)
       const clientSlug = (proposal.client_name ?? 'propuesta').replace(/\s+/g, '_')
       const dateSlug   = new Date().toISOString().slice(0, 10)
       pdf.save(`Propuesta_${clientSlug}_${dateSlug}.pdf`)

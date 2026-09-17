@@ -175,8 +175,8 @@ const FOOTER_TD: React.CSSProperties = {
   backgroundColor: '#1B2E3C',
   color: '#FFFFFF',
   fontWeight: 700,
-  fontSize: 10.5,
-  padding: '5px 8px',
+  fontSize: 9,
+  padding: '3px 7px',
   textAlign: 'right',
   borderRight: '1px solid #2E4155',
 }
@@ -271,7 +271,7 @@ export default function ProposalPDFTemplate({
     return (
       <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 0 }}>
         <thead>
-          <tr>
+          <tr data-pdf-keep-together>
             {show.moneda && <th style={{ ...TH_STYLE, width: 60 }}>MONEDA</th>}
             <th style={{ ...TH_STYLE, width: 60 }}>OPERACIÓN</th>
             <th style={{ ...TH_STYLE, textAlign: 'left' }}>FONDO DE INVERSIÓN</th>
@@ -340,7 +340,7 @@ export default function ProposalPDFTemplate({
       <div style={{ marginTop: 4 }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
-            <tr>
+            <tr data-pdf-keep-together>
               {show.moneda && <th style={{ ...bondTh, width: 55 }}>MONEDA</th>}
               <th style={{ ...bondTh, width: 55 }}>OPERACIÓN</th>
               <th style={{ ...bondTh, textAlign: 'left' }}>BONOS</th>
@@ -406,7 +406,7 @@ export default function ProposalPDFTemplate({
       <div style={{ marginTop: 4 }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
-            <tr>
+            <tr data-pdf-keep-together>
               {show.moneda && <th style={{ ...TH_STYLE, width: 60 }}>MONEDA</th>}
               <th style={{ ...TH_STYLE, width: 60 }}>OPERACIÓN</th>
               {show.ticker && <th style={{ ...TH_STYLE, width: 70 }}>TICKER</th>}
@@ -547,13 +547,19 @@ export default function ProposalPDFTemplate({
         <>
           {fundsTable(funds)}
           {bonds.length > 0 && (
-            <div style={{ marginTop: funds.length > 0 ? 10 : 0 }}>
+            // data-pdf-keep-together acá: si el título "Bonos" + su tabla
+            // entran enteros en una hoja, viajan juntos — nunca queda el
+            // título solo al pie de una página y la tabla arrancando en la
+            // siguiente. Si no entran enteros, esta marca se ignora y el
+            // corte cae en los puntos protegidos de más abajo (encabezado
+            // de columnas, cada fila).
+            <div data-pdf-keep-together style={{ marginTop: funds.length > 0 ? 10 : 0 }}>
               <div style={{ fontSize: 9, fontWeight: 700, color: '#1B2E3C', marginBottom: 3, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Bonos</div>
               {bondsTable(bonds)}
             </div>
           )}
           {equities.length > 0 && (
-            <div style={{ marginTop: 10 }}>
+            <div data-pdf-keep-together style={{ marginTop: 10 }}>
               <div style={{ fontSize: 9, fontWeight: 700, color: '#1B2E3C', marginBottom: 3, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Acciones</div>
               {equitiesTable(equities)}
             </div>
