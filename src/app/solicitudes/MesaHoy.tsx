@@ -669,7 +669,7 @@ export default function MesaHoy({ isMesa, userName, openId }: { isMesa: boolean;
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 border-b border-gray-100">
                   <tr>
-                    {['Hora','Cliente','Asesor','Ingresó','Operación','Instrumento','Monto ($)','Cantidad','Estado','Operador'].map(h => (
+                    {['Hora','Cliente','Asesor','Opera','Operación','Instrumento','Monto ($)','Cantidad','Estado','Operador'].map(h => (
                       <th key={h} className="px-3 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
@@ -703,10 +703,10 @@ export default function MesaHoy({ isMesa, userName, openId }: { isMesa: boolean;
                         </td>
                         <td className="px-3 py-2 text-xs text-gray-600 whitespace-nowrap">{row.asesor}</td>
                         <td className="px-3 py-2 whitespace-nowrap">
-                          {ingresadaPor(row) === 'mesa' ? (
-                            <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">Mesa</span>
-                          ) : (
+                          {row.opera_asesor ? (
                             <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-sky-100 text-sky-700">Asesor</span>
+                          ) : (
+                            <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">Mesa</span>
                           )}
                         </td>
                         <td className="px-3 py-2 text-xs font-medium text-gray-700 whitespace-nowrap">

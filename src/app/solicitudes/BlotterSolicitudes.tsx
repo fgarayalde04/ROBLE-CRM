@@ -418,12 +418,13 @@ function expandRows(rows: Solicitud[]): BlotterLine[] {
 }
 
 function exportCSV(rows: Solicitud[]) {
-  const headers = ['N° Interno','Fecha','Hora','Cliente','N°','Asesor','Operación','Tipo','Instrumento','Moneda','Monto ($)','Cantidad','Estado','Operador','Fecha ejecución']
+  const headers = ['N° Interno','Fecha','Hora','Cliente','N°','Asesor','Opera','Operación','Tipo','Instrumento','Moneda','Monto ($)','Cantidad','Estado','Operador','Fecha ejecución']
   const lines = expandRows(rows).map(l => [
     l.row.solicitud_id,
     l.row.fecha_operacion,
     format(new Date(l.row.created_at), 'HH:mm'),
     l.row.client_name, l.row.client_number, l.row.asesor,
+    l.row.opera_asesor ? 'Asesor' : 'Mesa',
     OP_LABEL[l.operacion ?? ''] ?? l.operacion,
     l.tipo,
     l.instrumento_nombre,
@@ -654,14 +655,14 @@ export default function BlotterSolicitudes({ isMesa, userName }: { isMesa: boole
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-100">
               <tr>
-                {['N° Interno','Fecha','Hora','Cliente','Asesor','Operación','Tipo','Instrumento','Moneda','Monto ($)','Cantidad','Estado','Operador','Ejecutada',''].map(h => (
+                {['N° Interno','Fecha','Hora','Cliente','Asesor','Opera','Operación','Tipo','Instrumento','Moneda','Monto ($)','Cantidad','Estado','Operador','Ejecutada',''].map(h => (
                   <th key={h} className="px-3 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
               {rows.length === 0 && !loading ? (
-                <tr><td colSpan={15} className="px-4 py-8 text-center text-sm text-gray-400">Sin resultados.</td></tr>
+                <tr><td colSpan={16} className="px-4 py-8 text-center text-sm text-gray-400">Sin resultados.</td></tr>
               ) : expandRows(rows).map(line => {
                 const row = line.row
                 const cfg = line.cancelada ? ESTADO_CFG.cancelada : (ESTADO_CFG[row.estado] ?? ESTADO_CFG.mesa_operaciones)
@@ -682,6 +683,13 @@ export default function BlotterSolicitudes({ isMesa, userName }: { isMesa: boole
                       <p className="text-[10px] text-gray-400">#{row.client_number}</p>
                     </td>
                     <td className="px-3 py-2 text-xs text-gray-600 whitespace-nowrap">{row.asesor}</td>
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      {row.opera_asesor ? (
+                        <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-sky-100 text-sky-700">Asesor</span>
+                      ) : (
+                        <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">Mesa</span>
+                      )}
+                    </td>
                     <td className="px-3 py-2 text-xs font-medium text-gray-700 whitespace-nowrap">{OP_LABEL[line.operacion ?? ''] ?? line.operacion}</td>
                     <td className="px-3 py-2 whitespace-nowrap">
                       {tipoCfg
