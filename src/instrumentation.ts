@@ -77,25 +77,38 @@ export async function register() {
 
 // El Monitor de Fondos (Davinci) tenía su corrida diaria definida como cron
 // de Vercel en vercel.json — pero la app corre en Railway, que no lee ese
-// archivo, así que esa corrida nunca se disparaba sola. Se resuelve igual
-// que el resto de los jobs recurrentes de este archivo: un intervalo que
-// chequea la hora y llama a la sincronización, que internamente ya se
-// autolimita a una vez por día.
+// archivo, así que esa corrida nunca se disparaba sola.
+//
+// Importa el browser headless (@sparticuz/chromium-min) — Next.js también
+// compila instrumentation.ts para el runtime EDGE (aunque el guard de
+// arriba lo descarte en tiempo de ejecución), y ese paquete no se puede
+// bundlear ni externalizar ahí (rompe el build con un error de sintaxis en
+// el bundle de edge). Por eso, en vez de llamar a syncFundMonitor()
+// directo, se le pega por HTTP a la ruta /api/cron/fund-monitor-sync
+// (que sí compila bien — ahí @sparticuz/chromium-min ya está en
+// serverComponentsExternalPackages) — mismo mecanismo que usaría un cron
+// externo, solo que disparado desde el propio proceso.
 async function registerFundMonitorSync() {
   if (!process.env.DAVINCI_EMAIL || !process.env.DAVINCI_PASSWORD) {
     console.log('[fund-monitor] Davinci no configurado — auto-sync del Monitor de Fondos deshabilitado')
     return
   }
 
-  const { syncFundMonitor } = await import('@/lib/fundMonitor/sync')
   const SYNC_HOUR_UTC = 8 // 05:00 en Montevideo (UTC-3) — antes de que abran los mercados
+  const port = process.env.PORT ?? '3000'
+  const url = `http://127.0.0.1:${port}/api/cron/fund-monitor-sync`
 
   async function maybeSync() {
     if (new Date().getUTCHours() < SYNC_HOUR_UTC) return
     try {
-      const result = await syncFundMonitor()
-      if (!('skipped' in result)) {
-        console.log(`[fund-monitor] Sync diario: ${result.ok}/${result.total} ok, ${result.no_source} sin fuente, ${result.error} con error`)
+      const headers: Record<string, string> = {}
+      if (process.env.CRON_SECRET) headers.Authorization = `Bearer ${process.env.CRON_SECRET}`
+      const res = await fetch(url, { headers })
+      const data = await res.json()
+      if (!res.ok) {
+        console.error('[fund-monitor] Error en el sync diario:', data.error ?? res.status)
+      } else if (!data.skipped) {
+        console.log(`[fund-monitor] Sync diario: ${data.ok}/${data.total} ok, ${data.no_source} sin fuente, ${data.error} con error`)
       }
     } catch (e: any) {
       console.error('[fund-monitor] Error en el sync diario:', e.message)
