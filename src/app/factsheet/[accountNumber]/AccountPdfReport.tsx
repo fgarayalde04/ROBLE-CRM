@@ -167,44 +167,6 @@ function PdfAreaChart({ points, height = 46 }: { points: { date: string; value: 
   )
 }
 
-// Gráfico de barras de rentabilidad por período — el mismo que trae el PDF
-// de performance del custodio (return % por período). SVG plano.
-function PdfPerfBarChart({ series, height = 58 }: { series: { label: string; value: number | null }[]; height?: number }) {
-  const vals = series.map(s => s.value).filter((v): v is number => v != null)
-  if (vals.length === 0) return null
-  const maxV = Math.max(...vals, 0)
-  const minV = Math.min(...vals, 0)
-  const range = (maxV - minV) || 1
-  const W = 1000, H = 320, padT = 26, padB = 34
-  const plotH = H - padT - padB
-  const zeroY = padT + (maxV / range) * plotH
-  const bw = W / series.length
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: `${height}mm`, display: 'block' }}>
-      <line x1={0} y1={zeroY} x2={W} y2={zeroY} stroke={COLORS.mutedSlate} strokeWidth={1.5} />
-      {series.map((s, i) => {
-        if (s.value == null) {
-          return <text key={s.label} x={i * bw + bw / 2} y={H - 10} fontSize={15} fill={COLORS.slate} textAnchor="middle">{s.label}</text>
-        }
-        const pos = s.value >= 0
-        const h = Math.max(Math.abs(s.value / range) * plotH, 2)
-        const y = pos ? zeroY - h : zeroY
-        const x = i * bw + bw * 0.24
-        return (
-          <g key={s.label}>
-            <rect x={x} y={y} width={bw * 0.52} height={h} rx={3} fill={pos ? COLORS.midGreen : COLORS.loss} />
-            <text x={i * bw + bw / 2} y={pos ? y - 8 : y + h + 20} fontSize={17} fontWeight={700}
-              fill={pos ? COLORS.gain : COLORS.loss} textAnchor="middle">
-              {s.value >= 0 ? '+' : ''}{s.value.toFixed(2)}%
-            </text>
-            <text x={i * bw + bw / 2} y={H - 10} fontSize={15} fill={COLORS.slate} textAnchor="middle">{s.label}</text>
-          </g>
-        )
-      })}
-    </svg>
-  )
-}
-
 // Disclosure fijado al pie de la hoja (arriba del footer institucional).
 // Va en el flujo normal, al final del contenido de la hoja (arriba del
 // footer). data-pdf-keep-together evita que el paginado lo parta al medio.
@@ -423,22 +385,6 @@ export default function AccountPdfReport({
             <PdfAreaChart points={growthPoints} height={50} />
             <div style={{ fontSize: 6.4, color: COLORS.mutedSlate, marginTop: '2mm' }}>
               Valor de mercado en cada importación. Puede incluir aportes, retiros u operaciones — no representa rentabilidad por sí solo.
-            </div>
-          </div>
-        )}
-
-        {performance && (
-          <div data-pdf-keep-together style={{ border: `1px solid ${COLORS.border}`, borderRadius: 10, padding: '5mm 6mm' }}>
-            <div style={{ fontSize: 9.5, fontWeight: 700, color: COLORS.ink, marginBottom: '3mm' }}>Rentabilidad por período (Net of Fees)</div>
-            <PdfPerfBarChart series={[
-              { label: 'YTD', value: performance.return_ytd != null ? Number(performance.return_ytd) : null },
-              { label: '1 Año', value: performance.return_1y != null ? Number(performance.return_1y) : null },
-              { label: '3 Años', value: performance.return_3y != null ? Number(performance.return_3y) : null },
-              { label: '5 Años', value: performance.return_5y != null ? Number(performance.return_5y) : null },
-              { label: 'Desde inicio', value: performance.return_since_inception != null ? Number(performance.return_since_inception) : null },
-            ]} />
-            <div style={{ fontSize: 6.4, color: COLORS.mutedSlate, marginTop: '2mm' }}>
-              Rentabilidad time-weighted reportada por el custodio — no calculada por el sistema. Los períodos mayores a un año están anualizados.
             </div>
           </div>
         )}

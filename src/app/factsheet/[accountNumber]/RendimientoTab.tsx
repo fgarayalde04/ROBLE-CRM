@@ -1,6 +1,6 @@
 'use client'
 import { useState, useMemo } from 'react'
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, BarChart, Bar, Cell, LabelList, ReferenceLine } from 'recharts'
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { fmtUSD, fmtDate } from './PortfolioAccountClient'
 import DocumentUploadButton from '@/components/portfolio/DocumentUploadButton'
 import { computePerfValueSeries, computeInitialAccountValue } from '@/lib/portfolio/engine'
@@ -218,29 +218,6 @@ export default function RendimientoTab({ accountNumber, history, performance, on
 
         return (
           <>
-            {perfBars.length > 0 && (
-              <div className="bg-white rounded-xl border border-gray-200 p-5">
-                <p className="text-sm font-bold text-gray-900 mb-1">Rentabilidad por período (TWRR)</p>
-                <p className="text-[11px] text-gray-400 mb-4">
-                  Rentabilidad real reportada por el custodio. Los períodos mayores a un año están anualizados.
-                </p>
-                <ResponsiveContainer width="100%" height={260}>
-                  <BarChart data={perfBars} margin={{ top: 20, right: 8, bottom: 0, left: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" vertical={false} />
-                    <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#6B7280' }} />
-                    <YAxis tick={{ fontSize: 10, fill: '#6B7280' }} tickFormatter={(v) => `${v}%`} />
-                    <ReferenceLine y={0} stroke="#9CA3AF" />
-                    <Tooltip formatter={(v: any) => `${Number(v) >= 0 ? '+' : ''}${Number(v).toFixed(2)}%`} cursor={{ fill: '#F3F4F6' }} />
-                    <Bar dataKey="value" radius={[3, 3, 0, 0]} maxBarSize={64}>
-                      {perfBars.map((d, i) => <Cell key={i} fill={d.value >= 0 ? '#2E7D52' : '#B91C1C'} />)}
-                      <LabelList dataKey="value" position="top" formatter={(v: any) => `${Number(v) >= 0 ? '+' : ''}${Number(v).toFixed(2)}%`}
-                        style={{ fontSize: 11, fontWeight: 700, fill: '#111827' }} />
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-
             {(() => {
               const perfSeries = computePerfValueSeries(performance)
               const usePerf = perfSeries.length >= 2
