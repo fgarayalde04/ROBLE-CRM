@@ -302,11 +302,11 @@ export default function FondosMonitorClient({ funds }: { funds: FundRow[] }) {
               <table className="w-full text-sm min-w-[1100px] table-fixed">
                 <thead>
                   <tr className="sticky top-0 z-10" style={{ backgroundColor: '#1B2E3C' }}>
-                    <th className="px-3 py-2 text-left text-[10px] font-bold text-white uppercase tracking-wide w-[30%]">Nombre</th>
+                    <th className="px-3 py-2 text-left text-[10px] font-bold text-white uppercase tracking-wide w-[26%]">Nombre</th>
                     {COLS.map(c => (
-                      <th key={c.key} className="px-2 py-2 text-right text-[10px] font-bold text-white uppercase tracking-wide w-[7%]">{c.label}</th>
+                      <th key={c.key} className="px-2 py-2 text-center text-[10px] font-bold text-white uppercase tracking-wide w-[7.4%]">{c.label}</th>
                     ))}
-                    <th className="px-2 py-2 text-center text-[10px] font-bold text-white uppercase tracking-wide w-[7%]">Estado</th>
+                    <th className="px-2 py-2 text-center text-[10px] font-bold text-white uppercase tracking-wide w-[7.4%]">Estado</th>
                   </tr>
                 </thead>
                 {subgroups.map(({ key: subcategoria, items: rows }) => (
@@ -339,12 +339,12 @@ export default function FondosMonitorClient({ funds }: { funds: FundRow[] }) {
                             </div>
                           </td>
                           {COLS.map(c => (
-                            <td key={c.key} className={`px-2 py-2 text-right text-xs border-b border-gray-100 ${pctColor(f[c.key] as number | null)}`}>
+                            <td key={c.key} className={`px-2 py-2 text-center text-xs tabular-nums border-b border-gray-100 ${pctColor(f[c.key] as number | null)}`}>
                               {fmtPct(f[c.key] as number | null)}
                             </td>
                           ))}
                           <td className="px-2 py-2 text-center border-b border-gray-100">
-                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${st.color}`}>{st.label}</span>
+                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded whitespace-nowrap ${st.color}`}>{st.label}</span>
                           </td>
                         </tr>
                       )

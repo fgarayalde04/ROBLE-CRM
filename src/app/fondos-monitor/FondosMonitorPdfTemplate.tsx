@@ -145,7 +145,7 @@ export default function FondosMonitorPdfTemplate({ funds }: { funds: FundRow[] }
                         <td
                           key={c.key}
                           style={{
-                            padding: '1mm 1mm', textAlign: 'right', color: '#000', fontSize: 6.8,
+                            padding: '1mm 1mm', textAlign: 'center', color: '#000', fontSize: 6.8,
                             borderBottom: '0.15mm solid #ddd', background: c.highlight ? YTD_COL_TINT : undefined,
                           }}
                         >
