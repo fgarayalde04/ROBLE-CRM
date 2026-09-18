@@ -135,6 +135,48 @@ function headerVal(headers: Array<{ name: string; value: string }>, name: string
   return headers.find((h) => h.name.toLowerCase() === name.toLowerCase())?.value ?? ''
 }
 
+/** Fetch one message's metadata (asunto, remitente, fecha, threadId — nunca el cuerpo) */
+export async function getInboxMessage(accessToken: string, id: string): Promise<(InboxMessage & { labelIds: string[] }) | null> {
+  const msgRes = await fetch(
+    `${GMAIL_BASE}/users/me/messages/${id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=Date`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  )
+  // 404: el mensaje ya no existe (borrado entre el aviso y la lectura) — no es un error.
+  if (msgRes.status === 404) return null
+  if (!msgRes.ok) {
+    const e: any = new Error(`Gmail get message failed: ${await msgRes.text()}`)
+    e.status = msgRes.status
+    throw e
+  }
+  const msg = await msgRes.json()
+
+  const headers: Array<{ name: string; value: string }> = msg.payload?.headers ?? []
+  const fromRaw = headerVal(headers, 'From')
+  const subject = headerVal(headers, 'Subject') || '(Sin asunto)'
+  const dateRaw = headerVal(headers, 'Date')
+  const { name: fromName, email: fromEmail } = parseFrom(fromRaw)
+  const labelIds: string[] = msg.labelIds ?? []
+  // Header Date como siempre; si viene vacío o ilegible, internalDate (la hora en que Gmail recibió el mensaje).
+  const headerDate = dateRaw ? new Date(dateRaw) : null
+  const received = headerDate && !Number.isNaN(headerDate.getTime())
+    ? headerDate
+    : new Date(msg.internalDate ? Number(msg.internalDate) : Date.now())
+
+  return {
+    id: msg.id,
+    threadId: msg.threadId,
+    from: fromRaw,
+    fromName,
+    fromEmail,
+    subject,
+    snippet: msg.snippet ?? '',
+    date: received.toISOString(),
+    isUnread: labelIds.includes('UNREAD'),
+    isMarketRelated: isMarketRelated(subject, fromEmail),
+    labelIds,
+  }
+}
+
 /** Internal: list + fetch metadata for inbox messages matching a Gmail search query */
 async function listInboxByQuery(
   accessToken: string,
@@ -163,38 +205,7 @@ async function listInboxByQuery(
 
   // Fetch metadata for each message in parallel (cap at 25)
   const messages = await Promise.all(
-    ids.slice(0, 25).map(async (id): Promise<InboxMessage | null> => {
-      try {
-        const msgRes = await fetch(
-          `${GMAIL_BASE}/users/me/messages/${id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=Date`,
-          { headers: { Authorization: `Bearer ${accessToken}` } }
-        )
-        if (!msgRes.ok) return null
-        const msg = await msgRes.json()
-
-        const headers: Array<{ name: string; value: string }> = msg.payload?.headers ?? []
-        const fromRaw = headerVal(headers, 'From')
-        const subject = headerVal(headers, 'Subject') || '(Sin asunto)'
-        const dateRaw = headerVal(headers, 'Date')
-        const { name: fromName, email: fromEmail } = parseFrom(fromRaw)
-        const isUnread = (msg.labelIds ?? []).includes('UNREAD')
-
-        return {
-          id: msg.id,
-          threadId: msg.threadId,
-          from: fromRaw,
-          fromName,
-          fromEmail,
-          subject,
-          snippet: msg.snippet ?? '',
-          date: dateRaw ? new Date(dateRaw).toISOString() : new Date().toISOString(),
-          isUnread,
-          isMarketRelated: isMarketRelated(subject, fromEmail),
-        }
-      } catch {
-        return null
-      }
-    })
+    ids.slice(0, 25).map((id) => getInboxMessage(accessToken, id).catch(() => null))
   )
 
   return messages.filter(Boolean) as InboxMessage[]
@@ -224,6 +235,82 @@ export async function listInboxSince(
 ): Promise<InboxMessage[]> {
   const dateStr = `${afterDate.getFullYear()}/${String(afterDate.getMonth() + 1).padStart(2, '0')}/${String(afterDate.getDate()).padStart(2, '0')}`
   return listInboxByQuery(accessToken, `in:inbox after:${dateStr}`, maxResults)
+}
+
+// ─── Push (Gmail watch + Pub/Sub) ─────────────────────────────────────────────
+// Gmail avisa a un topic de Pub/Sub cuando cambia el buzón; Pub/Sub le pega a
+// nuestro webhook al instante. El aviso solo trae un historyId — los mensajes
+// nuevos se leen con history.list desde el último historyId ya procesado.
+
+async function gmailJson<T>(accessToken: string, url: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(url, {
+    ...init,
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json', ...init?.headers },
+  })
+  if (!res.ok) {
+    const e: any = new Error(`Gmail request failed (${res.status}): ${await res.text()}`)
+    e.status = res.status
+    throw e
+  }
+  return res.json()
+}
+
+/** historyId actual del buzón — punto de partida para "solo lo que llegue de ahora en más". */
+export async function getMailboxHistoryId(accessToken: string): Promise<string> {
+  const profile = await gmailJson<{ historyId: string }>(accessToken, `${GMAIL_BASE}/users/me/profile`)
+  return String(profile.historyId)
+}
+
+/** Registra (o renueva) el watch de la bandeja de entrada. Vence a los 7 días como máximo. */
+export async function watchInbox(accessToken: string, topicName: string): Promise<{ historyId: string; expiration: Date }> {
+  const data = await gmailJson<{ historyId: string; expiration: string }>(
+    accessToken,
+    `${GMAIL_BASE}/users/me/watch`,
+    { method: 'POST', body: JSON.stringify({ topicName, labelIds: ['INBOX'], labelFilterBehavior: 'INCLUDE' }) }
+  )
+  return { historyId: String(data.historyId), expiration: new Date(Number(data.expiration)) }
+}
+
+/**
+ * Ids de mensajes que llegaron a la bandeja de entrada después de startHistoryId,
+ * y el historyId hasta el que se leyó. Lanza error con status 404 si Gmail ya
+ * no guarda ese historial (demasiado viejo) — el llamador debe re-sembrar.
+ */
+export async function listInboxMessageIdsSince(
+  accessToken: string,
+  startHistoryId: string
+): Promise<{ messageIds: string[]; historyId: string }> {
+  const ids = new Set<string>()
+  let pageToken: string | undefined
+  let historyId = startHistoryId
+
+  do {
+    const url = new URL(`${GMAIL_BASE}/users/me/history`)
+    url.searchParams.set('startHistoryId', startHistoryId)
+    url.searchParams.set('historyTypes', 'messageAdded')
+    url.searchParams.set('labelId', 'INBOX')
+    url.searchParams.set('maxResults', '100')
+    if (pageToken) url.searchParams.set('pageToken', pageToken)
+
+    const data = await gmailJson<{
+      history?: Array<{ messagesAdded?: Array<{ message: { id: string; labelIds?: string[] } }> }>
+      nextPageToken?: string
+      historyId?: string
+    }>(accessToken, url.toString())
+
+    for (const h of data.history ?? []) {
+      for (const added of h.messagesAdded ?? []) {
+        // labelId=INBOX ya filtra, pero un mensaje que entra y sale de la
+        // bandeja en el mismo tramo puede colarse — el labelIds del propio
+        // evento es la referencia.
+        if (added.message.labelIds?.includes('INBOX')) ids.add(added.message.id)
+      }
+    }
+    if (data.historyId) historyId = String(data.historyId)
+    pageToken = data.nextPageToken
+  } while (pageToken)
+
+  return { messageIds: Array.from(ids), historyId }
 }
 
 // ─── Email templates ──────────────────────────────────────────────────────────
