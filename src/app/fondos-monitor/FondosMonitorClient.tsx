@@ -89,6 +89,10 @@ export default function FondosMonitorClient({ funds }: { funds: FundRow[] }) {
   const [editingFund, setEditingFund] = useState<FundRow | null>(null)
   const [downloadingPdf, setDownloadingPdf] = useState(false)
   const [syncNotice, setSyncNotice] = useState<string | null>(null)
+  const [showPdfMenu, setShowPdfMenu] = useState(false)
+  // Categorías que el usuario destildó para el PDF — se guarda lo excluido (no
+  // lo incluido) para que una categoría nueva entre tildada por defecto.
+  const [pdfExcluidas, setPdfExcluidas] = useState<Set<string>>(new Set())
   const pdfRef = useRef<HTMLDivElement>(null)
 
   const filteredFunds = useMemo(() => {
@@ -99,6 +103,24 @@ export default function FondosMonitorClient({ funds }: { funds: FundRow[] }) {
   }, [funds, search])
 
   const grouped = useMemo(() => groupInOrder(filteredFunds, f => f.categoria ?? 'Sin categoría'), [filteredFunds])
+
+  // Secciones que se pueden elegir para el PDF (todas las categorías, con
+  // cuántos fondos quedan según el buscador actual).
+  const pdfSecciones = useMemo(
+    () => grouped.map(g => ({ key: g.key, count: g.items.length })),
+    [grouped]
+  )
+  const pdfFunds = useMemo(
+    () => filteredFunds.filter(f => !pdfExcluidas.has(f.categoria ?? 'Sin categoría')),
+    [filteredFunds, pdfExcluidas]
+  )
+  const toggleSeccion = (key: string) =>
+    setPdfExcluidas(prev => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
 
   // Listas conocidas para los selects del alta: categorías fijas del Excel
   // primero, más cualquier otra que ya haya aparecido en los datos; las
@@ -195,7 +217,16 @@ export default function FondosMonitorClient({ funds }: { funds: FundRow[] }) {
         }
       }
       const dateSlug = new Date().toISOString().slice(0, 10)
-      pdf.save(`Monitor_de_Fondos_${dateSlug}.pdf`)
+      // Con una selección parcial, el nombre dice qué secciones trae (hasta 2).
+      const incluidas = pdfSecciones.map(s => s.key).filter(k => !pdfExcluidas.has(k))
+      const parcial = incluidas.length > 0 && incluidas.length < pdfSecciones.length
+      const seccionSlug = parcial
+        ? incluidas.length <= 2
+          ? '_' + incluidas.map(k => k.replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '')).join('_')
+          : '_Seleccion'
+        : ''
+      pdf.save(`Monitor_de_Fondos${seccionSlug}_${dateSlug}.pdf`)
+      setShowPdfMenu(false)
     } finally {
       setDownloadingPdf(false)
     }
@@ -222,13 +253,51 @@ export default function FondosMonitorClient({ funds }: { funds: FundRow[] }) {
             placeholder="Buscar por nombre o ISIN…"
             className="w-72 text-sm px-3 py-2 rounded-lg border border-gray-200 outline-none focus:border-[#1B3A2B]/50"
           />
-          <button
-            onClick={handleDownloadPdf}
-            disabled={downloadingPdf}
-            className="text-sm font-medium px-3 py-2 rounded-lg text-[#1B3A2B] border border-[#1B3A2B]/30 whitespace-nowrap disabled:opacity-50"
-          >
-            {downloadingPdf ? 'Generando…' : '⬇ Descargar PDF'}
-          </button>
+          <div className="relative">
+            <button
+              onClick={() => setShowPdfMenu(v => !v)}
+              disabled={downloadingPdf}
+              className="text-sm font-medium px-3 py-2 rounded-lg text-[#1B3A2B] border border-[#1B3A2B]/30 whitespace-nowrap disabled:opacity-50"
+            >
+              {downloadingPdf ? 'Generando…' : '⬇ Descargar PDF ▾'}
+            </button>
+            {showPdfMenu && !downloadingPdf && (
+              <>
+                <div className="fixed inset-0 z-20" onClick={() => setShowPdfMenu(false)} />
+                <div className="absolute right-0 mt-1 w-72 bg-white rounded-xl shadow-xl border border-gray-200 z-30 p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs font-bold text-gray-700">Secciones a descargar</p>
+                    <div className="flex gap-2 text-[11px]">
+                      <button onClick={() => setPdfExcluidas(new Set())} className="text-[#1B3A2B] hover:underline">Todas</button>
+                      <button onClick={() => setPdfExcluidas(new Set(pdfSecciones.map(s => s.key)))} className="text-gray-400 hover:underline">Ninguna</button>
+                    </div>
+                  </div>
+                  <div className="max-h-64 overflow-auto">
+                    {pdfSecciones.map(sec => (
+                      <label key={sec.key} className="flex items-center gap-2 px-1 py-1.5 rounded hover:bg-gray-50 cursor-pointer text-xs text-gray-700">
+                        <input
+                          type="checkbox"
+                          checked={!pdfExcluidas.has(sec.key)}
+                          onChange={() => toggleSeccion(sec.key)}
+                          className="accent-[#1B3A2B]"
+                        />
+                        <span className="flex-1">{sec.key}</span>
+                        <span className="text-gray-400">{sec.count}</span>
+                      </label>
+                    ))}
+                  </div>
+                  <button
+                    onClick={handleDownloadPdf}
+                    disabled={pdfFunds.length === 0}
+                    className="mt-3 w-full text-sm font-medium px-3 py-2 rounded-lg text-white disabled:opacity-40"
+                    style={{ backgroundColor: '#1B3A2B' }}
+                  >
+                    Descargar ({pdfFunds.length} fondos)
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
           <button
             onClick={() => setShowAdd(true)}
             className="text-sm font-medium px-3 py-2 rounded-lg text-white whitespace-nowrap"
@@ -248,7 +317,7 @@ export default function FondosMonitorClient({ funds }: { funds: FundRow[] }) {
 
       <div style={{ position: 'fixed', left: -10000, top: 0 }}>
         <div ref={pdfRef}>
-          <FondosMonitorPdfTemplate funds={filteredFunds} />
+          <FondosMonitorPdfTemplate funds={pdfFunds} />
         </div>
       </div>
 
