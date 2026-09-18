@@ -50,9 +50,9 @@ export async function syncFundMonitor(opts?: { force?: boolean }): Promise<FundS
 
     for (const fund of funds) {
       try {
-        const data = await searchFundReturns(page, fund.isin)
+        const data = await searchFundReturns(page, fund.isin, fund.nombre)
         if (!data) {
-          await markFundSyncIssue(fund.id, 'no_source', 'ISIN no encontrado en Davinci')
+          await markFundSyncIssue(fund.id, 'no_source', 'Fondo no encontrado en Davinci (ni por ISIN ni por nombre)')
           results.push({ isin: fund.isin, nombre: fund.nombre, status: 'no_source' })
           continue
         }
@@ -99,7 +99,7 @@ export type SingleFundSyncStatus = 'ok' | 'no_source' | 'error' | 'unavailable'
 // que aparezca con datos sin esperar al sync diario. Nunca lanza: el alta del
 // fondo ya se hizo y una falla de Davinci no debe deshacerla — el estado queda
 // registrado en fund_monitor_returns y el sync diario lo reintenta.
-export async function syncSingleFund(fund: { id: string; isin: string }): Promise<SingleFundSyncStatus> {
+export async function syncSingleFund(fund: { id: string; isin: string; nombre: string }): Promise<SingleFundSyncStatus> {
   const email = process.env.DAVINCI_EMAIL
   const password = process.env.DAVINCI_PASSWORD
   if (!email || !password) return 'unavailable'
@@ -111,9 +111,9 @@ export async function syncSingleFund(fund: { id: string; isin: string }): Promis
     const { context, page } = await openDavinciPage(browser)
     try {
       await loginDavinci(page, email, password)
-      const data = await searchFundReturns(page, fund.isin)
+      const data = await searchFundReturns(page, fund.isin, fund.nombre)
       if (!data) {
-        await markFundSyncIssue(fund.id, 'no_source', 'ISIN no encontrado en Davinci')
+        await markFundSyncIssue(fund.id, 'no_source', 'Fondo no encontrado en Davinci (ni por ISIN ni por nombre)')
         return 'no_source'
       }
       await upsertFundReturns(fund.id, {

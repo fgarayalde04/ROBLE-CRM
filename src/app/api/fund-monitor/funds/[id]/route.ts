@@ -73,7 +73,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     // Si cambió el ISIN, o el fondo nunca tuvo datos (p. ej. cargado a mano
     // antes de que existiera el autocompletado), se busca en Davinci ahora.
     const needsSync = current.isin !== cleanIsin || !current.has_data
-    const sync = needsSync ? await syncSingleFund({ id: params.id, isin: cleanIsin }) : undefined
+    const sync = needsSync ? await syncSingleFund({ id: params.id, isin: cleanIsin, nombre: rows[0].nombre }) : undefined
     return NextResponse.json({ ...rows[0], sync })
   } catch (err: any) {
     await client.query('rollback')
