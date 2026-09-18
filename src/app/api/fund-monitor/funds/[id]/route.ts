@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { pool } from '@/lib/db/pool'
+import { syncSingleFund } from '@/lib/fundMonitor/sync'
+
+export const maxDuration = 60 // login + búsqueda en Davinci
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   const session = await getSession()
@@ -23,7 +26,10 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     await client.query('begin')
 
     const { rows: currentRows } = await client.query(
-      `select categoria, subcategoria, sort_order from fund_monitor_funds where id = $1`,
+      `select f.isin, f.categoria, f.subcategoria, f.sort_order, (r.status = 'ok') as has_data
+       from fund_monitor_funds f
+       left join fund_monitor_returns r on r.fund_id = f.id
+       where f.id = $1`,
       [params.id]
     )
     const current = currentRows[0]
@@ -63,7 +69,12 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     )
 
     await client.query('commit')
-    return NextResponse.json(rows[0])
+
+    // Si cambió el ISIN, o el fondo nunca tuvo datos (p. ej. cargado a mano
+    // antes de que existiera el autocompletado), se busca en Davinci ahora.
+    const needsSync = current.isin !== cleanIsin || !current.has_data
+    const sync = needsSync ? await syncSingleFund({ id: params.id, isin: cleanIsin, nombre: rows[0].nombre }) : undefined
+    return NextResponse.json({ ...rows[0], sync })
   } catch (err: any) {
     await client.query('rollback')
     if (err.code === '23505') {

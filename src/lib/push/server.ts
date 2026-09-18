@@ -24,6 +24,9 @@ export interface SendPushInput {
   url?: string
   type?: string
   entityId?: string
+  // Notificaciones con el mismo tag se reemplazan entre sí en vez de apilarse
+  // (y vuelven a sonar) — para avisos repetitivos sobre un mismo hilo.
+  tag?: string
 }
 
 export interface SendPushResult {
@@ -47,6 +50,7 @@ export async function sendPushNotification(input: SendPushInput): Promise<SendPu
     url: input.url ?? '/',
     type: input.type ?? null,
     entityId: input.entityId ?? null,
+    tag: input.tag ?? null,
   })
 
   await Promise.all(subs.map(async (sub) => {
