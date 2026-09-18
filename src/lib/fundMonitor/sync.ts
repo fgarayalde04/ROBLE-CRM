@@ -52,6 +52,7 @@ export async function syncFundMonitor(opts?: { force?: boolean }): Promise<FundS
       try {
         const data = await searchFundReturns(page, fund.isin, fund.nombre)
         if (!data) {
+          console.warn(`[fund-monitor] Sin fuente: ${fund.isin} · ${fund.nombre}`)
           await markFundSyncIssue(fund.id, 'no_source', 'Fondo no encontrado en Davinci (ni por ISIN ni por nombre)')
           results.push({ isin: fund.isin, nombre: fund.nombre, status: 'no_source' })
           continue
@@ -73,6 +74,7 @@ export async function syncFundMonitor(opts?: { force?: boolean }): Promise<FundS
         // Un fondo que falla no corta el resto de la corrida — se registra
         // el error y se sigue con el próximo (Fase 6: "probar el
         // siguiente... seguir funcionando el resto de la aplicación").
+        console.error(`[fund-monitor] Error: ${fund.isin} · ${fund.nombre}:`, e.message)
         await markFundSyncIssue(fund.id, 'error', e.message ?? 'Error desconocido')
         results.push({ isin: fund.isin, nombre: fund.nombre, status: 'error', error: e.message })
       }

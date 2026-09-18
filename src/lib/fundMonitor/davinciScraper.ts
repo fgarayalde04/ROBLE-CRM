@@ -163,13 +163,22 @@ async function searchAlternativesByName(page: Page, nombre: string): Promise<Dav
   // La tabla se hidrata después del HTML inicial: se espera a la primera fila de datos.
   await page.waitForSelector('table tbody tr td:nth-child(18)', { timeout: 15000 }).catch(() => {})
 
-  const rows = page.locator('table tbody tr')
-  const count = await rows.count()
-  const parsed: { cell: string; row: DavinciFundReturns }[] = []
-  for (let i = 0; i < count; i++) {
-    const cells = await rows.nth(i).locator('td').allTextContents()
-    const row = parseAlternativeRow(cells)
-    if (row) parsed.push({ cell: cells[1], row })
+  const readRows = async () => {
+    const rows = page.locator('table tbody tr')
+    const count = await rows.count()
+    const out: { cell: string; row: DavinciFundReturns }[] = []
+    for (let i = 0; i < count; i++) {
+      const cells = await rows.nth(i).locator('td').allTextContents()
+      const row = parseAlternativeRow(cells)
+      if (row) out.push({ cell: cells[1], row })
+    }
+    return out
+  }
+  let parsed = await readRows()
+  if (parsed.length === 0) {
+    // En el servidor la tabla puede tardar más en hidratarse: un reintento antes de rendirse.
+    await page.waitForTimeout(4000)
+    parsed = await readRows()
   }
 
   // La celda trae el badge "DV" y el ícono de documento pegados al nombre
@@ -177,7 +186,10 @@ async function searchAlternativesByName(page: Page, nombre: string): Promise<Dav
   // ante varios candidatos, se exige igualdad exacta sin ese sufijo.
   const candidates = parsed.filter(p => norm(p.cell).includes(target))
   if (candidates.length === 1) return candidates[0].row
-  if (candidates.length === 0) return null
+  if (candidates.length === 0) {
+    console.warn(`[fund-monitor] Alternativos: ${parsed.length} filas leídas, ninguna coincide con "${nombre}" (url: ${page.url()})`)
+    return null
+  }
   const exact = candidates.filter(p => norm(p.cell.replace(/📄/g, '').replace(/DV\s*$/, '')) === target)
   return exact.length === 1 ? exact[0].row : null
 }
