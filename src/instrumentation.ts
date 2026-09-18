@@ -165,7 +165,7 @@ function registerEmailReplyWatch() {
       })
       const result = await res.json()
       if (!res.ok) console.error(`[${label}] ${res.status}`, JSON.stringify(result))
-      else if (result.notified > 0 || result.seeded || (!result.skipped && label === 'gmail-watch')) {
+      else if (result.notified > 0 || result.seeded || process.env.EMAIL_REPLY_DEBUG === 'true' || (!result.skipped && label === 'gmail-watch')) {
         console.log(`[${label}]`, JSON.stringify(result))
       }
     } catch (e: any) {

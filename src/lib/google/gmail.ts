@@ -255,6 +255,12 @@ async function gmailJson<T>(accessToken: string, url: string, init?: RequestInit
   return res.json()
 }
 
+/** Casilla a la que pertenece el token (emailAddress) y su historyId actual. */
+export async function getMailboxProfile(accessToken: string): Promise<{ emailAddress: string; historyId: string }> {
+  const profile = await gmailJson<{ emailAddress: string; historyId: string }>(accessToken, `${GMAIL_BASE}/users/me/profile`)
+  return { emailAddress: profile.emailAddress, historyId: String(profile.historyId) }
+}
+
 /** historyId actual del buzón — punto de partida para "solo lo que llegue de ahora en más". */
 export async function getMailboxHistoryId(accessToken: string): Promise<string> {
   const profile = await gmailJson<{ historyId: string }>(accessToken, `${GMAIL_BASE}/users/me/profile`)

@@ -9,7 +9,7 @@
 // email_replies y las notificaciones se deduplican por (respuesta, usuario).
 
 import { getValidMesaGoogleToken, invalidateMesaGoogleToken, MESA_GOOGLE_CONNECTION_KEY } from '@/lib/google/tokens'
-import { getInboxMessage, getMailboxHistoryId, listInboxMessageIdsSince } from '@/lib/google/gmail'
+import { getInboxMessage, getMailboxHistoryId, getMailboxProfile, listInboxMessageIdsSince } from '@/lib/google/gmail'
 import { findSolicitudByThreadId, findSolicitudesByAsunto, getSolicitud, insertSolicitudEvento } from '@/lib/db/solicitudes'
 import {
   insertEmailReply, markEmailReplyNotified, getMailWatchState, saveHistoryId, recordCheck,
@@ -27,6 +27,11 @@ import { stripReplyPrefixes, hasReplyPrefix, isAutomatedSender, looksLikeReply }
 export function isReplyWatchEnabled() {
   return process.env.GMAIL_REPLY_WATCH_ENABLED === 'true'
 }
+
+// EMAIL_REPLY_DEBUG=true: deja en los logs cada decisión (qué casilla, qué mensajes
+// vio, por qué descartó cada uno). Apagado por defecto para no llenar los logs.
+const debugOn = () => process.env.EMAIL_REPLY_DEBUG === 'true'
+const dbg = (...args: unknown[]) => { if (debugOn()) console.log('[mail-replies:debug]', ...args) }
 
 export interface ProcessResult {
   ok: true
@@ -84,6 +89,10 @@ async function runOnce(source: 'push' | 'poll'): Promise<ProcessResult> {
 
 async function scan(token: string): Promise<ProcessResult> {
   const state = await getMailWatchState()
+  if (debugOn()) {
+    const profile = await getMailboxProfile(token)
+    dbg('casilla conectada:', profile.emailAddress, '| historyId actual de Gmail:', profile.historyId, '| guardado:', state.history_id)
+  }
 
   // Primera vez: sembrar el punto de partida en "ahora" — nunca se notifica
   // nada recibido antes de activar esto.
@@ -112,6 +121,8 @@ async function scan(token: string): Promise<ProcessResult> {
     return { ok: true, seeded: true, reason: 'historyId vencido' }
   }
 
+  dbg('history desde', state.history_id, 'hasta', history.historyId, '| mensajes nuevos en INBOX:', history.messageIds.length)
+
   // Si algo falla acá el historyId NO avanza (más abajo): en el próximo aviso o
   // chequeo de respaldo se vuelve a leer el mismo tramo. Lo ya procesado no se
   // duplica (insertEmailReply devuelve null) y lo que quedó a medias se reintenta arriba.
@@ -129,10 +140,11 @@ async function scan(token: string): Promise<ProcessResult> {
 /** true si generó una notificación, false si se ignoró (propio, automático, no es respuesta, ya procesado). */
 async function handleMessage(token: string, id: string): Promise<boolean> {
   const msg = await getInboxMessage(token, id)
-  if (!msg) return false
-  if (msg.fromEmail.toLowerCase() === MESA_GOOGLE_CONNECTION_KEY) return false
-  if (msg.labelIds.includes('SENT') || msg.labelIds.includes('DRAFT')) return false
-  if (isAutomatedSender(msg.fromEmail)) return false
+  if (!msg) { dbg(id, 'ignorado: el mensaje ya no existe'); return false }
+  dbg(id, 'de', msg.fromEmail, '| asunto:', msg.subject, '| hilo:', msg.threadId, '| labels:', msg.labelIds.join(','))
+  if (msg.fromEmail.toLowerCase() === MESA_GOOGLE_CONNECTION_KEY) { dbg(id, 'ignorado: lo envió la propia casilla'); return false }
+  if (msg.labelIds.includes('SENT') || msg.labelIds.includes('DRAFT')) { dbg(id, 'ignorado: SENT/DRAFT'); return false }
+  if (isAutomatedSender(msg.fromEmail)) { dbg(id, 'ignorado: remitente automático'); return false }
 
   let solicitud: { id: string; client_name: string | null; asesor: string; asesor_id: string | null } | null = null
   let matchMethod: EmailReplyMatchMethod = 'unmatched'
@@ -150,7 +162,7 @@ async function handleMessage(token: string, id: string): Promise<boolean> {
     // 0 o >1 candidatos → queda sin matchear, nunca se adivina.
   }
 
-  if (!solicitud && !looksLikeReply(msg)) return false
+  if (!solicitud && !looksLikeReply(msg)) { dbg(id, 'ignorado: sin orden asociada y no parece respuesta'); return false }
 
   const row = await insertEmailReply({
     gmail_message_id: msg.id,
@@ -163,9 +175,11 @@ async function handleMessage(token: string, id: string): Promise<boolean> {
     snippet:          msg.snippet,
   })
   // row === null: ya procesado antes (aviso duplicado / chequeo de respaldo).
-  if (!row) return false
+  if (!row) { dbg(id, 'ignorado: ya procesado antes'); return false }
 
+  dbg(id, 'guardado como', matchMethod, '— notificando')
   await deliver(row)
+  dbg(id, 'notificación enviada')
   return true
 }
 
