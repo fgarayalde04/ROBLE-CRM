@@ -4,7 +4,7 @@
 // "qué evento de Órdenes le corresponde a quién".
 
 import { createNotification } from '@/lib/db/notifications'
-import { getUsersByRoles } from '@/lib/db/users'
+import { getUsersByRoles, getUserIdsByEmails } from '@/lib/db/users'
 import { sendPushNotification } from '@/lib/push/server'
 
 const MESA_ROLES = ['admin', 'ceo', 'direccion', 'mesa', 'asistente']
@@ -240,6 +240,17 @@ export async function notifyClienteRespondio(reply: ReplyCtx, asesor: { id: stri
   const recipients = new Map<string, string>()
   if (reply.solicitudId && asesor?.id) recipients.set(asesor.id, asesor.name)
   for (const r of await getUsersByRoles(MESA_ROLES)) recipients.set(r.id, r.name)
+
+  // Solo para probar: GMAIL_REPLY_NOTIFY_ONLY="a@x.com,b@y.com" acota los avisos a
+  // esos usuarios. Desarrollo tiene una copia de la DB de producción (con las
+  // suscripciones push de gente real) — sin esto, una prueba avisaría a todos.
+  const only = (process.env.GMAIL_REPLY_NOTIFY_ONLY ?? '').split(',').map((e) => e.trim()).filter(Boolean)
+  if (only.length > 0) {
+    const allowed = await getUserIdsByEmails(only)
+    for (const userId of Array.from(recipients.keys())) {
+      if (!allowed.has(userId)) recipients.delete(userId)
+    }
+  }
 
   await Promise.all(Array.from(recipients, ([userId, userName]) =>
     notifyAndMaybePush({ ...common, userId, userName })
