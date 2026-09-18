@@ -66,6 +66,11 @@ const COLS: { key: keyof FundRow; label: string }[] = [
 // Los fondos llegan ya en el orden del Excel (sort_order) — agrupar
 // simplemente por orden de aparición reproduce esa misma estructura de
 // categoría → subcategoría, sin necesidad de un orden fijo a mano.
+// Clave de un grupo categoría + subcategoría ('' = fondos sin subcategoría).
+function pdfGroupKey(categoria: string, subcategoria: string) {
+  return `${categoria}\u0000${subcategoria}`
+}
+
 function groupInOrder<T>(items: T[], keyFn: (item: T) => string): { key: string; items: T[] }[] {
   const groups: { key: string; items: T[] }[] = []
   const byKey = new Map<string, T[]>()
@@ -90,8 +95,9 @@ export default function FondosMonitorClient({ funds }: { funds: FundRow[] }) {
   const [downloadingPdf, setDownloadingPdf] = useState(false)
   const [syncNotice, setSyncNotice] = useState<string | null>(null)
   const [showPdfMenu, setShowPdfMenu] = useState(false)
-  // Categorías que el usuario destildó para el PDF — se guarda lo excluido (no
-  // lo incluido) para que una categoría nueva entre tildada por defecto.
+  // Grupos (categoría + subcategoría) que el usuario destildó para el PDF — se
+  // guarda lo excluido (no lo incluido) para que un grupo nuevo entre tildado
+  // por defecto. Clave: pdfGroupKey().
   const [pdfExcluidas, setPdfExcluidas] = useState<Set<string>>(new Set())
   const pdfRef = useRef<HTMLDivElement>(null)
 
@@ -104,21 +110,32 @@ export default function FondosMonitorClient({ funds }: { funds: FundRow[] }) {
 
   const grouped = useMemo(() => groupInOrder(filteredFunds, f => f.categoria ?? 'Sin categoría'), [filteredFunds])
 
-  // Secciones que se pueden elegir para el PDF (todas las categorías, con
-  // cuántos fondos quedan según el buscador actual).
+  // Secciones que se pueden elegir para el PDF: cada categoría con sus
+  // subcategorías (y cuántos fondos quedan según el buscador actual). Los
+  // fondos sin subcategoría van en un grupo propio de clave ''.
   const pdfSecciones = useMemo(
-    () => grouped.map(g => ({ key: g.key, count: g.items.length })),
+    () => grouped.map(g => ({
+      key: g.key,
+      count: g.items.length,
+      subs: groupInOrder(g.items, f => f.subcategoria ?? '').map(sg => ({
+        key: sg.key,
+        id: pdfGroupKey(g.key, sg.key),
+        count: sg.items.length,
+      })),
+    })),
     [grouped]
   )
   const pdfFunds = useMemo(
-    () => filteredFunds.filter(f => !pdfExcluidas.has(f.categoria ?? 'Sin categoría')),
+    () => filteredFunds.filter(f => !pdfExcluidas.has(pdfGroupKey(f.categoria ?? 'Sin categoría', f.subcategoria ?? ''))),
     [filteredFunds, pdfExcluidas]
   )
-  const toggleSeccion = (key: string) =>
+  const toggleGrupos = (ids: string[], incluir: boolean) =>
     setPdfExcluidas(prev => {
       const next = new Set(prev)
-      if (next.has(key)) next.delete(key)
-      else next.add(key)
+      for (const id of ids) {
+        if (incluir) next.delete(id)
+        else next.add(id)
+      }
       return next
     })
 
@@ -217,13 +234,19 @@ export default function FondosMonitorClient({ funds }: { funds: FundRow[] }) {
         }
       }
       const dateSlug = new Date().toISOString().slice(0, 10)
-      // Con una selección parcial, el nombre dice qué secciones trae (hasta 2).
-      const incluidas = pdfSecciones.map(s => s.key).filter(k => !pdfExcluidas.has(k))
-      const parcial = incluidas.length > 0 && incluidas.length < pdfSecciones.length
-      const seccionSlug = parcial
-        ? incluidas.length <= 2
-          ? '_' + incluidas.map(k => k.replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '')).join('_')
-          : '_Seleccion'
+      // Con una selección parcial, el nombre dice qué trae (hasta 2 etiquetas):
+      // la categoría si va completa, o sus subcategorías si va solo una parte.
+      const etiquetas: string[] = []
+      let hayExcluidas = false
+      for (const sec of pdfSecciones) {
+        const incl = sec.subs.filter(sub => !pdfExcluidas.has(sub.id))
+        if (incl.length < sec.subs.length) hayExcluidas = true
+        if (incl.length === sec.subs.length) etiquetas.push(sec.key)
+        else etiquetas.push(...incl.map(sub => sub.key || sec.key))
+      }
+      const slugify = (t: string) => t.replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '')
+      const seccionSlug = hayExcluidas && etiquetas.length > 0
+        ? etiquetas.length <= 2 ? '_' + etiquetas.map(slugify).join('_') : '_Seleccion'
         : ''
       pdf.save(`Monitor_de_Fondos${seccionSlug}_${dateSlug}.pdf`)
       setShowPdfMenu(false)
@@ -269,22 +292,42 @@ export default function FondosMonitorClient({ funds }: { funds: FundRow[] }) {
                     <p className="text-xs font-bold text-gray-700">Secciones a descargar</p>
                     <div className="flex gap-2 text-[11px]">
                       <button onClick={() => setPdfExcluidas(new Set())} className="text-[#1B3A2B] hover:underline">Todas</button>
-                      <button onClick={() => setPdfExcluidas(new Set(pdfSecciones.map(s => s.key)))} className="text-gray-400 hover:underline">Ninguna</button>
+                      <button onClick={() => setPdfExcluidas(new Set(pdfSecciones.flatMap(s => s.subs.map(sub => sub.id))))} className="text-gray-400 hover:underline">Ninguna</button>
                     </div>
                   </div>
-                  <div className="max-h-64 overflow-auto">
-                    {pdfSecciones.map(sec => (
-                      <label key={sec.key} className="flex items-center gap-2 px-1 py-1.5 rounded hover:bg-gray-50 cursor-pointer text-xs text-gray-700">
-                        <input
-                          type="checkbox"
-                          checked={!pdfExcluidas.has(sec.key)}
-                          onChange={() => toggleSeccion(sec.key)}
-                          className="accent-[#1B3A2B]"
-                        />
-                        <span className="flex-1">{sec.key}</span>
-                        <span className="text-gray-400">{sec.count}</span>
-                      </label>
-                    ))}
+                  <div className="max-h-80 overflow-auto">
+                    {pdfSecciones.map(sec => {
+                      const incluidas = sec.subs.filter(sub => !pdfExcluidas.has(sub.id)).length
+                      const todas = incluidas === sec.subs.length
+                      return (
+                        <div key={sec.key} className="mb-1">
+                          <label className="flex items-center gap-2 px-1 py-1.5 rounded hover:bg-gray-50 cursor-pointer text-xs font-semibold text-gray-800">
+                            <input
+                              type="checkbox"
+                              checked={todas}
+                              ref={el => { if (el) el.indeterminate = incluidas > 0 && !todas }}
+                              onChange={() => toggleGrupos(sec.subs.map(sub => sub.id), !todas)}
+                              className="accent-[#1B3A2B]"
+                            />
+                            <span className="flex-1">{sec.key}</span>
+                            <span className="text-gray-400 font-normal">{sec.count}</span>
+                          </label>
+                          {/* Una categoría sin subcategorías no necesita sublista. */}
+                          {sec.subs.some(sub => sub.key) && sec.subs.map(sub => (
+                            <label key={sub.id} className="flex items-center gap-2 pl-6 pr-1 py-1 rounded hover:bg-gray-50 cursor-pointer text-xs text-gray-600">
+                              <input
+                                type="checkbox"
+                                checked={!pdfExcluidas.has(sub.id)}
+                                onChange={() => toggleGrupos([sub.id], pdfExcluidas.has(sub.id))}
+                                className="accent-[#1B3A2B]"
+                              />
+                              <span className="flex-1">{sub.key || 'Sin subcategoría'}</span>
+                              <span className="text-gray-400">{sub.count}</span>
+                            </label>
+                          ))}
+                        </div>
+                      )
+                    })}
                   </div>
                   <button
                     onClick={handleDownloadPdf}
