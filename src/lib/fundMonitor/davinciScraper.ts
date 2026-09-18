@@ -9,6 +9,11 @@
  * pero no exactos porque Davinci y Bloomberg no comparten la misma fecha de
  * corte — se documenta como diferencia esperada, no como error.
  *
+ * Los fondos alternativos (private debt, infraestructura, private equity) no
+ * están en el Explorador ni tienen ISIN en Davinci: viven en su propia pestaña
+ * /alternatives, una tabla de 27 instrumentos con otro formato (ver
+ * searchAlternativesByName).
+ *
  * La búsqueda por ISIN exacto en el Explorador devuelve una sola fila; el
  * orden de columnas (verificado inspeccionando el DOM real) es:
  *   [nombre+categoría, watchlist(vacío), YTD, 1A, 3A, 5A, 2025, 2024, 2023,
@@ -121,12 +126,70 @@ async function searchExplorer(page: Page, query: string): Promise<string[][]> {
 }
 
 /**
- * Busca un fondo en el Explorador y devuelve sus retornos. Primero por ISIN
- * exacto; si no aparece (los fondos alternativos / private debt no tienen ISIN
- * en Davinci) y se pasó `nombre`, reintenta por nombre. La búsqueda por nombre
- * solo se acepta si identifica un único fondo — ante ambigüedad devuelve null
- * antes que traer los rendimientos de otro fondo.
- * null si el fondo no aparece en la base de Davinci (sin cobertura).
+ * Pestaña "Alternativos" de Davinci: una tabla única con todos los fondos
+ * semi-líquidos (private debt, infraestructura, private equity). Sin ISIN, se
+ * identifican por nombre. Layout de 18 celdas (verificado contra el DOM real):
+ *   [checkbox, nombre, cierre, YTD, 1A, 2A, 3A, 2025, 2024, 2023, 2022,
+ *    Sharpe1A, Sharpe3A, Sortino1A, Sortino3A, StdDev1A, StdDev3A, AUM]
+ * No trae 5 años ni 2021 (quedan null), y el cierre es mensual/trimestral.
+ * Las filas de encabezado de grupo y las vacías tienen menos celdas.
+ */
+function parseAlternativeRow(cells: string[]): DavinciFundReturns | null {
+  if (cells.length < 18) return null
+  const [, nombre, cierre, ytd, r1a, , r3a, y2025, y2024, y2023, y2022, , , , , , , aum] = cells
+  return {
+    nombreDavinci: nombre.replace(/📄/g, '').trim(),
+    ytd: parseNum(ytd),
+    r1a: parseNum(r1a),
+    r3a: parseNum(r3a),
+    r5a: null,
+    y2025: parseNum(y2025),
+    y2024: parseNum(y2024),
+    y2023: parseNum(y2023),
+    y2022: parseNum(y2022),
+    y2021: null,
+    aum: aum?.trim() || null,
+    asOfDate: parseDate(cierre ?? ''),
+  }
+}
+
+async function searchAlternativesByName(page: Page, nombre: string): Promise<DavinciFundReturns | null> {
+  const target = norm(nombre)
+  if (!target) return null
+
+  if (!page.url().includes('/alternatives')) {
+    await page.goto(`${BASE_URL}/alternatives`, { waitUntil: 'domcontentloaded', timeout: 20000 })
+  }
+  // La tabla se hidrata después del HTML inicial: se espera a la primera fila de datos.
+  await page.waitForSelector('table tbody tr td:nth-child(18)', { timeout: 15000 }).catch(() => {})
+
+  const rows = page.locator('table tbody tr')
+  const count = await rows.count()
+  const parsed: { cell: string; row: DavinciFundReturns }[] = []
+  for (let i = 0; i < count; i++) {
+    const cells = await rows.nth(i).locator('td').allTextContents()
+    const row = parseAlternativeRow(cells)
+    if (row) parsed.push({ cell: cells[1], row })
+  }
+
+  // La celda trae el badge "DV" y el ícono de documento pegados al nombre
+  // ("Oaktree Strategic Credit IDV📄"), por eso se compara por "contiene" y,
+  // ante varios candidatos, se exige igualdad exacta sin ese sufijo.
+  const candidates = parsed.filter(p => norm(p.cell).includes(target))
+  if (candidates.length === 1) return candidates[0].row
+  if (candidates.length === 0) return null
+  const exact = candidates.filter(p => norm(p.cell.replace(/📄/g, '').replace(/DV\s*$/, '')) === target)
+  return exact.length === 1 ? exact[0].row : null
+}
+
+/**
+ * Busca un fondo en Davinci y devuelve sus retornos, probando en orden:
+ *  1. Explorador por ISIN exacto (fondos comunes).
+ *  2. Pestaña Alternativos por nombre (private debt etc.: no tienen ISIN en Davinci).
+ *  3. Explorador por nombre.
+ * Las búsquedas por nombre solo se aceptan si identifican un único fondo — ante
+ * ambigüedad devuelve null antes que traer los rendimientos de otro fondo.
+ * null si el fondo no aparece en Davinci (sin cobertura).
  */
 export async function searchFundReturns(page: Page, isin: string, nombre?: string): Promise<DavinciFundReturns | null> {
   const byIsin = await searchExplorer(page, isin)
@@ -135,6 +198,9 @@ export async function searchFundReturns(page: Page, isin: string, nombre?: strin
 
   const target = nombre ? norm(nombre) : ''
   if (!target) return null
+
+  const alt = await searchAlternativesByName(page, nombre!)
+  if (alt) return alt
 
   const byName = await searchExplorer(page, nombre!.trim())
   const candidates = byName.filter(cells => cells.length >= 15 && norm(cells[0]).includes(target))
