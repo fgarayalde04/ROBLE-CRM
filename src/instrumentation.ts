@@ -139,22 +139,24 @@ async function registerFundMonitorSync() {
  *
  *  1. Registra/renueva el watch de Gmail (al arrancar y cada 6 h; vence a los 7
  *     días). Necesita GMAIL_PUSH_TOPIC; sin eso no hay push instantáneo.
- *  2. Chequeo de respaldo por si un aviso de Pub/Sub se pierde. Con push
- *     configurado alcanza con cada 5 min; sin push, cada 1 min (única vía).
+ *  2. Chequeo periódico. Sin push es la única vía, así que corre cada 15 s
+ *     (detección casi instantánea: la llamada a Gmail es una sola y liviana, el
+ *     límite de la API es órdenes de magnitud mayor). Con push configurado queda
+ *     como respaldo por si se pierde un aviso de Pub/Sub, cada 5 min.
  *
  * Configure via .env.local:
  *   GMAIL_REPLY_WATCH_ENABLED=true
  *   GMAIL_PUSH_TOPIC=projects/<proyecto>/topics/<topic>
  *   GMAIL_PUSH_TOKEN=<secreto que va en la URL de la suscripción de Pub/Sub>
- *   EMAIL_REPLY_CHECK_INTERVAL_MINUTES=  (opcional, pisa el default de arriba)
+ *   EMAIL_REPLY_CHECK_INTERVAL_SECONDS=  (opcional, pisa el default de arriba; mínimo 5)
  */
 function registerEmailReplyWatch() {
   if (process.env.GMAIL_REPLY_WATCH_ENABLED !== 'true') return
 
   const pushConfigured = !!process.env.GMAIL_PUSH_TOPIC
-  const defaultMins = pushConfigured ? 5 : 1
-  const parsed = parseInt(process.env.EMAIL_REPLY_CHECK_INTERVAL_MINUTES ?? '', 10)
-  const intervalMins = Number.isFinite(parsed) && parsed > 0 ? parsed : defaultMins
+  const defaultSecs = pushConfigured ? 300 : 15
+  const parsed = parseInt(process.env.EMAIL_REPLY_CHECK_INTERVAL_SECONDS ?? '', 10)
+  const intervalSecs = Number.isFinite(parsed) && parsed >= 5 ? parsed : defaultSecs
   const port = process.env.PORT ?? '3000'
   const cronSecret = process.env.CRON_SECRET
 
@@ -179,6 +181,6 @@ function registerEmailReplyWatch() {
     setInterval(() => callCron('/api/cron/gmail-watch', 'gmail-watch'), SIX_HOURS)
   }
   setTimeout(() => callCron('/api/cron/check-email-replies', 'email-replies'), 25000)
-  setInterval(() => callCron('/api/cron/check-email-replies', 'email-replies'), intervalMins * 60 * 1000)
-  console.log(`[email-replies] Scheduled — backup check every ${intervalMins} min, push ${pushConfigured ? 'enabled' : 'NOT configured'}`)
+  setInterval(() => callCron('/api/cron/check-email-replies', 'email-replies'), intervalSecs * 1000)
+  console.log(`[email-replies] Scheduled — check every ${intervalSecs} s, push ${pushConfigured ? 'enabled' : 'NOT configured'}`)
 }
