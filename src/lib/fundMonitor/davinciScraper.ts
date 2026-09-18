@@ -67,16 +67,16 @@ export async function loginDavinci(page: Page, email: string, password: string):
   await page.waitForFunction(() => !location.pathname.includes('/login'), { timeout: 15000 })
 }
 
-let explorerLoaded = false
-
 /**
  * Busca un fondo por ISIN exacto en el Explorador y devuelve sus retornos.
  * null si el ISIN no aparece en la base de Davinci (fondo sin cobertura).
  */
 export async function searchFundReturns(page: Page, isin: string): Promise<DavinciFundReturns | null> {
-  if (!explorerLoaded) {
+  // Se decide por la URL de la página y no por un flag de módulo: puede haber
+  // dos sesiones a la vez (alta manual de un fondo mientras corre el sync
+  // diario), y un flag compartido dejaría a una de ellas sin navegar.
+  if (!page.url().includes('/explorer')) {
     await page.goto(`${BASE_URL}/explorer`, { waitUntil: 'domcontentloaded', timeout: 20000 })
-    explorerLoaded = true
   }
 
   const input = page.locator('input[placeholder*="ISIN" i]')
@@ -119,6 +119,5 @@ export async function openDavinciPage(browser: Browser) {
   })
   const page = await context.newPage()
   page.setDefaultTimeout(20000)
-  explorerLoaded = false
   return { context, page }
 }

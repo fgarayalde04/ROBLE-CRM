@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { pool } from '@/lib/db/pool'
+import { syncSingleFund } from '@/lib/fundMonitor/sync'
+
+export const maxDuration = 60 // login + búsqueda en Davinci
 
 export async function POST(req: Request) {
   const session = await getSession()
@@ -48,7 +51,11 @@ export async function POST(req: Request) {
     )
 
     await client.query('commit')
-    return NextResponse.json(rows[0])
+
+    // Completa los rendimientos desde Davinci en el momento (no espera al sync
+    // diario). Si falla, el fondo igual queda creado.
+    const sync = await syncSingleFund({ id: rows[0].id, isin: cleanIsin })
+    return NextResponse.json({ ...rows[0], sync })
   } catch (err: any) {
     await client.query('rollback')
     if (err.code === '23505') {

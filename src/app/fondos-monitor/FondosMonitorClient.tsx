@@ -88,6 +88,7 @@ export default function FondosMonitorClient({ funds }: { funds: FundRow[] }) {
   const [showAdd, setShowAdd] = useState(false)
   const [editingFund, setEditingFund] = useState<FundRow | null>(null)
   const [downloadingPdf, setDownloadingPdf] = useState(false)
+  const [syncNotice, setSyncNotice] = useState<string | null>(null)
   const pdfRef = useRef<HTMLDivElement>(null)
 
   const filteredFunds = useMemo(() => {
@@ -238,6 +239,13 @@ export default function FondosMonitorClient({ funds }: { funds: FundRow[] }) {
         </div>
       </div>
 
+      {syncNotice && (
+        <div className="mb-4 flex items-start justify-between gap-3 text-sm px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-800">
+          <span>{syncNotice}</span>
+          <button onClick={() => setSyncNotice(null)} className="text-amber-600 hover:text-amber-800 leading-none">✕</button>
+        </div>
+      )}
+
       <div style={{ position: 'fixed', left: -10000, top: 0 }}>
         <div ref={pdfRef}>
           <FondosMonitorPdfTemplate funds={filteredFunds} />
@@ -249,8 +257,9 @@ export default function FondosMonitorClient({ funds }: { funds: FundRow[] }) {
           categoriasDisponibles={categoriasDisponibles}
           subcategoriasPorCategoria={subcategoriasPorCategoria}
           onClose={() => setShowAdd(false)}
-          onCreated={() => {
+          onCreated={sync => {
             setShowAdd(false)
+            setSyncNotice(syncNoticeFor(sync))
             router.refresh()
           }}
         />
@@ -262,8 +271,9 @@ export default function FondosMonitorClient({ funds }: { funds: FundRow[] }) {
           categoriasDisponibles={categoriasDisponibles}
           subcategoriasPorCategoria={subcategoriasPorCategoria}
           onClose={() => setEditingFund(null)}
-          onSaved={() => {
+          onSaved={sync => {
             setEditingFund(null)
+            setSyncNotice(syncNoticeFor(sync))
             router.refresh()
           }}
           onDeactivated={() => {
@@ -352,6 +362,15 @@ export default function FondosMonitorClient({ funds }: { funds: FundRow[] }) {
 
 const OTRA = '__otra__'
 
+// Resultado de la búsqueda inmediata en Davinci que hace el servidor al
+// agregar/editar un fondo. 'ok' (o ausente) no necesita aviso.
+function syncNoticeFor(sync: string | undefined): string | null {
+  if (sync === 'no_source') return 'El fondo se guardó, pero su ISIN no aparece en Davinci: quedó sin rendimientos. Revisá el ISIN.'
+  if (sync === 'error') return 'El fondo se guardó, pero no se pudieron traer los rendimientos de Davinci. Se reintenta en la próxima actualización diaria.'
+  if (sync === 'unavailable') return 'El fondo se guardó, pero Davinci no está configurado en este ambiente: quedó sin rendimientos.'
+  return null
+}
+
 function AddFundModal({
   categoriasDisponibles,
   subcategoriasPorCategoria,
@@ -361,7 +380,7 @@ function AddFundModal({
   categoriasDisponibles: string[]
   subcategoriasPorCategoria: Map<string, string[]>
   onClose: () => void
-  onCreated: () => void
+  onCreated: (sync?: string) => void
 }) {
   const [nombre, setNombre] = useState('')
   const [categoria, setCategoria] = useState(categoriasDisponibles[0] ?? '')
@@ -394,7 +413,7 @@ function AddFundModal({
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'No se pudo agregar el fondo')
-      onCreated()
+      onCreated(data.sync)
     } catch (err: any) {
       setError(err.message)
     } finally {
@@ -490,7 +509,7 @@ function AddFundModal({
             className="text-sm font-medium px-4 py-2 rounded-lg text-white disabled:opacity-50"
             style={{ backgroundColor: '#1B3A2B' }}
           >
-            {saving ? 'Guardando…' : 'Agregar'}
+            {saving ? 'Buscando en Davinci…' : 'Agregar'}
           </button>
         </div>
       </form>
@@ -510,7 +529,7 @@ function EditFundModal({
   categoriasDisponibles: string[]
   subcategoriasPorCategoria: Map<string, string[]>
   onClose: () => void
-  onSaved: () => void
+  onSaved: (sync?: string) => void
   onDeactivated: () => void
 }) {
   const [nombre, setNombre] = useState(fund.nombre)
@@ -551,7 +570,7 @@ function EditFundModal({
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'No se pudo guardar el fondo')
-      onSaved()
+      onSaved(data.sync)
     } catch (err: any) {
       setError(err.message)
     } finally {
