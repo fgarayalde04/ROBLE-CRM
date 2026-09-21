@@ -61,7 +61,7 @@ export async function resetStuckSyncLogs(cutoffIso: string) {
 // ── Sync clientes ────────────────────────────────────────────────────────────
 
 export async function getKnownClientsForSync() {
-  const { rows } = await pool.query(`select id, item_id, client_number from clients`)
+  const { rows } = await pool.query(`select id, item_id, client_number, first_name, last_name from clients`)
   return rows
 }
 

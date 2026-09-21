@@ -50,6 +50,14 @@ function normalizeKey(value: string | null | undefined): string {
   return (value ?? '').trim().toLowerCase().replace(/\s+/g, ' ')
 }
 
+// Para emparejar una carpeta con un cliente por nombre: sin tildes, sin
+// mayúsculas, sin puntuación ni espacios repetidos ("Nicolás Martín" == "NICOLAS MARTIN").
+function normalizeNameKey(value: string | null | undefined): string {
+  return (value ?? '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+}
+
 interface ExistingClientMatch {
   id: string
   status: string | null
@@ -110,6 +118,10 @@ export async function syncClients(): Promise<SyncResult> {
   const knownClientIds = new Set<string>()        // item_id → already a client
   const knownOpeningIds = new Set<string>()       // item_id → already an opening
   const clientByNumber = new Map<string, string>() // client_number → client.id
+  // Clientes todavía sin carpeta de OneDrive (ej: los que nacen de un legajo
+  // de Banco Central), por nombre normalizado. null = hay más de uno con ese
+  // nombre → ambiguo, no se empareja por nombre.
+  const unlinkedByName = new Map<string, { id: string; client_number: string | null } | null>()
   try {
     const [existingClients, existingOpeningItemIds] = await Promise.all([
       getKnownClientsForSync(),
@@ -118,6 +130,10 @@ export async function syncClients(): Promise<SyncResult> {
     for (const c of existingClients ?? []) {
       if (c.item_id) knownClientIds.add(c.item_id)
       if (c.client_number) clientByNumber.set(c.client_number, c.id)
+      if (!c.item_id) {
+        const nameKey = normalizeNameKey(`${c.first_name ?? ''} ${c.last_name ?? ''}`)
+        if (nameKey) unlinkedByName.set(nameKey, unlinkedByName.has(nameKey) ? null : { id: c.id, client_number: c.client_number ?? null })
+      }
     }
     for (const itemId of existingOpeningItemIds ?? []) knownOpeningIds.add(itemId)
   } catch (e: unknown) {
@@ -165,12 +181,10 @@ export async function syncClients(): Promise<SyncResult> {
               continue
             }
 
-            // ── 2. Already in account_openings → skip (no duplicates) ──
-            if (knownOpeningIds.has(itemId)) {
-              continue
-            }
-
-            // ── 3. Existing client matched by client_number → link item_id ──
+            // ── 2. Existing client matched by client_number → link item_id ──
+            // (antes que el chequeo de aperturas: si la carpeta ya tiene una
+            // apertura pero el cliente existente sigue sin link, hay que
+            // completárselo igual, no saltear la carpeta)
             if (clientNumber && clientByNumber.has(clientNumber)) {
               const existingClientId = clientByNumber.get(clientNumber)!
               await updateClientSharePointFieldsById(existingClientId, {
@@ -187,7 +201,34 @@ export async function syncClients(): Promise<SyncResult> {
               continue
             }
 
-            // ── 4. Truly new folder → Apertura de Cuenta + stub client with status='pendiente' ──
+            // ── 3. Existing client without folder matched by NAME → link it ──
+            // Las carpetas de Clientes/<asesor> muchas veces no llevan número
+            // ("Nicolas Martin Serrano"), y el cliente que nace de un legajo sí:
+            // por número nunca matchean y la ficha quedaba sin link de OneDrive.
+            // Solo se empareja si el nombre es único entre los clientes sin carpeta.
+            const nameMatch = unlinkedByName.get(normalizeNameKey(displayName))
+            if (nameMatch) {
+              await updateClientSharePointFieldsById(nameMatch.id, {
+                item_id: itemId,
+                drive_id: driveId,
+                web_url: clientFolder.webUrl,
+                onedrive_folder_url: clientFolder.webUrl,
+                parent_path: advisorName,
+                advisor: advisorName,
+                last_synced_at: new Date().toISOString(),
+              })
+              unlinkedByName.delete(normalizeNameKey(displayName))
+              knownClientIds.add(itemId)
+              result.updated++
+              continue
+            }
+
+            // ── 4. Already in account_openings → skip (no duplicates) ──
+            if (knownOpeningIds.has(itemId)) {
+              continue
+            }
+
+            // ── 5. Truly new folder → Apertura de Cuenta + stub client with status='pendiente' ──
             {
               const now = new Date().toISOString()
 
