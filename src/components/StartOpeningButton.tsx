@@ -10,7 +10,7 @@ export default function StartOpeningButton({ openingId }: { openingId: string })
   async function handleStart() {
     setLoading(true)
     try {
-      await fetch('/api/openings', {
+      const res = await fetch('/api/openings', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -19,8 +19,16 @@ export default function StartOpeningButton({ openingId }: { openingId: string })
           start_date: new Date().toISOString().split('T')[0],
         }),
       })
-      router.refresh()
-    } finally {
+      if (!res.ok) {
+        alert('No se pudo comenzar la apertura.')
+        setLoading(false)
+        return
+      }
+      // Al detalle, donde está el checklist paso a paso — quedarse en la
+      // lista dejaba al usuario sin saber dónde seguir.
+      router.push(`/openings/${openingId}`)
+    } catch {
+      alert('No se pudo comenzar la apertura.')
       setLoading(false)
     }
   }
