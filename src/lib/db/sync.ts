@@ -193,6 +193,52 @@ export async function setBancoCentralLinkedClient(id: string, clientId: string) 
   )
 }
 
+// Legajos cuyo cliente todavía no tiene mail o celular — candidatos a completar
+// leyendo la ficha del legajo. `excludeItemIds` = ya intentados hace poco.
+export async function getLegajosNeedingContact(excludeItemIds: string[], limit: number) {
+  const { rows } = await pool.query(
+    `select b.drive_id, b.item_id, b.linked_client_id as client_id
+     from banco_central_records b
+     join clients c on c.id = b.linked_client_id
+     where b.item_id is not null and b.drive_id is not null
+       and b.item_id <> all($1::text[])
+       and (coalesce(c.email, '') = '' or coalesce(c.phone, '') = '' or coalesce(c.first_name, '') = '')
+     order by c.created_at desc
+     limit $2`,
+    [excludeItemIds, limit]
+  )
+  return rows as { drive_id: string; item_id: string; client_id: string }[]
+}
+
+// Completa solo lo que está vacío — nunca pisa lo que alguien ya cargó a mano.
+// El nombre se corrige solo en los clientes "esqueleto" (sin first_name), que
+// nacen con el nombre completo pegado en last_name.
+export async function fillClientContact(
+  clientId: string,
+  f: { first_name: string | null; last_name: string | null; email: string | null; phone: string | null }
+) {
+  await pool.query(
+    `update clients set
+       email = coalesce(nullif(email, ''), $2),
+       phone = coalesce(nullif(phone, ''), $3),
+       last_name  = case when coalesce(first_name, '') = '' and $4::text is not null and $5::text is not null then $4 else last_name end,
+       first_name = case when coalesce(first_name, '') = '' and $4::text is not null and $5::text is not null then $5 else first_name end,
+       updated_at = now()
+     where id = $1`,
+    [clientId, f.email, f.phone, f.last_name, f.first_name]
+  )
+}
+
+// Última vez que arrancó un sync de este tipo — para no perder la corrida
+// programada cuando el server se reinicia (cada deploy reinicia el timer).
+export async function getLastSyncStartedAt(syncType: string): Promise<Date | null> {
+  const { rows } = await pool.query(
+    `select max(started_at) as t from sync_logs where sync_type = $1`,
+    [syncType]
+  )
+  return rows[0]?.t ? new Date(rows[0].t) : null
+}
+
 // ── Sync recursos ─────────────────────────────────────────────────────────────
 
 export async function getRecursoByItemId(itemId: string) {

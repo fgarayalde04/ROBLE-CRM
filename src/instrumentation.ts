@@ -27,7 +27,7 @@ export async function register() {
   }
 
   const { syncAll } = await import('@/lib/microsoft/sync')
-  const { resetMonthlyPaymentStatus } = await import('@/lib/db/sync')
+  const { resetMonthlyPaymentStatus, getLastSyncStartedAt } = await import('@/lib/db/sync')
 
   const parsedInterval = parseInt(process.env.SYNC_INTERVAL_MINUTES ?? '1', 10)
   const intervalMins = Number.isFinite(parsedInterval) && parsedInterval > 0 ? parsedInterval : 1
@@ -69,6 +69,20 @@ export async function register() {
 
   if (runOnStartup) {
     setTimeout(() => runAll(), 5000)
+  } else {
+    // El timer arranca de cero en cada reinicio (cada deploy), así que con un
+    // intervalo largo y deploys frecuentes el sync programado nunca llegaba a
+    // correr y los clientes nuevos no aparecían. Al arrancar se mira cuándo
+    // fue la última corrida (sync_logs) y, si ya pasó el intervalo, se hace
+    // ahora en vez de esperar otro intervalo completo.
+    setTimeout(async () => {
+      try {
+        const last = await getLastSyncStartedAt('clientes')
+        if (!last || Date.now() - last.getTime() >= intervalMins * 60 * 1000) runAll()
+      } catch (e) {
+        console.error('[auto-sync] No se pudo consultar la última corrida:', e)
+      }
+    }, 5000)
   }
 
   const intervalMs = intervalMins * 60 * 1000

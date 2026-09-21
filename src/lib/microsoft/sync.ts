@@ -4,12 +4,14 @@ import {
   updateClientSharePointFieldsByItemId, updateClientSharePointFieldsById,
   insertPendingClient, insertAccountOpeningStub,
   getBancoCentralByItemIds, getBancoCentralWithCustomerNumberByType,
+  getLegajosNeedingContact, fillClientContact,
   bulkInsertBancoCentralRecords, updateBancoCentralRecordById,
   getUnlinkedBancoCentralWithNumber, getClientIdsByNumbers, setBancoCentralLinkedClient,
   getRecursoByItemId, insertRecurso, updateRecursoById,
   getScoringFileByItemId, insertScoringFile, updateScoringFileById,
 } from '@/lib/db/sync'
-import { getGraphToken, listFolderChildren, DriveItem } from './graph'
+import { getGraphToken, listFolderChildren, downloadDriveFile, DriveItem } from './graph'
+import { docxToText, parseFichaText, findFichaFile } from './fichaParser'
 
 export interface SyncResult {
   found: number
@@ -318,6 +320,34 @@ export async function syncBancoCentralInternacional(): Promise<SyncResult> {
   )
 }
 
+// Cuántos legajos se leen por corrida (cada uno = listar carpeta + bajar un
+// .docx) y cuánto se espera antes de reintentar uno que no dio nada.
+const FICHA_BATCH = 15
+const FICHA_RETRY_MS = 6 * 60 * 60 * 1000
+const fichaAttempts = new Map<string, number>() // item_id → último intento
+
+// Completa nombre, mail y celular de los clientes que nacieron de un legajo
+// (vienen sin nada) leyendo la ficha .docx de la carpeta del legajo.
+async function enrichClientsFromFichas(token: string, result: SyncResult) {
+  const nowMs = Date.now()
+  const recent = Array.from(fichaAttempts.entries()).filter(([, t]) => nowMs - t < FICHA_RETRY_MS).map(([id]) => id)
+  const legajos = await getLegajosNeedingContact(recent, FICHA_BATCH)
+
+  for (const l of legajos) {
+    fichaAttempts.set(l.item_id, nowMs)
+    try {
+      const ficha = findFichaFile(await listFolderChildren(l.drive_id, l.item_id, token))
+      if (!ficha) continue
+      const contact = parseFichaText(docxToText(await downloadDriveFile(l.drive_id, ficha.id, token)))
+      if (!contact.email && !contact.phone && !contact.first_name) continue
+      await fillClientContact(l.client_id, contact)
+      result.updated++
+    } catch (e: unknown) {
+      result.errors.push(`Ficha ${l.item_id}: ${e instanceof Error ? e.message : String(e)}`)
+    }
+  }
+}
+
 async function syncBancoCentral(
   logType: string,
   bcuType: 'local' | 'internacional',
@@ -488,6 +518,13 @@ async function syncBancoCentral(
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e)
       result.errors.push(`Reconciliación linked_client_id: ${msg}`)
+    }
+
+    // Completar nombre/mail/celular de los clientes de legajos a partir de la ficha
+    try {
+      await enrichClientsFromFichas(token, result)
+    } catch (e: unknown) {
+      result.errors.push(`Completar desde fichas: ${e instanceof Error ? e.message : String(e)}`)
     }
 
     const status = result.errors.length === 0 ? 'success' : 'partial'
