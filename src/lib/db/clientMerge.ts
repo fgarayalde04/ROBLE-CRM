@@ -143,3 +143,24 @@ export async function mergeClients(keepId: string, dropId: string) {
     conn.release()
   }
 }
+
+// Fusiona solos los "pares seguros" (dos clientes con el mismo nombre: uno con
+// número de Banco Central y sin carpeta, el otro con carpeta y sin número) —
+// exactamente el duplicado que genera la sincronización cuando la carpeta de
+// Clientes/<asesor> no lleva número. Los demás casos quedan para revisar a
+// mano en Clientes > Ver duplicados.
+export async function mergeSafeDuplicates(): Promise<{ merged: number; errors: string[] }> {
+  const errors: string[] = []
+  let merged = 0
+  for (const g of await findDuplicateGroups()) {
+    if (!g.safe) continue
+    const drop = g.clients.find(c => c.id !== g.suggested_keep)!
+    try {
+      await mergeClients(g.suggested_keep, drop.id)
+      merged++
+    } catch (e: any) {
+      errors.push(`${g.key}: ${e.message}`)
+    }
+  }
+  return { merged, errors }
+}

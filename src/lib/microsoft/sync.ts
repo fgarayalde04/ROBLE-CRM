@@ -13,6 +13,7 @@ import {
 import { getGraphToken, listFolderChildren, downloadDriveFile, DriveItem } from './graph'
 import { docxToText, parseFichaText, findFichaFile } from './fichaParser'
 import { nameMatchKey } from '@/lib/normalizeName'
+import { mergeSafeDuplicates } from '@/lib/db/clientMerge'
 
 export interface SyncResult {
   found: number
@@ -709,6 +710,17 @@ export async function syncScoring(): Promise<SyncResult> {
   return result
 }
 
+// Un cliente por persona: fusiona los pares duplicados seguros que hayan quedado.
+export async function mergeSafeDuplicatesLogged() {
+  try {
+    const { merged, errors } = await mergeSafeDuplicates()
+    if (merged > 0) console.log(`[sync] Clientes duplicados fusionados: ${merged}`)
+    for (const e of errors) console.error('[sync] No se pudo fusionar duplicado:', e)
+  } catch (e) {
+    console.error('[sync] Error buscando clientes duplicados:', e)
+  }
+}
+
 // ── Sync All ──────────────────────────────────────────────────────────────────
 export async function syncAll(): Promise<Record<string, SyncResult>> {
   // Las que crean/emparejan clientes corren una detrás de otra: en paralelo
@@ -722,6 +734,7 @@ export async function syncAll(): Promise<Record<string, SyncResult>> {
     syncResources(),
     syncScoring(),
   ])
+  await mergeSafeDuplicatesLogged()
 
   return {
     clientes:
