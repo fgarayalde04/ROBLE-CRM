@@ -127,9 +127,12 @@ export async function syncClients(): Promise<SyncResult> {
       getKnownOpeningItemIds(),
     ])
     for (const c of existingClients ?? []) {
-      if (c.item_id) knownClientIds.add(c.item_id)
+      // Si la carpeta enlazada es la del legajo (no la de Clientes), no cuenta
+      // como "ya tiene su carpeta": queda disponible para emparejarla con la de
+      // Clientes por número o por nombre, y ahí se reemplaza el enlace.
+      if (c.item_id && !c.folder_is_legajo) knownClientIds.add(c.item_id)
       if (c.client_number) clientByNumber.set(c.client_number, c.id)
-      if (!c.item_id) {
+      if (!c.item_id || c.folder_is_legajo) {
         const nameKey = nameMatchKey(`${c.first_name ?? ''} ${c.last_name ?? ''}`)
         if (nameKey) unlinkedByName.set(nameKey, unlinkedByName.has(nameKey) ? null : { id: c.id, client_number: c.client_number ?? null })
       }

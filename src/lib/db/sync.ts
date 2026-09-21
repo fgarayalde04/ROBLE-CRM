@@ -61,7 +61,14 @@ export async function resetStuckSyncLogs(cutoffIso: string) {
 // ── Sync clientes ────────────────────────────────────────────────────────────
 
 export async function getKnownClientsForSync() {
-  const { rows } = await pool.query(`select id, item_id, client_number, first_name, last_name from clients`)
+  // folder_is_legajo: la carpeta enlazada al cliente es la de su legajo de Banco
+  // Central (carpeta de Legajos), no la de Clientes/<asesor>. Hay que
+  // reemplazarla por la de Clientes cuando aparezca.
+  const { rows } = await pool.query(
+    `select c.id, c.item_id, c.client_number, c.first_name, c.last_name,
+            (c.item_id is not null and exists (select 1 from banco_central_records b where b.item_id = c.item_id)) as folder_is_legajo
+     from clients c`
+  )
   return rows
 }
 
