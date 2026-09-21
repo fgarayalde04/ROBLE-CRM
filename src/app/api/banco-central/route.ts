@@ -1,12 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import {
   CHECKBOX_FIELDS, type CheckboxField,
-  listBancoCentralRecords, closeBancoCentralRecord, reopenBancoCentralRecord,
+  listBancoCentralRecords, listBancoCentralRecordsByClient, closeBancoCentralRecord, reopenBancoCentralRecord,
   updateBancoCentralText, updateBancoCentralCheckbox, bulkRestoreBancoCentralCheckboxes,
 } from '@/lib/db/bancoCentral'
 
 // GET /api/banco-central?type=local|internacional
+// GET /api/banco-central?client_id=...  → legajos de ese cliente
 export async function GET(req: NextRequest) {
+  const clientId = req.nextUrl.searchParams.get('client_id')
+  if (clientId) {
+    return NextResponse.json({ records: await listBancoCentralRecordsByClient(clientId) })
+  }
   const type = req.nextUrl.searchParams.get('type')
   const data = await listBancoCentralRecords(type)
   return NextResponse.json({ records: data })

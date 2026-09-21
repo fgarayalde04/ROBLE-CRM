@@ -353,7 +353,7 @@ export default async function ClientDetailPage({ params }: Props) {
 
           {/* Banco Central */}
           <div className="mt-6 bg-white border border-[#E2E8F0] rounded-lg p-5">
-            <ComplianceBlock clientId={client.id} />
+            <ComplianceBlock clientId={client.id} clientName={`${client.first_name} ${client.last_name}`} />
           </div>
         </div>
       </div>
