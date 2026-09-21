@@ -2,63 +2,35 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import type { DocState } from './ComplianceTable'
 
+// Mismos campos y criterio que la sección Legajos de Banco Central
+// (banco_central_records) — esta ficha es una vista de esos legajos.
 const FIELDS = [
-  { key: 'ficha_cliente',       label: 'Ficha' },
-  { key: 'perfil_inversor',     label: 'Perfil inversor' },
-  { key: 'cedula',              label: 'Cedula' },
-  { key: 'documentos_legales',  label: 'Docs legales' },
-  { key: 'cuestionario_asesor', label: 'Cuestionario' },
+  { key: 'ficha',              label: 'Ficha cliente' },
+  { key: 'lista_verificacion', label: 'Lista verif.' },
+  { key: 'cuestionario',       label: 'Cuest. asesor' },
+  { key: 'ci',                 label: 'Cédula' },
+  { key: 'cumplo',             label: 'Cumplo' },
+  { key: 'documentos_legales', label: 'Docs legales (sociedad)' },
 ] as const
 
 type FieldKey = typeof FIELDS[number]['key']
 
-const DOC_STATE_ORDER: DocState[] = ['falta', 'pedido', 'recibido', 'revisado', 'vencido']
-const DONE_STATES: DocState[] = ['recibido', 'revisado']
+const REQUIRED_FIELDS: FieldKey[] = ['ficha', 'lista_verificacion', 'cuestionario', 'ci', 'cumplo']
 
-const DOC_STATE_CONFIG: Record<DocState, { label: string; activeBg: string; activeText: string; activeBorder: string }> = {
-  falta:    { label: 'Falta',    activeBg: 'bg-gray-100',   activeText: 'text-gray-600',   activeBorder: 'border-gray-300' },
-  pedido:   { label: 'Pedido',   activeBg: 'bg-amber-50',   activeText: 'text-amber-700',  activeBorder: 'border-amber-300' },
-  recibido: { label: 'Recibido', activeBg: 'bg-blue-50',    activeText: 'text-blue-700',   activeBorder: 'border-blue-300' },
-  revisado: { label: 'Revisado', activeBg: 'bg-emerald-50', activeText: 'text-emerald-700', activeBorder: 'border-emerald-300' },
-  vencido:  { label: 'Vencido',  activeBg: 'bg-red-50',     activeText: 'text-red-700',    activeBorder: 'border-red-300' },
-}
-
-function nextState(current: DocState): DocState {
-  const idx = DOC_STATE_ORDER.indexOf(current)
-  return DOC_STATE_ORDER[(idx + 1) % DOC_STATE_ORDER.length]
-}
-
-interface ComplianceData {
-  id: string | null
-  ficha_cliente: DocState
-  perfil_inversor: DocState
-  cedula: DocState
-  documentos_legales: DocState
-  cuestionario_asesor: DocState
+interface Legajo {
+  id: string
+  type: 'local' | 'internacional'
+  customer_number: string | null
+  folder_name: string | null
   status: string
   updated_at: string | null
-  updated_by: string | null
-}
-
-interface ClientRow {
-  client_id: string
-  first_name: string
-  last_name: string
-  compliance: ComplianceData
-}
-
-const DEFAULT_COMPLIANCE: ComplianceData = {
-  id: null,
-  ficha_cliente: 'falta',
-  perfil_inversor: 'falta',
-  cedula: 'falta',
-  documentos_legales: 'falta',
-  cuestionario_asesor: 'falta',
-  status: 'incompleto',
-  updated_at: null,
-  updated_by: null,
+  ficha: boolean
+  lista_verificacion: boolean
+  cuestionario: boolean
+  ci: boolean
+  cumplo: boolean
+  documentos_legales: boolean
 }
 
 function StatusBadge({ status }: { status: string }) {
@@ -69,6 +41,13 @@ function StatusBadge({ status }: { status: string }) {
       </span>
     )
   }
+  if (status === 'cerrada') {
+    return (
+      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border text-gray-600 bg-gray-100 border-gray-300">
+        Cerrada
+      </span>
+    )
+  }
   return (
     <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border text-amber-700 bg-amber-50 border-amber-200">
       Incompleto
@@ -76,40 +55,41 @@ function StatusBadge({ status }: { status: string }) {
   )
 }
 
-export default function ComplianceBlock({ clientId }: { clientId: string }) {
-  const [row, setRow] = useState<ClientRow | null>(null)
+export default function ComplianceBlock({ clientId, clientName }: { clientId: string; clientName?: string }) {
+  const [legajos, setLegajos] = useState<Legajo[]>([])
   const [loading, setLoading] = useState(true)
   const [creatingTask, setCreatingTask] = useState(false)
 
   useEffect(() => {
-    fetch(`/api/compliance?client_id=${clientId}`)
+    fetch(`/api/banco-central?client_id=${clientId}`)
       .then((r) => r.json())
-      .then((data) => { setRow(data); setLoading(false) })
+      .then((data) => { setLegajos(data.records ?? []); setLoading(false) })
       .catch(() => setLoading(false))
   }, [clientId])
 
-  async function cycleField(field: FieldKey, currentState: DocState) {
-    if (!row) return
-    const newState = nextState(currentState)
+  async function toggle(legajo: Legajo, field: FieldKey) {
+    const value = !legajo[field]
+    const merged = { ...legajo, [field]: value }
+    const newStatus = legajo.status === 'cerrada'
+      ? 'cerrada'
+      : REQUIRED_FIELDS.every((f) => merged[f]) ? 'completo' : 'incompleto'
 
-    // Optimistic update
-    const updated = { ...row.compliance, [field]: newState }
-    const allDone = FIELDS.every((f) => DONE_STATES.includes(updated[f.key]))
-    setRow({ ...row, compliance: { ...updated, status: allDone ? 'completo' : 'incompleto' } })
+    setLegajos((prev) => prev.map((l) => (l.id === legajo.id ? { ...merged, status: newStatus } : l)))
 
-    await fetch('/api/compliance', {
+    const res = await fetch('/api/banco-central', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ client_id: clientId, field, value: newState }),
+      body: JSON.stringify({ id: legajo.id, field, value }),
     })
+    if (!res.ok) {
+      setLegajos((prev) => prev.map((l) => (l.id === legajo.id ? legajo : l)))
+    }
   }
 
-  async function crearTarea() {
-    if (!row) return
-    const missing = FIELDS.filter((f) => !DONE_STATES.includes(row.compliance[f.key]))
+  async function crearTarea(legajo: Legajo) {
+    const missing = FIELDS.filter((f) => REQUIRED_FIELDS.includes(f.key) && !legajo[f.key])
     if (missing.length === 0) return
-    const missingList = missing.map((f) => f.label).join(', ')
-    const title = `Pedir a ${row.first_name} ${row.last_name}: ${missingList}`
+    const title = `Pedir a ${clientName ?? legajo.folder_name ?? 'cliente'}: ${missing.map((f) => f.label).join(', ')}`
 
     setCreatingTask(true)
     await fetch('/api/tasks', {
@@ -120,80 +100,113 @@ export default function ComplianceBlock({ clientId }: { clientId: string }) {
     setCreatingTask(false)
   }
 
+  const heading = (
+    <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-widest">
+      Documentacion Banco Central
+    </h3>
+  )
+
   if (loading) {
     return (
       <div>
-        <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-3">
-          Documentacion Banco Central
-        </h3>
+        <div className="mb-3">{heading}</div>
         <p className="text-sm text-gray-400">Cargando...</p>
       </div>
     )
   }
 
-  const compliance = row?.compliance ?? DEFAULT_COMPLIANCE
-
-  return (
-    <div>
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-widest">
-          Documentacion Banco Central
-        </h3>
-        <div className="flex items-center gap-3">
-          <StatusBadge status={compliance.status} />
+  if (legajos.length === 0) {
+    return (
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          {heading}
           <Link href="/banco-central" className="text-xs text-[#2D3F52] hover:underline font-medium">
             Ver en Banco Central
           </Link>
         </div>
+        <p className="text-sm text-gray-400">Este cliente no tiene legajo en Banco Central.</p>
       </div>
+    )
+  }
 
-      {/* Fields */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-4">
-        {FIELDS.map((f) => {
-          const state = compliance[f.key]
-          const cfg = DOC_STATE_CONFIG[state] ?? DOC_STATE_CONFIG.falta
-          const isDone = DONE_STATES.includes(state)
-          return (
-            <button
-              key={f.key}
-              onClick={() => cycleField(f.key, state)}
-              title="Clic para avanzar estado"
-              className={`flex items-center justify-between gap-2 px-3 py-2.5 rounded border text-left transition-colors ${
-                isDone
-                  ? `${cfg.activeBg} ${cfg.activeBorder}`
-                  : 'bg-gray-50 border-gray-200 hover:border-[#16A34A]/60'
-              }`}
-            >
-              <span className={`text-xs font-medium ${isDone ? cfg.activeText : 'text-gray-500'}`}>
-                {f.label}
-              </span>
-              <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${cfg.activeBg} ${cfg.activeText} ${cfg.activeBorder}`}>
-                {cfg.label}
-              </span>
-            </button>
-          )
-        })}
-      </div>
+  return (
+    <div className="space-y-6">
+      {legajos.map((legajo) => {
+        const cerrada = legajo.status === 'cerrada'
+        return (
+          <div key={legajo.id}>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                {heading}
+                {legajos.length > 1 && (
+                  <span className="text-[10px] uppercase tracking-wide text-gray-400">
+                    {legajo.type === 'internacional' ? 'Internacional' : 'Local'}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-3">
+                <StatusBadge status={legajo.status} />
+                <Link
+                  href={`/banco-central?tab=${legajo.type}${legajo.customer_number ? `&q=${encodeURIComponent(legajo.customer_number)}` : ''}`}
+                  className="text-xs text-[#2D3F52] hover:underline font-medium"
+                >
+                  Ver en Banco Central
+                </Link>
+              </div>
+            </div>
 
-      {compliance.status !== 'completo' && (
-        <button
-          onClick={crearTarea}
-          disabled={creatingTask}
-          className="text-xs font-medium bg-[#2D3F52] text-white px-3 py-1.5 rounded hover:bg-[#354A5E] disabled:opacity-50 transition-colors"
-        >
-          {creatingTask ? 'Creando tarea...' : 'Crear tarea por faltantes'}
-        </button>
-      )}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-4">
+              {FIELDS.map((f) => {
+                const done = legajo[f.key]
+                return (
+                  <button
+                    key={f.key}
+                    onClick={() => toggle(legajo, f.key)}
+                    title="Clic para tildar / destildar"
+                    className={`flex items-center justify-between gap-2 px-3 py-2.5 rounded border text-left transition-colors ${
+                      done
+                        ? 'bg-emerald-50 border-emerald-300'
+                        : 'bg-gray-50 border-gray-200 hover:border-[#16A34A]/60'
+                    }`}
+                  >
+                    <span className={`text-xs font-medium ${done ? 'text-emerald-700' : 'text-gray-500'}`}>
+                      {f.label}
+                    </span>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${
+                      done
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
+                        : 'bg-gray-100 text-gray-600 border-gray-300'
+                    }`}>
+                      {done ? '✓' : 'Falta'}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
 
-      {compliance.updated_at && (
-        <p className="mt-3 text-xs text-gray-400">
-          Actualizado:{' '}
-          {new Date(compliance.updated_at).toLocaleDateString('es-UY', {
-            day: '2-digit', month: '2-digit', year: 'numeric',
-          })}
-          {compliance.updated_by && ` por ${compliance.updated_by}`}
-        </p>
-      )}
+            {legajo.status === 'incompleto' && (
+              <button
+                onClick={() => crearTarea(legajo)}
+                disabled={creatingTask}
+                className="text-xs font-medium bg-[#2D3F52] text-white px-3 py-1.5 rounded hover:bg-[#354A5E] disabled:opacity-50 transition-colors"
+              >
+                {creatingTask ? 'Creando tarea...' : 'Crear tarea por faltantes'}
+              </button>
+            )}
+
+            {cerrada && <p className="text-xs text-gray-400">Legajo cerrado.</p>}
+
+            {legajo.updated_at && (
+              <p className="mt-3 text-xs text-gray-400">
+                Actualizado:{' '}
+                {new Date(legajo.updated_at).toLocaleDateString('es-UY', {
+                  day: '2-digit', month: '2-digit', year: 'numeric',
+                })}
+              </p>
+            )}
+          </div>
+        )
+      })}
     </div>
   )
 }

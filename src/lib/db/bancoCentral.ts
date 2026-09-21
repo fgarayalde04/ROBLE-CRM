@@ -34,6 +34,21 @@ export async function listBancoCentralRecords(type?: string | null, customerNumb
   return rows
 }
 
+// Legajos de un cliente: por vínculo directo o por N° de cliente (mismo criterio que la sección Legajos).
+export async function listBancoCentralRecordsByClient(clientId: string) {
+  const { rows } = await pool.query(
+    `select b.id, b.type, b.customer_number, b.folder_name, b.status, b.updated_at,
+            b.ficha, b.lista_verificacion, b.cuestionario, b.ci, b.cumplo, b.documentos_legales
+     from banco_central_records b
+     left join clients c on c.id = $1
+     where b.linked_client_id = $1
+        or (c.client_number is not null and b.customer_number = c.client_number)
+     order by b.type asc, b.folder_name asc`,
+    [clientId]
+  )
+  return rows
+}
+
 export async function getBancoCentralCheckboxes(id: string) {
   const { rows } = await pool.query(
     `select ${CHECKBOX_FIELDS.join(', ')} from banco_central_records where id = $1`,
