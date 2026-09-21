@@ -274,7 +274,7 @@ export default async function OpeningsPage({ searchParams }: Props) {
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1">
                         {o.status === 'carpeta_creada' && (
-                          <StartOpeningButton openingId={o.id} />
+                          <StartOpeningButton openingId={o.id} clientId={o.client?.id ?? null} />
                         )}
                         <Link
                           href={`/openings/${o.id}`}

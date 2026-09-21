@@ -4,12 +4,14 @@ import {
   updateClientSharePointFieldsByItemId, updateClientSharePointFieldsById,
   insertPendingClient, insertAccountOpeningStub,
   getBancoCentralByItemIds, getBancoCentralWithCustomerNumberByType,
+  getLegajosNeedingContact, fillClientContact,
   bulkInsertBancoCentralRecords, updateBancoCentralRecordById,
   getUnlinkedBancoCentralWithNumber, getClientIdsByNumbers, setBancoCentralLinkedClient,
   getRecursoByItemId, insertRecurso, updateRecursoById,
   getScoringFileByItemId, insertScoringFile, updateScoringFileById,
 } from '@/lib/db/sync'
-import { getGraphToken, listFolderChildren, DriveItem } from './graph'
+import { getGraphToken, listFolderChildren, downloadDriveFile, DriveItem } from './graph'
+import { docxToText, parseFichaText, findFichaFile } from './fichaParser'
 
 export interface SyncResult {
   found: number
@@ -48,6 +50,14 @@ function parseClientFolderName(folderName: string): {
 
 function normalizeKey(value: string | null | undefined): string {
   return (value ?? '').trim().toLowerCase().replace(/\s+/g, ' ')
+}
+
+// Para emparejar una carpeta con un cliente por nombre: sin tildes, sin
+// mayúsculas, sin puntuación ni espacios repetidos ("Nicolás Martín" == "NICOLAS MARTIN").
+function normalizeNameKey(value: string | null | undefined): string {
+  return (value ?? '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
 }
 
 interface ExistingClientMatch {
@@ -110,6 +120,10 @@ export async function syncClients(): Promise<SyncResult> {
   const knownClientIds = new Set<string>()        // item_id → already a client
   const knownOpeningIds = new Set<string>()       // item_id → already an opening
   const clientByNumber = new Map<string, string>() // client_number → client.id
+  // Clientes todavía sin carpeta de OneDrive (ej: los que nacen de un legajo
+  // de Banco Central), por nombre normalizado. null = hay más de uno con ese
+  // nombre → ambiguo, no se empareja por nombre.
+  const unlinkedByName = new Map<string, { id: string; client_number: string | null } | null>()
   try {
     const [existingClients, existingOpeningItemIds] = await Promise.all([
       getKnownClientsForSync(),
@@ -118,6 +132,10 @@ export async function syncClients(): Promise<SyncResult> {
     for (const c of existingClients ?? []) {
       if (c.item_id) knownClientIds.add(c.item_id)
       if (c.client_number) clientByNumber.set(c.client_number, c.id)
+      if (!c.item_id) {
+        const nameKey = normalizeNameKey(`${c.first_name ?? ''} ${c.last_name ?? ''}`)
+        if (nameKey) unlinkedByName.set(nameKey, unlinkedByName.has(nameKey) ? null : { id: c.id, client_number: c.client_number ?? null })
+      }
     }
     for (const itemId of existingOpeningItemIds ?? []) knownOpeningIds.add(itemId)
   } catch (e: unknown) {
@@ -165,12 +183,10 @@ export async function syncClients(): Promise<SyncResult> {
               continue
             }
 
-            // ── 2. Already in account_openings → skip (no duplicates) ──
-            if (knownOpeningIds.has(itemId)) {
-              continue
-            }
-
-            // ── 3. Existing client matched by client_number → link item_id ──
+            // ── 2. Existing client matched by client_number → link item_id ──
+            // (antes que el chequeo de aperturas: si la carpeta ya tiene una
+            // apertura pero el cliente existente sigue sin link, hay que
+            // completárselo igual, no saltear la carpeta)
             if (clientNumber && clientByNumber.has(clientNumber)) {
               const existingClientId = clientByNumber.get(clientNumber)!
               await updateClientSharePointFieldsById(existingClientId, {
@@ -187,7 +203,34 @@ export async function syncClients(): Promise<SyncResult> {
               continue
             }
 
-            // ── 4. Truly new folder → Apertura de Cuenta + stub client with status='pendiente' ──
+            // ── 3. Existing client without folder matched by NAME → link it ──
+            // Las carpetas de Clientes/<asesor> muchas veces no llevan número
+            // ("Nicolas Martin Serrano"), y el cliente que nace de un legajo sí:
+            // por número nunca matchean y la ficha quedaba sin link de OneDrive.
+            // Solo se empareja si el nombre es único entre los clientes sin carpeta.
+            const nameMatch = unlinkedByName.get(normalizeNameKey(displayName))
+            if (nameMatch) {
+              await updateClientSharePointFieldsById(nameMatch.id, {
+                item_id: itemId,
+                drive_id: driveId,
+                web_url: clientFolder.webUrl,
+                onedrive_folder_url: clientFolder.webUrl,
+                parent_path: advisorName,
+                advisor: advisorName,
+                last_synced_at: new Date().toISOString(),
+              })
+              unlinkedByName.delete(normalizeNameKey(displayName))
+              knownClientIds.add(itemId)
+              result.updated++
+              continue
+            }
+
+            // ── 4. Already in account_openings → skip (no duplicates) ──
+            if (knownOpeningIds.has(itemId)) {
+              continue
+            }
+
+            // ── 5. Truly new folder → Apertura de Cuenta + stub client with status='pendiente' ──
             {
               const now = new Date().toISOString()
 
@@ -275,6 +318,34 @@ export async function syncBancoCentralInternacional(): Promise<SyncResult> {
     process.env.LEGAJOS_GELIENE_DRIVE_ID,
     process.env.LEGAJOS_GELIENE_FOLDER_ID
   )
+}
+
+// Cuántos legajos se leen por corrida (cada uno = listar carpeta + bajar un
+// .docx) y cuánto se espera antes de reintentar uno que no dio nada.
+const FICHA_BATCH = 15
+const FICHA_RETRY_MS = 6 * 60 * 60 * 1000
+const fichaAttempts = new Map<string, number>() // item_id → último intento
+
+// Completa nombre, mail y celular de los clientes que nacieron de un legajo
+// (vienen sin nada) leyendo la ficha .docx de la carpeta del legajo.
+async function enrichClientsFromFichas(token: string, result: SyncResult) {
+  const nowMs = Date.now()
+  const recent = Array.from(fichaAttempts.entries()).filter(([, t]) => nowMs - t < FICHA_RETRY_MS).map(([id]) => id)
+  const legajos = await getLegajosNeedingContact(recent, FICHA_BATCH)
+
+  for (const l of legajos) {
+    fichaAttempts.set(l.item_id, nowMs)
+    try {
+      const ficha = findFichaFile(await listFolderChildren(l.drive_id, l.item_id, token))
+      if (!ficha) continue
+      const contact = parseFichaText(docxToText(await downloadDriveFile(l.drive_id, ficha.id, token)))
+      if (!contact.email && !contact.phone && !contact.first_name) continue
+      await fillClientContact(l.client_id, contact)
+      result.updated++
+    } catch (e: unknown) {
+      result.errors.push(`Ficha ${l.item_id}: ${e instanceof Error ? e.message : String(e)}`)
+    }
+  }
 }
 
 async function syncBancoCentral(
@@ -447,6 +518,13 @@ async function syncBancoCentral(
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e)
       result.errors.push(`Reconciliación linked_client_id: ${msg}`)
+    }
+
+    // Completar nombre/mail/celular de los clientes de legajos a partir de la ficha
+    try {
+      await enrichClientsFromFichas(token, result)
+    } catch (e: unknown) {
+      result.errors.push(`Completar desde fichas: ${e instanceof Error ? e.message : String(e)}`)
     }
 
     const status = result.errors.length === 0 ? 'success' : 'partial'
