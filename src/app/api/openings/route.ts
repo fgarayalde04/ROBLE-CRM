@@ -18,6 +18,9 @@ export async function PUT(req: Request) {
 
     // When "Comenzar" is clicked (status → recolectando_informacion):
     // If the opening doesn't have a client yet, create one from the stored folder data.
+    // La apertura queda en curso (recolectando_informacion) y el cliente sigue
+    // pendiente: pasan a "Cuenta abierta"/Activo recién al terminar el checklist
+    // (TabResumen). Antes Comenzar las marcaba abiertas de entrada, sin paso a paso.
     if (payload.status === 'recolectando_informacion') {
       const opening = await getOpeningRaw(id)
 
@@ -40,7 +43,7 @@ export async function PUT(req: Request) {
         if (!clientId) {
           const { rows: newClientRows } = await pool.query(
             `insert into clients (first_name, last_name, client_number, status, source, drive_id, item_id, web_url, onedrive_folder_url, advisor, last_synced_at)
-             values ('', $1, $2, 'activo', 'sharepoint', $3, $4, $5, $6, $7, now())
+             values ('', $1, $2, 'prospecto', 'sharepoint', $3, $4, $5, $6, $7, now())
              returning id`,
             [
               displayName,
@@ -55,7 +58,7 @@ export async function PUT(req: Request) {
           clientId = newClientRows[0].id
         } else {
           await pool.query(
-            `update clients set status = 'activo', drive_id = $1, web_url = $2, onedrive_folder_url = $3, advisor = $4, updated_at = now(), last_synced_at = now()
+            `update clients set drive_id = coalesce($1, drive_id), web_url = coalesce($2, web_url), onedrive_folder_url = coalesce($3, onedrive_folder_url), advisor = coalesce($4, advisor), updated_at = now(), last_synced_at = now()
              where id = $5`,
             [opening.drive_id, opening.web_url ?? opening.onedrive_url, opening.onedrive_url ?? opening.web_url, opening.advisor, clientId]
           )
@@ -64,16 +67,11 @@ export async function PUT(req: Request) {
         payload.client_id = clientId
       } else if (opening.client_id) {
         await pool.query(
-          `update clients set status = 'activo', drive_id = $1, web_url = $2, onedrive_folder_url = $3, advisor = $4, updated_at = now(), last_synced_at = now()
+          `update clients set drive_id = coalesce($1, drive_id), web_url = coalesce($2, web_url), onedrive_folder_url = coalesce($3, onedrive_folder_url), advisor = coalesce($4, advisor), updated_at = now(), last_synced_at = now()
            where id = $5`,
           [opening.drive_id, opening.web_url ?? opening.onedrive_url, opening.onedrive_url ?? opening.web_url, opening.advisor, opening.client_id]
         )
       }
-
-      const now = new Date().toISOString()
-      payload.status = 'cuenta_abierta'
-      payload.opened_date = now.split('T')[0]
-      payload.account_opened_at = now
     }
 
     const data = await updateOpening(id, payload)

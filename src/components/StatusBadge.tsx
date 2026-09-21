@@ -9,7 +9,7 @@ import type {
 } from '@/types/platform'
 
 const clientStatusConfig: Record<ClientStatus, { label: string; className: string }> = {
-  prospecto:               { label: 'Prospecto',              className: 'bg-slate-100 text-slate-700 border-slate-200' },
+  prospecto:               { label: 'Pendiente',              className: 'bg-slate-100 text-slate-700 border-slate-200' },
   activo:                  { label: 'Activo',                 className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
   en_apertura:             { label: 'En apertura',            className: 'bg-blue-50 text-blue-700 border-blue-200' },
   pendiente:               { label: 'Pendiente',              className: 'bg-amber-50 text-amber-700 border-amber-200' },

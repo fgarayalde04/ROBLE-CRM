@@ -129,7 +129,7 @@ export default function ClientForm({ initial, mode }: Props) {
           </Field>
           <Field label="Estado">
             <select value={form.status} onChange={(e) => set('status', e.target.value)} className={selectClass}>
-              <option value="prospecto">Prospecto</option>
+              <option value="prospecto">Pendiente</option>
               <option value="activo">Activo</option>
               <option value="en_apertura">En apertura</option>
               <option value="pendiente_documentacion">Pendiente documentacion</option>

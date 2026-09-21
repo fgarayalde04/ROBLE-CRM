@@ -167,7 +167,8 @@ export async function listClients(opts: ListClientsOptions) {
 
   if (opts.tab === 'activos') { params.push('activo'); where.push(`status = $${params.length}`) }
   else if (opts.tab === 'cerrados') { params.push('inactivo'); where.push(`status = $${params.length}`) }
-  else if (opts.tab === 'pendientes') { params.push('pendiente'); where.push(`status = $${params.length}`) }
+  // 'prospecto' (cliente nacido de un legajo/carpeta, apertura sin terminar) se muestra como Pendiente
+  else if (opts.tab === 'pendientes') { where.push(`status in ('pendiente', 'prospecto')`) }
 
   if (opts.folderFilter && opts.folderFilter.length > 0) {
     params.push(opts.folderFilter)

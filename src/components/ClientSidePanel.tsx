@@ -40,7 +40,7 @@ const clientTypeLabel: Record<string, string> = {
 
 const statusLabel: Record<string, string> = {
   activo: 'Activo',
-  prospecto: 'Prospecto',
+  prospecto: 'Pendiente',
   en_apertura: 'En apertura',
   pendiente_documentacion: 'Pendiente documentación',
   en_revision: 'En revisión',
