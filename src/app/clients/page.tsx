@@ -131,6 +131,11 @@ export default async function ClientsPage({ searchParams }: Props) {
           <h1 className="text-2xl font-semibold text-[#2D3F52]">Clientes</h1>
           <p className="mt-1 text-sm text-gray-500">{clients.length} registros</p>
         </div>
+        {['admin', 'ceo', 'direccion', 'asistente'].includes(session?.role ?? '') && (
+          <Link href="/clients/duplicados" className="px-3 py-1.5 text-xs border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50">
+            Ver duplicados
+          </Link>
+        )}
       </div>
 
       {/* Tab nav */}

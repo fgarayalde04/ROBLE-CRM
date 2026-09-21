@@ -6,6 +6,14 @@ import { createOpening, updateOpening, getOpeningRaw, deleteOpening } from '@/li
 export async function POST(req: Request) {
   try {
     const payload = await req.json()
+    // Un cliente no puede tener dos aperturas en curso: si ya hay una, se devuelve esa.
+    if (payload.client_id) {
+      const { rows } = await pool.query(
+        `select * from account_openings where client_id = $1 and status not in ('cuenta_abierta', 'descartado') order by created_at desc limit 1`,
+        [payload.client_id]
+      )
+      if (rows[0]) return NextResponse.json({ ...rows[0], already_existed: true })
+    }
     const data = await createOpening(payload)
     return NextResponse.json(data)
   } catch (err: any) {

@@ -2,7 +2,7 @@ import {
   insertOpeningChecklistItems, insertSyncLog,
   getKnownClientsForSync, getKnownOpeningItemIds,
   updateClientSharePointFieldsByItemId, updateClientSharePointFieldsById,
-  insertPendingClient, insertAccountOpeningStub,
+  insertPendingClient, insertAccountOpeningStub, setClientNumberIfFree,
   getBancoCentralByItemIds, getBancoCentralWithCustomerNumberByType,
   getLegajosNeedingContact, fillClientContact,
   bulkInsertBancoCentralRecords, updateBancoCentralRecordById,
@@ -12,7 +12,7 @@ import {
 } from '@/lib/db/sync'
 import { getGraphToken, listFolderChildren, downloadDriveFile, DriveItem } from './graph'
 import { docxToText, parseFichaText, findFichaFile } from './fichaParser'
-import { normalizeNameKey } from '@/lib/normalizeName'
+import { nameMatchKey } from '@/lib/normalizeName'
 
 export interface SyncResult {
   found: number
@@ -126,7 +126,7 @@ export async function syncClients(): Promise<SyncResult> {
       if (c.item_id) knownClientIds.add(c.item_id)
       if (c.client_number) clientByNumber.set(c.client_number, c.id)
       if (!c.item_id) {
-        const nameKey = normalizeNameKey(`${c.first_name ?? ''} ${c.last_name ?? ''}`)
+        const nameKey = nameMatchKey(`${c.first_name ?? ''} ${c.last_name ?? ''}`)
         if (nameKey) unlinkedByName.set(nameKey, unlinkedByName.has(nameKey) ? null : { id: c.id, client_number: c.client_number ?? null })
       }
     }
@@ -201,7 +201,7 @@ export async function syncClients(): Promise<SyncResult> {
             // ("Nicolas Martin Serrano"), y el cliente que nace de un legajo sí:
             // por número nunca matchean y la ficha quedaba sin link de OneDrive.
             // Solo se empareja si el nombre es único entre los clientes sin carpeta.
-            const nameMatch = unlinkedByName.get(normalizeNameKey(displayName))
+            const nameMatch = unlinkedByName.get(nameMatchKey(displayName))
             if (nameMatch) {
               await updateClientSharePointFieldsById(nameMatch.id, {
                 item_id: itemId,
@@ -212,7 +212,7 @@ export async function syncClients(): Promise<SyncResult> {
                 advisor: advisorName,
                 last_synced_at: new Date().toISOString(),
               })
-              unlinkedByName.delete(normalizeNameKey(displayName))
+              unlinkedByName.delete(nameMatchKey(displayName))
               knownClientIds.add(itemId)
               result.updated++
               continue
@@ -391,8 +391,26 @@ async function syncBancoCentral(
     // si existe una carpeta bajo Clientes/<asesor>/... — nunca la de Legajos,
     // que es de otra sección).
     const clientByNumber = new Set<string>()
+    // Clientes que todavía no tienen número (ej: los que nacieron de la carpeta
+    // de Clientes/<asesor> sin número adelante), por nombre. Un legajo nuevo
+    // con ese nombre es la MISMA persona: se le da el número en vez de crear un
+    // segundo cliente. null = nombre repetido → ambiguo, no se adopta.
+    const unnumberedByName = new Map<string, string | null>()
     for (const c of knownClients ?? []) {
       if (c.client_number) clientByNumber.add(c.client_number)
+      else {
+        const key = nameMatchKey(`${c.first_name ?? ''} ${c.last_name ?? ''}`)
+        if (key) unnumberedByName.set(key, unnumberedByName.has(key) ? null : c.id)
+      }
+    }
+    // Devuelve true si el legajo fue adoptado por un cliente existente sin número
+    const adoptExistingClient = async (nombre: string, number: string, type: string): Promise<boolean> => {
+      const key = nameMatchKey(nombre)
+      const id = unnumberedByName.get(key)
+      if (!id) return false
+      await setClientNumberIfFree(id, number, type)
+      unnumberedByName.delete(key)
+      return true
     }
 
     const now = new Date().toISOString()
@@ -436,7 +454,7 @@ async function syncBancoCentral(
         // poder hacerle el checklist de Banco Central. Sin carpeta de
         // OneDrive propia acá (esa es la de Clientes, no la de Legajos) —
         // syncClients() la completa por separado si existe.
-        if (customerNumber && !clientByNumber.has(customerNumber)) {
+        if (customerNumber && !clientByNumber.has(customerNumber) && !(await adoptExistingClient(nombreCliente, customerNumber, bcuType))) {
           newClientStubs.push({
             first_name:     '',
             last_name:      nombreCliente,
@@ -493,6 +511,9 @@ async function syncBancoCentral(
         const clientIdByNumber = new Map<string, string>(existingClients.map(c => [c.client_number, c.id]))
         for (const rec of unlinked as any[]) {
           let clientId: string | undefined = clientIdByNumber.get(rec.customer_number)
+          if (!clientId && rec.customer_number && await adoptExistingClient(rec.nombre_cliente || rec.folder_name, rec.customer_number, rec.type)) {
+            clientId = (await getClientIdsByNumbers([rec.customer_number]))[0]?.id
+          }
           if (!clientId) {
             const created = await insertPendingClient({
               first_name:    '',
@@ -690,10 +711,14 @@ export async function syncScoring(): Promise<SyncResult> {
 
 // ── Sync All ──────────────────────────────────────────────────────────────────
 export async function syncAll(): Promise<Record<string, SyncResult>> {
-  const [clientes, bcuLocal, bcuInternacional, recursos, scoring] = await Promise.allSettled([
-    syncClients(),
-    syncBancoCentralLocal(),
-    syncBancoCentralInternacional(),
+  // Las que crean/emparejan clientes corren una detrás de otra: en paralelo
+  // cada una cargaba la lista de clientes antes de que la otra terminara y no
+  // se veían entre sí, así que la misma persona quedaba duplicada (uno con
+  // número y otro con carpeta).
+  const clientes = await Promise.allSettled([syncClients()]).then(r => r[0])
+  const bcuLocal = await Promise.allSettled([syncBancoCentralLocal()]).then(r => r[0])
+  const bcuInternacional = await Promise.allSettled([syncBancoCentralInternacional()]).then(r => r[0])
+  const [recursos, scoring] = await Promise.allSettled([
     syncResources(),
     syncScoring(),
   ])
