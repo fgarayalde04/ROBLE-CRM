@@ -349,7 +349,14 @@ async function enrichClientsFromFichas(token: string, result: SyncResult) {
       await fillClientContact(l.client_id, contact)
       result.updated++
     } catch (e: unknown) {
-      result.errors.push(`Ficha ${l.item_id}: ${e instanceof Error ? e.message : String(e)}`)
+      const msg = e instanceof Error ? e.message : String(e)
+      // La carpeta del legajo ya no existe en SharePoint (borrada o movida): no es
+      // una falla del sync, no hay ficha que leer. Se reintenta recién a las 6 h.
+      if (msg.includes('itemNotFound')) {
+        console.warn(`[sync] Ficha ${l.item_id}: la carpeta del legajo ya no existe en SharePoint, se omite`)
+        continue
+      }
+      result.errors.push(`Ficha ${l.item_id}: ${msg}`)
     }
   }
 }
