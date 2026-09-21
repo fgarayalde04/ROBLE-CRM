@@ -7,6 +7,7 @@ import {
   syncBancoCentralInternacional,
   syncResources,
   syncScoring,
+  mergeSafeDuplicatesLogged,
 } from '@/lib/microsoft/sync'
 
 export const maxDuration = 300 // 5 minutes — enough for full sync
@@ -66,6 +67,10 @@ export async function POST(req: NextRequest) {
     } catch (e: any) {
       results[t] = { error: e.message }
     }
+  }
+
+  if (targets.some(t => t === 'clientes' || t === 'bcu_local' || t === 'bcu_internacional')) {
+    await mergeSafeDuplicatesLogged()
   }
 
   return NextResponse.json({ status: 'done', results })

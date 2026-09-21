@@ -193,7 +193,29 @@ export async function updateOpeningChecklistItem(
   const { sql, values } = dynUpdate('opening_checklist_items', id, payload)
   const { rows } = await pool.query(sql, values)
   if (rows.length === 0) throw new Error('Checklist item not found')
+  if (payload.completed) await openAccountIfChecklistDone(rows[0].opening_id)
   return rows[0] as OpeningChecklistItem
+}
+
+// Al completarse el último ítem del checklist la cuenta queda abierta: la
+// apertura pasa a "cuenta_abierta" y el cliente a "activo". No toca aperturas
+// ya abiertas o descartadas.
+async function openAccountIfChecklistDone(openingId: string) {
+  const { rows: [pending] } = await pool.query(
+    `select count(*) filter (where not completed) as pending from opening_checklist_items where opening_id = $1`,
+    [openingId]
+  )
+  if (parseInt(pending.pending, 10) > 0) return
+  const { rows } = await pool.query(
+    `update account_openings
+        set status = 'cuenta_abierta', opened_date = current_date, account_opened_at = now(), updated_at = now()
+      where id = $1 and status not in ('cuenta_abierta', 'descartado')
+      returning client_id`,
+    [openingId]
+  )
+  if (rows[0]?.client_id) {
+    await pool.query(`update clients set status = 'activo', updated_at = now() where id = $1`, [rows[0].client_id])
+  }
 }
 
 // ─── Opening tasks ──────────────────────────────────────────────────────────

@@ -31,7 +31,7 @@ interface BrowseData {
 }
 
 const STATUS_LABEL: Record<string, string> = {
-  prospecto: 'Prospecto',
+  prospecto: 'Pendiente',
   activo: 'Activo',
   en_apertura: 'En apertura',
   pendiente_documentacion: 'Pend. doc.',

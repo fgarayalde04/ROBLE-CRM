@@ -45,14 +45,15 @@ export default async function ClientsPage({ searchParams }: Props) {
 
   try {
     // Counts for tab badges (scoped by advisor if needed)
-    const [ca, cc, cp] = await Promise.all([
+    const [ca, cc, cp, cpr] = await Promise.all([
       countClientsByStatus('activo', folderFilter),
       countClientsByStatus('inactivo', folderFilter),
       countClientsByStatus('pendiente', folderFilter),
+      countClientsByStatus('prospecto', folderFilter),
     ])
     totalActivos    = ca
     totalCerrados   = cc
-    totalPendientes = cp
+    totalPendientes = cp + cpr
 
     const [clientData, pendingTaskClientIds] = await Promise.all([
       listClients({
@@ -130,6 +131,11 @@ export default async function ClientsPage({ searchParams }: Props) {
           <h1 className="text-2xl font-semibold text-[#2D3F52]">Clientes</h1>
           <p className="mt-1 text-sm text-gray-500">{clients.length} registros</p>
         </div>
+        {['admin', 'ceo', 'direccion', 'asistente'].includes(session?.role ?? '') && (
+          <Link href="/clients/duplicados" className="px-3 py-1.5 text-xs border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50">
+            Ver duplicados
+          </Link>
+        )}
       </div>
 
       {/* Tab nav */}
@@ -185,7 +191,7 @@ export default async function ClientsPage({ searchParams }: Props) {
           <svg className="w-4 h-4 text-amber-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-          Cuentas en proceso de apertura — se activan automáticamente cuando se completa el onboarding.
+          Cuentas pendientes de abrir — pasan a Activos cuando la apertura llega a "Cuenta abierta".
         </div>
       )}
 

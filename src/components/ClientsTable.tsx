@@ -105,9 +105,9 @@ export default function ClientsTable({
                     {c.advisor}
                   </span>
                 )}
-                {c.status === 'pendiente' ? (
+                {c.status === 'pendiente' || c.status === 'prospecto' ? (
                   <span className="inline-flex items-center text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded">
-                    En apertura
+                    {c.status === 'prospecto' ? 'Pendiente' : 'En apertura'}
                   </span>
                 ) : (
                   <ClientStatusToggle
@@ -276,9 +276,9 @@ export default function ClientsTable({
                         : <span className="text-gray-300 text-xs">—</span>}
                     </td>
                     <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                      {c.status === 'pendiente' ? (
+                      {c.status === 'pendiente' || c.status === 'prospecto' ? (
                         <span className="inline-flex items-center text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded">
-                          En apertura
+                          {c.status === 'prospecto' ? 'Pendiente' : 'En apertura'}
                         </span>
                       ) : (
                         <ClientStatusToggle

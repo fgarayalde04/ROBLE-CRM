@@ -97,6 +97,16 @@ export async function insertPendingClient(record: Record<string, any>) {
   return rows[0]
 }
 
+// Le da el número (y tipo) a un cliente que no tenía, salvo que otro cliente ya lo use.
+export async function setClientNumberIfFree(id: string, number: string, type: string | null) {
+  await pool.query(
+    `update clients set client_number = $2, client_type = coalesce(client_type, $3), updated_at = now()
+     where id = $1 and coalesce(client_number, '') = ''
+       and not exists (select 1 from clients where client_number = $2)`,
+    [id, number, type]
+  )
+}
+
 export async function insertAccountOpeningStub(record: Record<string, any>) {
   const cols = Object.keys(record)
   const placeholders = cols.map((_, i) => `$${i + 1}`)
