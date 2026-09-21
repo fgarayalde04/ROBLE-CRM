@@ -190,3 +190,13 @@ export async function createPendingSSOUser(name: string, email: string) {
     [name, email, ['_pending_approval']]
   )
 }
+
+// Ids de usuarios activos por email (sin distinguir mayúsculas) — para acotar
+// destinatarios de notificaciones en ambientes de prueba.
+export async function getUserIdsByEmails(emails: string[]): Promise<Set<string>> {
+  const { rows } = await pool.query(
+    `select id from crm_users where active = true and lower(email) = ANY($1)`,
+    [emails.map((e) => e.toLowerCase().trim())]
+  )
+  return new Set(rows.map((r) => r.id as string))
+}

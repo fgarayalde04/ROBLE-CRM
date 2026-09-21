@@ -24,6 +24,8 @@ self.addEventListener('push', (event) => {
     icon: '/icons/icon-192.png',
     badge: '/icons/icon-192.png',
     tag: data.tag || undefined,
+    // Con tag, el navegador reemplaza la anterior en silencio — renotify hace que igual suene/vibre.
+    renotify: !!data.tag,
     data: {
       url: data.url || '/',
       type: data.type || null,

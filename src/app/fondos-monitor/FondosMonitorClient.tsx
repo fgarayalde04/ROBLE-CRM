@@ -66,6 +66,11 @@ const COLS: { key: keyof FundRow; label: string }[] = [
 // Los fondos llegan ya en el orden del Excel (sort_order) — agrupar
 // simplemente por orden de aparición reproduce esa misma estructura de
 // categoría → subcategoría, sin necesidad de un orden fijo a mano.
+// Clave de un grupo categoría + subcategoría ('' = fondos sin subcategoría).
+function pdfGroupKey(categoria: string, subcategoria: string) {
+  return `${categoria}\u0000${subcategoria}`
+}
+
 function groupInOrder<T>(items: T[], keyFn: (item: T) => string): { key: string; items: T[] }[] {
   const groups: { key: string; items: T[] }[] = []
   const byKey = new Map<string, T[]>()
@@ -88,6 +93,12 @@ export default function FondosMonitorClient({ funds }: { funds: FundRow[] }) {
   const [showAdd, setShowAdd] = useState(false)
   const [editingFund, setEditingFund] = useState<FundRow | null>(null)
   const [downloadingPdf, setDownloadingPdf] = useState(false)
+  const [syncNotice, setSyncNotice] = useState<string | null>(null)
+  const [showPdfMenu, setShowPdfMenu] = useState(false)
+  // Grupos (categoría + subcategoría) que el usuario destildó para el PDF — se
+  // guarda lo excluido (no lo incluido) para que un grupo nuevo entre tildado
+  // por defecto. Clave: pdfGroupKey().
+  const [pdfExcluidas, setPdfExcluidas] = useState<Set<string>>(new Set())
   const pdfRef = useRef<HTMLDivElement>(null)
 
   const filteredFunds = useMemo(() => {
@@ -98,6 +109,35 @@ export default function FondosMonitorClient({ funds }: { funds: FundRow[] }) {
   }, [funds, search])
 
   const grouped = useMemo(() => groupInOrder(filteredFunds, f => f.categoria ?? 'Sin categoría'), [filteredFunds])
+
+  // Secciones que se pueden elegir para el PDF: cada categoría con sus
+  // subcategorías (y cuántos fondos quedan según el buscador actual). Los
+  // fondos sin subcategoría van en un grupo propio de clave ''.
+  const pdfSecciones = useMemo(
+    () => grouped.map(g => ({
+      key: g.key,
+      count: g.items.length,
+      subs: groupInOrder(g.items, f => f.subcategoria ?? '').map(sg => ({
+        key: sg.key,
+        id: pdfGroupKey(g.key, sg.key),
+        count: sg.items.length,
+      })),
+    })),
+    [grouped]
+  )
+  const pdfFunds = useMemo(
+    () => filteredFunds.filter(f => !pdfExcluidas.has(pdfGroupKey(f.categoria ?? 'Sin categoría', f.subcategoria ?? ''))),
+    [filteredFunds, pdfExcluidas]
+  )
+  const toggleGrupos = (ids: string[], incluir: boolean) =>
+    setPdfExcluidas(prev => {
+      const next = new Set(prev)
+      for (const id of ids) {
+        if (incluir) next.delete(id)
+        else next.add(id)
+      }
+      return next
+    })
 
   // Listas conocidas para los selects del alta: categorías fijas del Excel
   // primero, más cualquier otra que ya haya aparecido en los datos; las
@@ -194,7 +234,22 @@ export default function FondosMonitorClient({ funds }: { funds: FundRow[] }) {
         }
       }
       const dateSlug = new Date().toISOString().slice(0, 10)
-      pdf.save(`Monitor_de_Fondos_${dateSlug}.pdf`)
+      // Con una selección parcial, el nombre dice qué trae (hasta 2 etiquetas):
+      // la categoría si va completa, o sus subcategorías si va solo una parte.
+      const etiquetas: string[] = []
+      let hayExcluidas = false
+      for (const sec of pdfSecciones) {
+        const incl = sec.subs.filter(sub => !pdfExcluidas.has(sub.id))
+        if (incl.length < sec.subs.length) hayExcluidas = true
+        if (incl.length === sec.subs.length) etiquetas.push(sec.key)
+        else etiquetas.push(...incl.map(sub => sub.key || sec.key))
+      }
+      const slugify = (t: string) => t.replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '')
+      const seccionSlug = hayExcluidas && etiquetas.length > 0
+        ? etiquetas.length <= 2 ? '_' + etiquetas.map(slugify).join('_') : '_Seleccion'
+        : ''
+      pdf.save(`Monitor_de_Fondos${seccionSlug}_${dateSlug}.pdf`)
+      setShowPdfMenu(false)
     } finally {
       setDownloadingPdf(false)
     }
@@ -221,13 +276,71 @@ export default function FondosMonitorClient({ funds }: { funds: FundRow[] }) {
             placeholder="Buscar por nombre o ISIN…"
             className="w-72 text-sm px-3 py-2 rounded-lg border border-gray-200 outline-none focus:border-[#1B3A2B]/50"
           />
-          <button
-            onClick={handleDownloadPdf}
-            disabled={downloadingPdf}
-            className="text-sm font-medium px-3 py-2 rounded-lg text-[#1B3A2B] border border-[#1B3A2B]/30 whitespace-nowrap disabled:opacity-50"
-          >
-            {downloadingPdf ? 'Generando…' : '⬇ Descargar PDF'}
-          </button>
+          <div className="relative">
+            <button
+              onClick={() => setShowPdfMenu(v => !v)}
+              disabled={downloadingPdf}
+              className="text-sm font-medium px-3 py-2 rounded-lg text-[#1B3A2B] border border-[#1B3A2B]/30 whitespace-nowrap disabled:opacity-50"
+            >
+              {downloadingPdf ? 'Generando…' : '⬇ Descargar PDF ▾'}
+            </button>
+            {showPdfMenu && !downloadingPdf && (
+              <>
+                <div className="fixed inset-0 z-20" onClick={() => setShowPdfMenu(false)} />
+                <div className="absolute right-0 mt-1 w-72 bg-white rounded-xl shadow-xl border border-gray-200 z-30 p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs font-bold text-gray-700">Secciones a descargar</p>
+                    <div className="flex gap-2 text-[11px]">
+                      <button onClick={() => setPdfExcluidas(new Set())} className="text-[#1B3A2B] hover:underline">Todas</button>
+                      <button onClick={() => setPdfExcluidas(new Set(pdfSecciones.flatMap(s => s.subs.map(sub => sub.id))))} className="text-gray-400 hover:underline">Ninguna</button>
+                    </div>
+                  </div>
+                  <div className="max-h-80 overflow-auto">
+                    {pdfSecciones.map(sec => {
+                      const incluidas = sec.subs.filter(sub => !pdfExcluidas.has(sub.id)).length
+                      const todas = incluidas === sec.subs.length
+                      return (
+                        <div key={sec.key} className="mb-1">
+                          <label className="flex items-center gap-2 px-1 py-1.5 rounded hover:bg-gray-50 cursor-pointer text-xs font-semibold text-gray-800">
+                            <input
+                              type="checkbox"
+                              checked={todas}
+                              ref={el => { if (el) el.indeterminate = incluidas > 0 && !todas }}
+                              onChange={() => toggleGrupos(sec.subs.map(sub => sub.id), !todas)}
+                              className="accent-[#1B3A2B]"
+                            />
+                            <span className="flex-1">{sec.key}</span>
+                            <span className="text-gray-400 font-normal">{sec.count}</span>
+                          </label>
+                          {/* Una categoría sin subcategorías no necesita sublista. */}
+                          {sec.subs.some(sub => sub.key) && sec.subs.map(sub => (
+                            <label key={sub.id} className="flex items-center gap-2 pl-6 pr-1 py-1 rounded hover:bg-gray-50 cursor-pointer text-xs text-gray-600">
+                              <input
+                                type="checkbox"
+                                checked={!pdfExcluidas.has(sub.id)}
+                                onChange={() => toggleGrupos([sub.id], pdfExcluidas.has(sub.id))}
+                                className="accent-[#1B3A2B]"
+                              />
+                              <span className="flex-1">{sub.key || 'Sin subcategoría'}</span>
+                              <span className="text-gray-400">{sub.count}</span>
+                            </label>
+                          ))}
+                        </div>
+                      )
+                    })}
+                  </div>
+                  <button
+                    onClick={handleDownloadPdf}
+                    disabled={pdfFunds.length === 0}
+                    className="mt-3 w-full text-sm font-medium px-3 py-2 rounded-lg text-white disabled:opacity-40"
+                    style={{ backgroundColor: '#1B3A2B' }}
+                  >
+                    Descargar ({pdfFunds.length} fondos)
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
           <button
             onClick={() => setShowAdd(true)}
             className="text-sm font-medium px-3 py-2 rounded-lg text-white whitespace-nowrap"
@@ -238,9 +351,16 @@ export default function FondosMonitorClient({ funds }: { funds: FundRow[] }) {
         </div>
       </div>
 
+      {syncNotice && (
+        <div className="mb-4 flex items-start justify-between gap-3 text-sm px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-800">
+          <span>{syncNotice}</span>
+          <button onClick={() => setSyncNotice(null)} className="text-amber-600 hover:text-amber-800 leading-none">✕</button>
+        </div>
+      )}
+
       <div style={{ position: 'fixed', left: -10000, top: 0 }}>
         <div ref={pdfRef}>
-          <FondosMonitorPdfTemplate funds={filteredFunds} />
+          <FondosMonitorPdfTemplate funds={pdfFunds} />
         </div>
       </div>
 
@@ -249,8 +369,9 @@ export default function FondosMonitorClient({ funds }: { funds: FundRow[] }) {
           categoriasDisponibles={categoriasDisponibles}
           subcategoriasPorCategoria={subcategoriasPorCategoria}
           onClose={() => setShowAdd(false)}
-          onCreated={() => {
+          onCreated={sync => {
             setShowAdd(false)
+            setSyncNotice(syncNoticeFor(sync))
             router.refresh()
           }}
         />
@@ -262,8 +383,9 @@ export default function FondosMonitorClient({ funds }: { funds: FundRow[] }) {
           categoriasDisponibles={categoriasDisponibles}
           subcategoriasPorCategoria={subcategoriasPorCategoria}
           onClose={() => setEditingFund(null)}
-          onSaved={() => {
+          onSaved={sync => {
             setEditingFund(null)
+            setSyncNotice(syncNoticeFor(sync))
             router.refresh()
           }}
           onDeactivated={() => {
@@ -292,11 +414,11 @@ export default function FondosMonitorClient({ funds }: { funds: FundRow[] }) {
               <table className="w-full text-sm min-w-[1100px] table-fixed">
                 <thead>
                   <tr className="sticky top-0 z-10" style={{ backgroundColor: '#1B2E3C' }}>
-                    <th className="px-3 py-2 text-left text-[10px] font-bold text-white uppercase tracking-wide w-[30%]">Nombre</th>
+                    <th className="px-3 py-2 text-left text-[10px] font-bold text-white uppercase tracking-wide w-[26%]">Nombre</th>
                     {COLS.map(c => (
-                      <th key={c.key} className="px-2 py-2 text-right text-[10px] font-bold text-white uppercase tracking-wide w-[7%]">{c.label}</th>
+                      <th key={c.key} className="px-2 py-2 text-center text-[10px] font-bold text-white uppercase tracking-wide w-[7.4%]">{c.label}</th>
                     ))}
-                    <th className="px-2 py-2 text-center text-[10px] font-bold text-white uppercase tracking-wide w-[7%]">Estado</th>
+                    <th className="px-2 py-2 text-center text-[10px] font-bold text-white uppercase tracking-wide w-[7.4%]">Estado</th>
                   </tr>
                 </thead>
                 {subgroups.map(({ key: subcategoria, items: rows }) => (
@@ -329,12 +451,12 @@ export default function FondosMonitorClient({ funds }: { funds: FundRow[] }) {
                             </div>
                           </td>
                           {COLS.map(c => (
-                            <td key={c.key} className={`px-2 py-2 text-right text-xs border-b border-gray-100 ${pctColor(f[c.key] as number | null)}`}>
+                            <td key={c.key} className={`px-2 py-2 text-center text-xs tabular-nums border-b border-gray-100 ${pctColor(f[c.key] as number | null)}`}>
                               {fmtPct(f[c.key] as number | null)}
                             </td>
                           ))}
                           <td className="px-2 py-2 text-center border-b border-gray-100">
-                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${st.color}`}>{st.label}</span>
+                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded whitespace-nowrap ${st.color}`}>{st.label}</span>
                           </td>
                         </tr>
                       )
@@ -352,6 +474,15 @@ export default function FondosMonitorClient({ funds }: { funds: FundRow[] }) {
 
 const OTRA = '__otra__'
 
+// Resultado de la búsqueda inmediata en Davinci que hace el servidor al
+// agregar/editar un fondo. 'ok' (o ausente) no necesita aviso.
+function syncNoticeFor(sync: string | undefined): string | null {
+  if (sync === 'no_source') return 'El fondo se guardó, pero no aparece en Davinci ni por ISIN ni por nombre: quedó sin rendimientos. Revisá que el nombre sea igual al de Davinci.'
+  if (sync === 'error') return 'El fondo se guardó, pero no se pudieron traer los rendimientos de Davinci. Se reintenta en la próxima actualización diaria.'
+  if (sync === 'unavailable') return 'El fondo se guardó, pero Davinci no está configurado en este ambiente: quedó sin rendimientos.'
+  return null
+}
+
 function AddFundModal({
   categoriasDisponibles,
   subcategoriasPorCategoria,
@@ -361,7 +492,7 @@ function AddFundModal({
   categoriasDisponibles: string[]
   subcategoriasPorCategoria: Map<string, string[]>
   onClose: () => void
-  onCreated: () => void
+  onCreated: (sync?: string) => void
 }) {
   const [nombre, setNombre] = useState('')
   const [categoria, setCategoria] = useState(categoriasDisponibles[0] ?? '')
@@ -394,7 +525,7 @@ function AddFundModal({
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'No se pudo agregar el fondo')
-      onCreated()
+      onCreated(data.sync)
     } catch (err: any) {
       setError(err.message)
     } finally {
@@ -490,7 +621,7 @@ function AddFundModal({
             className="text-sm font-medium px-4 py-2 rounded-lg text-white disabled:opacity-50"
             style={{ backgroundColor: '#1B3A2B' }}
           >
-            {saving ? 'Guardando…' : 'Agregar'}
+            {saving ? 'Buscando en Davinci…' : 'Agregar'}
           </button>
         </div>
       </form>
@@ -510,7 +641,7 @@ function EditFundModal({
   categoriasDisponibles: string[]
   subcategoriasPorCategoria: Map<string, string[]>
   onClose: () => void
-  onSaved: () => void
+  onSaved: (sync?: string) => void
   onDeactivated: () => void
 }) {
   const [nombre, setNombre] = useState(fund.nombre)
@@ -551,7 +682,7 @@ function EditFundModal({
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'No se pudo guardar el fondo')
-      onSaved()
+      onSaved(data.sync)
     } catch (err: any) {
       setError(err.message)
     } finally {

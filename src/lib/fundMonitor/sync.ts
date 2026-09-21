@@ -50,9 +50,10 @@ export async function syncFundMonitor(opts?: { force?: boolean }): Promise<FundS
 
     for (const fund of funds) {
       try {
-        const data = await searchFundReturns(page, fund.isin)
+        const data = await searchFundReturns(page, fund.isin, fund.nombre)
         if (!data) {
-          await markFundSyncIssue(fund.id, 'no_source', 'ISIN no encontrado en Davinci')
+          console.warn(`[fund-monitor] Sin fuente: ${fund.isin} · ${fund.nombre}`)
+          await markFundSyncIssue(fund.id, 'no_source', 'Fondo no encontrado en Davinci (ni por ISIN ni por nombre)')
           results.push({ isin: fund.isin, nombre: fund.nombre, status: 'no_source' })
           continue
         }
@@ -73,6 +74,7 @@ export async function syncFundMonitor(opts?: { force?: boolean }): Promise<FundS
         // Un fondo que falla no corta el resto de la corrida — se registra
         // el error y se sigue con el próximo (Fase 6: "probar el
         // siguiente... seguir funcionando el resto de la aplicación").
+        console.error(`[fund-monitor] Error: ${fund.isin} · ${fund.nombre}:`, e.message)
         await markFundSyncIssue(fund.id, 'error', e.message ?? 'Error desconocido')
         results.push({ isin: fund.isin, nombre: fund.nombre, status: 'error', error: e.message })
       }
@@ -90,5 +92,51 @@ export async function syncFundMonitor(opts?: { force?: boolean }): Promise<FundS
     no_source: results.filter(r => r.status === 'no_source').length,
     error: results.filter(r => r.status === 'error').length,
     results,
+  }
+}
+
+export type SingleFundSyncStatus = 'ok' | 'no_source' | 'error' | 'unavailable'
+
+// Busca en Davinci un único fondo recién cargado o editado, en el momento, para
+// que aparezca con datos sin esperar al sync diario. Nunca lanza: el alta del
+// fondo ya se hizo y una falla de Davinci no debe deshacerla — el estado queda
+// registrado en fund_monitor_returns y el sync diario lo reintenta.
+export async function syncSingleFund(fund: { id: string; isin: string; nombre: string }): Promise<SingleFundSyncStatus> {
+  const email = process.env.DAVINCI_EMAIL
+  const password = process.env.DAVINCI_PASSWORD
+  if (!email || !password) return 'unavailable'
+
+  try {
+    const browser = await getBrowser()
+    if (!browser) return 'unavailable'
+
+    const { context, page } = await openDavinciPage(browser)
+    try {
+      await loginDavinci(page, email, password)
+      const data = await searchFundReturns(page, fund.isin, fund.nombre)
+      if (!data) {
+        await markFundSyncIssue(fund.id, 'no_source', 'Fondo no encontrado en Davinci (ni por ISIN ni por nombre)')
+        return 'no_source'
+      }
+      await upsertFundReturns(fund.id, {
+        as_of_date: data.asOfDate,
+        r_ytd: data.ytd,
+        r_1y: data.r1a,
+        r_3y: data.r3a,
+        r_5y: data.r5a,
+        y_2025: data.y2025,
+        y_2024: data.y2024,
+        y_2023: data.y2023,
+        y_2022: data.y2022,
+        y_2021: data.y2021,
+      })
+      return 'ok'
+    } finally {
+      await context.close()
+    }
+  } catch (e: any) {
+    console.error('[fund-monitor] Error buscando el fondo en Davinci:', fund.isin, e.message)
+    try { await markFundSyncIssue(fund.id, 'error', e.message ?? 'Error desconocido') } catch {}
+    return 'error'
   }
 }
