@@ -35,6 +35,13 @@ export default function StartOpeningButton({ openingId, clientId }: { openingId:
         start_date: new Date().toISOString().split('T')[0],
       }),
     })
+    if (res.ok) {
+      const data = await res.json().catch(() => null)
+      const missing: string[] = data?.link?.missing ?? []
+      if (missing.length > 0) {
+        alert(`La apertura comenzó, pero al cliente le falta vincular: ${missing.join(', ')}.\nRevisalo en su ficha o en Banco Central.`)
+      }
+    }
     return res.ok
   }
 

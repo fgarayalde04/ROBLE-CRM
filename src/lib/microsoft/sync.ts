@@ -12,6 +12,7 @@ import {
 } from '@/lib/db/sync'
 import { getGraphToken, listFolderChildren, downloadDriveFile, DriveItem } from './graph'
 import { docxToText, parseFichaText, findFichaFile } from './fichaParser'
+import { normalizeNameKey } from '@/lib/normalizeName'
 
 export interface SyncResult {
   found: number
@@ -50,14 +51,6 @@ function parseClientFolderName(folderName: string): {
 
 function normalizeKey(value: string | null | undefined): string {
   return (value ?? '').trim().toLowerCase().replace(/\s+/g, ' ')
-}
-
-// Para emparejar una carpeta con un cliente por nombre: sin tildes, sin
-// mayúsculas, sin puntuación ni espacios repetidos ("Nicolás Martín" == "NICOLAS MARTIN").
-function normalizeNameKey(value: string | null | undefined): string {
-  return (value ?? '')
-    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
 }
 
 interface ExistingClientMatch {

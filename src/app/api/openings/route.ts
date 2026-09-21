@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { linkClientForOpening } from '@/lib/db/clientLinks'
 import { pool } from '@/lib/db/pool'
 import { createOpening, updateOpening, getOpeningRaw, deleteOpening } from '@/lib/db/openings'
 
@@ -15,6 +16,7 @@ export async function POST(req: Request) {
 export async function PUT(req: Request) {
   try {
     const { id, ...payload } = await req.json()
+    let link: Awaited<ReturnType<typeof linkClientForOpening>> | null = null
 
     // When "Comenzar" is clicked (status → recolectando_informacion):
     // If the opening doesn't have a client yet, create one from the stored folder data.
@@ -72,10 +74,17 @@ export async function PUT(req: Request) {
           [opening.drive_id, opening.web_url ?? opening.onedrive_url, opening.onedrive_url ?? opening.web_url, opening.advisor, opening.client_id]
         )
       }
+
+      // Que el cliente quede siempre vinculado: número de Banco Central,
+      // legajo de Banco Central y carpeta de OneDrive.
+      const linkedClientId = payload.client_id ?? opening.client_id
+      link = linkedClientId
+        ? await linkClientForOpening(id, linkedClientId)
+        : { client_number: null, banco_central: false, folder: false, missing: ['cliente'] }
     }
 
     const data = await updateOpening(id, payload)
-    return NextResponse.json(data)
+    return NextResponse.json(link ? { ...data, link } : data)
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 400 })
   }
