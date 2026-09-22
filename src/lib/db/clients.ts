@@ -1,4 +1,5 @@
 import { pool } from './pool'
+import { registrarDescarteDeCliente } from './descartes'
 import type { Client } from '@/types/platform'
 
 export async function getNewLocalClients() {
@@ -146,6 +147,7 @@ export async function updateClient(id: string, updates: Partial<Client>) {
 }
 
 export async function deleteClient(id: string) {
+  await registrarDescarteDeCliente(id)
   await pool.query(`delete from clients where id = $1`, [id])
 }
 

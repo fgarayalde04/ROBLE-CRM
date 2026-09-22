@@ -13,6 +13,7 @@ import {
 import { getGraphToken, listFolderChildren, downloadDriveFile, DriveItem } from './graph'
 import { docxToText, parseFichaText, findFichaFile } from './fichaParser'
 import { nameMatchKey } from '@/lib/normalizeName'
+import { loadDescartes, isDescartado, type Descartes } from '@/lib/db/descartes'
 import { mergeSafeDuplicates } from '@/lib/db/clientMerge'
 
 export interface SyncResult {
@@ -118,20 +119,26 @@ export async function syncClients(): Promise<SyncResult> {
   // de Banco Central), por nombre normalizado. null = hay más de uno con ese
   // nombre → ambiguo, no se empareja por nombre.
   const unlinkedByName = new Map<string, { id: string; client_number: string | null } | null>()
+  // Clientes/carpetas eliminados a propósito: no se vuelven a crear.
+  let descartes: Descartes = { numbers: new Set(), itemIds: new Set(), nameKeys: new Set() }
   try {
     const [existingClients, existingOpeningItemIds] = await Promise.all([
       getKnownClientsForSync(),
       getKnownOpeningItemIds(),
     ])
     for (const c of existingClients ?? []) {
-      if (c.item_id) knownClientIds.add(c.item_id)
+      // Si la carpeta enlazada es la del legajo (no la de Clientes), no cuenta
+      // como "ya tiene su carpeta": queda disponible para emparejarla con la de
+      // Clientes por número o por nombre, y ahí se reemplaza el enlace.
+      if (c.item_id && !c.folder_is_legajo) knownClientIds.add(c.item_id)
       if (c.client_number) clientByNumber.set(c.client_number, c.id)
-      if (!c.item_id) {
+      if (!c.item_id || c.folder_is_legajo) {
         const nameKey = nameMatchKey(`${c.first_name ?? ''} ${c.last_name ?? ''}`)
         if (nameKey) unlinkedByName.set(nameKey, unlinkedByName.has(nameKey) ? null : { id: c.id, client_number: c.client_number ?? null })
       }
     }
     for (const itemId of existingOpeningItemIds ?? []) knownOpeningIds.add(itemId)
+    descartes = await loadDescartes()
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e)
     result.errors.push(`Failed to load known IDs: ${msg}`)
@@ -216,6 +223,11 @@ export async function syncClients(): Promise<SyncResult> {
               unlinkedByName.delete(nameMatchKey(displayName))
               knownClientIds.add(itemId)
               result.updated++
+              continue
+            }
+
+            // ── 3b. Carpeta de un cliente eliminado a propósito → no recrearlo ──
+            if (isDescartado(descartes, { number: clientNumber, itemId, name: displayName })) {
               continue
             }
 
@@ -337,7 +349,14 @@ async function enrichClientsFromFichas(token: string, result: SyncResult) {
       await fillClientContact(l.client_id, contact)
       result.updated++
     } catch (e: unknown) {
-      result.errors.push(`Ficha ${l.item_id}: ${e instanceof Error ? e.message : String(e)}`)
+      const msg = e instanceof Error ? e.message : String(e)
+      // La carpeta del legajo ya no existe en SharePoint (borrada o movida): no es
+      // una falla del sync, no hay ficha que leer. Se reintenta recién a las 6 h.
+      if (msg.includes('itemNotFound')) {
+        console.warn(`[sync] Ficha ${l.item_id}: la carpeta del legajo ya no existe en SharePoint, se omite`)
+        continue
+      }
+      result.errors.push(`Ficha ${l.item_id}: ${msg}`)
     }
   }
 }
@@ -392,6 +411,8 @@ async function syncBancoCentral(
     // si existe una carpeta bajo Clientes/<asesor>/... — nunca la de Legajos,
     // que es de otra sección).
     const clientByNumber = new Set<string>()
+    // Clientes eliminados a propósito: su legajo no vuelve a generar el cliente.
+    const descartes = await loadDescartes()
     // Clientes que todavía no tienen número (ej: los que nacieron de la carpeta
     // de Clientes/<asesor> sin número adelante), por nombre. Un legajo nuevo
     // con ese nombre es la MISMA persona: se le da el número en vez de crear un
@@ -455,7 +476,7 @@ async function syncBancoCentral(
         // poder hacerle el checklist de Banco Central. Sin carpeta de
         // OneDrive propia acá (esa es la de Clientes, no la de Legajos) —
         // syncClients() la completa por separado si existe.
-        if (customerNumber && !clientByNumber.has(customerNumber) && !(await adoptExistingClient(nombreCliente, customerNumber, bcuType))) {
+        if (customerNumber && !clientByNumber.has(customerNumber) && !isDescartado(descartes, { number: customerNumber }) && !(await adoptExistingClient(nombreCliente, customerNumber, bcuType))) {
           newClientStubs.push({
             first_name:     '',
             last_name:      nombreCliente,
@@ -511,6 +532,7 @@ async function syncBancoCentral(
         const existingClients = await getClientIdsByNumbers(numbers)
         const clientIdByNumber = new Map<string, string>(existingClients.map(c => [c.client_number, c.id]))
         for (const rec of unlinked as any[]) {
+          if (isDescartado(descartes, { number: rec.customer_number })) continue
           let clientId: string | undefined = clientIdByNumber.get(rec.customer_number)
           if (!clientId && rec.customer_number && await adoptExistingClient(rec.nombre_cliente || rec.folder_name, rec.customer_number, rec.type)) {
             clientId = (await getClientIdsByNumbers([rec.customer_number]))[0]?.id
