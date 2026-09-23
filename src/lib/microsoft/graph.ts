@@ -1,6 +1,13 @@
 // App-only authentication via client_credentials grant
 // No user login required for server-side sync operations
 
+// Sin esto, un fetch a Graph que se cuelga (red lenta, Microsoft caído) deja
+// la promesa pendiente para siempre — y quien llama (p.ej. el wizard de Iche
+// Acciones) queda esperando hasta que el proxy corta la conexión y el
+// navegador muestra "Failed to fetch", aun cuando el archivado en OneDrive
+// es un paso no crítico que ya se tolera con try/catch.
+const GRAPH_TIMEOUT_MS = 20_000
+
 export interface DriveItem {
   id: string
   name: string
@@ -35,6 +42,7 @@ export async function getGraphToken(): Promise<string> {
         client_secret: clientSecret,
         scope:         'https://graph.microsoft.com/.default',
       }),
+      signal: AbortSignal.timeout(GRAPH_TIMEOUT_MS),
     }
   )
 
@@ -66,7 +74,10 @@ export async function listFolderChildren(
     `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${itemId}/children` +
     `?$select=id,name,webUrl,folder,file,parentReference,lastModifiedDateTime,createdDateTime,size&$top=500&$orderby=name`
 
-  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(GRAPH_TIMEOUT_MS),
+  })
   if (!res.ok) {
     const err = await res.text()
     throw new Error(`Graph API error listing ${driveId}/${itemId}: ${err}`)
@@ -84,7 +95,10 @@ export async function getDriveItem(
     `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${itemId}` +
     `?$select=id,name,webUrl,folder,file,parentReference,lastModifiedDateTime,createdDateTime,size`
 
-  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(GRAPH_TIMEOUT_MS),
+  })
   if (!res.ok) {
     const err = await res.text()
     throw new Error(`Graph API error getting item ${driveId}/${itemId}: ${err}`)
@@ -98,7 +112,10 @@ export async function downloadDriveFile(
   token: string
 ): Promise<ArrayBuffer> {
   const url = `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${itemId}/content`
-  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(GRAPH_TIMEOUT_MS),
+  })
   if (!res.ok) {
     const err = await res.text()
     throw new Error(`Graph download error ${driveId}/${itemId}: ${err}`)
@@ -113,7 +130,10 @@ export async function getDownloadUrl(
   token: string
 ): Promise<string> {
   const url = `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${itemId}?$select=@microsoft.graph.downloadUrl`
-  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(GRAPH_TIMEOUT_MS),
+  })
   if (!res.ok) throw new Error(`Graph getDownloadUrl error: ${await res.text()}`)
   const data = await res.json()
   const dlUrl = data['@microsoft.graph.downloadUrl']
@@ -134,7 +154,10 @@ export async function searchInFolder(
     `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${folderId}/search(q='${encodeURIComponent(query)}')` +
     `?$select=id,name,webUrl,folder,file,parentReference,lastModifiedDateTime,size&$top=100`
 
-  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(GRAPH_TIMEOUT_MS),
+  })
   if (!res.ok) {
     const err = await res.text()
     throw new Error(`Graph search error: ${err}`)
@@ -164,6 +187,7 @@ export async function uploadFile(
       'Content-Type': mimeType || 'application/octet-stream',
     },
     body: content,
+    signal: AbortSignal.timeout(GRAPH_TIMEOUT_MS),
   })
 
   if (!res.ok) {
@@ -193,6 +217,7 @@ export async function createFolder(
       folder: {},
       '@microsoft.graph.conflictBehavior': 'rename',
     }),
+    signal: AbortSignal.timeout(GRAPH_TIMEOUT_MS),
   })
 
   if (!res.ok) {
@@ -218,6 +243,7 @@ export async function renameItem(
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ name: newName }),
+    signal: AbortSignal.timeout(GRAPH_TIMEOUT_MS),
   })
 
   if (!res.ok) {
@@ -248,6 +274,7 @@ export async function moveItem(
       'Content-Type': 'application/json',
     },
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(GRAPH_TIMEOUT_MS),
   })
 
   if (!res.ok) {
@@ -267,6 +294,7 @@ export async function deleteItem(
   const res = await fetch(url, {
     method: 'DELETE',
     headers: { Authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(GRAPH_TIMEOUT_MS),
   })
   if (!res.ok && res.status !== 204) {
     const err = await res.text()
@@ -290,6 +318,7 @@ export async function getPreviewUrl(
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({}),
+    signal: AbortSignal.timeout(GRAPH_TIMEOUT_MS),
   })
   if (!res.ok) {
     const err = await res.text()

@@ -24,6 +24,11 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       return_1y:        body.return_1y        ?? null,
       return_3y:        body.return_3y        ?? null,
       return_5y:        body.return_5y        ?? null,
+      return_2025:      body.return_2025      ?? null,
+      return_2024:      body.return_2024      ?? null,
+      return_2023:      body.return_2023      ?? null,
+      return_2022:      body.return_2022      ?? null,
+      return_2021:      body.return_2021      ?? null,
       ytm_indicative:   body.ytm_indicative   ?? null,
       duration_years:   body.duration_years   ?? null,
       pct:              body.pct              ?? 0,
@@ -49,7 +54,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     const { fund_id, ...fields } = body
 
     const allowed: Record<string, unknown> = {}
-    const cols = ['isin','issuer','fund_name','fund_class','fund_category','return_ytd','return_1y','return_3y','return_5y','ytm_indicative','duration_years','pct','amount','operacion','broker','needs_review','data_source']
+    const cols = ['isin','issuer','fund_name','fund_class','fund_category','return_ytd','return_1y','return_3y','return_5y','return_2025','return_2024','return_2023','return_2022','return_2021','ytm_indicative','duration_years','pct','amount','operacion','broker','needs_review','data_source']
     for (const c of cols) {
       if (fields[c] !== undefined) allowed[c] = fields[c]
     }

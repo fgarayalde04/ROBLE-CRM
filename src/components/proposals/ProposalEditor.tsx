@@ -17,7 +17,19 @@ import {
 // tiene rendimientos cargados ahí. Sin match (fondo no cubierto por Davinci,
 // o ISIN inválido) simplemente no completa nada — nunca pisa un valor ya
 // cargado con null.
-async function lookupFundMonitorReturns(isin: string): Promise<{ return_ytd: number | null; return_1y: number | null; return_3y: number | null; return_5y: number | null } | null> {
+interface FundMonitorReturns {
+  return_ytd: number | null
+  return_1y: number | null
+  return_3y: number | null
+  return_5y: number | null
+  return_2025: number | null
+  return_2024: number | null
+  return_2023: number | null
+  return_2022: number | null
+  return_2021: number | null
+}
+
+async function lookupFundMonitorReturns(isin: string): Promise<FundMonitorReturns | null> {
   try {
     const res = await fetch(`/api/fund-monitor/lookup?isin=${encodeURIComponent(isin)}`)
     if (!res.ok) return null
@@ -32,10 +44,7 @@ async function lookupFundMonitorReturns(isin: string): Promise<{ return_ytd: num
 // completar filas que quedaron con el ISIN cargado pero sin nombre y/o sin
 // rendimientos (por un import o un cruce anterior), y donde antes no había
 // forma de saber qué fondo era ni cómo venía rindiendo sin buscarlo a mano.
-async function lookupFundMonitorInfo(isin: string): Promise<{
-  nombre: string | null
-  return_ytd: number | null; return_1y: number | null; return_3y: number | null; return_5y: number | null
-} | null> {
+async function lookupFundMonitorInfo(isin: string): Promise<({ nombre: string | null } & FundMonitorReturns) | null> {
   try {
     const res = await fetch(`/api/fund-monitor/lookup?isin=${encodeURIComponent(isin)}`)
     if (!res.ok) return null
@@ -544,6 +553,11 @@ interface Fund {
   return_1y: number | null
   return_3y: number | null
   return_5y: number | null
+  return_2025: number | null
+  return_2024: number | null
+  return_2023: number | null
+  return_2022: number | null
+  return_2021: number | null
   ytm_indicative: number | null
   duration_years: number | null
   pct: number
@@ -857,6 +871,7 @@ function FundsTable({
     const candidates = funds.filter(f => {
       if (!f.isin?.trim() || backfilledInfo.current.has(f.id)) return false
       return !f.fund_name?.trim() || f.return_ytd == null || f.return_1y == null || f.return_3y == null || f.return_5y == null
+        || f.return_2025 == null || f.return_2024 == null || f.return_2023 == null || f.return_2022 == null || f.return_2021 == null
     })
     if (candidates.length === 0) return
     candidates.forEach(async f => {
@@ -869,6 +884,11 @@ function FundsTable({
       if (f.return_1y == null && info.return_1y != null) patch.return_1y = info.return_1y
       if (f.return_3y == null && info.return_3y != null) patch.return_3y = info.return_3y
       if (f.return_5y == null && info.return_5y != null) patch.return_5y = info.return_5y
+      if (f.return_2025 == null && info.return_2025 != null) patch.return_2025 = info.return_2025
+      if (f.return_2024 == null && info.return_2024 != null) patch.return_2024 = info.return_2024
+      if (f.return_2023 == null && info.return_2023 != null) patch.return_2023 = info.return_2023
+      if (f.return_2022 == null && info.return_2022 != null) patch.return_2022 = info.return_2022
+      if (f.return_2021 == null && info.return_2021 != null) patch.return_2021 = info.return_2021
       if (Object.keys(patch).length === 0) return
       onUpdate(funds.map(x => x.id === f.id ? { ...x, ...patch } : x))
       await fetch(`/api/proposals/${proposalId}/funds`, {
@@ -893,7 +913,7 @@ function FundsTable({
   }) : funds
 
   const updateField = useCallback(async (fund: Fund, field: keyof Fund, raw: string) => {
-    const isNumeric = ['amount','return_ytd','return_1y','return_3y','return_5y','ytm_indicative','duration_years'].includes(field)
+    const isNumeric = ['amount','return_ytd','return_1y','return_3y','return_5y','return_2025','return_2024','return_2023','return_2022','return_2021','ytm_indicative','duration_years'].includes(field)
     const value = isNumeric ? (raw === '' ? null : parseFloat(raw.replace(/,/g, ''))) : (raw === '' ? null : raw)
     let patch: Partial<Fund> = { [field]: value } as Partial<Fund>
     // Tipear/corregir el ISIN a mano también dispara la búsqueda en el
@@ -1019,7 +1039,7 @@ function FundsTable({
       ) : (
         <div className="rounded-xl overflow-hidden border border-[#E2E8F0]">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[1160px]">
+            <table className="w-full text-sm min-w-[1520px]">
               <thead>
                 <tr style={{ backgroundColor: '#1B2E3C' }}>
                   <th className={`${TH} text-left w-20`}>PORTAFOLIO</th>
@@ -1029,7 +1049,10 @@ function FundsTable({
                   <th className={`${TH} text-left w-24`}>CATEGORÍA</th>
                   {([
                     ['YTD', 'return_ytd', 'w-14'], ['1 AÑO', 'return_1y', 'w-16'], ['3 AÑOS', 'return_3y', 'w-16'],
-                    ['5 AÑOS', 'return_5y', 'w-16'], ['YTM IND.', 'ytm_indicative', 'w-20'], ['DUR. (a)', 'duration_years', 'w-16'],
+                    ['5 AÑOS', 'return_5y', 'w-16'],
+                    ['2025', 'return_2025', 'w-14'], ['2024', 'return_2024', 'w-14'], ['2023', 'return_2023', 'w-14'],
+                    ['2022', 'return_2022', 'w-14'], ['2021', 'return_2021', 'w-14'],
+                    ['YTM IND.', 'ytm_indicative', 'w-20'], ['DUR. (a)', 'duration_years', 'w-16'],
                     ['%', 'pct', 'w-12'], ['TOTAL', 'amount', 'w-28'],
                   ] as [string, keyof Fund, string][]).map(([h, key, w]) => (
                     <th key={h} className={`${TH} text-right ${w}`}>
@@ -1087,6 +1110,21 @@ function FundsTable({
                       <EditCell value={f.return_5y} onChange={v => updateField(f, 'return_5y', v)} placeholder="—" numeric className={`text-right text-xs ${pctColor(f.return_5y)}`} />
                     </td>
                     <td className={`${TD} text-right`}>
+                      <EditCell value={f.return_2025} onChange={v => updateField(f, 'return_2025', v)} placeholder="—" numeric className={`text-right text-xs ${pctColor(f.return_2025)}`} />
+                    </td>
+                    <td className={`${TD} text-right`}>
+                      <EditCell value={f.return_2024} onChange={v => updateField(f, 'return_2024', v)} placeholder="—" numeric className={`text-right text-xs ${pctColor(f.return_2024)}`} />
+                    </td>
+                    <td className={`${TD} text-right`}>
+                      <EditCell value={f.return_2023} onChange={v => updateField(f, 'return_2023', v)} placeholder="—" numeric className={`text-right text-xs ${pctColor(f.return_2023)}`} />
+                    </td>
+                    <td className={`${TD} text-right`}>
+                      <EditCell value={f.return_2022} onChange={v => updateField(f, 'return_2022', v)} placeholder="—" numeric className={`text-right text-xs ${pctColor(f.return_2022)}`} />
+                    </td>
+                    <td className={`${TD} text-right`}>
+                      <EditCell value={f.return_2021} onChange={v => updateField(f, 'return_2021', v)} placeholder="—" numeric className={`text-right text-xs ${pctColor(f.return_2021)}`} />
+                    </td>
+                    <td className={`${TD} text-right`}>
                       <EditCell value={f.ytm_indicative} onChange={v => updateField(f, 'ytm_indicative', v)} placeholder="—" numeric className="text-right text-xs" />
                     </td>
                     <td className={`${TD} text-right`}>
@@ -1118,7 +1156,7 @@ function FundsTable({
               {/* Totals footer */}
               <tfoot>
                 <tr style={{ backgroundColor: '#1B2E3C' }}>
-                  <td colSpan={10} className="px-3 py-2.5 text-[9px] text-white/40 uppercase tracking-widest">Total fondos</td>
+                  <td colSpan={15} className="px-3 py-2.5 text-[9px] text-white/40 uppercase tracking-widest">Total fondos</td>
                   <td className="px-3 py-2.5 text-right text-sm font-bold text-white">{totalFundsPct.toFixed(1)}%</td>
                   <td className="px-3 py-2.5 text-right text-sm font-bold text-white font-mono tabular-nums">
                     Compras {fmtMoney(totalFundsCompras, currency)}
@@ -1561,6 +1599,11 @@ const HIDEABLE_COLUMNS: { key: string; label: string; group: string }[] = [
   { key: 'funds.1y',            label: '1 año',          group: 'Fondos' },
   { key: 'funds.3y',            label: '3 años',         group: 'Fondos' },
   { key: 'funds.5y',            label: '5 años',         group: 'Fondos' },
+  { key: 'funds.y2025',         label: '2025',           group: 'Fondos' },
+  { key: 'funds.y2024',         label: '2024',           group: 'Fondos' },
+  { key: 'funds.y2023',         label: '2023',           group: 'Fondos' },
+  { key: 'funds.y2022',         label: '2022',           group: 'Fondos' },
+  { key: 'funds.y2021',         label: '2021',           group: 'Fondos' },
   { key: 'funds.ytm',           label: 'YTM indicativo', group: 'Fondos' },
   { key: 'funds.duration',      label: 'Duración',       group: 'Fondos' },
   { key: 'bonds.moneda',        label: 'Moneda',         group: 'Bonos' },
@@ -1623,7 +1666,12 @@ export default function ProposalEditor({
   const [titleDraft, setTitleDraft]     = useState('')
   const [showPDF, setShowPDF]           = useState(false)
   const [downloading, setDownloading]   = useState(false)
-  const [hiddenCols, setHiddenCols]     = useState<Set<string>>(new Set())
+  // Los retornos por año calendario arrancan ocultos en el PDF — están
+  // siempre visibles en la tabla de edición para tener panorama al armar la
+  // propuesta, pero en el documento para el cliente solo se incluyen si se
+  // los tilda a propósito en el selector de columnas (si no, el PDF queda
+  // demasiado ancho/denso por defecto).
+  const [hiddenCols, setHiddenCols]     = useState<Set<string>>(new Set(['funds.y2025', 'funds.y2024', 'funds.y2023', 'funds.y2022', 'funds.y2021']))
   const [showColumnPicker, setShowColumnPicker] = useState(false)
 
   const toggleCol = (key: string) => {

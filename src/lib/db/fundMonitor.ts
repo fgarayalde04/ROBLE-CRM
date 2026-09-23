@@ -98,7 +98,8 @@ export async function markFundSyncIssue(fundId: string, status: 'no_source' | 'e
 // maestro de instrumentos, así que sirve de clave de cruce directa.
 export async function getFundReturnsByIsin(isin: string) {
   const { rows } = await pool.query(
-    `select f.nombre, r.r_ytd, r.r_1y, r.r_3y, r.r_5y
+    `select f.nombre, r.r_ytd, r.r_1y, r.r_3y, r.r_5y,
+            r.y_2025, r.y_2024, r.y_2023, r.y_2022, r.y_2021
      from fund_monitor_funds f
      join fund_monitor_returns r on r.fund_id = f.id
      where f.isin = $1 and r.status = 'ok'`,

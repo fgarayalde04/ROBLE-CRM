@@ -26,6 +26,11 @@ interface Fund {
   return_1y: number | null
   return_3y: number | null
   return_5y: number | null
+  return_2025: number | null
+  return_2024: number | null
+  return_2023: number | null
+  return_2022: number | null
+  return_2021: number | null
   ytm_indicative: number | null
   duration_years: number | null
   pct: number
@@ -271,6 +276,11 @@ export default function ProposalPDFTemplate({
       y1:       !isHidden('funds.1y'),
       y3:       !isHidden('funds.3y'),
       y5:       !isHidden('funds.5y'),
+      y2025:    !isHidden('funds.y2025'),
+      y2024:    !isHidden('funds.y2024'),
+      y2023:    !isHidden('funds.y2023'),
+      y2022:    !isHidden('funds.y2022'),
+      y2021:    !isHidden('funds.y2021'),
       ytm:      !isHidden('funds.ytm'),
       duration: !isHidden('funds.duration'),
     }
@@ -290,6 +300,11 @@ export default function ProposalPDFTemplate({
             {show.y1 && <th style={{ ...TH_STYLE, width: 48 }}>1 AÑO</th>}
             {show.y3 && <th style={{ ...TH_STYLE, width: 48 }}>3 AÑOS</th>}
             {show.y5 && <th style={{ ...TH_STYLE, width: 48 }}>5 AÑOS</th>}
+            {show.y2025 && <th style={{ ...TH_STYLE, width: 42 }}>2025</th>}
+            {show.y2024 && <th style={{ ...TH_STYLE, width: 42 }}>2024</th>}
+            {show.y2023 && <th style={{ ...TH_STYLE, width: 42 }}>2023</th>}
+            {show.y2022 && <th style={{ ...TH_STYLE, width: 42 }}>2022</th>}
+            {show.y2021 && <th style={{ ...TH_STYLE, width: 42 }}>2021</th>}
             {show.ytm && <th style={{ ...TH_STYLE, width: 52 }}>YTM IND.</th>}
             {show.duration && <th style={{ ...TH_STYLE, width: 48 }}>DUR. (A)</th>}
             <th style={{ ...TH_STYLE, width: 90, borderRight: 'none' }}>INVERSIÓN</th>
@@ -309,6 +324,11 @@ export default function ProposalPDFTemplate({
               {show.y1 && <td style={{ ...TD_STYLE, color: pctColor(f.return_1y), fontWeight: 600 }}>{fmtNum(f.return_1y)}%</td>}
               {show.y3 && <td style={{ ...TD_STYLE, color: pctColor(f.return_3y), fontWeight: 600 }}>{fmtNum(f.return_3y)}%</td>}
               {show.y5 && <td style={{ ...TD_STYLE, color: pctColor(f.return_5y), fontWeight: 600 }}>{fmtNum(f.return_5y)}%</td>}
+              {show.y2025 && <td style={{ ...TD_STYLE, color: pctColor(f.return_2025), fontWeight: 600 }}>{fmtNum(f.return_2025)}%</td>}
+              {show.y2024 && <td style={{ ...TD_STYLE, color: pctColor(f.return_2024), fontWeight: 600 }}>{fmtNum(f.return_2024)}%</td>}
+              {show.y2023 && <td style={{ ...TD_STYLE, color: pctColor(f.return_2023), fontWeight: 600 }}>{fmtNum(f.return_2023)}%</td>}
+              {show.y2022 && <td style={{ ...TD_STYLE, color: pctColor(f.return_2022), fontWeight: 600 }}>{fmtNum(f.return_2022)}%</td>}
+              {show.y2021 && <td style={{ ...TD_STYLE, color: pctColor(f.return_2021), fontWeight: 600 }}>{fmtNum(f.return_2021)}%</td>}
               {show.ytm && <td style={TD_STYLE}>{f.ytm_indicative != null ? `${fmtNum(f.ytm_indicative)}%` : '—'}</td>}
               {show.duration && <td style={TD_STYLE}>{f.duration_years != null ? fmtNum(f.duration_years, 1) : '—'}</td>}
               <td style={{ ...TD_STYLE, textAlign: 'right', fontWeight: 600, borderRight: 'none' }}>{fmtAmt(f.amount)}</td>

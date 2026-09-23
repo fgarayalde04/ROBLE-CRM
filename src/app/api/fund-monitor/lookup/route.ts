@@ -29,6 +29,11 @@ export async function GET(req: Request) {
       return_1y: row.r_1y != null ? Number(row.r_1y) : null,
       return_3y: row.r_3y != null ? Number(row.r_3y) : null,
       return_5y: row.r_5y != null ? Number(row.r_5y) : null,
+      return_2025: row.y_2025 != null ? Number(row.y_2025) : null,
+      return_2024: row.y_2024 != null ? Number(row.y_2024) : null,
+      return_2023: row.y_2023 != null ? Number(row.y_2023) : null,
+      return_2022: row.y_2022 != null ? Number(row.y_2022) : null,
+      return_2021: row.y_2021 != null ? Number(row.y_2021) : null,
     },
   })
 }
