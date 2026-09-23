@@ -10,7 +10,6 @@ import ClientEmailTogglePills from '@/components/ClientEmailTogglePills'
 import InstrumentsManager from './InstrumentsManager'
 import BlotterTable from './BlotterTable'
 import BlotterSolicitudes from '../solicitudes/BlotterSolicitudes'
-import NuevaSolicitudForm from '../solicitudes/NuevaSolicitudForm'
 import MesaHoy from '../solicitudes/MesaHoy'
 import type { Instrument } from '@/app/api/instruments/route'
 import { useAdvisorModeCtx } from '@/contexts/AdvisorModeContext'
@@ -378,8 +377,12 @@ export default function OrdenesClient({ gmailConnected, initialTab, isAdmin = fa
   const { advisorMode } = useAdvisorModeCtx()
   // En modo asesor, un admin ve tabs de asesor
   const effectiveAdmin = isAdmin && !advisorMode
-  const defaultTab: Tab = effectiveAdmin ? 'mesa' : 'enviar'
-  const [tab, setTab] = useState<Tab>(initialTab ?? defaultTab)
+  // El Blotter es solo para ver órdenes (hechas o pendientes); las órdenes se
+  // cargan desde /solicitudes, así que acá no hay tab para enviar.
+  const defaultTab: Tab = effectiveAdmin ? 'mesa' : 'blotter-asesor'
+  const [tab, setTab] = useState<Tab>(
+    initialTab && initialTab !== 'enviar' && initialTab !== 'nueva' ? initialTab : defaultTab
+  )
   const [blocks, setBlocks]             = useState<OrderBlock[]>([])
   const [clientId, setClientId]         = useState('')
   const [clientName, setClientName]     = useState('')
@@ -546,9 +549,8 @@ export default function OrdenesClient({ gmailConnected, initialTab, isAdmin = fa
                 { t: 'instrumentos' as Tab, label: 'Instrumentos' },
               ]
             : [
-                { t: 'enviar'          as Tab, label: 'Enviar solicitud' },
-                { t: 'mis-solicitudes' as Tab, label: 'Mis solicitudes' },
                 { t: 'blotter-asesor'  as Tab, label: 'Blotter' },
+                { t: 'mis-solicitudes' as Tab, label: 'Mis solicitudes' },
               ]
           ).map(({ t, label }) => (
             <button key={t} onClick={() => setTab(t)}
@@ -570,9 +572,8 @@ export default function OrdenesClient({ gmailConnected, initialTab, isAdmin = fa
               { t: 'instrumentos' as Tab, label: 'Instr.' },
             ]
           : [
-              { t: 'enviar'          as Tab, label: 'Enviar' },
-              { t: 'mis-solicitudes' as Tab, label: 'Mis solicitudes' },
               { t: 'blotter-asesor'  as Tab, label: 'Blotter' },
+              { t: 'mis-solicitudes' as Tab, label: 'Mis solicitudes' },
             ]
         ).map(({ t, label }) => (
           <button key={t} onClick={() => setTab(t)}
@@ -876,11 +877,6 @@ export default function OrdenesClient({ gmailConnected, initialTab, isAdmin = fa
       {/* ── MESA DE HOY / MIS ÓRDENES ── */}
       {tab === 'mesa' && (
         <MesaHoy isMesa={isMesa} userName={userName} />
-      )}
-
-      {/* ── ENVIAR ORDEN ── */}
-      {tab === 'enviar' && (
-        <NuevaSolicitudForm gmailConnected={gmailConnected} userEmail={userEmail} />
       )}
 
       {/* ── MIS SOLICITUDES (asesor - solo las propias) ── */}
