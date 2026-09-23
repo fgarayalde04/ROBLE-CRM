@@ -243,6 +243,12 @@ export default function ProposalPDFTemplate({
   const totalCompras = allItems.filter(i => isCompraSide(i.operacion)).reduce((s, i) => s + (i.amount ?? 0), 0)
   const totalVentas  = allItems.filter(i => isVentaSide(i.operacion)).reduce((s, i) => s + (i.amount ?? 0), 0)
   const totalAssigned = totalCompras || totalAmount
+  // Si todas las tablas presentes ocultan sus montos (propuesta comparativa,
+  // sin importes), tampoco se muestran los totales generales.
+  const showAmounts =
+    (funds.length > 0 && !isHidden('funds.inversion')) ||
+    (bonds.length > 0 && !isHidden('bonds.inversion')) ||
+    (equities.length > 0 && !isHidden('equities.inversion'))
 
   // Cupón corrido / desembolso estimado — solo bonos en compra, mismo
   // criterio que el resto del PDF.
@@ -283,11 +289,12 @@ export default function ProposalPDFTemplate({
       y2021:    !isHidden('funds.y2021'),
       ytm:      !isHidden('funds.ytm'),
       duration: !isHidden('funds.duration'),
+      inversion:!isHidden('funds.inversion'),
     }
     // colSpan de la fila de subtotal = todas las columnas visibles menos la
     // última (INVERSIÓN, que muestra su propio total) — moneda, operación,
     // fondo y categoría/métricas opcionales que estén visibles.
-    const labelColSpan = 2 + Object.values(show).filter(Boolean).length
+    const labelColSpan = 2 + Object.values(show).filter(Boolean).length - (show.inversion ? 1 : 0)
     return (
       <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 0 }}>
         <thead>
@@ -307,7 +314,7 @@ export default function ProposalPDFTemplate({
             {show.y2021 && <th style={{ ...TH_STYLE, width: 42 }}>2021</th>}
             {show.ytm && <th style={{ ...TH_STYLE, width: 52 }}>YTM IND.</th>}
             {show.duration && <th style={{ ...TH_STYLE, width: 48 }}>DUR. (A)</th>}
-            <th style={{ ...TH_STYLE, width: 90, borderRight: 'none' }}>INVERSIÓN</th>
+            {show.inversion && <th style={{ ...TH_STYLE, width: 90, borderRight: 'none' }}>INVERSIÓN</th>}
           </tr>
         </thead>
         <tbody>
@@ -331,16 +338,16 @@ export default function ProposalPDFTemplate({
               {show.y2021 && <td style={{ ...TD_STYLE, color: pctColor(f.return_2021), fontWeight: 600 }}>{fmtNum(f.return_2021)}%</td>}
               {show.ytm && <td style={TD_STYLE}>{f.ytm_indicative != null ? `${fmtNum(f.ytm_indicative)}%` : '—'}</td>}
               {show.duration && <td style={TD_STYLE}>{f.duration_years != null ? fmtNum(f.duration_years, 1) : '—'}</td>}
-              <td style={{ ...TD_STYLE, textAlign: 'right', fontWeight: 600, borderRight: 'none' }}>{fmtAmt(f.amount)}</td>
+              {show.inversion && <td style={{ ...TD_STYLE, textAlign: 'right', fontWeight: 600, borderRight: 'none' }}>{fmtAmt(f.amount)}</td>}
             </tr>
           ))}
         </tbody>
         <tfoot>
           <tr data-pdf-keep-together>
-            <td colSpan={labelColSpan} style={{ ...FOOTER_TD, textAlign: 'left', fontSize: 9, opacity: 0.6, borderRight: 'none' }}>
+            <td colSpan={labelColSpan} style={{ ...FOOTER_TD, textAlign: 'left', fontSize: 9, opacity: 0.6, borderRight: show.inversion ? undefined : 'none' }}>
               {opSubtotalLabel(list)}
             </td>
-            <td style={{ ...FOOTER_TD, textAlign: 'right', borderRight: 'none' }}>{fmtAmt(opCompras(list))}</td>
+            {show.inversion && <td style={{ ...FOOTER_TD, textAlign: 'right', borderRight: 'none' }}>{fmtAmt(opCompras(list))}</td>}
           </tr>
         </tfoot>
       </table>
@@ -360,8 +367,9 @@ export default function ProposalPDFTemplate({
       duration:    !isHidden('bonds.duration'),
       rating:      !isHidden('bonds.rating'),
       precio:      !isHidden('bonds.precio'),
+      montos:      !isHidden('bonds.inversion'),
     }
-    const labelColSpan = 2 + Object.values(show).filter(Boolean).length
+    const labelColSpan = 2 + Object.values(show).filter(Boolean).length - (show.montos ? 1 : 0)
     // Misma letra, tamaño y alineado que fondos/acciones — solo el padding
     // horizontal se recorta un poco para que las hasta 12 columnas de
     // bonos entren, sin tocar fuente ni alto de fila.
@@ -381,9 +389,9 @@ export default function ProposalPDFTemplate({
               {show.duration && <th style={{ ...bondTh, width: 42 }}>DUR. (A)</th>}
               {show.rating && <th style={{ ...bondTh, width: 44 }}>RATING</th>}
               {show.precio && <th style={{ ...bondTh, width: 58 }}>PRECIO (IND)</th>}
-              <th style={{ ...bondTh, width: 72 }}>VALOR COMPRA</th>
-              <th style={{ ...bondTh, width: 72 }}>CUPÓN CORRIDO</th>
-              <th style={{ ...bondTh, width: 80, borderRight: 'none' }}>DESEMBOLSO EST.</th>
+              {show.montos && <th style={{ ...bondTh, width: 72 }}>VALOR COMPRA</th>}
+              {show.montos && <th style={{ ...bondTh, width: 72 }}>CUPÓN CORRIDO</th>}
+              {show.montos && <th style={{ ...bondTh, width: 80, borderRight: 'none' }}>DESEMBOLSO EST.</th>}
             </tr>
           </thead>
           <tbody>
@@ -402,9 +410,9 @@ export default function ProposalPDFTemplate({
                 {show.duration && <td style={bondTd}>{b.duration != null ? fmtNum(b.duration, 1) : '—'}</td>}
                 {show.rating && <td style={bondTd}>{b.rating ?? '—'}</td>}
                 {show.precio && <td style={bondTd}>{b.price != null ? fmtNum(b.price, 3) : '—'}</td>}
-                <td style={{ ...bondTd, textAlign: 'right', fontWeight: 600 }}>{fmtAmt(b.amount)}</td>
-                <td style={{ ...bondTd, textAlign: 'right', fontWeight: 700, backgroundColor: '#FEF3C7' }}>{accrual.accruedInterest > 0 ? fmtAmt(accrual.accruedInterest) : '—'}</td>
-                <td style={{ ...bondTd, textAlign: 'right', fontWeight: 700, borderRight: 'none' }}>{fmtAmt(accrual.estimatedCashRequired)}</td>
+                {show.montos && <td style={{ ...bondTd, textAlign: 'right', fontWeight: 600 }}>{fmtAmt(b.amount)}</td>}
+                {show.montos && <td style={{ ...bondTd, textAlign: 'right', fontWeight: 700, backgroundColor: '#FEF3C7' }}>{accrual.accruedInterest > 0 ? fmtAmt(accrual.accruedInterest) : '—'}</td>}
+                {show.montos && <td style={{ ...bondTd, textAlign: 'right', fontWeight: 700, borderRight: 'none' }}>{fmtAmt(accrual.estimatedCashRequired)}</td>}
               </tr>
               )
             })}
@@ -414,9 +422,9 @@ export default function ProposalPDFTemplate({
               <td colSpan={labelColSpan} style={{ ...FOOTER_TD, fontSize: 9, opacity: 0.6, borderRight: 'none' }}>
                 {opSubtotalLabel(list)}
               </td>
-              <td style={{ ...FOOTER_TD, textAlign: 'right' }}>{fmtAmt(opCompras(list))}</td>
-              <td style={{ ...FOOTER_TD, textAlign: 'right' }}>{listAccruedInterest > 0 ? fmtAmt(listAccruedInterest) : '—'}</td>
-              <td style={{ ...FOOTER_TD, textAlign: 'right', borderRight: 'none' }}>{fmtAmt(listEstimatedCash)}</td>
+              {show.montos && <td style={{ ...FOOTER_TD, textAlign: 'right' }}>{fmtAmt(opCompras(list))}</td>}
+              {show.montos && <td style={{ ...FOOTER_TD, textAlign: 'right' }}>{listAccruedInterest > 0 ? fmtAmt(listAccruedInterest) : '—'}</td>}
+              {show.montos && <td style={{ ...FOOTER_TD, textAlign: 'right', borderRight: 'none' }}>{fmtAmt(listEstimatedCash)}</td>}
             </tr>
           </tfoot>
         </table>
@@ -431,8 +439,9 @@ export default function ProposalPDFTemplate({
       ticker: !isHidden('equities.ticker'),
       sector: !isHidden('equities.sector'),
       pais:   !isHidden('equities.pais'),
+      inversion: !isHidden('equities.inversion'),
     }
-    const labelColSpan = 2 + Object.values(show).filter(Boolean).length
+    const labelColSpan = 2 + Object.values(show).filter(Boolean).length - (show.inversion ? 1 : 0)
     return (
       <div style={{ marginTop: 4 }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -444,7 +453,7 @@ export default function ProposalPDFTemplate({
               <th style={{ ...TH_STYLE, textAlign: 'left' }}>EMPRESA</th>
               {show.sector && <th style={{ ...TH_STYLE, textAlign: 'left' }}>SECTOR</th>}
               {show.pais && <th style={{ ...TH_STYLE, textAlign: 'left' }}>PAÍS</th>}
-              <th style={{ ...TH_STYLE, width: 90, borderRight: 'none' }}>INVERSIÓN</th>
+              {show.inversion && <th style={{ ...TH_STYLE, width: 90, borderRight: 'none' }}>INVERSIÓN</th>}
             </tr>
           </thead>
           <tbody>
@@ -456,7 +465,7 @@ export default function ProposalPDFTemplate({
                 <td style={{ ...TD_STYLE, textAlign: 'left', fontWeight: 600 }}>{e.company_name?.toUpperCase() ?? '—'}</td>
                 {show.sector && <td style={{ ...TD_STYLE, textAlign: 'left' }}>{e.sector ?? '—'}</td>}
                 {show.pais && <td style={{ ...TD_STYLE, textAlign: 'left' }}>{e.country ?? '—'}</td>}
-                <td style={{ ...TD_STYLE, textAlign: 'right', fontWeight: 600, borderRight: 'none' }}>{fmtAmt(e.amount)}</td>
+                {show.inversion && <td style={{ ...TD_STYLE, textAlign: 'right', fontWeight: 600, borderRight: 'none' }}>{fmtAmt(e.amount)}</td>}
               </tr>
             ))}
           </tbody>
@@ -465,7 +474,7 @@ export default function ProposalPDFTemplate({
               <td colSpan={labelColSpan} style={{ ...FOOTER_TD, fontSize: 9, opacity: 0.6, borderRight: 'none' }}>
                 {opSubtotalLabel(list)}
               </td>
-              <td style={{ ...FOOTER_TD, textAlign: 'right', borderRight: 'none' }}>{fmtAmt(opCompras(list))}</td>
+              {show.inversion && <td style={{ ...FOOTER_TD, textAlign: 'right', borderRight: 'none' }}>{fmtAmt(opCompras(list))}</td>}
             </tr>
           </tfoot>
         </table>
@@ -508,7 +517,7 @@ export default function ProposalPDFTemplate({
           ['Cliente', clientName ?? '—', 1.5],
           ['Asesor', advisorName ?? '—', 1],
           ['Fecha', displayDate, 1],
-          ['Compras', `${currency} ${fmtAmt(totalAssigned)}`.replace(`${currency} $`, `${currency} `), 1],
+          ...(showAmounts ? [['Compras', `${currency} ${fmtAmt(totalAssigned)}`.replace(`${currency} $`, `${currency} `), 1]] : []),
         ].map(([label, value, flex], i, arr) => (
           <div key={label as string} style={{
             flex: flex as number,
@@ -523,13 +532,13 @@ export default function ProposalPDFTemplate({
             <span style={{ fontSize: 9.5, fontWeight: 700, color: '#1B2E3C' }}>{value}</span>
           </div>
         ))}
-        {totalVentas > 0 && (
+        {showAmounts && totalVentas > 0 && (
           <div style={{ flex: 1, padding: '5px 12px', backgroundColor: '#F7F9FB', whiteSpace: 'nowrap' }}>
             <span style={{ fontSize: 7.5, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Ventas: </span>
             <span style={{ fontSize: 9.5, fontWeight: 700, color: '#1B2E3C' }}>{`${currency} ${fmtAmt(totalVentas)}`.replace(`${currency} $`, `${currency} `)}</span>
           </div>
         )}
-        {totalAccruedInterest > 0 && (
+        {showAmounts && totalAccruedInterest > 0 && (
           <div style={{ flex: 1, padding: '5px 12px', backgroundColor: '#F7F9FB', whiteSpace: 'nowrap' }}>
             <span style={{ fontSize: 7.5, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Cupón Corrido: </span>
             <span style={{ fontSize: 9.5, fontWeight: 700, color: '#1B2E3C' }}>{`${currency} ${fmtAmt(totalAccruedInterest)}`.replace(`${currency} $`, `${currency} `)}</span>
@@ -599,7 +608,7 @@ export default function ProposalPDFTemplate({
       )}
 
       {/* ── Grand total (if multiple sections) ── */}
-      {(bonds.length > 0 || equities.length > 0) && funds.length > 0 && (
+      {showAmounts && (bonds.length > 0 || equities.length > 0) && funds.length > 0 && (
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 5, marginTop: 3 }}>
           {totalVentas > 0 && (
             <div style={{

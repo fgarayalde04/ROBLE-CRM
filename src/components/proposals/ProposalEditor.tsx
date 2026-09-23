@@ -1606,6 +1606,7 @@ const HIDEABLE_COLUMNS: { key: string; label: string; group: string }[] = [
   { key: 'funds.y2021',         label: '2021',           group: 'Fondos' },
   { key: 'funds.ytm',           label: 'YTM indicativo', group: 'Fondos' },
   { key: 'funds.duration',      label: 'Duración',       group: 'Fondos' },
+  { key: 'funds.inversion',     label: 'Inversión (monto)', group: 'Fondos' },
   { key: 'bonds.moneda',        label: 'Moneda',         group: 'Bonos' },
   { key: 'bonds.vencimiento',   label: 'Vencimiento',    group: 'Bonos' },
   { key: 'bonds.cupon',         label: 'Cupón',          group: 'Bonos' },
@@ -1613,10 +1614,12 @@ const HIDEABLE_COLUMNS: { key: string; label: string; group: string }[] = [
   { key: 'bonds.duration',      label: 'Duración',       group: 'Bonos' },
   { key: 'bonds.rating',        label: 'Rating',         group: 'Bonos' },
   { key: 'bonds.precio',        label: 'Precio (ind.)',  group: 'Bonos' },
+  { key: 'bonds.inversion',     label: 'Montos (compra, cupón, desembolso)', group: 'Bonos' },
   { key: 'equities.moneda',     label: 'Moneda',         group: 'Acciones' },
   { key: 'equities.ticker',     label: 'Ticker',         group: 'Acciones' },
   { key: 'equities.sector',     label: 'Sector',         group: 'Acciones' },
   { key: 'equities.pais',       label: 'País',           group: 'Acciones' },
+  { key: 'equities.inversion',  label: 'Inversión (monto)', group: 'Acciones' },
 ]
 
 function ColumnPicker({ hidden, onToggle, onClose }: { hidden: Set<string>; onToggle: (key: string) => void; onClose: () => void }) {
