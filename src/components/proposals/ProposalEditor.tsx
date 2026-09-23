@@ -55,6 +55,28 @@ async function lookupFundMonitorInfo(isin: string, nombre?: string | null): Prom
   }
 }
 
+// Guarda en el maestro de instrumentos los fondos/bonos que se cargan a mano
+// (con ISIN/CUSIP y nombre), para que la próxima vez aparezcan en el buscador.
+// Espera 2 s sin cambios (el nombre se guarda letra por letra) y manda cada
+// versión de la fila una sola vez; el servidor no pisa lo que ya existe.
+function useEnsureInstruments<T extends { id: string }>(rows: T[], build: (row: T) => Record<string, unknown> | null) {
+  const sent = useRef<Set<string>>(new Set())
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      rows.forEach(r => {
+        const payload = build(r)
+        if (!payload) return
+        const body = JSON.stringify(payload)
+        if (sent.current.has(body)) return
+        sent.current.add(body)
+        fetch('/api/instruments/ensure', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body }).catch(() => {})
+      })
+    }, 2000)
+    return () => clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows])
+}
+
 // ─── FactsheetData (mirrors lib/factsheet-extractor) ─────────────────────────
 
 interface FactsheetData {
@@ -862,6 +884,10 @@ function FundsTable({
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const backfilledInfo = useRef<Set<string>>(new Set())
 
+  useEnsureInstruments(funds, f => (f.isin?.trim() && f.fund_name?.trim())
+    ? { tipo_activo: 'fondo', nombre: f.fund_name, identificador: f.isin, emisor: f.issuer, categoria: f.fund_category }
+    : null)
+
   // Filas que quedaron con el ISIN cargado pero sin nombre y/o sin
   // rendimientos (de un import o cruce anterior) — se completa buscando por
   // ISIN en el Monitor de Fondos, para poder ver de qué fondo se trata y
@@ -1184,6 +1210,14 @@ function BondsTable({
   const [sortKey, setSortKey] = useState<keyof Bond | null>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
 
+  useEnsureInstruments(bonds, b => (b.isin?.trim() && b.issuer?.trim())
+    ? {
+        tipo_activo: 'bono', nombre: b.issuer, identificador: b.isin, moneda: b.currency,
+        maturity_date: b.maturity_date, coupon: b.coupon, rating: b.rating,
+        frequency: b.frequency, day_count_convention: b.day_count_convention,
+      }
+    : null)
+
   const toggleSort = (key: keyof Bond) => {
     if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
     else { setSortKey(key); setSortDir('desc') }
@@ -1230,6 +1264,12 @@ function BondsTable({
   // emisor/ISIN/moneda — mismo componente/API que ya usa Órdenes.
   const selectBondInstrument = useCallback(async (bond: Bond, inst: Instrument) => {
     const patch: Partial<Bond> = { issuer: inst.nombre, isin: inst.isin ?? inst.cusip ?? bond.isin, currency: inst.moneda ?? bond.currency }
+    // Condiciones guardadas la última vez que se cargó este bono a mano.
+    if (inst.maturity_date) patch.maturity_date = inst.maturity_date.slice(0, 10)
+    if (inst.coupon != null) patch.coupon = Number(inst.coupon)
+    if (inst.rating) patch.rating = inst.rating
+    if (inst.frequency) patch.frequency = inst.frequency as CouponFrequency
+    if (inst.day_count_convention) patch.day_count_convention = inst.day_count_convention as DayCountConvention
     const updated = bonds.map(b => b.id === bond.id ? { ...b, ...patch } as Bond : b)
     onUpdate(updated)
     await fetch(`/api/proposals/${proposalId}/bonds`, {

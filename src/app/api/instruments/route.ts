@@ -15,6 +15,11 @@ export interface Instrument {
   emisor: string | null
   categoria: string | null
   activo: boolean
+  maturity_date?: string | null
+  coupon?: number | null
+  rating?: string | null
+  frequency?: string | null
+  day_count_convention?: string | null
   created_at: string
   updated_at: string
 }
