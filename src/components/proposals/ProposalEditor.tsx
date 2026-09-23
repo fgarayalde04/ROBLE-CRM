@@ -29,9 +29,9 @@ interface FundMonitorReturns {
   return_2021: number | null
 }
 
-async function lookupFundMonitorReturns(isin: string): Promise<FundMonitorReturns | null> {
+async function lookupFundMonitorReturns(isin: string, nombre?: string | null): Promise<FundMonitorReturns | null> {
   try {
-    const res = await fetch(`/api/fund-monitor/lookup?isin=${encodeURIComponent(isin)}`)
+    const res = await fetch(`/api/fund-monitor/lookup?isin=${encodeURIComponent(isin)}${nombre ? `&nombre=${encodeURIComponent(nombre)}` : ''}`)
     if (!res.ok) return null
     const data = await res.json()
     return data.found ? data.returns : null
@@ -44,15 +44,37 @@ async function lookupFundMonitorReturns(isin: string): Promise<FundMonitorReturn
 // completar filas que quedaron con el ISIN cargado pero sin nombre y/o sin
 // rendimientos (por un import o un cruce anterior), y donde antes no había
 // forma de saber qué fondo era ni cómo venía rindiendo sin buscarlo a mano.
-async function lookupFundMonitorInfo(isin: string): Promise<({ nombre: string | null } & FundMonitorReturns) | null> {
+async function lookupFundMonitorInfo(isin: string, nombre?: string | null): Promise<({ nombre: string | null } & FundMonitorReturns) | null> {
   try {
-    const res = await fetch(`/api/fund-monitor/lookup?isin=${encodeURIComponent(isin)}`)
+    const res = await fetch(`/api/fund-monitor/lookup?isin=${encodeURIComponent(isin)}${nombre ? `&nombre=${encodeURIComponent(nombre)}` : ''}`)
     if (!res.ok) return null
     const data = await res.json()
     return data.found ? { nombre: data.nombre ?? null, ...data.returns } : null
   } catch {
     return null
   }
+}
+
+// Guarda en el maestro de instrumentos los fondos/bonos que se cargan a mano
+// (con ISIN/CUSIP y nombre), para que la próxima vez aparezcan en el buscador.
+// Espera 2 s sin cambios (el nombre se guarda letra por letra) y manda cada
+// versión de la fila una sola vez; el servidor no pisa lo que ya existe.
+function useEnsureInstruments<T extends { id: string }>(rows: T[], build: (row: T) => Record<string, unknown> | null) {
+  const sent = useRef<Set<string>>(new Set())
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      rows.forEach(r => {
+        const payload = build(r)
+        if (!payload) return
+        const body = JSON.stringify(payload)
+        if (sent.current.has(body)) return
+        sent.current.add(body)
+        fetch('/api/instruments/ensure', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body }).catch(() => {})
+      })
+    }, 2000)
+    return () => clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows])
 }
 
 // ─── FactsheetData (mirrors lib/factsheet-extractor) ─────────────────────────
@@ -862,6 +884,10 @@ function FundsTable({
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const backfilledInfo = useRef<Set<string>>(new Set())
 
+  useEnsureInstruments(funds, f => (f.isin?.trim() && f.fund_name?.trim())
+    ? { tipo_activo: 'fondo', nombre: f.fund_name, identificador: f.isin, emisor: f.issuer, categoria: f.fund_category }
+    : null)
+
   // Filas que quedaron con el ISIN cargado pero sin nombre y/o sin
   // rendimientos (de un import o cruce anterior) — se completa buscando por
   // ISIN en el Monitor de Fondos, para poder ver de qué fondo se trata y
@@ -876,7 +902,7 @@ function FundsTable({
     if (candidates.length === 0) return
     candidates.forEach(async f => {
       backfilledInfo.current.add(f.id)
-      const info = await lookupFundMonitorInfo(f.isin!.trim())
+      const info = await lookupFundMonitorInfo(f.isin!.trim(), f.fund_name)
       if (!info) return
       const patch: Partial<Fund> = {}
       if (!f.fund_name?.trim() && info.nombre) patch.fund_name = info.nombre
@@ -920,7 +946,7 @@ function FundsTable({
     // Monitor de Fondos — mismo criterio que elegir el fondo del maestro
     // de instrumentos (ver selectFundInstrument más abajo).
     if (field === 'isin' && typeof value === 'string' && value.trim()) {
-      const returns = await lookupFundMonitorReturns(value.trim())
+      const returns = await lookupFundMonitorReturns(value.trim(), fund.fund_name)
       if (returns) patch = { ...patch, ...returns, data_source: 'fund_monitor' }
     }
     const updated = funds.map(f => f.id === fund.id ? { ...f, ...patch } as Fund : f)
@@ -947,7 +973,7 @@ function FundsTable({
     const isin = inst.isin ?? inst.cusip ?? fund.isin
     let patch: Partial<Fund> = { fund_name: inst.nombre, isin, issuer: inst.emisor ?? fund.issuer }
     if (isin) {
-      const returns = await lookupFundMonitorReturns(isin)
+      const returns = await lookupFundMonitorReturns(isin, inst.nombre)
       if (returns) patch = { ...patch, ...returns, data_source: 'fund_monitor' }
     }
     const updated = funds.map(f => f.id === fund.id ? { ...f, ...patch } as Fund : f)
@@ -1184,6 +1210,14 @@ function BondsTable({
   const [sortKey, setSortKey] = useState<keyof Bond | null>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
 
+  useEnsureInstruments(bonds, b => (b.isin?.trim() && b.issuer?.trim())
+    ? {
+        tipo_activo: 'bono', nombre: b.issuer, identificador: b.isin, moneda: b.currency,
+        maturity_date: b.maturity_date, coupon: b.coupon, rating: b.rating,
+        frequency: b.frequency, day_count_convention: b.day_count_convention,
+      }
+    : null)
+
   const toggleSort = (key: keyof Bond) => {
     if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
     else { setSortKey(key); setSortDir('desc') }
@@ -1230,6 +1264,12 @@ function BondsTable({
   // emisor/ISIN/moneda — mismo componente/API que ya usa Órdenes.
   const selectBondInstrument = useCallback(async (bond: Bond, inst: Instrument) => {
     const patch: Partial<Bond> = { issuer: inst.nombre, isin: inst.isin ?? inst.cusip ?? bond.isin, currency: inst.moneda ?? bond.currency }
+    // Condiciones guardadas la última vez que se cargó este bono a mano.
+    if (inst.maturity_date) patch.maturity_date = inst.maturity_date.slice(0, 10)
+    if (inst.coupon != null) patch.coupon = Number(inst.coupon)
+    if (inst.rating) patch.rating = inst.rating
+    if (inst.frequency) patch.frequency = inst.frequency as CouponFrequency
+    if (inst.day_count_convention) patch.day_count_convention = inst.day_count_convention as DayCountConvention
     const updated = bonds.map(b => b.id === bond.id ? { ...b, ...patch } as Bond : b)
     onUpdate(updated)
     await fetch(`/api/proposals/${proposalId}/bonds`, {
@@ -1606,6 +1646,7 @@ const HIDEABLE_COLUMNS: { key: string; label: string; group: string }[] = [
   { key: 'funds.y2021',         label: '2021',           group: 'Fondos' },
   { key: 'funds.ytm',           label: 'YTM indicativo', group: 'Fondos' },
   { key: 'funds.duration',      label: 'Duración',       group: 'Fondos' },
+  { key: 'funds.inversion',     label: 'Inversión (monto)', group: 'Fondos' },
   { key: 'bonds.moneda',        label: 'Moneda',         group: 'Bonos' },
   { key: 'bonds.vencimiento',   label: 'Vencimiento',    group: 'Bonos' },
   { key: 'bonds.cupon',         label: 'Cupón',          group: 'Bonos' },
@@ -1613,10 +1654,12 @@ const HIDEABLE_COLUMNS: { key: string; label: string; group: string }[] = [
   { key: 'bonds.duration',      label: 'Duración',       group: 'Bonos' },
   { key: 'bonds.rating',        label: 'Rating',         group: 'Bonos' },
   { key: 'bonds.precio',        label: 'Precio (ind.)',  group: 'Bonos' },
+  { key: 'bonds.inversion',     label: 'Montos (compra, cupón, desembolso)', group: 'Bonos' },
   { key: 'equities.moneda',     label: 'Moneda',         group: 'Acciones' },
   { key: 'equities.ticker',     label: 'Ticker',         group: 'Acciones' },
   { key: 'equities.sector',     label: 'Sector',         group: 'Acciones' },
   { key: 'equities.pais',       label: 'País',           group: 'Acciones' },
+  { key: 'equities.inversion',  label: 'Inversión (monto)', group: 'Acciones' },
 ]
 
 function ColumnPicker({ hidden, onToggle, onClose }: { hidden: Set<string>; onToggle: (key: string) => void; onClose: () => void }) {

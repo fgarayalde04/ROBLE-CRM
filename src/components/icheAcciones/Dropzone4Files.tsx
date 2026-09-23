@@ -10,13 +10,26 @@ interface Props {
 export default function Dropzone4Files({ onSubmit, loading }: Props) {
   const [files, setFiles] = useState<File[]>([])
   const [dragOver, setDragOver] = useState(false)
+  const [readError, setReadError] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  function addFiles(list: FileList | null) {
-    if (!list) return
+  async function addFiles(incoming: File[]) {
+    setReadError(null)
+    const snapshots: File[] = []
+    for (const f of incoming) {
+      try {
+        // Copia a memoria: si el archivo cambia o se vuelve ilegible en disco
+        // (OneDrive, descarga en curso) Chrome aborta el envío con un genérico
+        // "Failed to fetch"; leyéndolo ya, el error sale acá y con nombre.
+        snapshots.push(new File([await f.arrayBuffer()], f.name, { type: f.type, lastModified: f.lastModified }))
+      } catch {
+        setReadError(`No se pudo leer "${f.name}". Si está en OneDrive o se está descargando, esperá a que termine (o copialo a Descargas) y volvé a elegirlo.`)
+      }
+    }
+    if (!snapshots.length) return
     setFiles(prev => {
       const next = [...prev]
-      for (const f of Array.from(list)) {
+      for (const f of snapshots) {
         const i = next.findIndex(existing => existing.name === f.name)
         if (i >= 0) next[i] = f // mismo nombre: se asume una corrección, reemplaza
         else next.push(f)
@@ -37,7 +50,7 @@ export default function Dropzone4Files({ onSubmit, loading }: Props) {
         onDrop={e => {
           e.preventDefault()
           setDragOver(false)
-          addFiles(e.dataTransfer.files)
+          addFiles(Array.from(e.dataTransfer.files))
         }}
         onClick={() => inputRef.current?.click()}
         className={`cursor-pointer rounded-lg border-2 border-dashed p-10 text-center transition-colors ${
@@ -53,9 +66,15 @@ export default function Dropzone4Files({ onSubmit, loading }: Props) {
           multiple
           accept=".xlsx"
           className="hidden"
-          onChange={e => { addFiles(e.target.files); e.target.value = '' }}
+          onChange={e => {
+            const picked = Array.from(e.target.files ?? [])
+            e.target.value = ''
+            addFiles(picked)
+          }}
         />
       </div>
+
+      {readError && <p className="mt-3 text-sm text-red-700">{readError}</p>}
 
       {files.length > 0 && (
         <ul className="mt-4 space-y-1 text-sm text-gray-700">

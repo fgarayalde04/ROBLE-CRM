@@ -9,7 +9,8 @@
  */
 import type { ActivityRow } from '@/lib/portfolio/activityParser'
 import type { PortfolioPositionParsed } from '@/lib/portfolio/parser'
-import { findSale } from './activityMatcher'
+import type { UnrealizedGainLossRow } from '@/lib/portfolio/unrealizedGainLossParser'
+import { findBuys, findSale, type BuyLot } from './activityMatcher'
 import type { PershingUnrealizedRow } from './pershingUnrealizedParser'
 import type { IcheQuestion, Lot, OpenPosition, ReconcilePlan, TickerChange } from './types'
 
@@ -31,6 +32,37 @@ function matchByDescription(desc: string, candidates: OpenPosition[]): OpenPosit
   return prefix ?? null
 }
 
+const QTY_EPS = 0.0001
+
+// Lotes del archivo que todavía no están cargados (mismo trade date y cantidad
+// que un lote existente = ya conocido). Un lote existente sin fecha matchea
+// solo por cantidad.
+function diffNewLots(existing: Lot[], fileLots: Lot[]): Lot[] {
+  const pool = [...existing]
+  const fresh: Lot[] = []
+  for (const fl of fileLots) {
+    const i = pool.findIndex(l =>
+      Math.abs(l.quantity - fl.quantity) < QTY_EPS && (l.tradeDate == null || l.tradeDate === fl.tradeDate)
+    )
+    if (i >= 0) pool.splice(i, 1)
+    else fresh.push(fl)
+  }
+  return fresh
+}
+
+// Compras más recientes del Activity que suman exactamente la cantidad nueva.
+function pickRecentBuys(buys: BuyLot[], delta: number): BuyLot[] | null {
+  const picked: BuyLot[] = []
+  let sum = 0
+  for (const b of [...buys].reverse()) {
+    picked.unshift(b)
+    sum += b.quantity
+    if (Math.abs(sum - delta) < QTY_EPS) return picked
+    if (sum > delta) return null
+  }
+  return null
+}
+
 let questionCounter = 0
 function nextQuestionId(): string {
   questionCounter += 1
@@ -42,7 +74,8 @@ export function reconcile(
   pershingRows: PershingUnrealizedRow[],
   morganPositions: PortfolioPositionParsed[],
   pershingActivity: ActivityRow[],
-  morganActivity: ActivityRow[]
+  morganActivity: ActivityRow[],
+  morganCosts: UnrealizedGainLossRow[] = []
 ): ReconcilePlan {
   const changes: TickerChange[] = []
   const pendingQuestions: IcheQuestion[] = []
@@ -70,7 +103,9 @@ export function reconcile(
         description: row.description,
         quantity: row.quantity,
         unitCost: row.unitCost,
-        tradeDate: row.tradeDate,
+        tradeDate: row.lots.length === 1 ? row.lots[0].tradeDate : null,
+        lots: row.lots,
+        lastPrice: row.quantity > 0 ? parseFloat((row.marketValue / row.quantity).toFixed(4)) : null,
         source: 'pershing',
       })
       continue
@@ -90,17 +125,27 @@ export function reconcile(
       }
     } else if (row.quantity > currentQty) {
       const deltaQty = row.quantity - currentQty
-      // Costo del lote nuevo: se infiere del delta de costo total contra lo
-      // que ya había, no se puede leer directo (el archivo da el agregado).
-      const priorCost = match.lots.reduce((s, l) => s + l.quantity * l.unitCost, 0)
-      const deltaCost = row.originalTotalCost - priorCost
-      const newLot: Lot = {
-        quantity: deltaQty,
-        unitCost: deltaQty > 0 ? parseFloat((deltaCost / deltaQty).toFixed(4)) : row.unitCost,
-        tradeDate: row.tradeDate,
-      }
       const newLastPrice = row.quantity > 0 ? parseFloat((row.marketValue / row.quantity).toFixed(4)) : null
-      changes.push({ kind: 'new_lot', ticker: match.ticker, analyst: match.analyst, newLot, newLastPrice, cusip: row.cusip })
+      const fresh = diffNewLots(match.lots, row.lots)
+      const freshQty = fresh.reduce((s, l) => s + l.quantity, 0)
+      if (fresh.length > 0 && Math.abs(freshQty - deltaQty) < QTY_EPS) {
+        // Lotes nuevos con su fecha y costo reales, tal cual vienen de Pershing.
+        for (const newLot of fresh) {
+          changes.push({ kind: 'new_lot', ticker: match.ticker, analyst: match.analyst, newLot, newLastPrice, cusip: row.cusip })
+        }
+      } else {
+        // No se pudo aislar la compra: costo inferido del delta y SIN fecha
+        // (antes se usaba la fecha del primer lote, que es otra compra).
+        const priorCost = match.lots.reduce((s, l) => s + l.quantity * l.unitCost, 0)
+        const deltaCost = row.originalTotalCost - priorCost
+        const newLot: Lot = {
+          quantity: deltaQty,
+          unitCost: deltaQty > 0 ? parseFloat((deltaCost / deltaQty).toFixed(4)) : row.unitCost,
+          tradeDate: null,
+        }
+        changes.push({ kind: 'new_lot', ticker: match.ticker, analyst: match.analyst, newLot, newLastPrice, cusip: row.cusip })
+        warnings.push(`${match.ticker}: la compra nueva no se pudo identificar entre los lotes de Pershing — se cargó sin fecha, completar el Trade Date a mano.`)
+      }
     } else {
       changes.push({ kind: 'quantity_mismatch', ticker: match.ticker, analyst: match.analyst, oldQuantity: currentQty, newQuantity: row.quantity })
       warnings.push(`${match.ticker}: la cantidad bajó de ${currentQty} a ${row.quantity} sin que el ticker haya desaparecido — revisar a mano, no se aplicó ningún cambio automático.`)
@@ -116,7 +161,15 @@ export function reconcile(
     }
     const match = morganOpen.find(p => p.ticker.toUpperCase() === ticker.toUpperCase()) ?? null
 
+    const cost = pos.cusip ? (morganCosts.find(r => r.cusip === pos.cusip)?.costBasis ?? null) : null
+    const buys = findBuys(ticker, morganActivity)
+
     if (!match) {
+      const qty = pos.quantity ?? 0
+      const buyLots = buys.length > 0 && Math.abs(buys.reduce((s, b) => s + b.quantity, 0) - qty) < QTY_EPS ? buys : null
+      const avgCost = cost != null && qty > 0 ? parseFloat((cost / qty).toFixed(4)) : 0
+      if (!buyLots) warnings.push(`${ticker} (Morgan): no se encontraron compras en el Activity que sumen ${qty} acciones — se carga sin fecha, completar el Trade Date a mano.`)
+      if (cost == null) warnings.push(`${ticker} (Morgan): el Holdings no trae costo total — el costo unitario quedó en 0, revisarlo.`)
       pendingQuestions.push({
         id: nextQuestionId(),
         type: 'assign_analyst',
@@ -124,9 +177,11 @@ export function reconcile(
         tickerEditable: true,
         cusip: pos.cusip,
         description: pos.name,
-        quantity: pos.quantity ?? 0,
-        unitCost: pos.quantity ? (pos.marketValue) / (pos.quantity || 1) : 0,
-        tradeDate: null,
+        quantity: qty,
+        unitCost: avgCost,
+        tradeDate: buyLots && buyLots.length === 1 ? buyLots[0].tradeDate : null,
+        lots: buyLots ? buyLots.map(b => ({ quantity: b.quantity, unitCost: b.unitCost, tradeDate: b.tradeDate })) : [{ quantity: qty, unitCost: avgCost, tradeDate: null }],
+        lastPrice: pos.price,
         source: 'morgan',
       })
       continue
@@ -144,16 +199,26 @@ export function reconcile(
         changes.push({ kind: 'unchanged', ticker: match.ticker, analyst: match.analyst })
       }
     } else if (newQty > currentQty) {
-      warnings.push(`${match.ticker} (Morgan): la cantidad aumentó de ${currentQty} a ${newQty}, pero Morgan Holdings no da lotes individuales — se guarda como una posición agregada nueva, revisar el costo unitario resultante.`)
-      const priorCost = match.lots.reduce((s, l) => s + l.quantity * l.unitCost, 0)
-      const totalCost = newQty * ((pos.marketValue ?? 0) / (newQty || 1)) // placeholder si no hay costo total real
-      changes.push({
-        kind: 'new_lot',
-        ticker: match.ticker,
-        analyst: match.analyst,
-        newLot: { quantity: newQty - currentQty, unitCost: totalCost > priorCost ? (totalCost - priorCost) / (newQty - currentQty) : 0, tradeDate: null },
-        newLastPrice: pos.price,
-      })
+      const delta = newQty - currentQty
+      const recent = pickRecentBuys(buys, delta)
+      if (recent) {
+        for (const b of recent) {
+          changes.push({
+            kind: 'new_lot', ticker: match.ticker, analyst: match.analyst,
+            newLot: { quantity: b.quantity, unitCost: b.unitCost, tradeDate: b.tradeDate },
+            newLastPrice: pos.price,
+          })
+        }
+      } else {
+        const priorCost = match.lots.reduce((s, l) => s + l.quantity * l.unitCost, 0)
+        const unitCost = cost != null && cost > priorCost ? parseFloat(((cost - priorCost) / delta).toFixed(4)) : 0
+        warnings.push(`${match.ticker} (Morgan): la cantidad aumentó de ${currentQty} a ${newQty} y no se encontró la compra en el Activity — se carga sin fecha y con costo inferido (${unitCost}), completar el Trade Date a mano.`)
+        changes.push({
+          kind: 'new_lot', ticker: match.ticker, analyst: match.analyst,
+          newLot: { quantity: delta, unitCost, tradeDate: null },
+          newLastPrice: pos.price,
+        })
+      }
     } else {
       changes.push({ kind: 'quantity_mismatch', ticker: match.ticker, analyst: match.analyst, oldQuantity: currentQty, newQuantity: newQty })
       warnings.push(`${match.ticker} (Morgan): la cantidad bajó de ${currentQty} a ${newQty} sin que el ticker haya desaparecido — revisar a mano.`)

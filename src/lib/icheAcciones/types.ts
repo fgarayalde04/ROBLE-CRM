@@ -95,6 +95,10 @@ export type IcheQuestion =
       quantity: number
       unitCost: number
       tradeDate: string | null
+      // Lotes reales (fecha y costo de cada compra) y cotización actual, para
+      // crear la posición completa sin perder fechas ni Last Price.
+      lots: Lot[]
+      lastPrice: number | null
       source: Source
     }
   | {

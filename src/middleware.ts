@@ -61,12 +61,6 @@ export async function middleware(req: NextRequest) {
     }
   }
 
-  // Aviso push de Gmail (Pub/Sub → Roble). No trae sesión: la ruta valida por
-  // su cuenta el token secreto que va en la URL de la suscripción.
-  if (pathname === '/api/webhooks/gmail' && req.method === 'POST') {
-    return NextResponse.next()
-  }
-
   // Cron routes — disparadas por instrumentation.ts (llamada interna a sí
   // mismo, sin sesión) y potencialmente por un scheduler externo. Nunca deben
   // caer al chequeo de cookie de abajo, que las mandaría a /login — la

@@ -106,7 +106,8 @@ export async function POST(req: NextRequest) {
     pershingUnrealized.rows,
     morganHoldings.portfolio.positions,
     pershingActivity.rows,
-    morganActivity.rows
+    morganActivity.rows,
+    morganHoldings.unrealizedGL.rows
   )
   plan.inputsFolder = inputsFolderInfo
   plan.warnings.push(...pershingUnrealized.warnings, ...pershingActivity.warnings, ...morganHoldings.portfolio.warnings, ...morganActivity.warnings)

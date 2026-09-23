@@ -49,3 +49,84 @@ export async function findInstrumentByCusip(cusip: string) {
   const { rows } = await pool.query(`select id from instrument_master where cusip = $1`, [cusip])
   return rows[0] ?? null
 }
+
+const ISIN_RE = /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/
+const CUSIP_RE = /^[A-Z0-9]{9}$/
+
+export interface EnsureInstrumentInput {
+  tipo_activo: 'fondo' | 'bono'
+  nombre: string
+  identificador: string           // ISIN o CUSIP tal como lo tipeó el usuario
+  moneda?: string | null
+  emisor?: string | null
+  categoria?: string | null
+  maturity_date?: string | null
+  coupon?: number | null
+  rating?: string | null
+  frequency?: string | null
+  day_count_convention?: string | null
+}
+
+const TERM_COLS = ['maturity_date', 'coupon', 'rating', 'frequency', 'day_count_convention'] as const
+
+// Guarda en el maestro un instrumento cargado a mano (fondo o bono) si todavía
+// no está, para que la próxima vez aparezca en el buscador. Si ya existe (mismo
+// ISIN/CUSIP) no pisa nada: solo completa los campos que estén vacíos.
+// Devuelve null si el identificador no tiene forma de ISIN/CUSIP — sin clave
+// confiable no se guarda, para no llenar el maestro de duplicados.
+export async function ensureInstrument(input: EnsureInstrumentInput): Promise<{ id: string; created: boolean } | null> {
+  const ident = input.identificador.trim().toUpperCase()
+  const nombre = input.nombre.trim()
+  const isIsin = ISIN_RE.test(ident)
+  if (!nombre || nombre.length < 3 || (!isIsin && !CUSIP_RE.test(ident))) return null
+  const idCol = isIsin ? 'isin' : 'cusip'
+
+  const terms: Record<string, unknown> = {}
+  if (input.tipo_activo === 'bono') {
+    for (const c of TERM_COLS) if (input[c] != null && input[c] !== '') terms[c] = input[c]
+  }
+
+  const { rows: existing } = await pool.query(`select id from instrument_master where ${idCol} = $1`, [ident])
+  if (existing[0]) {
+    const sets: string[] = []
+    const vals: unknown[] = []
+    const fill = (col: string, v: unknown) => {
+      if (v == null || v === '') return
+      vals.push(v)
+      sets.push(`"${col}" = coalesce(nullif("${col}"::text, ''), $${vals.length}::text)::${col === 'maturity_date' ? 'date' : col === 'coupon' ? 'numeric' : 'text'}`)
+    }
+    fill('emisor', input.emisor)
+    fill('categoria', input.categoria)
+    for (const [k, v] of Object.entries(terms)) fill(k, v)
+    if (sets.length > 0) {
+      vals.push(existing[0].id)
+      try {
+        await pool.query(`update instrument_master set ${sets.join(', ')} where id = $${vals.length}`, vals)
+      } catch (e: any) {
+        if (e.code !== '42703') throw e   // columnas de bono todavía sin migrar
+      }
+    }
+    return { id: existing[0].id, created: false }
+  }
+
+  const base: Record<string, unknown> = {
+    tipo_activo: input.tipo_activo,
+    nombre,
+    [idCol]: ident,
+    moneda: input.moneda?.trim() || 'USD',
+    emisor: input.emisor?.trim() || null,
+    categoria: input.categoria?.trim() || null,
+    activo: true,
+  }
+  try {
+    const row = await createInstrument({ ...base, ...terms })
+    return { id: row.id, created: true }
+  } catch (e: any) {
+    if (e.code === '42703') {                // migración de condiciones de bono pendiente
+      const row = await createInstrument(base)
+      return { id: row.id, created: true }
+    }
+    if (e.code === '23505') return null      // carrera: otro request lo creó justo antes
+    throw e
+  }
+}

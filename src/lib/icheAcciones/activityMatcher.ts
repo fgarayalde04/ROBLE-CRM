@@ -38,3 +38,31 @@ export function findSale(
 
   return { closingDate: latestDate, quantity: totalQty, saleProceeds: totalProceeds }
 }
+
+const BUY_PATTERN = /\bbought\b|\bbuy\b|\bpurchase/i
+
+export interface BuyLot {
+  quantity: number
+  unitCost: number
+  tradeDate: string
+}
+
+/**
+ * Compras de un ticker en el Activity de Morgan. Morgan Holdings no trae
+ * fecha ni lotes, así que la fecha real de una compra nueva sale de acá.
+ * Solo se devuelven compras con fecha, cantidad y precio completos.
+ */
+export function findBuys(ticker: string, activity: ActivityRow[]): BuyLot[] {
+  return activity
+    .filter(row => {
+      if (row.symbol?.toUpperCase() !== ticker.toUpperCase()) return false
+      return BUY_PATTERN.test(row.activityType ?? '') || BUY_PATTERN.test(row.description ?? '')
+    })
+    .map(row => ({
+      quantity: Math.abs(row.quantity ?? 0),
+      unitCost: Math.abs(row.price ?? 0),
+      tradeDate: row.tradeDate ?? row.settleDate ?? '',
+    }))
+    .filter(b => b.quantity > 0 && b.unitCost > 0 && b.tradeDate)
+    .sort((a, b) => a.tradeDate.localeCompare(b.tradeDate))
+}
