@@ -55,6 +55,9 @@ export interface DetectedFile {
 
 export type TickerChange =
   | { kind: 'unchanged'; ticker: string; analyst: Analyst; cusip?: string | null }
+  // Repara una posición ya guardada: ticker que quedó como CUSIP y/o lotes con
+  // fechas inválidas (bugs de corridas anteriores). `ticker` es el actual.
+  | { kind: 'position_fix'; id: string; ticker: string; analyst: Analyst; newTicker: string | null; newLots: Lot[] | null }
   | { kind: 'price_update'; ticker: string; analyst: Analyst; newLastPrice: number; cusip?: string | null }
   | {
       kind: 'new_lot'

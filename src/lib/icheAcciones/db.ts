@@ -89,6 +89,15 @@ export async function addLotToPosition(ticker: string, analyst: Analyst, lot: Lo
   )
 }
 
+export async function fixPosition(id: string, newTicker: string | null, newLots: Lot[] | null): Promise<void> {
+  await pool.query(
+    `update iche_open_positions
+     set ticker = coalesce($2, ticker), lots = coalesce($3::jsonb, lots), updated_at = now()
+     where id = $1`,
+    [id, newTicker, newLots ? JSON.stringify(newLots) : null]
+  )
+}
+
 export async function createOpenPosition(pos: Omit<OpenPosition, 'id'>): Promise<void> {
   await pool.query(
     `insert into iche_open_positions (analyst, ticker, cusip, description, lots, last_price, source)
