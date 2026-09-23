@@ -12,9 +12,21 @@ export default function Dropzone4Files({ onSubmit, loading }: Props) {
   const [dragOver, setDragOver] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  function handleFiles(list: FileList | null) {
+  function addFiles(list: FileList | null) {
     if (!list) return
-    setFiles(Array.from(list))
+    setFiles(prev => {
+      const next = [...prev]
+      for (const f of Array.from(list)) {
+        const i = next.findIndex(existing => existing.name === f.name)
+        if (i >= 0) next[i] = f // mismo nombre: se asume una corrección, reemplaza
+        else next.push(f)
+      }
+      return next
+    })
+  }
+
+  function removeFile(name: string) {
+    setFiles(prev => prev.filter(f => f.name !== name))
   }
 
   return (
@@ -25,7 +37,7 @@ export default function Dropzone4Files({ onSubmit, loading }: Props) {
         onDrop={e => {
           e.preventDefault()
           setDragOver(false)
-          handleFiles(e.dataTransfer.files)
+          addFiles(e.dataTransfer.files)
         }}
         onClick={() => inputRef.current?.click()}
         className={`cursor-pointer rounded-lg border-2 border-dashed p-10 text-center transition-colors ${
@@ -33,7 +45,7 @@ export default function Dropzone4Files({ onSubmit, loading }: Props) {
         }`}
       >
         <p className="text-sm text-gray-600">
-          Soltá acá los 4 archivos del mes (Unrealized Pershing, Activity Pershing, Holdings Morgan, Activity Morgan) — el sistema detecta cuál es cuál.
+          Soltá acá los 4 archivos del mes (Unrealized Pershing, Activity Pershing, Holdings Morgan, Activity Morgan) — el sistema detecta cuál es cuál. Podés subirlos de a uno, cada archivo nuevo se suma a los anteriores.
         </p>
         <input
           ref={inputRef}
@@ -41,14 +53,23 @@ export default function Dropzone4Files({ onSubmit, loading }: Props) {
           multiple
           accept=".xlsx"
           className="hidden"
-          onChange={e => handleFiles(e.target.files)}
+          onChange={e => { addFiles(e.target.files); e.target.value = '' }}
         />
       </div>
 
       {files.length > 0 && (
         <ul className="mt-4 space-y-1 text-sm text-gray-700">
           {files.map(f => (
-            <li key={f.name}>📄 {f.name}</li>
+            <li key={f.name} className="flex items-center justify-between">
+              <span>📄 {f.name}</span>
+              <button
+                type="button"
+                onClick={e => { e.stopPropagation(); removeFile(f.name) }}
+                className="ml-2 text-xs text-gray-400 hover:text-red-600"
+              >
+                Quitar
+              </button>
+            </li>
           ))}
         </ul>
       )}
