@@ -733,6 +733,11 @@ function AllocationPanel({
   const bondAccruals = bonds.filter(b => isCompraSide(b.operacion)).map(b => calculateBondAccrual(b, settlementDate))
   const totalAccruedInterest = bondAccruals.reduce((s, a) => s + a.accruedInterest, 0)
   const totalEstimatedCash   = bondAccruals.reduce((s, a) => s + a.estimatedCashRequired, 0)
+  // Ventas de bonos: el cupón corrido se cobra (lo paga el comprador), así que
+  // el monto a recibir es valor de venta + cupón corrido.
+  const saleAccruals = bonds.filter(b => isVentaSide(b.operacion)).map(b => calculateBondAccrual(b, settlementDate))
+  const totalSaleAccrued   = saleAccruals.reduce((s, a) => s + a.accruedInterest, 0)
+  const totalSaleProceeds  = saleAccruals.reduce((s, a) => s + a.estimatedCashRequired, 0)
 
   return (
     <div className="bg-white border border-[#E2E8F0] rounded-xl p-5 space-y-4 sticky top-4">
@@ -814,6 +819,22 @@ function AllocationPanel({
           <div className="flex items-center justify-between mt-1">
             <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest">Desembolso Total Estimado</p>
             <span className="text-sm font-bold tabular-nums font-mono text-[#2D3F52]">{fmtMoney(totalEstimatedCash, currency)}</span>
+          </div>
+        </div>
+      )}
+
+      {/* Ventas de bonos: monto a recibir = valor de venta + cupón corrido */}
+      {totalSaleProceeds > 0 && (
+        <div className="border-t border-gray-100 pt-3">
+          {totalSaleAccrued > 0 && (
+            <div className="flex items-center justify-between">
+              <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest">Cupón Corrido a Cobrar</p>
+              <span className="text-sm font-bold tabular-nums font-mono text-emerald-700">{fmtMoney(totalSaleAccrued, currency)}</span>
+            </div>
+          )}
+          <div className="flex items-center justify-between mt-1">
+            <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest">Monto a Recibir (Ventas)</p>
+            <span className="text-sm font-bold tabular-nums font-mono text-emerald-700">{fmtMoney(totalSaleProceeds, currency)}</span>
           </div>
         </div>
       )}
@@ -1210,6 +1231,13 @@ function BondsTable({
   const [sortKey, setSortKey] = useState<keyof Bond | null>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
 
+  // Encabezados según las operaciones de la tabla: en una venta el valor es de
+  // venta y lo que se cobra es valor + cupón corrido (se suma, lo paga el comprador).
+  const hasSale = bonds.some(b => isVentaSide(b.operacion))
+  const onlySale = hasSale && bonds.every(b => isVentaSide(b.operacion))
+  const valueLabel = onlySale ? 'Valor de Venta' : hasSale ? 'Valor Compra / Venta' : 'Valor de Compra'
+  const cashLabel  = onlySale ? 'Monto a Recibir' : hasSale ? 'Desembolso / A Recibir' : 'Desembolso Estimado'
+
   useEnsureInstruments(bonds, b => (b.isin?.trim() && b.issuer?.trim())
     ? {
         tipo_activo: 'bono', nombre: b.issuer, identificador: b.isin, moneda: b.currency,
@@ -1343,10 +1371,10 @@ function BondsTable({
                     ['Precio (Ind.)', 'price'], ['Cantidad', 'quantity'], ['Moneda', null],
                     ['Vencimiento', 'maturity_date'], ['Cupón %', 'coupon'], ['Yield (Ind.) %', 'yield'],
                     ['Dur. (a)', 'duration'], ['Rating', null], ['Frecuencia', null], ['Día/360', null],
-                    ['%', 'pct'], ['Nominal', null], ['Valor de Compra', 'amount'], ['Cupón Corrido', null],
-                    ['Desembolso Estimado', null], ['', null],
+                    ['%', 'pct'], ['Nominal', null], [valueLabel, 'amount'], ['Cupón Corrido', null],
+                    [cashLabel, null], ['', null],
                   ] as [string, keyof Bond | null][]).map(([h, key]) => (
-                    <th key={h} className={`px-3 py-2.5 text-[9px] font-semibold text-gray-400 uppercase tracking-wider ${h === '' ? 'w-8' : ['Nominal','Valor de Compra','Cupón Corrido','Desembolso Estimado','%','Precio (Ind.)','Cantidad'].includes(h) ? 'text-right' : h === 'Operación' ? 'text-center' : 'text-left'}`}>
+                    <th key={h} className={`px-3 py-2.5 text-[9px] font-semibold text-gray-400 uppercase tracking-wider ${h === '' ? 'w-8' : ['Nominal',valueLabel,'Cupón Corrido',cashLabel,'%','Precio (Ind.)','Cantidad'].includes(h) ? 'text-right' : h === 'Operación' ? 'text-center' : 'text-left'}`}>
                       {key ? (
                         <button onClick={() => toggleSort(key)} className={`inline-flex items-center gap-0.5 hover:text-[#1B2E3C] transition-colors ${sortKey === key ? 'text-[#1B2E3C]' : ''}`}>
                           {h}
@@ -1430,7 +1458,10 @@ function BondsTable({
                       )}
                     </td>
                     <td className="px-3 py-2.5 text-right">
-                      <span className="text-sm font-bold font-mono tabular-nums text-[#2D3F52]">
+                      <span
+                        className={`text-sm font-bold font-mono tabular-nums ${isVentaSide(b.operacion) ? 'text-emerald-700' : 'text-[#2D3F52]'}`}
+                        title={isVentaSide(b.operacion) ? 'Valor de venta + cupón corrido (lo cobra el vendedor)' : 'Valor de compra + cupón corrido'}
+                      >
                         {currency} {accrual.estimatedCashRequired.toLocaleString('en-US', { maximumFractionDigits: 2 })}
                       </span>
                     </td>
