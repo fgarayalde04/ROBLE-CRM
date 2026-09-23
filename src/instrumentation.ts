@@ -10,10 +10,6 @@
 export async function register() {
   if (process.env.NEXT_RUNTIME !== 'nodejs') return
 
-  // Independiente del auto-sync de SharePoint de abajo — no depende de
-  // credenciales de Microsoft, así que se registra antes del early return.
-  registerEmailReplyWatch()
-
   // Independiente del sync de Microsoft/SharePoint de abajo — no debe
   // quedar sin registrarse solo porque esa integración no está configurada.
   await registerFundMonitorSync()
@@ -139,62 +135,4 @@ async function registerFundMonitorSync() {
   setTimeout(() => maybeSync(), 15000)
   setInterval(() => maybeSync(), 15 * 60 * 1000)
   console.log(`[fund-monitor] Auto-sync programado — corre una vez por día después de las ${SYNC_HOUR_UTC}:00 UTC`)
-}
-
-/**
- * Respuestas de clientes en trading@ (Gmail push). Solo si
- * GMAIL_REPLY_WATCH_ENABLED=true — ver processMesaInbox.ts.
- *
- * Hace dos cosas, ambas con un fetch a su propia ruta /api/cron/* en vez de
- * importar el código directo: esa cadena de imports pasa por web-push, que usa
- * 'crypto'/'stream' de Node — Next no puede empaquetar eso en el bundle de
- * instrumentation.ts (falla el build de producción). Las rutas /api/* sí se
- * empaquetan aparte sin ese problema.
- *
- *  1. Registra/renueva el watch de Gmail (al arrancar y cada 6 h; vence a los 7
- *     días). Necesita GMAIL_PUSH_TOPIC; sin eso no hay push instantáneo.
- *  2. Chequeo periódico. Sin push es la única vía, así que corre cada 15 s
- *     (detección casi instantánea: la llamada a Gmail es una sola y liviana, el
- *     límite de la API es órdenes de magnitud mayor). Con push configurado queda
- *     como respaldo por si se pierde un aviso de Pub/Sub, cada 5 min.
- *
- * Configure via .env.local:
- *   GMAIL_REPLY_WATCH_ENABLED=true
- *   GMAIL_PUSH_TOPIC=projects/<proyecto>/topics/<topic>
- *   GMAIL_PUSH_TOKEN=<secreto que va en la URL de la suscripción de Pub/Sub>
- *   EMAIL_REPLY_CHECK_INTERVAL_SECONDS=  (opcional, pisa el default de arriba; mínimo 5)
- */
-function registerEmailReplyWatch() {
-  if (process.env.GMAIL_REPLY_WATCH_ENABLED !== 'true') return
-
-  const pushConfigured = !!process.env.GMAIL_PUSH_TOPIC
-  const defaultSecs = pushConfigured ? 300 : 15
-  const parsed = parseInt(process.env.EMAIL_REPLY_CHECK_INTERVAL_SECONDS ?? '', 10)
-  const intervalSecs = Number.isFinite(parsed) && parsed >= 5 ? parsed : defaultSecs
-  const port = process.env.PORT ?? '3000'
-  const cronSecret = process.env.CRON_SECRET
-
-  async function callCron(path: string, label: string) {
-    try {
-      const res = await fetch(`http://localhost:${port}${path}`, {
-        headers: cronSecret ? { Authorization: `Bearer ${cronSecret}` } : undefined,
-      })
-      const result = await res.json()
-      if (!res.ok) console.error(`[${label}] ${res.status}`, JSON.stringify(result))
-      else if (result.notified > 0 || result.seeded || process.env.EMAIL_REPLY_DEBUG === 'true' || (!result.skipped && label === 'gmail-watch')) {
-        console.log(`[${label}]`, JSON.stringify(result))
-      }
-    } catch (e: any) {
-      console.error(`[${label}] Error:`, e.message)
-    }
-  }
-
-  if (pushConfigured) {
-    const SIX_HOURS = 6 * 60 * 60 * 1000
-    setTimeout(() => callCron('/api/cron/gmail-watch', 'gmail-watch'), 20000)
-    setInterval(() => callCron('/api/cron/gmail-watch', 'gmail-watch'), SIX_HOURS)
-  }
-  setTimeout(() => callCron('/api/cron/check-email-replies', 'email-replies'), 25000)
-  setInterval(() => callCron('/api/cron/check-email-replies', 'email-replies'), intervalSecs * 1000)
-  console.log(`[email-replies] Scheduled — check every ${intervalSecs} s, push ${pushConfigured ? 'enabled' : 'NOT configured'}`)
 }
