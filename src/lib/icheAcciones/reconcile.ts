@@ -69,20 +69,58 @@ function nextQuestionId(): string {
   return `q${Date.now()}_${questionCounter}`
 }
 
+const isPlaceholderTicker = (t: string) => t.length >= 8 && /\d/.test(t)
+const isValidDate = (d: string | null) => d == null || /^\d{4}-\d{2}-\d{2}$/.test(d)
+
 export function reconcile(
-  currentOpen: OpenPosition[],
+  currentOpenRaw: OpenPosition[],
   pershingRows: PershingUnrealizedRow[],
   morganPositions: PortfolioPositionParsed[],
   pershingActivity: ActivityRow[],
   morganActivity: ActivityRow[],
-  morganCosts: UnrealizedGainLossRow[] = []
+  morganCosts: UnrealizedGainLossRow[] = [],
+  knownTickers: Map<string, string> = new Map()
 ): ReconcilePlan {
   const changes: TickerChange[] = []
   const pendingQuestions: IcheQuestion[] = []
   const warnings: string[] = []
   const matched = new Set<string>() // `${analyst}:${ticker}` de currentOpen ya resueltos
 
+  // Pershing no trae ticker: se busca por CUSIP en Morgan, en las posiciones ya
+  // cargadas, en ambos Activity y en el maestro de instrumentos.
+  const resolveTicker = (cusip: string): string | null => {
+    const key = cusip.trim().toUpperCase()
+    const fromMorgan = morganPositions.find(p => p.cusip?.toUpperCase() === key && p.symbol)?.symbol
+    const fromOpen = currentOpenRaw.find(p => p.cusip?.toUpperCase() === key && p.ticker.toUpperCase() !== key)?.ticker
+    const fromActivity = [...pershingActivity, ...morganActivity].find(r => r.cusip?.toUpperCase() === key && r.symbol)?.symbol
+    return (fromMorgan ?? fromOpen ?? fromActivity ?? knownTickers.get(key) ?? null)?.trim().toUpperCase() ?? null
+  }
+
   const pershingStocks = pershingRows.filter(r => PERSHING_ASSET_CATEGORIES.has(r.assetCategory))
+
+  // Reparación de filas ya guardadas con datos malos de corridas anteriores:
+  // ticker = CUSIP (Pershing no trae ticker) y fechas de compra inválidas.
+  const currentOpen = currentOpenRaw.map(p => {
+    let ticker = p.ticker
+    let lots = p.lots
+    let newTicker: string | null = null
+    let newLots: Lot[] | null = null
+    if (isPlaceholderTicker(p.ticker)) {
+      const resolved = resolveTicker(p.cusip ?? p.ticker)
+      if (resolved && resolved !== p.ticker.toUpperCase()) { newTicker = resolved; ticker = resolved }
+    }
+    if (p.source === 'pershing' && p.lots.some(l => !isValidDate(l.tradeDate))) {
+      const row = p.cusip ? pershingStocks.find(r => r.cusip === p.cusip) : undefined
+      const qty = p.lots.reduce((s, l) => s + l.quantity, 0)
+      if (row && Math.abs(row.quantity - qty) < QTY_EPS) { newLots = row.lots; lots = row.lots }
+      else warnings.push(`${p.ticker}: tiene fechas de compra inválidas y no se pudieron reparar solas — revisar a mano.`)
+    }
+    if (newTicker || newLots) {
+      changes.push({ kind: 'position_fix', id: p.id, ticker: p.ticker, analyst: p.analyst, newTicker, newLots })
+      return { ...p, ticker, lots }
+    }
+    return p
+  })
   const morganStocks = morganPositions.filter(p => MORGAN_PRODUCT_TYPES.has(p.securityType ?? ''))
 
   const pershingOpen = currentOpen.filter(p => p.source === 'pershing')
@@ -94,10 +132,12 @@ export function reconcile(
     if (!match) match = matchByDescription(row.description, pershingOpen)
 
     if (!match) {
+      const resolved = resolveTicker(row.cusip)
+      if (!resolved) warnings.push(`${row.description}: no se encontró el ticker del CUSIP ${row.cusip} — ingresarlo a mano en el formulario.`)
       pendingQuestions.push({
         id: nextQuestionId(),
         type: 'assign_analyst',
-        suggestedTicker: row.cusip,
+        suggestedTicker: resolved ?? row.cusip,
         tickerEditable: true,
         cusip: row.cusip,
         description: row.description,

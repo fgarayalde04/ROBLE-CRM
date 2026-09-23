@@ -7,6 +7,7 @@ import {
   backfillCusip,
   closePosition,
   createOpenPosition,
+  fixPosition,
   getClosedPositions,
   getOpenPositions,
   logGeneration,
@@ -34,6 +35,15 @@ export async function POST(req: NextRequest) {
     switch (change.kind) {
       case 'unchanged':
         break
+      case 'position_fix': {
+        await fixPosition(change.id, change.newTicker, change.newLots)
+        const cached = openBefore.find(p => p.id === change.id)
+        if (cached) {
+          if (change.newTicker) cached.ticker = change.newTicker
+          if (change.newLots) cached.lots = change.newLots
+        }
+        break
+      }
       case 'price_update':
         await updateLastPrice(change.ticker, change.analyst, change.newLastPrice)
         if (change.cusip) await backfillCusip(change.ticker, change.analyst, change.cusip)

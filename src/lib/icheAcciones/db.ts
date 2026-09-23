@@ -42,6 +42,16 @@ export async function getOpenPositions(): Promise<OpenPosition[]> {
   }))
 }
 
+// CUSIP -> ticker conocido en el maestro de instrumentos (Pershing no trae
+// ticker, solo CUSIP).
+export async function getCusipTickerMap(): Promise<Map<string, string>> {
+  const { rows } = await pool.query<{ cusip: string; ticker: string }>(
+    `select cusip, ticker from instrument_master
+     where coalesce(cusip, '') <> '' and coalesce(ticker, '') <> ''`
+  )
+  return new Map(rows.map(r => [r.cusip.trim().toUpperCase(), r.ticker.trim().toUpperCase()]))
+}
+
 export async function getClosedPositions(): Promise<ClosedPosition[]> {
   const { rows } = await pool.query<ClosedRow>(
     `select id, analyst, year, ticker, description, opening_date, cost_basis,
@@ -76,6 +86,15 @@ export async function addLotToPosition(ticker: string, analyst: Analyst, lot: Lo
      set lots = lots || $1::jsonb, last_price = coalesce($2, last_price), updated_at = now()
      where ticker = $3 and analyst = $4`,
     [JSON.stringify([lot]), lastPrice, ticker, analyst]
+  )
+}
+
+export async function fixPosition(id: string, newTicker: string | null, newLots: Lot[] | null): Promise<void> {
+  await pool.query(
+    `update iche_open_positions
+     set ticker = coalesce($2, ticker), lots = coalesce($3::jsonb, lots), updated_at = now()
+     where id = $1`,
+    [id, newTicker, newLots ? JSON.stringify(newLots) : null]
   )
 }
 

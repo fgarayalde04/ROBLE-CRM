@@ -4,7 +4,7 @@ import { createFolder, getGraphToken, listFolderChildren, uploadFile } from '@/l
 import { parseActivityExcel } from '@/lib/portfolio/activityParser'
 import { parseMorganHoldingsExcel } from '@/lib/portfolio/morganParser'
 import { getIcheClientFolder } from '@/lib/icheAcciones/clientLookup'
-import { getOpenPositions } from '@/lib/icheAcciones/db'
+import { getCusipTickerMap, getOpenPositions } from '@/lib/icheAcciones/db'
 import { detectAll } from '@/lib/icheAcciones/detectFileKind'
 import { parsePershingUnrealizedExcel } from '@/lib/icheAcciones/pershingUnrealizedParser'
 import { reconcile } from '@/lib/icheAcciones/reconcile'
@@ -100,6 +100,7 @@ export async function POST(req: NextRequest) {
   const morganActivity = parseActivityExcel(morganActivityBuf)
 
   const currentOpen = await getOpenPositions()
+  const knownTickers = await getCusipTickerMap().catch(() => new Map<string, string>())
 
   const plan = reconcile(
     currentOpen,
@@ -107,7 +108,8 @@ export async function POST(req: NextRequest) {
     morganHoldings.portfolio.positions,
     pershingActivity.rows,
     morganActivity.rows,
-    morganHoldings.unrealizedGL.rows
+    morganHoldings.unrealizedGL.rows,
+    knownTickers
   )
   plan.inputsFolder = inputsFolderInfo
   plan.warnings.push(...pershingUnrealized.warnings, ...pershingActivity.warnings, ...morganHoldings.portfolio.warnings, ...morganActivity.warnings)

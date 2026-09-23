@@ -19,7 +19,11 @@ export default function QuestionsForm({ questions, onSubmit, loading }: Props) {
   const allAnswered = questions.every(q => {
     const a = answers[q.id]
     if (!a) return false
-    if (q.type === 'assign_analyst') return !!a.analyst
+    if (q.type === 'assign_analyst') {
+      const ticker = (a.ticker ?? q.suggestedTicker).trim().toUpperCase()
+      // Un ticker igual al CUSIP es el placeholder de Pershing: no se acepta.
+      return !!a.analyst && !!ticker && ticker !== (q.cusip ?? '').toUpperCase()
+    }
     if (q.type === 'unmatched_close') return !!a.resolution && (a.resolution === 'leave_as_is' || !!a.closeDetails)
     return false
   })
@@ -80,8 +84,8 @@ function AssignAnalystQuestion({ q, value, onChange }: {
             onChange={e => onChange({ ticker: e.target.value })}
             className="ml-2 rounded border border-gray-300 px-2 py-1 text-sm"
           />
-          {q.source === 'pershing' && (
-            <span className="ml-2 text-xs text-amber-600">Pershing no da el ticker — confirmá cuál es (CUSIP: {q.cusip})</span>
+          {q.source === 'pershing' && q.suggestedTicker === q.cusip && (
+            <span className="ml-2 text-xs text-amber-600">No se pudo detectar el ticker — ingresalo (CUSIP: {q.cusip})</span>
           )}
         </div>
       )}
