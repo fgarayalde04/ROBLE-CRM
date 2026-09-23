@@ -75,12 +75,23 @@ export function reconcile(
   morganPositions: PortfolioPositionParsed[],
   pershingActivity: ActivityRow[],
   morganActivity: ActivityRow[],
-  morganCosts: UnrealizedGainLossRow[] = []
+  morganCosts: UnrealizedGainLossRow[] = [],
+  knownTickers: Map<string, string> = new Map()
 ): ReconcilePlan {
   const changes: TickerChange[] = []
   const pendingQuestions: IcheQuestion[] = []
   const warnings: string[] = []
   const matched = new Set<string>() // `${analyst}:${ticker}` de currentOpen ya resueltos
+
+  // Pershing no trae ticker: se busca por CUSIP en Morgan, en las posiciones ya
+  // cargadas, en ambos Activity y en el maestro de instrumentos.
+  const resolveTicker = (cusip: string): string | null => {
+    const key = cusip.trim().toUpperCase()
+    const fromMorgan = morganPositions.find(p => p.cusip?.toUpperCase() === key && p.symbol)?.symbol
+    const fromOpen = currentOpen.find(p => p.cusip?.toUpperCase() === key && p.ticker.toUpperCase() !== key)?.ticker
+    const fromActivity = [...pershingActivity, ...morganActivity].find(r => r.cusip?.toUpperCase() === key && r.symbol)?.symbol
+    return (fromMorgan ?? fromOpen ?? fromActivity ?? knownTickers.get(key) ?? null)?.trim().toUpperCase() ?? null
+  }
 
   const pershingStocks = pershingRows.filter(r => PERSHING_ASSET_CATEGORIES.has(r.assetCategory))
   const morganStocks = morganPositions.filter(p => MORGAN_PRODUCT_TYPES.has(p.securityType ?? ''))
@@ -94,10 +105,12 @@ export function reconcile(
     if (!match) match = matchByDescription(row.description, pershingOpen)
 
     if (!match) {
+      const resolved = resolveTicker(row.cusip)
+      if (!resolved) warnings.push(`${row.description}: no se encontró el ticker del CUSIP ${row.cusip} — ingresarlo a mano en el formulario.`)
       pendingQuestions.push({
         id: nextQuestionId(),
         type: 'assign_analyst',
-        suggestedTicker: row.cusip,
+        suggestedTicker: resolved ?? row.cusip,
         tickerEditable: true,
         cusip: row.cusip,
         description: row.description,

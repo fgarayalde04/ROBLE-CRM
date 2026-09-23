@@ -56,6 +56,15 @@ function parseNum(v: unknown): number | null {
 function parseDate(v: unknown): string | null {
   if (v == null || v === '') return null
   if (v instanceof Date) return v.toISOString().slice(0, 10)
+  // Pershing exporta Trade Date como número serial de Excel (p.ej. 46077);
+  // sin esto `new Date("46077")` daba fechas absurdas tipo "+046077-01".
+  if (typeof v === 'number' || /^\d{5}(\.\d+)?$/.test(String(v).trim())) {
+    const serial = Number(v)
+    if (serial > 20000 && serial < 80000) {
+      return new Date(Date.UTC(1899, 11, 30) + Math.floor(serial) * 86400000).toISOString().slice(0, 10)
+    }
+    return null
+  }
   const s = String(v).trim()
   if (/^multiple$/i.test(s)) return null
   const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)

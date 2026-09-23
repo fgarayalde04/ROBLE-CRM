@@ -42,6 +42,16 @@ export async function getOpenPositions(): Promise<OpenPosition[]> {
   }))
 }
 
+// CUSIP -> ticker conocido en el maestro de instrumentos (Pershing no trae
+// ticker, solo CUSIP).
+export async function getCusipTickerMap(): Promise<Map<string, string>> {
+  const { rows } = await pool.query<{ cusip: string; ticker: string }>(
+    `select cusip, ticker from instrument_master
+     where coalesce(cusip, '') <> '' and coalesce(ticker, '') <> ''`
+  )
+  return new Map(rows.map(r => [r.cusip.trim().toUpperCase(), r.ticker.trim().toUpperCase()]))
+}
+
 export async function getClosedPositions(): Promise<ClosedPosition[]> {
   const { rows } = await pool.query<ClosedRow>(
     `select id, analyst, year, ticker, description, opening_date, cost_basis,
