@@ -23,6 +23,9 @@ export interface PershingUnrealizedRow {
   unitCost: number
   assetCategory: string
   tradeDate: string | null // YYYY-MM-DD; null cuando el lote es "Multiple"
+  // Compras individuales con su fecha real (sin la fila subtotal "Multiple").
+  // Si el archivo solo trae el subtotal, queda un único lote con tradeDate null.
+  lots: { quantity: number; unitCost: number; tradeDate: string | null }[]
 }
 
 export interface ParsedPershingUnrealized {
@@ -129,7 +132,23 @@ export function parsePershingUnrealizedExcel(buffer: ArrayBuffer): ParsedPershin
     const quantity = used.reduce((s, l) => s + l.quantity, 0)
     const originalTotalCost = used.reduce((s, l) => s + l.originalTotalCost, 0)
     const marketValue = used.reduce((s, l) => s + l.marketValue, 0)
+    const individual = lots.filter(l => !l.isSubtotal && l.tradeDate && l.quantity > 0)
+    const individualQty = individual.reduce((s, l) => s + l.quantity, 0)
+    // Solo se confía en el desglose si suma la cantidad total; si no, mejor un
+    // único lote sin fecha que fechas inventadas.
+    const lotsOut = individual.length > 0 && Math.abs(individualQty - quantity) < 0.0001
+      ? individual.map(l => ({
+          quantity: l.quantity,
+          unitCost: parseFloat((l.originalTotalCost / l.quantity).toFixed(4)),
+          tradeDate: l.tradeDate,
+        }))
+      : [{
+          quantity,
+          unitCost: quantity > 0 ? parseFloat((originalTotalCost / quantity).toFixed(4)) : 0,
+          tradeDate: subtotal ? null : used[0].tradeDate,
+        }]
     rows.push({
+      lots: lotsOut,
       cusip,
       description: used[0].description,
       quantity,

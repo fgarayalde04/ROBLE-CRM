@@ -76,8 +76,8 @@ export async function POST(req: NextRequest) {
         ticker,
         cusip: q.cusip,
         description: q.description,
-        lots: [{ quantity: q.quantity, unitCost: q.unitCost, tradeDate: q.tradeDate }],
-        lastPrice: null,
+        lots: q.lots?.length ? q.lots : [{ quantity: q.quantity, unitCost: q.unitCost, tradeDate: q.tradeDate }],
+        lastPrice: q.lastPrice ?? null,
         source: q.source,
       })
     } else if (q.type === 'unmatched_close') {
