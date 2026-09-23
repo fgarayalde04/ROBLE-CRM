@@ -29,9 +29,9 @@ interface FundMonitorReturns {
   return_2021: number | null
 }
 
-async function lookupFundMonitorReturns(isin: string): Promise<FundMonitorReturns | null> {
+async function lookupFundMonitorReturns(isin: string, nombre?: string | null): Promise<FundMonitorReturns | null> {
   try {
-    const res = await fetch(`/api/fund-monitor/lookup?isin=${encodeURIComponent(isin)}`)
+    const res = await fetch(`/api/fund-monitor/lookup?isin=${encodeURIComponent(isin)}${nombre ? `&nombre=${encodeURIComponent(nombre)}` : ''}`)
     if (!res.ok) return null
     const data = await res.json()
     return data.found ? data.returns : null
@@ -44,9 +44,9 @@ async function lookupFundMonitorReturns(isin: string): Promise<FundMonitorReturn
 // completar filas que quedaron con el ISIN cargado pero sin nombre y/o sin
 // rendimientos (por un import o un cruce anterior), y donde antes no había
 // forma de saber qué fondo era ni cómo venía rindiendo sin buscarlo a mano.
-async function lookupFundMonitorInfo(isin: string): Promise<({ nombre: string | null } & FundMonitorReturns) | null> {
+async function lookupFundMonitorInfo(isin: string, nombre?: string | null): Promise<({ nombre: string | null } & FundMonitorReturns) | null> {
   try {
-    const res = await fetch(`/api/fund-monitor/lookup?isin=${encodeURIComponent(isin)}`)
+    const res = await fetch(`/api/fund-monitor/lookup?isin=${encodeURIComponent(isin)}${nombre ? `&nombre=${encodeURIComponent(nombre)}` : ''}`)
     if (!res.ok) return null
     const data = await res.json()
     return data.found ? { nombre: data.nombre ?? null, ...data.returns } : null
@@ -876,7 +876,7 @@ function FundsTable({
     if (candidates.length === 0) return
     candidates.forEach(async f => {
       backfilledInfo.current.add(f.id)
-      const info = await lookupFundMonitorInfo(f.isin!.trim())
+      const info = await lookupFundMonitorInfo(f.isin!.trim(), f.fund_name)
       if (!info) return
       const patch: Partial<Fund> = {}
       if (!f.fund_name?.trim() && info.nombre) patch.fund_name = info.nombre
@@ -920,7 +920,7 @@ function FundsTable({
     // Monitor de Fondos — mismo criterio que elegir el fondo del maestro
     // de instrumentos (ver selectFundInstrument más abajo).
     if (field === 'isin' && typeof value === 'string' && value.trim()) {
-      const returns = await lookupFundMonitorReturns(value.trim())
+      const returns = await lookupFundMonitorReturns(value.trim(), fund.fund_name)
       if (returns) patch = { ...patch, ...returns, data_source: 'fund_monitor' }
     }
     const updated = funds.map(f => f.id === fund.id ? { ...f, ...patch } as Fund : f)
@@ -947,7 +947,7 @@ function FundsTable({
     const isin = inst.isin ?? inst.cusip ?? fund.isin
     let patch: Partial<Fund> = { fund_name: inst.nombre, isin, issuer: inst.emisor ?? fund.issuer }
     if (isin) {
-      const returns = await lookupFundMonitorReturns(isin)
+      const returns = await lookupFundMonitorReturns(isin, inst.nombre)
       if (returns) patch = { ...patch, ...returns, data_source: 'fund_monitor' }
     }
     const updated = funds.map(f => f.id === fund.id ? { ...f, ...patch } as Fund : f)
