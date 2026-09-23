@@ -277,7 +277,29 @@ export default function ProposalPDFTemplate({
     return v > 0 ? `Ventas: ${fmtAmt(v)}` : ''
   }
 
-  function fundsTable(list: Fund[]) {
+  // Con ventas y compras en la misma tabla, se separan en dos secciones (ventas
+  // arriba, compras abajo) para que cada una tenga sus columnas correctas.
+  function splitByOp<T extends { operacion: Operacion }>(list: T[], render: (l: T[]) => React.ReactNode) {
+    const sales = list.filter(i => isVentaSide(i.operacion))
+    const rest = list.filter(i => !isVentaSide(i.operacion))
+    if (sales.length === 0 || rest.length === 0) return render(list)
+    const title = (text: string, color: string) => (
+      <div data-pdf-keep-together style={{ fontSize: 9, fontWeight: 700, color, textTransform: 'uppercase', letterSpacing: '0.06em', margin: '6px 0 3px' }}>{text}</div>
+    )
+    return (
+      <>
+        {title('Ventas', '#B91C1C')}
+        {render(sales)}
+        {title('Compras', '#15803D')}
+        {render(rest)}
+      </>
+    )
+  }
+  function fundsTable(list: Fund[]) { return splitByOp(list, fundsTableInner) }
+  function bondsTable(list: Bond[]) { return splitByOp(list, bondsTableInner) }
+  function equitiesTable(list: Equity[]) { return splitByOp(list, equitiesTableInner) }
+
+  function fundsTableInner(list: Fund[]) {
     if (list.length === 0) return null
     const show = {
       moneda:   !isHidden('funds.moneda'),
@@ -298,6 +320,7 @@ export default function ProposalPDFTemplate({
     // colSpan de la fila de subtotal = todas las columnas visibles menos la
     // última (INVERSIÓN, que muestra su propio total) — moneda, operación,
     // fondo y categoría/métricas opcionales que estén visibles.
+    const onlySale = list.every(f => isVentaSide(f.operacion))
     const labelColSpan = 2 + Object.values(show).filter(Boolean).length - (show.inversion ? 1 : 0)
     return (
       <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 0 }}>
@@ -349,16 +372,16 @@ export default function ProposalPDFTemplate({
         <tfoot>
           <tr data-pdf-keep-together>
             <td colSpan={labelColSpan} style={{ ...FOOTER_TD, textAlign: 'left', fontSize: 9, opacity: 0.6, borderRight: show.inversion ? undefined : 'none' }}>
-              {opSubtotalLabel(list)}
+              {onlySale ? 'Total ventas' : opSubtotalLabel(list)}
             </td>
-            {show.inversion && <td style={{ ...FOOTER_TD, textAlign: 'right', borderRight: 'none' }}>{fmtAmt(opCompras(list))}</td>}
+            {show.inversion && <td style={{ ...FOOTER_TD, textAlign: 'right', borderRight: 'none' }}>{fmtAmt(onlySale ? opVentas(list) : opCompras(list))}</td>}
           </tr>
         </tfoot>
       </table>
     )
   }
 
-  function bondsTable(list: Bond[]) {
+  function bondsTableInner(list: Bond[]) {
     if (list.length === 0) return null
     const accrualsByRow = new Map(list.map(b => [b.id, calculateBondAccrual(b, settlementDate ?? null)]))
     const listAccruedInterest = list.filter(b => isCompraSide(b.operacion)).reduce((s, b) => s + (accrualsByRow.get(b.id)?.accruedInterest ?? 0), 0)
@@ -431,7 +454,7 @@ export default function ProposalPDFTemplate({
           <tfoot>
             <tr data-pdf-keep-together>
               <td colSpan={labelColSpan} style={{ ...FOOTER_TD, fontSize: 9, opacity: 0.6, borderRight: 'none' }}>
-                {mixedSale ? `Ventas: valor ${fmtAmt(opVentas(list))} · a recibir ${fmtAmt(saleCash)}` : onlySale ? '' : opSubtotalLabel(list)}
+                {onlySale ? 'Total ventas' : ''}
               </td>
               {show.montos && <td style={{ ...FOOTER_TD, textAlign: 'right' }}>{fmtAmt(onlySale ? opVentas(list) : opCompras(list))}</td>}
               {show.montos && <td style={{ ...FOOTER_TD, textAlign: 'right' }}>{(onlySale ? saleAccrued : listAccruedInterest) > 0 ? fmtAmt(onlySale ? saleAccrued : listAccruedInterest) : '—'}</td>}
@@ -443,7 +466,7 @@ export default function ProposalPDFTemplate({
     )
   }
 
-  function equitiesTable(list: Equity[]) {
+  function equitiesTableInner(list: Equity[]) {
     if (list.length === 0) return null
     const show = {
       moneda: !isHidden('equities.moneda'),
@@ -452,6 +475,7 @@ export default function ProposalPDFTemplate({
       pais:   !isHidden('equities.pais'),
       inversion: !isHidden('equities.inversion'),
     }
+    const onlySale = list.every(e => isVentaSide(e.operacion))
     const labelColSpan = 2 + Object.values(show).filter(Boolean).length - (show.inversion ? 1 : 0)
     return (
       <div style={{ marginTop: 4 }}>
@@ -483,9 +507,9 @@ export default function ProposalPDFTemplate({
           <tfoot>
             <tr data-pdf-keep-together>
               <td colSpan={labelColSpan} style={{ ...FOOTER_TD, fontSize: 9, opacity: 0.6, borderRight: 'none' }}>
-                {opSubtotalLabel(list)}
+                {onlySale ? 'Total ventas' : opSubtotalLabel(list)}
               </td>
-              {show.inversion && <td style={{ ...FOOTER_TD, textAlign: 'right', borderRight: 'none' }}>{fmtAmt(opCompras(list))}</td>}
+              {show.inversion && <td style={{ ...FOOTER_TD, textAlign: 'right', borderRight: 'none' }}>{fmtAmt(onlySale ? opVentas(list) : opCompras(list))}</td>}
             </tr>
           </tfoot>
         </table>
