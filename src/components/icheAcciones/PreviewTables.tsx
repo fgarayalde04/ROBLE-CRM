@@ -30,13 +30,20 @@ export default function PreviewTables({ preview, fileName, uploadedItem, fileBas
     <div className="space-y-8">
       <div className="flex flex-wrap items-center gap-3 rounded-lg border border-green-200 bg-green-50 p-4 text-sm text-green-800">
         <span>✅ <strong>{fileName}</strong> generado y guardado en OneDrive.</span>
-        {fileBase64 && (
+        {fileBase64 ? (
           <button
             onClick={() => downloadXlsx(fileName, fileBase64)}
             className="rounded-md bg-[#1B4332] px-3 py-1.5 text-xs font-medium text-white"
           >
             Descargar Excel
           </button>
+        ) : (
+          <a
+            href="/api/admin/planillas/iche-acciones/download"
+            className="rounded-md bg-[#1B4332] px-3 py-1.5 text-xs font-medium text-white"
+          >
+            Descargar Excel
+          </a>
         )}
         {uploadedItem.webUrl && (
           <a href={uploadedItem.webUrl} target="_blank" rel="noreferrer" className="underline">
