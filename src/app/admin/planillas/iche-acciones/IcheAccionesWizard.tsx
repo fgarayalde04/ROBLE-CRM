@@ -34,7 +34,11 @@ export default function IcheAccionesWizard({ initialResult }: { initialResult: P
         await handleGenerate(data.plan, {})
       }
     } catch (err: any) {
-      setError(err.message)
+      setError(
+        err instanceof TypeError
+          ? 'No se pudieron enviar los archivos al servidor (el navegador cortó la conexión antes de recibir respuesta). Recargá la página, volvé a elegir los 4 archivos y reintentá.'
+          : err.message
+      )
     } finally {
       setLoading(false)
     }
