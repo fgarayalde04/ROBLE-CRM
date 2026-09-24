@@ -4,6 +4,17 @@ import { getSession } from '@/lib/auth'
 
 const TABLE = 'proposal_funds'
 
+// Los retornos por año calendario solo se mandan si traen valor: así el alta y
+// la edición de un fondo no dependen de que esas columnas existan en la base
+// (migración proposal_funds_yearly_returns_migration.sql) cuando no hay años
+// para guardar.
+const YEAR_COLS = ['return_2025', 'return_2024', 'return_2023', 'return_2022', 'return_2021'] as const
+function yearlyReturns(src: Record<string, unknown>) {
+  const out: Record<string, unknown> = {}
+  for (const c of YEAR_COLS) if (src[c] != null) out[c] = src[c]
+  return out
+}
+
 export async function POST(req: Request, { params }: { params: { id: string } }) {
   try {
     const session = await getSession()
@@ -24,11 +35,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       return_1y:        body.return_1y        ?? null,
       return_3y:        body.return_3y        ?? null,
       return_5y:        body.return_5y        ?? null,
-      return_2025:      body.return_2025      ?? null,
-      return_2024:      body.return_2024      ?? null,
-      return_2023:      body.return_2023      ?? null,
-      return_2022:      body.return_2022      ?? null,
-      return_2021:      body.return_2021      ?? null,
+      ...yearlyReturns(body),
       ytm_indicative:   body.ytm_indicative   ?? null,
       duration_years:   body.duration_years   ?? null,
       pct:              body.pct              ?? 0,
