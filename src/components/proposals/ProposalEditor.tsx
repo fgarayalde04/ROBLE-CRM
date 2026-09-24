@@ -34,7 +34,10 @@ async function lookupFundMonitorReturns(isin: string, nombre?: string | null): P
     const res = await fetch(`/api/fund-monitor/lookup?isin=${encodeURIComponent(isin)}${nombre ? `&nombre=${encodeURIComponent(nombre)}` : ''}`)
     if (!res.ok) return null
     const data = await res.json()
-    return data.found ? data.returns : null
+    if (!data.found) return null
+    // Solo los valores que Davinci/el Monitor efectivamente trae: nunca pisar
+    // con null un rendimiento ya cargado.
+    return Object.fromEntries(Object.entries(data.returns).filter(([, v]) => v != null)) as unknown as FundMonitorReturns
   } catch {
     return null
   }
@@ -1012,6 +1015,7 @@ function FundsTable({
     })
     const data = await res.json()
     if (res.ok) onUpdate([...funds, data])
+    else alert(`No se pudo agregar el fondo: ${data.error ?? res.status}`)
     setAdding(false)
   }
 
