@@ -290,7 +290,7 @@ function CreatePeriodModal({
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1.5">Trimestre</label>
-                  <div className="grid grid-cols-4 gap-1.5">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
                     {[1, 2, 3, 4].map(q => (
                       <button
                         key={q}
@@ -368,27 +368,29 @@ function CreatePeriodModal({
                     No hay archivos. Sincronizá OneDrive para cargar los estados de cuenta.
                   </div>
                 ) : (
-                  <table className="w-full text-sm">
-                    <tbody className="divide-y divide-gray-100">
-                      {files.map(f => (
-                        <tr
-                          key={f.id}
-                          onClick={() => toggleFile(f.id)}
-                          className={`cursor-pointer transition-colors ${selected.has(f.id) ? 'bg-emerald-50' : 'hover:bg-gray-50'}`}
-                        >
-                          <td className="px-4 py-2.5 w-8">
-                            <div className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-all ${
-                              selected.has(f.id) ? 'bg-emerald-500 border-emerald-500' : 'border-gray-300'
-                            }`}>
-                              {selected.has(f.id) && <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 12 12"><path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"/></svg>}
-                            </div>
-                          </td>
-                          <td className="px-2 py-2.5 font-medium text-gray-800">{f.name}</td>
-                          <td className="px-4 py-2.5 text-gray-400 text-xs">{f.client_folder ?? ''}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                  <div className="mobile-scroll-x">
+                    <table className="w-full text-sm">
+                      <tbody className="divide-y divide-gray-100">
+                        {files.map(f => (
+                          <tr
+                            key={f.id}
+                            onClick={() => toggleFile(f.id)}
+                            className={`cursor-pointer transition-colors ${selected.has(f.id) ? 'bg-emerald-50' : 'hover:bg-gray-50'}`}
+                          >
+                            <td className="px-4 py-2.5 w-8">
+                              <div className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-all ${
+                                selected.has(f.id) ? 'bg-emerald-500 border-emerald-500' : 'border-gray-300'
+                              }`}>
+                                {selected.has(f.id) && <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 12 12"><path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                              </div>
+                            </td>
+                            <td className="px-2 py-2.5 font-medium text-gray-800">{f.name}</td>
+                            <td className="px-4 py-2.5 text-gray-400 text-xs">{f.client_folder ?? ''}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 )}
               </div>
 
@@ -429,60 +431,62 @@ function CreatePeriodModal({
               )}
 
               <div className="border border-gray-200 rounded-xl overflow-hidden max-h-72 overflow-y-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="bg-gray-50 border-b border-gray-100">
-                      <th className="text-left px-4 py-2 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Archivo</th>
-                      <th className="text-left px-4 py-2 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Cliente detectado</th>
-                      <th className="text-left px-4 py-2 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Vinculación CRM</th>
-                      <th className="px-4 py-2" />
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {results.map((r, i) => (
-                      <tr key={i}>
-                        <td className="px-4 py-2.5 font-medium text-gray-800 text-xs">{r.file_name}</td>
-                        <td className="px-4 py-2.5">
-                          {r.detected_name
-                            ? <>
-                                <p className="text-xs text-gray-700 font-medium">{r.detected_name}</p>
-                                {r.secondary_holder && (
-                                  <p className="text-[10px] text-gray-400">{r.secondary_holder}</p>
-                                )}
-                              </>
-                            : <span className="text-xs text-gray-400">—</span>
-                          }
-                        </td>
-                        <td className="px-4 py-2.5">
-                          {r.error ? null : r.client_name && r.match_confidence != null ? (
-                            <div>
-                              <p className="text-xs font-medium text-gray-800">{r.client_name}</p>
-                              <div className="flex items-center gap-1.5 mt-0.5">
-                                {r.match_confidence >= 90
-                                  ? <span className="text-[10px] font-medium text-emerald-600">✓ Exacto</span>
-                                  : r.match_confidence >= 60
-                                    ? <span className="text-[10px] font-medium text-amber-600">~ Sugerido</span>
-                                    : <span className="text-[10px] font-medium text-gray-400">~ Posible</span>
-                                }
-                                <span className="text-[10px] text-gray-300">{r.match_confidence}%</span>
-                              </div>
-                            </div>
-                          ) : r.client_name ? (
-                            <p className="text-xs text-gray-500">{r.client_name}</p>
-                          ) : (
-                            <span className="text-[10px] text-gray-300">Sin match</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-2.5 text-right">
-                          {r.error
-                            ? <span className="text-xs text-red-500">{r.error}</span>
-                            : <span className="text-xs text-emerald-600 font-medium">✓ OK</span>
-                          }
-                        </td>
+                <div className="mobile-scroll-x">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-gray-50 border-b border-gray-100">
+                        <th className="text-left px-4 py-2 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Archivo</th>
+                        <th className="text-left px-4 py-2 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Cliente detectado</th>
+                        <th className="text-left px-4 py-2 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Vinculación CRM</th>
+                        <th className="px-4 py-2" />
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {results.map((r, i) => (
+                        <tr key={i}>
+                          <td className="px-4 py-2.5 font-medium text-gray-800 text-xs">{r.file_name}</td>
+                          <td className="px-4 py-2.5">
+                            {r.detected_name
+                              ? <>
+                                  <p className="text-xs text-gray-700 font-medium">{r.detected_name}</p>
+                                  {r.secondary_holder && (
+                                    <p className="text-[10px] text-gray-400">{r.secondary_holder}</p>
+                                  )}
+                                </>
+                              : <span className="text-xs text-gray-400">—</span>
+                            }
+                          </td>
+                          <td className="px-4 py-2.5">
+                            {r.error ? null : r.client_name && r.match_confidence != null ? (
+                              <div>
+                                <p className="text-xs font-medium text-gray-800">{r.client_name}</p>
+                                <div className="flex items-center gap-1.5 mt-0.5">
+                                  {r.match_confidence >= 90
+                                    ? <span className="text-[10px] font-medium text-emerald-600">✓ Exacto</span>
+                                    : r.match_confidence >= 60
+                                      ? <span className="text-[10px] font-medium text-amber-600">~ Sugerido</span>
+                                      : <span className="text-[10px] font-medium text-gray-400">~ Posible</span>
+                                  }
+                                  <span className="text-[10px] text-gray-300">{r.match_confidence}%</span>
+                                </div>
+                              </div>
+                            ) : r.client_name ? (
+                              <p className="text-xs text-gray-500">{r.client_name}</p>
+                            ) : (
+                              <span className="text-[10px] text-gray-300">Sin match</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-2.5 text-right">
+                            {r.error
+                              ? <span className="text-xs text-red-500">{r.error}</span>
+                              : <span className="text-xs text-emerald-600 font-medium">✓ OK</span>
+                            }
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
 
               <div className="flex justify-end">
@@ -708,56 +712,58 @@ function PeriodView({
         </div>
       ) : (
         <div className="bg-white border border-[#E2E8F0] rounded-xl overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-100 bg-gray-50/50">
-                <th className="text-left px-5 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Cliente</th>
-                <th className="text-left px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider hidden sm:table-cell">Asesor</th>
-                <th className="text-left px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">P. declarado</th>
-                <th className="text-right px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Score</th>
-                <th className="text-left px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">P. calculado</th>
-                <th className="text-left px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Estado</th>
-                <th className="px-5 py-3" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {reviews.map(r => (
-                <tr key={r.id} className="hover:bg-gray-50/60 transition-colors">
-                  <td className="px-5 py-3">
-                    <p className="font-medium text-gray-800 font-mono">{r.client_number ?? '—'}</p>
-                    <p className="text-[10px] text-gray-400 mt-0.5">{r.client_name ?? r.file_name}</p>
-                  </td>
-                  <td className="px-4 py-3 text-xs text-gray-500 hidden sm:table-cell">{r.advisor ?? '—'}</td>
-                  <td className="px-4 py-3"><ProfileBadge profile={r.client_profile} /></td>
-                  <td className="px-4 py-3 text-right">
-                    {r.portfolio_score != null ? (
-                      <div className="inline-block min-w-[52px]">
-                        <span className={`text-sm font-bold px-2 py-1 rounded-lg ${scoreColor(r.portfolio_score)}`}>
-                          {r.portfolio_score.toFixed(1)}
-                        </span>
-                        <ScoreBar score={r.portfolio_score} />
-                      </div>
-                    ) : <span className="text-xs text-gray-300">—</span>}
-                  </td>
-                  <td className="px-4 py-3"><ProfileBadge profile={r.portfolio_profile} /></td>
-                  <td className="px-4 py-3">
-                    <AlignBadge review={r.portfolio_profile} client={r.client_profile} />
-                    {(r.pending_weight ?? 0) > 10 && (
-                      <p className="text-[10px] text-amber-500 mt-0.5">{r.pending_weight?.toFixed(0)}% pendiente</p>
-                    )}
-                  </td>
-                  <td className="px-5 py-3 text-right">
-                    <button
-                      onClick={() => onOpenDetail(r)}
-                      className="text-xs text-blue-600 hover:text-blue-800 font-medium"
-                    >
-                      Ver →
-                    </button>
-                  </td>
+          <div className="mobile-scroll-x">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-100 bg-gray-50/50">
+                  <th className="text-left px-5 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Cliente</th>
+                  <th className="text-left px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider hidden sm:table-cell">Asesor</th>
+                  <th className="text-left px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">P. declarado</th>
+                  <th className="text-right px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Score</th>
+                  <th className="text-left px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">P. calculado</th>
+                  <th className="text-left px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Estado</th>
+                  <th className="px-5 py-3" />
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {reviews.map(r => (
+                  <tr key={r.id} className="hover:bg-gray-50/60 transition-colors">
+                    <td className="px-5 py-3">
+                      <p className="font-medium text-gray-800 font-mono">{r.client_number ?? '—'}</p>
+                      <p className="text-[10px] text-gray-400 mt-0.5">{r.client_name ?? r.file_name}</p>
+                    </td>
+                    <td className="px-4 py-3 text-xs text-gray-500 hidden sm:table-cell">{r.advisor ?? '—'}</td>
+                    <td className="px-4 py-3"><ProfileBadge profile={r.client_profile} /></td>
+                    <td className="px-4 py-3 text-right">
+                      {r.portfolio_score != null ? (
+                        <div className="inline-block min-w-[52px]">
+                          <span className={`text-sm font-bold px-2 py-1 rounded-lg ${scoreColor(r.portfolio_score)}`}>
+                            {r.portfolio_score.toFixed(1)}
+                          </span>
+                          <ScoreBar score={r.portfolio_score} />
+                        </div>
+                      ) : <span className="text-xs text-gray-300">—</span>}
+                    </td>
+                    <td className="px-4 py-3"><ProfileBadge profile={r.portfolio_profile} /></td>
+                    <td className="px-4 py-3">
+                      <AlignBadge review={r.portfolio_profile} client={r.client_profile} />
+                      {(r.pending_weight ?? 0) > 10 && (
+                        <p className="text-[10px] text-amber-500 mt-0.5">{r.pending_weight?.toFixed(0)}% pendiente</p>
+                      )}
+                    </td>
+                    <td className="px-5 py-3 text-right">
+                      <button
+                        onClick={() => onOpenDetail(r)}
+                        className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                      >
+                        Ver →
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>
@@ -999,108 +1005,112 @@ function ScoringBaseTab({ isAdmin }: { isAdmin: boolean }) {
           <div className="p-8 text-center text-sm text-gray-400">{emptyMsg}</div>
         ) : subTab === 'pending' ? (
           // ── Pending assets table (compact assign view) ──────────────────────
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-100 bg-gray-50/50">
-                <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Identificador</th>
-                <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Descripción</th>
-                <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Tipo</th>
-                <th className="text-right px-4 py-2.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Veces visto</th>
-                <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Último cliente</th>
-                <th className="px-4 py-2.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Acción</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {entries.map(e => (
-                <tr key={e.id} className="hover:bg-amber-50/40 transition-colors">
-                  <td className="px-4 py-2.5">
-                    <p className="font-mono text-xs font-medium text-gray-800">{e.security_identifier}</p>
-                    <p className="text-[10px] text-gray-400">{e.identifier_type ?? ''}{e.symbol ? ` · ${e.symbol}` : ''}</p>
-                  </td>
-                  <td className="px-4 py-2.5 max-w-[200px]">
-                    <p className="text-xs text-gray-700 truncate" title={e.security_description ?? e.normalized_name ?? ''}>{e.security_description ?? e.normalized_name ?? '—'}</p>
-                  </td>
-                  <td className="px-4 py-2.5 text-[10px] text-gray-500">{e.security_type ?? '—'}</td>
-                  <td className="px-4 py-2.5 text-right">
-                    <span className="inline-flex items-center justify-center min-w-[24px] h-6 px-2 rounded-full bg-amber-100 text-amber-700 text-[10px] font-bold">
-                      {e.times_seen ?? 1}
-                    </span>
-                  </td>
-                  <td className="px-4 py-2.5 text-xs text-gray-500">{e.last_client_seen ?? '—'}</td>
-                  <td className="px-4 py-2.5 text-right">
-                    <button
-                      onClick={() => setEditing({ ...e, classification_status: 'classified', manual_override: true })}
-                      className="px-3 py-1.5 bg-[#2D3F52] text-white text-[10px] font-medium rounded-lg hover:bg-[#1f2d3d] transition-colors"
-                    >
-                      Asignar score →
-                    </button>
-                  </td>
+          <div className="mobile-scroll-x">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-100 bg-gray-50/50">
+                  <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Identificador</th>
+                  <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Descripción</th>
+                  <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Tipo</th>
+                  <th className="text-right px-4 py-2.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Veces visto</th>
+                  <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Último cliente</th>
+                  <th className="px-4 py-2.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Acción</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {entries.map(e => (
+                  <tr key={e.id} className="hover:bg-amber-50/40 transition-colors">
+                    <td className="px-4 py-2.5">
+                      <p className="font-mono text-xs font-medium text-gray-800">{e.security_identifier}</p>
+                      <p className="text-[10px] text-gray-400">{e.identifier_type ?? ''}{e.symbol ? ` · ${e.symbol}` : ''}</p>
+                    </td>
+                    <td className="px-4 py-2.5 max-w-[200px]">
+                      <p className="text-xs text-gray-700 truncate" title={e.security_description ?? e.normalized_name ?? ''}>{e.security_description ?? e.normalized_name ?? '—'}</p>
+                    </td>
+                    <td className="px-4 py-2.5 text-[10px] text-gray-500">{e.security_type ?? '—'}</td>
+                    <td className="px-4 py-2.5 text-right">
+                      <span className="inline-flex items-center justify-center min-w-[24px] h-6 px-2 rounded-full bg-amber-100 text-amber-700 text-[10px] font-bold">
+                        {e.times_seen ?? 1}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2.5 text-xs text-gray-500">{e.last_client_seen ?? '—'}</td>
+                    <td className="px-4 py-2.5 text-right">
+                      <button
+                        onClick={() => setEditing({ ...e, classification_status: 'classified', manual_override: true })}
+                        className="px-3 py-1.5 bg-[#2D3F52] text-white text-[10px] font-medium rounded-lg hover:bg-[#1f2d3d] transition-colors"
+                      >
+                        Asignar score →
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         ) : (
           // ── Standard table (Todos / Override) ────────────────────────────────
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-100 bg-gray-50/50">
-                <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Identificador</th>
-                <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Nombre / Categoría</th>
-                <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Clase activo</th>
-                <th className="text-center px-4 py-2.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Score</th>
-                <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Fuente / Visto</th>
-                <th className="px-5 py-2.5" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {entries.map(e => (
-                <tr key={e.id} className="hover:bg-gray-50/60 transition-colors group">
-                  <td className="px-4 py-2.5">
-                    <div className="flex items-center gap-1.5">
-                      <p className="font-mono text-xs font-medium text-gray-800">{e.security_identifier}</p>
-                      {e.manual_override && (
-                        <span title={`Override por ${e.manual_override_by ?? 'usuario'} el ${e.manual_override_at?.slice(0,10) ?? ''}`}
-                          className="inline-flex items-center px-1 py-0.5 rounded text-[9px] font-bold bg-blue-100 text-blue-700 border border-blue-200">M</span>
-                      )}
-                    </div>
-                    <p className="text-[10px] text-gray-400">
-                      {e.identifier_type ?? ''}
-                      {e.symbol ? ` · ${e.symbol}` : ''}
-                    </p>
-                  </td>
-                  <td className="px-4 py-2.5">
-                    <p className="text-xs text-gray-800">{e.normalized_name ?? e.security_description ?? '—'}</p>
-                    <p className="text-[10px] text-gray-400">{e.category ?? ''}{e.security_type ? ` · ${e.security_type}` : ''}</p>
-                  </td>
-                  <td className="px-4 py-2.5">
-                    <span className="text-xs text-gray-600">{ASSET_CLASS_OPTIONS.find(o => o.value === e.asset_class)?.label ?? e.asset_class ?? '—'}</span>
-                  </td>
-                  <td className="px-4 py-2.5 text-center">
-                    {e.risk_score != null
-                      ? <span className={`inline-flex items-center justify-center w-8 h-8 rounded-full text-xs font-bold ${scoreColor(e.risk_score)}`}>{e.risk_score}</span>
-                      : <span className="text-xs text-gray-300">—</span>
-                    }
-                  </td>
-                  <td className="px-4 py-2.5">
-                    <p className="text-[10px] font-medium" style={{ color: SOURCE_COLOR[e.source ?? ''] ?? '#6b7280' }}>
-                      {SOURCE_LABEL[e.source ?? ''] ?? e.source ?? '—'}
-                    </p>
-                    <p className="text-[10px] text-gray-400">
-                      {e.times_seen != null ? `${e.times_seen}× visto` : ''}
-                      {e.last_client_seen ? ` · ${e.last_client_seen}` : ''}
-                    </p>
-                  </td>
-                  <td className="px-5 py-2.5 text-right">
-                    <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      {e.needs_review && <span className="text-[10px] text-amber-500 font-medium">⚠</span>}
-                      <button onClick={() => setEditing({ ...e })} className="text-xs text-blue-600 hover:text-blue-800 font-medium">Editar</button>
-                      {isAdmin && <button onClick={() => handleDelete(e.id)} className="text-xs text-red-400 hover:text-red-600 font-medium">×</button>}
-                    </div>
-                  </td>
+          <div className="mobile-scroll-x">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-100 bg-gray-50/50">
+                  <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Identificador</th>
+                  <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Nombre / Categoría</th>
+                  <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Clase activo</th>
+                  <th className="text-center px-4 py-2.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Score</th>
+                  <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Fuente / Visto</th>
+                  <th className="px-5 py-2.5" />
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {entries.map(e => (
+                  <tr key={e.id} className="hover:bg-gray-50/60 transition-colors group">
+                    <td className="px-4 py-2.5">
+                      <div className="flex items-center gap-1.5">
+                        <p className="font-mono text-xs font-medium text-gray-800">{e.security_identifier}</p>
+                        {e.manual_override && (
+                          <span title={`Override por ${e.manual_override_by ?? 'usuario'} el ${e.manual_override_at?.slice(0,10) ?? ''}`}
+                            className="inline-flex items-center px-1 py-0.5 rounded text-[9px] font-bold bg-blue-100 text-blue-700 border border-blue-200">M</span>
+                        )}
+                      </div>
+                      <p className="text-[10px] text-gray-400">
+                        {e.identifier_type ?? ''}
+                        {e.symbol ? ` · ${e.symbol}` : ''}
+                      </p>
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <p className="text-xs text-gray-800">{e.normalized_name ?? e.security_description ?? '—'}</p>
+                      <p className="text-[10px] text-gray-400">{e.category ?? ''}{e.security_type ? ` · ${e.security_type}` : ''}</p>
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <span className="text-xs text-gray-600">{ASSET_CLASS_OPTIONS.find(o => o.value === e.asset_class)?.label ?? e.asset_class ?? '—'}</span>
+                    </td>
+                    <td className="px-4 py-2.5 text-center">
+                      {e.risk_score != null
+                        ? <span className={`inline-flex items-center justify-center w-8 h-8 rounded-full text-xs font-bold ${scoreColor(e.risk_score)}`}>{e.risk_score}</span>
+                        : <span className="text-xs text-gray-300">—</span>
+                      }
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <p className="text-[10px] font-medium" style={{ color: SOURCE_COLOR[e.source ?? ''] ?? '#6b7280' }}>
+                        {SOURCE_LABEL[e.source ?? ''] ?? e.source ?? '—'}
+                      </p>
+                      <p className="text-[10px] text-gray-400">
+                        {e.times_seen != null ? `${e.times_seen}× visto` : ''}
+                        {e.last_client_seen ? ` · ${e.last_client_seen}` : ''}
+                      </p>
+                    </td>
+                    <td className="px-5 py-2.5 text-right">
+                      <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        {e.needs_review && <span className="text-[10px] text-amber-500 font-medium">⚠</span>}
+                        <button onClick={() => setEditing({ ...e })} className="text-xs text-blue-600 hover:text-blue-800 font-medium">Editar</button>
+                        {isAdmin && <button onClick={() => handleDelete(e.id)} className="text-xs text-red-400 hover:text-red-600 font-medium">×</button>}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
       <p className="text-[10px] text-gray-400 text-right">{entries.length} activos · ordenados por frecuencia de aparición</p>
@@ -1463,71 +1473,73 @@ export default function ScoringPanel({ isAdmin }: { isAdmin: boolean }) {
                   {/* Expanded review table */}
                   {isOpen && (
                     <div className="border-t border-gray-100">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="bg-gray-50/60">
-                            <th className="text-left px-5 py-2.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Cuenta</th>
-                            <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider hidden sm:table-cell">Asesor</th>
-                            <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">P. Decl.</th>
-                            <th className="text-right px-4 py-2.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Score</th>
-                            <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">P. Calc.</th>
-                            <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Estado</th>
-                            <th className="px-5 py-2.5 w-24" />
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-50">
-                          {dayReviews.map(r => (
-                            <tr key={r.id} className="hover:bg-gray-50/60 transition-colors group">
-                              <td className="px-5 py-3">
-                                <p className="font-medium text-gray-800 font-mono">{r.client_number ?? '—'}</p>
-                                <p className="text-[10px] text-gray-400 mt-0.5">{r.client_name ?? r.file_name}</p>
-                              </td>
-                              <td className="px-4 py-3 text-xs text-gray-500 hidden sm:table-cell">{r.advisor ?? '—'}</td>
-                              <td className="px-4 py-3"><ProfileBadge profile={r.client_profile} /></td>
-                              <td className="px-4 py-3 text-right">
-                                {r.portfolio_score != null ? (
-                                  <div className="inline-block min-w-[52px]">
-                                    <span className={`text-sm font-bold px-2 py-1 rounded-lg ${scoreColor(r.portfolio_score)}`}>
-                                      {r.portfolio_score.toFixed(1)}
-                                    </span>
-                                    <ScoreBar score={r.portfolio_score} />
-                                  </div>
-                                ) : <span className="text-xs text-gray-300">—</span>}
-                              </td>
-                              <td className="px-4 py-3"><ProfileBadge profile={r.portfolio_profile} /></td>
-                              <td className="px-4 py-3">
-                                <AlignBadge review={r.portfolio_profile} client={r.client_profile} />
-                                {(r.pending_weight ?? 0) > 10 && (
-                                  <p className="text-[10px] text-amber-500 mt-0.5">{r.pending_weight?.toFixed(0)}% pendiente</p>
-                                )}
-                              </td>
-                              <td className="px-5 py-3">
-                                <div className="flex items-center justify-end gap-3">
-                                  <button
-                                    onClick={() => setDetailR(r)}
-                                    className="text-xs text-blue-600 hover:text-blue-800 font-medium whitespace-nowrap"
-                                  >
-                                    Ver →
-                                  </button>
-                                  <button
-                                    onClick={() => handleDeleteReview(r.id)}
-                                    disabled={deletingReviewId === r.id}
-                                    title="Eliminar este análisis"
-                                    className="w-6 h-6 flex items-center justify-center rounded-md text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors disabled:opacity-40 opacity-0 group-hover:opacity-100"
-                                  >
-                                    {deletingReviewId === r.id
-                                      ? <span className="w-3 h-3 border-2 border-red-300 border-t-red-500 rounded-full animate-spin" />
-                                      : <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                        </svg>
-                                    }
-                                  </button>
-                                </div>
-                              </td>
+                      <div className="mobile-scroll-x">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="bg-gray-50/60">
+                              <th className="text-left px-5 py-2.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Cuenta</th>
+                              <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider hidden sm:table-cell">Asesor</th>
+                              <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">P. Decl.</th>
+                              <th className="text-right px-4 py-2.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Score</th>
+                              <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">P. Calc.</th>
+                              <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Estado</th>
+                              <th className="px-5 py-2.5 w-24" />
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                          </thead>
+                          <tbody className="divide-y divide-gray-50">
+                            {dayReviews.map(r => (
+                              <tr key={r.id} className="hover:bg-gray-50/60 transition-colors group">
+                                <td className="px-5 py-3">
+                                  <p className="font-medium text-gray-800 font-mono">{r.client_number ?? '—'}</p>
+                                  <p className="text-[10px] text-gray-400 mt-0.5">{r.client_name ?? r.file_name}</p>
+                                </td>
+                                <td className="px-4 py-3 text-xs text-gray-500 hidden sm:table-cell">{r.advisor ?? '—'}</td>
+                                <td className="px-4 py-3"><ProfileBadge profile={r.client_profile} /></td>
+                                <td className="px-4 py-3 text-right">
+                                  {r.portfolio_score != null ? (
+                                    <div className="inline-block min-w-[52px]">
+                                      <span className={`text-sm font-bold px-2 py-1 rounded-lg ${scoreColor(r.portfolio_score)}`}>
+                                        {r.portfolio_score.toFixed(1)}
+                                      </span>
+                                      <ScoreBar score={r.portfolio_score} />
+                                    </div>
+                                  ) : <span className="text-xs text-gray-300">—</span>}
+                                </td>
+                                <td className="px-4 py-3"><ProfileBadge profile={r.portfolio_profile} /></td>
+                                <td className="px-4 py-3">
+                                  <AlignBadge review={r.portfolio_profile} client={r.client_profile} />
+                                  {(r.pending_weight ?? 0) > 10 && (
+                                    <p className="text-[10px] text-amber-500 mt-0.5">{r.pending_weight?.toFixed(0)}% pendiente</p>
+                                  )}
+                                </td>
+                                <td className="px-5 py-3">
+                                  <div className="flex items-center justify-end gap-3">
+                                    <button
+                                      onClick={() => setDetailR(r)}
+                                      className="text-xs text-blue-600 hover:text-blue-800 font-medium whitespace-nowrap"
+                                    >
+                                      Ver →
+                                    </button>
+                                    <button
+                                      onClick={() => handleDeleteReview(r.id)}
+                                      disabled={deletingReviewId === r.id}
+                                      title="Eliminar este análisis"
+                                      className="w-6 h-6 flex items-center justify-center rounded-md text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors disabled:opacity-40 opacity-0 group-hover:opacity-100"
+                                    >
+                                      {deletingReviewId === r.id
+                                        ? <span className="w-3 h-3 border-2 border-red-300 border-t-red-500 rounded-full animate-spin" />
+                                        : <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                          </svg>
+                                      }
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
                   )}
                 </div>

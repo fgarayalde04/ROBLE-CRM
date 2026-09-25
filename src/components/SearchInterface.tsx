@@ -91,112 +91,120 @@ export default function SearchInterface() {
           {/* Clients */}
           {results.clients.length > 0 && (
             <Section title="Clientes" count={results.clients.length}>
-              <table className="w-full text-sm">
-                <tbody className="divide-y divide-gray-50">
-                  {results.clients.map((c) => (
-                    <tr key={c.id} className="hover:bg-gray-50">
-                      <td className="px-5 py-3">
-                        <Link href={`clients/${c.id}`} className="font-medium text-gray-900 hover:text-blue-600 hover:underline">
-                          {c.first_name} {c.last_name}
-                        </Link>
-                        <p className="text-xs text-gray-400 mt-0.5">#{c.client_number}{c.email ? ` · ${c.email}` : ''}</p>
-                      </td>
-                      <td className="px-5 py-3"><StatusBadge type="client_status" value={c.status} /></td>
-                      <td className="px-5 py-3">
-                        {c.onedrive_folder_url && (
-                          <a href={c.onedrive_folder_url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline">
-                            Abrir carpeta
-                          </a>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <div className="mobile-scroll-x">
+                <table className="w-full text-sm">
+                  <tbody className="divide-y divide-gray-50">
+                    {results.clients.map((c) => (
+                      <tr key={c.id} className="hover:bg-gray-50">
+                        <td className="px-5 py-3">
+                          <Link href={`clients/${c.id}`} className="font-medium text-gray-900 hover:text-blue-600 hover:underline">
+                            {c.first_name} {c.last_name}
+                          </Link>
+                          <p className="text-xs text-gray-400 mt-0.5">#{c.client_number}{c.email ? ` · ${c.email}` : ''}</p>
+                        </td>
+                        <td className="px-5 py-3"><StatusBadge type="client_status" value={c.status} /></td>
+                        <td className="px-5 py-3">
+                          {c.onedrive_folder_url && (
+                            <a href={c.onedrive_folder_url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline">
+                              Abrir carpeta
+                            </a>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </Section>
           )}
 
           {/* Documents */}
           {results.documents.length > 0 && (
             <Section title="Documentos" count={results.documents.length}>
-              <table className="w-full text-sm">
-                <tbody className="divide-y divide-gray-50">
-                  {results.documents.map((d: any) => (
-                    <tr key={d.id} className="hover:bg-gray-50">
-                      <td className="px-5 py-3">
-                        <p className="font-medium text-gray-900">{d.name}</p>
-                        {d.client && (
-                          <Link href={`clients/${d.client.id}`} className="text-xs text-blue-600 hover:underline">
-                            {d.client.first_name} {d.client.last_name}
-                          </Link>
-                        )}
-                      </td>
-                      <td className="px-5 py-3 text-gray-500 text-xs">{categoryLabel[d.category] ?? d.category}</td>
-                      <td className="px-5 py-3"><StatusBadge type="document_status" value={d.status} /></td>
-                      <td className="px-5 py-3">
-                        {d.onedrive_url && (
-                          <a href={d.onedrive_url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline">
-                            Abrir
-                          </a>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <div className="mobile-scroll-x">
+                <table className="w-full text-sm">
+                  <tbody className="divide-y divide-gray-50">
+                    {results.documents.map((d: any) => (
+                      <tr key={d.id} className="hover:bg-gray-50">
+                        <td className="px-5 py-3">
+                          <p className="font-medium text-gray-900">{d.name}</p>
+                          {d.client && (
+                            <Link href={`clients/${d.client.id}`} className="text-xs text-blue-600 hover:underline">
+                              {d.client.first_name} {d.client.last_name}
+                            </Link>
+                          )}
+                        </td>
+                        <td className="px-5 py-3 text-gray-500 text-xs">{categoryLabel[d.category] ?? d.category}</td>
+                        <td className="px-5 py-3"><StatusBadge type="document_status" value={d.status} /></td>
+                        <td className="px-5 py-3">
+                          {d.onedrive_url && (
+                            <a href={d.onedrive_url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline">
+                              Abrir
+                            </a>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </Section>
           )}
 
           {/* Tasks */}
           {results.tasks.length > 0 && (
             <Section title="Tareas" count={results.tasks.length}>
-              <table className="w-full text-sm">
-                <tbody className="divide-y divide-gray-50">
-                  {results.tasks.map((t: any) => (
-                    <tr key={t.id} className="hover:bg-gray-50">
-                      <td className="px-5 py-3">
-                        <p className="font-medium text-gray-900">{t.title}</p>
-                        {t.client && (
-                          <Link href={`clients/${t.client.id}`} className="text-xs text-blue-600 hover:underline">
-                            {t.client.first_name} {t.client.last_name}
-                          </Link>
-                        )}
-                      </td>
-                      <td className="px-5 py-3"><StatusBadge type="priority" value={t.priority} /></td>
-                      <td className="px-5 py-3"><StatusBadge type="task_status" value={t.status} /></td>
-                      <td className="px-5 py-3 text-gray-500 text-xs">
-                        {t.due_date ? format(new Date(t.due_date + 'T00:00:00'), 'd MMM yyyy', { locale: es }) : '—'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <div className="mobile-scroll-x">
+                <table className="w-full text-sm">
+                  <tbody className="divide-y divide-gray-50">
+                    {results.tasks.map((t: any) => (
+                      <tr key={t.id} className="hover:bg-gray-50">
+                        <td className="px-5 py-3">
+                          <p className="font-medium text-gray-900">{t.title}</p>
+                          {t.client && (
+                            <Link href={`clients/${t.client.id}`} className="text-xs text-blue-600 hover:underline">
+                              {t.client.first_name} {t.client.last_name}
+                            </Link>
+                          )}
+                        </td>
+                        <td className="px-5 py-3"><StatusBadge type="priority" value={t.priority} /></td>
+                        <td className="px-5 py-3"><StatusBadge type="task_status" value={t.status} /></td>
+                        <td className="px-5 py-3 text-gray-500 text-xs">
+                          {t.due_date ? format(new Date(t.due_date + 'T00:00:00'), 'd MMM yyyy', { locale: es }) : '—'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </Section>
           )}
 
           {/* Deadlines */}
           {results.deadlines.length > 0 && (
             <Section title="Vencimientos" count={results.deadlines.length}>
-              <table className="w-full text-sm">
-                <tbody className="divide-y divide-gray-50">
-                  {results.deadlines.map((d: any) => (
-                    <tr key={d.id} className="hover:bg-gray-50">
-                      <td className="px-5 py-3">
-                        <p className="font-medium text-gray-900">{d.title}</p>
-                        {d.client && (
-                          <Link href={`clients/${d.client.id}`} className="text-xs text-blue-600 hover:underline">
-                            {d.client.first_name} {d.client.last_name}
-                          </Link>
-                        )}
-                      </td>
-                      <td className="px-5 py-3"><StatusBadge type="task_status" value={d.status} /></td>
-                      <td className="px-5 py-3 text-gray-500 text-xs">
-                        {format(new Date(d.due_date + 'T00:00:00'), 'd MMM yyyy', { locale: es })}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <div className="mobile-scroll-x">
+                <table className="w-full text-sm">
+                  <tbody className="divide-y divide-gray-50">
+                    {results.deadlines.map((d: any) => (
+                      <tr key={d.id} className="hover:bg-gray-50">
+                        <td className="px-5 py-3">
+                          <p className="font-medium text-gray-900">{d.title}</p>
+                          {d.client && (
+                            <Link href={`clients/${d.client.id}`} className="text-xs text-blue-600 hover:underline">
+                              {d.client.first_name} {d.client.last_name}
+                            </Link>
+                          )}
+                        </td>
+                        <td className="px-5 py-3"><StatusBadge type="task_status" value={d.status} /></td>
+                        <td className="px-5 py-3 text-gray-500 text-xs">
+                          {format(new Date(d.due_date + 'T00:00:00'), 'd MMM yyyy', { locale: es })}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </Section>
           )}
 

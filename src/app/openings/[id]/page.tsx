@@ -28,7 +28,7 @@ export default async function OpeningDetailPage({ params }: { params: { id: stri
   const pendingTasksCount = tasks.filter((t) => t.status !== 'completada').length
 
   return (
-    <div className="p-8 max-w-5xl">
+    <div className="p-4 md:p-8 max-w-5xl">
       {/* Breadcrumb */}
       <div className="flex items-center gap-2 text-xs text-gray-400 mb-6">
         <Link href="/openings" className="hover:text-gray-600 transition-colors">
@@ -39,7 +39,7 @@ export default async function OpeningDetailPage({ params }: { params: { id: stri
       </div>
 
       {/* Header */}
-      <div className="flex items-start justify-between mb-6">
+      <div className="flex items-start justify-between flex-wrap gap-3 mb-6">
         <div>
           <h1 className="text-2xl font-semibold text-gray-900">{opening.folder_name}</h1>
           <div className="flex items-center gap-3 mt-2 flex-wrap">

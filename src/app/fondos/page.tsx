@@ -25,7 +25,7 @@ export default async function FondosPage() {
   const managers = await getManagersWithStats() as ManagerWithStats[]
 
   return (
-    <Suspense fallback={<div className="p-8 text-gray-500">Cargando…</div>}>
+    <Suspense fallback={<div className="p-4 md:p-8 text-gray-500">Cargando…</div>}>
       <FondosClient managers={managers} />
     </Suspense>
   )

@@ -68,7 +68,7 @@ export default async function GestoraPage({ params }: Props) {
         </div>
       </div>
 
-      <div className="max-w-6xl mx-auto px-8 py-6">
+      <div className="max-w-6xl mx-auto px-4 py-4 md:px-8 md:py-6">
         <GestoraDetail
           manager={manager}
           fondos={fondos}

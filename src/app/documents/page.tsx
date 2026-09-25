@@ -35,8 +35,8 @@ export default async function DocumentsPage({ searchParams }: Props) {
   }
 
   return (
-    <div className="p-8">
-      <div className="flex items-center justify-between mb-6">
+    <div className="p-4 md:p-8">
+      <div className="flex items-center justify-between flex-wrap gap-3 mb-6">
         <div>
           <h1 className="text-2xl font-semibold text-gray-900">Documentos</h1>
           <p className="mt-1 text-sm text-gray-500">{documents.length} registros</p>
@@ -96,48 +96,50 @@ export default async function DocumentsPage({ searchParams }: Props) {
             </Link>
           </div>
         ) : (
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Nombre</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Cliente</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Categoría</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Estado</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Vencimiento</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Responsable</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Archivo</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {documents.map((d) => (
-                <tr key={d.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 font-medium text-gray-900">{d.name}</td>
-                  <td className="px-4 py-3">
-                    {d.client ? (
-                      <Link href={`/clients/${d.client.id}`} className="text-blue-600 hover:underline">
-                        {d.client.first_name} {d.client.last_name}
-                      </Link>
-                    ) : <span className="text-gray-300">—</span>}
-                  </td>
-                  <td className="px-4 py-3 text-gray-500">{categoryLabel[d.category] ?? d.category}</td>
-                  <td className="px-4 py-3"><StatusBadge type="document_status" value={d.status} /></td>
-                  <td className="px-4 py-3 text-gray-500">
-                    {d.expiry_date
-                      ? format(new Date(d.expiry_date + 'T00:00:00'), 'd MMM yyyy', { locale: es })
-                      : <span className="text-gray-300">—</span>}
-                  </td>
-                  <td className="px-4 py-3 text-gray-500">{d.responsible ?? <span className="text-gray-300">—</span>}</td>
-                  <td className="px-4 py-3">
-                    {d.onedrive_url ? (
-                      <a href={d.onedrive_url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline">
-                        Abrir
-                      </a>
-                    ) : <span className="text-gray-300 text-xs">—</span>}
-                  </td>
+          <div className="mobile-scroll-x">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Nombre</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Cliente</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Categoría</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Estado</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Vencimiento</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Responsable</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Archivo</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {documents.map((d) => (
+                  <tr key={d.id} className="hover:bg-gray-50">
+                    <td className="px-4 py-3 font-medium text-gray-900">{d.name}</td>
+                    <td className="px-4 py-3">
+                      {d.client ? (
+                        <Link href={`/clients/${d.client.id}`} className="text-blue-600 hover:underline">
+                          {d.client.first_name} {d.client.last_name}
+                        </Link>
+                      ) : <span className="text-gray-300">—</span>}
+                    </td>
+                    <td className="px-4 py-3 text-gray-500">{categoryLabel[d.category] ?? d.category}</td>
+                    <td className="px-4 py-3"><StatusBadge type="document_status" value={d.status} /></td>
+                    <td className="px-4 py-3 text-gray-500">
+                      {d.expiry_date
+                        ? format(new Date(d.expiry_date + 'T00:00:00'), 'd MMM yyyy', { locale: es })
+                        : <span className="text-gray-300">—</span>}
+                    </td>
+                    <td className="px-4 py-3 text-gray-500">{d.responsible ?? <span className="text-gray-300">—</span>}</td>
+                    <td className="px-4 py-3">
+                      {d.onedrive_url ? (
+                        <a href={d.onedrive_url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline">
+                          Abrir
+                        </a>
+                      ) : <span className="text-gray-300 text-xs">—</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </div>

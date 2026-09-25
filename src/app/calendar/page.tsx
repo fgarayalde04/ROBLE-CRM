@@ -45,8 +45,8 @@ export default async function CalendarPage({ searchParams }: Props) {
   const upcoming = deadlines.filter((d) => d.status === 'pendiente' && d.due_date >= today)
 
   return (
-    <div className="p-8">
-      <div className="flex items-center justify-between mb-6">
+    <div className="p-4 md:p-8">
+      <div className="flex items-center justify-between flex-wrap gap-3 mb-6">
         <div>
           <h1 className="text-2xl font-semibold text-gray-900">Vencimientos</h1>
           <p className="mt-1 text-sm text-gray-500">{deadlines.length} registros</p>
@@ -146,35 +146,37 @@ function DeadlineTable({ deadlines, today }: { deadlines: DeadlineWithClient[]; 
           <div className="px-5 py-3 bg-gray-50 border-b border-gray-100">
             <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wide capitalize">{month}</h3>
           </div>
-          <table className="w-full text-sm">
-            <tbody className="divide-y divide-gray-50">
-              {items.map((d) => {
-                const isOverdue = d.status === 'pendiente' && d.due_date < today
-                return (
-                  <tr key={d.id} className={`hover:bg-gray-50 ${isOverdue ? 'bg-red-50/30' : ''}`}>
-                    <td className="px-5 py-3 w-28">
-                      <span className={`text-sm font-medium ${isOverdue ? 'text-red-600' : 'text-gray-700'}`}>
-                        {format(parseISO(d.due_date), 'd MMM', { locale: es })}
-                      </span>
-                    </td>
-                    <td className="px-5 py-3">
-                      <p className="font-medium text-gray-900">{d.title}</p>
-                      {d.client && (
-                        <p className="text-xs text-gray-400 mt-0.5">
-                          {d.client.first_name} {d.client.last_name}
-                        </p>
-                      )}
-                    </td>
-                    <td className="px-5 py-3 text-gray-500 text-xs">{categoryLabel[d.category] ?? d.category}</td>
-                    <td className="px-5 py-3 text-gray-500 text-xs">{d.responsible ?? '—'}</td>
-                    <td className="px-5 py-3">
-                      <StatusBadge type="task_status" value={d.status} />
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+          <div className="mobile-scroll-x">
+            <table className="w-full text-sm">
+              <tbody className="divide-y divide-gray-50">
+                {items.map((d) => {
+                  const isOverdue = d.status === 'pendiente' && d.due_date < today
+                  return (
+                    <tr key={d.id} className={`hover:bg-gray-50 ${isOverdue ? 'bg-red-50/30' : ''}`}>
+                      <td className="px-5 py-3 w-28">
+                        <span className={`text-sm font-medium ${isOverdue ? 'text-red-600' : 'text-gray-700'}`}>
+                          {format(parseISO(d.due_date), 'd MMM', { locale: es })}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3">
+                        <p className="font-medium text-gray-900">{d.title}</p>
+                        {d.client && (
+                          <p className="text-xs text-gray-400 mt-0.5">
+                            {d.client.first_name} {d.client.last_name}
+                          </p>
+                        )}
+                      </td>
+                      <td className="px-5 py-3 text-gray-500 text-xs">{categoryLabel[d.category] ?? d.category}</td>
+                      <td className="px-5 py-3 text-gray-500 text-xs">{d.responsible ?? '—'}</td>
+                      <td className="px-5 py-3">
+                        <StatusBadge type="task_status" value={d.status} />
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       ))}
     </div>

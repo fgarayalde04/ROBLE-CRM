@@ -7,9 +7,9 @@ export const dynamic = 'force-dynamic'
 
 export default function CarpetasPage() {
   return (
-    <div className="p-8">
+    <div className="p-4 md:p-8">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between flex-wrap gap-3 mb-6">
         <div>
           <h1 className="text-2xl font-semibold text-[#2D3F52]">Carpetas de clientes</h1>
           <p className="mt-1 text-sm text-gray-500">

@@ -6,7 +6,7 @@ export const metadata: Metadata = { title: 'Nueva carpeta' }
 
 export default function NewFolderPage() {
   return (
-    <div className="p-8">
+    <div className="p-4 md:p-8">
       <div className="flex items-center gap-2 text-xs text-gray-400 mb-6">
         <Link href="/folders" className="hover:text-gray-600">Nuevas carpetas</Link>
         <span>/</span>

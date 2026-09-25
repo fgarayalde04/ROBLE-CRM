@@ -36,7 +36,7 @@ export default function ImportHistoryModal({ accountNumber, onClose }: { account
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
         </div>
 
-        <div className="overflow-y-auto flex-1">
+        <div className="overflow-auto flex-1">
           {loading ? (
             <div className="py-16 text-center text-sm text-gray-400">Cargando…</div>
           ) : rows.length === 0 ? (

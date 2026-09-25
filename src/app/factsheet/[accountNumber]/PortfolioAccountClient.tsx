@@ -479,7 +479,7 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
         </div>
       </div>
 
-      <div className="max-w-6xl mx-auto p-6">
+      <div className="max-w-6xl mx-auto p-4 md:p-6">
         {tab === 'resumen' && (
           <ResumenTab
             accountNumber={accountNumber}
@@ -540,7 +540,7 @@ function Header({ router, account, accountNumber, importRow, onImport, onHistory
 
   return (
     <div className="bg-white border-b border-gray-200 px-6 py-4 sticky top-0 z-10">
-      <div className="max-w-6xl mx-auto flex items-center justify-between gap-4">
+      <div className="max-w-6xl mx-auto flex items-center justify-between flex-wrap gap-4">
         <div className="min-w-0">
           <button onClick={() => router.push('/factsheet')} className="text-xs text-gray-400 hover:text-gray-600 transition mb-1">← Portafolio</button>
           {account?.clientName ? (

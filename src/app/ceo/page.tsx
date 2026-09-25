@@ -164,9 +164,9 @@ export default async function CeoDashboardPage({ searchParams }: PageProps) {
   void cYear
 
   return (
-    <div className="p-6 space-y-6" style={{ backgroundColor: '#F4F6F8', minHeight: '100vh' }}>
+    <div className="p-4 md:p-6 space-y-6" style={{ backgroundColor: '#F4F6F8', minHeight: '100vh' }}>
       {/* Header */}
-      <div className="flex items-start justify-between">
+      <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
           <p className="text-xs text-gray-400 uppercase tracking-widest mb-1">Roble Capital Wealth Management</p>
           <h1 className="text-2xl font-semibold text-[#2D3F52]">Dashboard ejecutivo</h1>

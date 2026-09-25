@@ -474,7 +474,7 @@ function MonitoreoTable({
   return (
     <div className="space-y-4">
       {/* Stats */}
-      <div className="grid grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <StatCard label="Período" value={periodLabel(run)} subtitle={PERIOD_MONTHS[run.period_quarter]} />
         <StatCard label="Creado" value={format(new Date(run.created_at), 'd MMM yyyy', { locale: es })} subtitle={`por ${run.created_by}`} />
         <StatCard label="Cuentas analizadas" value={run.total_accounts} />
@@ -710,55 +710,57 @@ function HistorialView({ runs, onView, onDownload, onDelete, isAdmin }: {
 }) {
   return (
     <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b border-gray-100 bg-gray-50/60">
-            {['Período','Fecha de creación','Archivo original','Cuentas','Con desvío','Sin desvío','Nuevas','Creado por',''].map((h) => (
-              <th key={h} className={`px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider ${h === '' ? '' : 'text-left'} ${['Cuentas','Con desvío','Sin desvío','Nuevas'].includes(h) ? 'text-right' : ''}`}>{h}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-gray-50">
-          {runs.map((run, i) => (
-            <tr key={run.id} className="hover:bg-gray-50/60 transition-colors">
-              <td className="px-4 py-3">
-                <div className="flex items-center gap-2">
-                  <span className="font-semibold text-[#2D3F52]">{periodLabel(run)}</span>
-                  {i === 0 && <span className="text-[9px] font-bold px-1.5 py-0.5 bg-[#2D3F52]/8 text-[#2D3F52] rounded">ACTUAL</span>}
-                </div>
-                <p className="text-[10px] text-gray-400">{PERIOD_MONTHS[run.period_quarter]}</p>
-              </td>
-              <td className="px-4 py-3 text-xs text-gray-500">{format(new Date(run.created_at), 'd MMM yyyy HH:mm', { locale: es })}</td>
-              <td className="px-4 py-3 text-xs text-gray-500 max-w-[160px]">
-                <span className="truncate block" title={run.original_file_name ?? ''}>{run.original_file_name ?? '—'}</span>
-              </td>
-              <td className="px-4 py-3 text-right font-semibold text-gray-700">{run.total_accounts}</td>
-              <td className="px-4 py-3 text-right">
-                <span className={`font-semibold ${run.accounts_with_deviation > 0 ? 'text-red-600' : 'text-emerald-600'}`}>{run.accounts_with_deviation}</span>
-              </td>
-              <td className="px-4 py-3 text-right text-emerald-600 font-semibold">{run.accounts_without_deviation}</td>
-              <td className="px-4 py-3 text-right">
-                <span className={run.new_accounts_detected > 0 ? 'text-amber-600 font-semibold' : 'text-gray-400'}>{run.new_accounts_detected}</span>
-              </td>
-              <td className="px-4 py-3 text-xs text-gray-500">{run.created_by}</td>
-              <td className="px-4 py-3">
-                <div className="flex items-center gap-1 justify-end">
-                  <button onClick={() => onView(run)} className="px-2.5 py-1 text-[11px] text-blue-600 hover:bg-blue-50 rounded transition-colors font-medium">Ver</button>
-                  <button onClick={() => onDownload(run.id, 'xlsx')} className="p-1.5 text-gray-400 hover:text-[#2D3F52] hover:bg-gray-100 rounded transition-colors" title="Excel">
-                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                  </button>
-                  <button onClick={() => onDownload(run.id, 'csv')} className="p-1.5 text-gray-400 hover:text-[#2D3F52] hover:bg-gray-100 rounded transition-colors text-[10px] font-bold" title="CSV">CSV</button>
-                  {isAdmin && (
-                    <button onClick={() => onDelete(run)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors" title="Eliminar">
-                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                    </button>
-                  )}
-                </div>
-              </td>
+      <div className="mobile-scroll-x">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-gray-100 bg-gray-50/60">
+              {['Período','Fecha de creación','Archivo original','Cuentas','Con desvío','Sin desvío','Nuevas','Creado por',''].map((h) => (
+                <th key={h} className={`px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider ${h === '' ? '' : 'text-left'} ${['Cuentas','Con desvío','Sin desvío','Nuevas'].includes(h) ? 'text-right' : ''}`}>{h}</th>
+              ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody className="divide-y divide-gray-50">
+            {runs.map((run, i) => (
+              <tr key={run.id} className="hover:bg-gray-50/60 transition-colors">
+                <td className="px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-[#2D3F52]">{periodLabel(run)}</span>
+                    {i === 0 && <span className="text-[9px] font-bold px-1.5 py-0.5 bg-[#2D3F52]/8 text-[#2D3F52] rounded">ACTUAL</span>}
+                  </div>
+                  <p className="text-[10px] text-gray-400">{PERIOD_MONTHS[run.period_quarter]}</p>
+                </td>
+                <td className="px-4 py-3 text-xs text-gray-500">{format(new Date(run.created_at), 'd MMM yyyy HH:mm', { locale: es })}</td>
+                <td className="px-4 py-3 text-xs text-gray-500 max-w-[160px]">
+                  <span className="truncate block" title={run.original_file_name ?? ''}>{run.original_file_name ?? '—'}</span>
+                </td>
+                <td className="px-4 py-3 text-right font-semibold text-gray-700">{run.total_accounts}</td>
+                <td className="px-4 py-3 text-right">
+                  <span className={`font-semibold ${run.accounts_with_deviation > 0 ? 'text-red-600' : 'text-emerald-600'}`}>{run.accounts_with_deviation}</span>
+                </td>
+                <td className="px-4 py-3 text-right text-emerald-600 font-semibold">{run.accounts_without_deviation}</td>
+                <td className="px-4 py-3 text-right">
+                  <span className={run.new_accounts_detected > 0 ? 'text-amber-600 font-semibold' : 'text-gray-400'}>{run.new_accounts_detected}</span>
+                </td>
+                <td className="px-4 py-3 text-xs text-gray-500">{run.created_by}</td>
+                <td className="px-4 py-3">
+                  <div className="flex items-center gap-1 justify-end">
+                    <button onClick={() => onView(run)} className="px-2.5 py-1 text-[11px] text-blue-600 hover:bg-blue-50 rounded transition-colors font-medium">Ver</button>
+                    <button onClick={() => onDownload(run.id, 'xlsx')} className="p-1.5 text-gray-400 hover:text-[#2D3F52] hover:bg-gray-100 rounded transition-colors" title="Excel">
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                    </button>
+                    <button onClick={() => onDownload(run.id, 'csv')} className="p-1.5 text-gray-400 hover:text-[#2D3F52] hover:bg-gray-100 rounded transition-colors text-[10px] font-bold" title="CSV">CSV</button>
+                    {isAdmin && (
+                      <button onClick={() => onDelete(run)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors" title="Eliminar">
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                      </button>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }
@@ -1029,7 +1031,7 @@ function CreateMonitoreoModal({ user, entity, onClose, onCreated }: {
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1.5">Trimestre</label>
-                  <div className="grid grid-cols-4 gap-2">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                     {([1, 2, 3, 4] as const).map((q) => (
                       <button key={q} onClick={() => setQuarter(q)}
                         className={`py-2.5 text-sm font-medium rounded-lg border transition-colors ${quarter === q ? 'bg-[#2D3F52] text-white border-[#2D3F52]' : 'border-gray-200 text-gray-600 hover:border-gray-300'}`}>
@@ -1311,7 +1313,7 @@ function BaseAccountsView({
   return (
     <div className="space-y-4">
       {/* Summary */}
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <StatCard label="Total cuentas"   value={accounts.length} />
         <StatCard label="Activas"         value={accounts.filter(a => a.is_active).length}  accent="green" />
         <StatCard label="Inactivas"       value={inactiveCount}   accent={inactiveCount > 0 ? 'neutral' : 'neutral'} />

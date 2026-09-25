@@ -218,7 +218,7 @@ export default function TabResumen({ opening }: Props) {
       {/* Edicion */}
       <div className="bg-white border border-[#E2E8F0] rounded-lg p-5">
         <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-4">Editar</h2>
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
             <label className="block text-xs text-gray-500 mb-1">Estado</label>
             <select

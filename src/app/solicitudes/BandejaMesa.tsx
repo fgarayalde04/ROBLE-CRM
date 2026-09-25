@@ -350,7 +350,7 @@ export default function BandejaMesa({ isMesa, userName }: { isMesa: boolean; use
     <div className="space-y-4">
 
       {/* KPIs */}
-      <div className="grid grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         {[
           { label: 'Pendiente',    val: kpis.pendiente,    color: 'text-amber-700',   bg: 'bg-amber-50' },
           { label: 'En revisión',  val: kpis.en_revision,  color: 'text-blue-700',    bg: 'bg-blue-50' },
@@ -378,14 +378,14 @@ export default function BandejaMesa({ isMesa, userName }: { isMesa: boolean; use
       </div>
 
       {/* Layout: tabla + panel */}
-      <div className="flex gap-4 min-h-[500px]">
+      <div className="flex flex-col md:flex-row gap-4 md:min-h-[500px]">
 
         {/* Tabla */}
         <div className="flex-1 bg-white rounded-lg border border-gray-200 overflow-hidden">
           {loading ? (
-            <div className="p-8 text-center text-sm text-gray-400">Cargando…</div>
+            <div className="p-4 md:p-8 text-center text-sm text-gray-400">Cargando…</div>
           ) : rows.length === 0 ? (
-            <div className="p-8 text-center text-sm text-gray-400">No hay solicitudes.</div>
+            <div className="p-4 md:p-8 text-center text-sm text-gray-400">No hay solicitudes.</div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -440,7 +440,7 @@ export default function BandejaMesa({ isMesa, userName }: { isMesa: boolean; use
 
         {/* Panel de detalle */}
         {selected && (
-          <div className="w-80 shrink-0 bg-white rounded-lg border border-gray-200 overflow-y-auto">
+          <div className="w-full md:w-80 md:shrink-0 bg-white rounded-lg border border-gray-200 overflow-y-auto">
             <div className="px-4 pt-4 pb-3 border-b border-gray-100 flex items-center justify-between">
               <div>
                 <p className="text-xs font-mono text-gray-400">{selected.solicitud_id}</p>

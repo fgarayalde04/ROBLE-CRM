@@ -284,7 +284,7 @@ export default function FactsheetClient() {
 
       {/* ── History modal ── */}
       {showHistory && (
-        <div className="no-print fixed inset-0 bg-black/40 z-50 flex items-center justify-center" onClick={() => setShowHistory(false)}>
+        <div className="no-print fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setShowHistory(false)}>
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[70vh] overflow-hidden" onClick={e => e.stopPropagation()}>
             <div className="p-5 border-b flex justify-between items-center">
               <h3 className="font-semibold text-gray-900">Historial de Factsheets</h3>

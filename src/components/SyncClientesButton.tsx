@@ -83,7 +83,7 @@ export default function SyncClientesButton({ configuredPath }: Props) {
             </svg>
             <p className="text-sm font-medium text-gray-800">Sincronización completada</p>
           </div>
-          <div className="grid grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {[
               { label: 'Encontradas', value: result.total_found },
               { label: 'Nuevas', value: result.created, accent: result.created > 0 },

@@ -230,58 +230,60 @@ export default function TabDocumentos({ documents: initialDocs, openingId }: Pro
             <p className="text-sm text-gray-400">No hay documentos registrados.</p>
           </div>
         ) : (
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-100">
-              <tr>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Nombre</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Categoria</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Estado</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Vencimiento</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Link</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Notas</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {docs.map((doc) => (
-                <tr key={doc.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-4 py-3 font-medium text-gray-900">{doc.name}</td>
-                  <td className="px-4 py-3 text-gray-500 text-xs">
-                    {doc.category ? (CATEGORY_LABELS[doc.category] ?? doc.category) : '—'}
-                  </td>
-                  <td className="px-4 py-3">
-                    <select
-                      value={doc.status}
-                      onChange={(e) => handleStatusChange(doc, e.target.value)}
-                      disabled={updating.has(doc.id)}
-                      className={`text-[10px] font-medium px-2 py-0.5 rounded border appearance-none cursor-pointer ${DOC_STATUS_COLORS[doc.status]}`}
-                    >
-                      <option value="pendiente">Pendiente</option>
-                      <option value="recibido">Recibido</option>
-                      <option value="aprobado">Aprobado</option>
-                      <option value="rechazado">Rechazado</option>
-                    </select>
-                  </td>
-                  <td className="px-4 py-3 text-gray-500 text-xs">
-                    {doc.expiry_date
-                      ? new Date(doc.expiry_date + 'T12:00:00').toLocaleDateString('es-UY', { day: '2-digit', month: 'short', year: 'numeric' })
-                      : '—'}
-                  </td>
-                  <td className="px-4 py-3">
-                    {doc.link ? (
-                      <a href={doc.link} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline truncate max-w-[120px] inline-block">
-                        Ver
-                      </a>
-                    ) : (
-                      <span className="text-gray-300 text-xs">—</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-gray-500 text-xs max-w-[160px] truncate">
-                    {doc.notes ?? '—'}
-                  </td>
+          <div className="mobile-scroll-x">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 border-b border-gray-100">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Nombre</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Categoria</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Estado</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Vencimiento</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Link</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Notas</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {docs.map((doc) => (
+                  <tr key={doc.id} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-4 py-3 font-medium text-gray-900">{doc.name}</td>
+                    <td className="px-4 py-3 text-gray-500 text-xs">
+                      {doc.category ? (CATEGORY_LABELS[doc.category] ?? doc.category) : '—'}
+                    </td>
+                    <td className="px-4 py-3">
+                      <select
+                        value={doc.status}
+                        onChange={(e) => handleStatusChange(doc, e.target.value)}
+                        disabled={updating.has(doc.id)}
+                        className={`text-[10px] font-medium px-2 py-0.5 rounded border appearance-none cursor-pointer ${DOC_STATUS_COLORS[doc.status]}`}
+                      >
+                        <option value="pendiente">Pendiente</option>
+                        <option value="recibido">Recibido</option>
+                        <option value="aprobado">Aprobado</option>
+                        <option value="rechazado">Rechazado</option>
+                      </select>
+                    </td>
+                    <td className="px-4 py-3 text-gray-500 text-xs">
+                      {doc.expiry_date
+                        ? new Date(doc.expiry_date + 'T12:00:00').toLocaleDateString('es-UY', { day: '2-digit', month: 'short', year: 'numeric' })
+                        : '—'}
+                    </td>
+                    <td className="px-4 py-3">
+                      {doc.link ? (
+                        <a href={doc.link} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline truncate max-w-[120px] inline-block">
+                          Ver
+                        </a>
+                      ) : (
+                        <span className="text-gray-300 text-xs">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-gray-500 text-xs max-w-[160px] truncate">
+                      {doc.notes ?? '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </div>

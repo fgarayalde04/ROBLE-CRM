@@ -288,7 +288,20 @@ export default function OrderHistorial({ isAdmin, userName }: Props) {
           ) : entries.length === 0 ? (
             <EmptyState onClear={() => { setSearch(''); setDatePreset('') }} />
           ) : (
-            <div className="overflow-x-auto">
+            <>
+            {/* Celular: tarjetas en vez de tabla de 7 columnas */}
+            <ul className="md:hidden divide-y divide-gray-100">
+              {entries.map((entry) => (
+                <EntryCard
+                  key={entry.id}
+                  entry={entry}
+                  canEdit={canEdit(entry)}
+                  onPatch={patchEntry}
+                  onDetail={openDetail}
+                />
+              ))}
+            </ul>
+            <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-gray-100 bg-gray-50/80">
@@ -315,6 +328,7 @@ export default function OrderHistorial({ isAdmin, userName }: Props) {
                 </tbody>
               </table>
             </div>
+            </>
           )}
         </div>
       </div>
@@ -485,6 +499,82 @@ function EntryRow({
   )
 }
 
+// ─── Entry Card (celular) ─────────────────────────────────────────────────────
+
+function EntryCard({
+  entry, canEdit, onPatch, onDetail,
+}: {
+  entry: OrderEntry
+  canEdit: boolean
+  onPatch: (id: string, u: Record<string, any>) => void
+  onDetail: (e: OrderEntry) => void
+}) {
+  const st = STATUS[entry.status] ?? STATUS.copiado
+  return (
+    <li className="px-4 py-3">
+      <button type="button" onClick={() => onDetail(entry)} className="w-full text-left">
+        <div className="flex items-start justify-between gap-2">
+          <p className="text-[14px] font-semibold text-[#2D3F52] truncate min-w-0">
+            {entry.client_name || <span className="text-gray-300 font-normal">Sin nombre</span>}
+          </p>
+          <span className={`shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded ${st.bg} ${st.text}`}>{st.label}</span>
+        </div>
+        <div className="flex items-center gap-1.5 mt-0.5 text-[11px] text-gray-400">
+          <span>{format(new Date(entry.created_at), 'd MMM yyyy · HH:mm', { locale: es })}</span>
+          {entry.client_number && (
+            <span className="font-mono text-gray-500 bg-gray-100 px-1.5 rounded">{entry.client_number}</span>
+          )}
+        </div>
+        {entry.summary_text && (
+          <p className="text-[12px] text-gray-600 mt-1.5 line-clamp-2">{entry.summary_text}</p>
+        )}
+        {entry.instruments?.length > 0 && (
+          <div className="flex gap-1 mt-1.5 flex-wrap">
+            {Array.from(new Set(entry.instruments)).map((k) => {
+              const s = INSTR[k]; if (!s) return null
+              return (
+                <span key={k} className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${s.bg} ${s.text}`}>
+                  {s.label}
+                </span>
+              )
+            })}
+          </div>
+        )}
+        {entry.comentarios && (
+          <p className="text-[11px] text-gray-500 mt-1.5 italic truncate">{entry.comentarios}</p>
+        )}
+      </button>
+      <div className="flex items-center gap-4 mt-2.5">
+        <span className="flex items-center gap-1.5 text-[11px] text-gray-500">
+          <Check
+            checked={entry.confirmacion_cliente}
+            canEdit={canEdit}
+            color="emerald"
+            onToggle={() => onPatch(entry.id, { confirmacion_cliente: !entry.confirmacion_cliente })}
+          />
+          Confirmada
+        </span>
+        <span className="flex items-center gap-1.5 text-[11px] text-gray-500">
+          <Check
+            checked={entry.orden_ejecutada}
+            canEdit={canEdit}
+            color="blue"
+            onToggle={() => onPatch(entry.id, { orden_ejecutada: !entry.orden_ejecutada })}
+          />
+          Ejecutada
+        </span>
+        <button
+          type="button"
+          onClick={() => onDetail(entry)}
+          className="ml-auto text-[12px] font-semibold text-blue-600 px-2 py-1 rounded hover:bg-blue-50"
+        >
+          Ver
+        </button>
+      </div>
+    </li>
+  )
+}
+
 // ─── Check ────────────────────────────────────────────────────────────────────
 
 function Check({ checked, canEdit, color, onToggle }: {
@@ -615,46 +705,48 @@ function DetailPanel({ entry, loading, canEdit, onPatch, onClose }: {
               </div>
             ) : entry.items?.length > 0 ? (
               <div className="rounded-lg border border-gray-100 overflow-hidden">
-                <table className="w-full text-[12px]">
-                  <thead>
-                    <tr className="bg-gray-50 border-b border-gray-100">
-                      {['Tipo','Op.','Instrumento','Cantidad','Precio','Vigencia','Comisión'].map((h) => (
-                        <th key={h} className="px-3 py-2 text-left text-[10px] font-bold text-gray-400 uppercase tracking-wider">{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-50">
-                    {entry.items.map((item) => {
-                      const s = INSTR[item.order_type]
-                      return (
-                        <tr key={item.id} className="hover:bg-gray-50/60">
-                          <td className="px-3 py-2">
-                            <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${s?.bg ?? 'bg-gray-100'} ${s?.text ?? 'text-gray-600'}`}>
-                              {s?.label ?? item.order_type}
-                            </span>
-                          </td>
-                          <td className="px-3 py-2">
-                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase ${item.operation_type === 'compra' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'}`}>
-                              {item.operation_type}
-                            </span>
-                          </td>
-                          <td className="px-3 py-2 max-w-[150px]">
-                            <p className="font-semibold text-[#2D3F52] truncate">{item.instrument_name ?? '—'}</p>
-                            {(item.symbol || item.cusip) && <p className="text-[10px] font-mono text-gray-400">{item.symbol ?? item.cusip}</p>}
-                          </td>
-                          <td className="px-3 py-2 font-mono">{fmtQty(item)}</td>
-                          <td className="px-3 py-2 text-gray-600">{item.price ?? '—'}</td>
-                          <td className="px-3 py-2">
-                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${item.vigencia === 'GTC' ? 'bg-purple-50 text-purple-700' : 'bg-gray-100 text-gray-600'}`}>
-                              {item.vigencia ?? 'DIA'}
-                            </span>
-                          </td>
-                          <td className="px-3 py-2 text-gray-500">{item.comision ?? '—'}</td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
+                <div className="mobile-scroll-x">
+                  <table className="w-full text-[12px]">
+                    <thead>
+                      <tr className="bg-gray-50 border-b border-gray-100">
+                        {['Tipo','Op.','Instrumento','Cantidad','Precio','Vigencia','Comisión'].map((h) => (
+                          <th key={h} className="px-3 py-2 text-left text-[10px] font-bold text-gray-400 uppercase tracking-wider">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {entry.items.map((item) => {
+                        const s = INSTR[item.order_type]
+                        return (
+                          <tr key={item.id} className="hover:bg-gray-50/60">
+                            <td className="px-3 py-2">
+                              <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${s?.bg ?? 'bg-gray-100'} ${s?.text ?? 'text-gray-600'}`}>
+                                {s?.label ?? item.order_type}
+                              </span>
+                            </td>
+                            <td className="px-3 py-2">
+                              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase ${item.operation_type === 'compra' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'}`}>
+                                {item.operation_type}
+                              </span>
+                            </td>
+                            <td className="px-3 py-2 max-w-[150px]">
+                              <p className="font-semibold text-[#2D3F52] truncate">{item.instrument_name ?? '—'}</p>
+                              {(item.symbol || item.cusip) && <p className="text-[10px] font-mono text-gray-400">{item.symbol ?? item.cusip}</p>}
+                            </td>
+                            <td className="px-3 py-2 font-mono">{fmtQty(item)}</td>
+                            <td className="px-3 py-2 text-gray-600">{item.price ?? '—'}</td>
+                            <td className="px-3 py-2">
+                              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${item.vigencia === 'GTC' ? 'bg-purple-50 text-purple-700' : 'bg-gray-100 text-gray-600'}`}>
+                                {item.vigencia ?? 'DIA'}
+                              </span>
+                            </td>
+                            <td className="px-3 py-2 text-gray-500">{item.comision ?? '—'}</td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             ) : (
               <p className="text-sm text-gray-400 italic">Sin instrucciones detalladas.</p>

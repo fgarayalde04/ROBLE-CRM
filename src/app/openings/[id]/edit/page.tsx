@@ -27,7 +27,7 @@ export default async function EditOpeningPage({ params }: { params: { id: string
   }
 
   return (
-    <div className="p-8">
+    <div className="p-4 md:p-8">
       <div className="flex items-center gap-2 text-xs text-gray-400 mb-6">
         <Link href="/openings" className="hover:text-gray-600">Apertura de cuentas</Link>
         <span>/</span>

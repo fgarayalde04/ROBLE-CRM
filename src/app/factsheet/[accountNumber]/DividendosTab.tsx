@@ -283,55 +283,57 @@ export default function DividendosTab({ accountNumber, positions }: { accountNum
               {previewOtherAccountCount > 0 && ` Se ignoraron ${previewOtherAccountCount} fila(s) que pertenecen a otra cuenta dentro del mismo archivo.`}
             </p>
             {previewWarnings.map((w, i) => <p key={i} className="text-xs text-amber-700 mb-2">{w}</p>)}
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="border-b border-gray-200 text-left text-gray-400">
-                  <th className="py-1 w-6" />
-                  <th className="py-1">Fecha</th>
-                  <th className="py-1">Fondo</th>
-                  <th className="py-1 w-24">Tipo</th>
-                  <th className="py-1 text-right">Monto</th>
-                  <th className="py-1 w-14">Moneda</th>
-                  <th className="py-1"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {preview.map((r, i) => (
-                  <tr key={i} className={`border-b border-gray-50 ${r.isDuplicate ? 'bg-gray-50 text-gray-400' : ''}`}>
-                    <td className="py-1"><input type="checkbox" checked={previewChecked[i]} onChange={e => setPreviewChecked(prev => prev.map((v, j) => j === i ? e.target.checked : v))} /></td>
-                    <td className="py-1">
-                      <input type="date" defaultValue={r.date ?? ''} onBlur={e => setPreview(prev => prev!.map((row, j) => j === i ? { ...row, date: e.target.value || null } : row))}
-                        className="border border-transparent hover:border-gray-200 rounded px-1 outline-none w-28" />
-                    </td>
-                    <td className="py-1">
-                      <input defaultValue={r.fundName} onBlur={e => setPreview(prev => prev!.map((row, j) => j === i ? { ...row, fundName: e.target.value } : row))}
-                        className="border border-transparent hover:border-gray-200 rounded px-1 outline-none w-full" />
-                    </td>
-                    <td className="py-1">
-                      <select
-                        defaultValue={r.type}
-                        onChange={e => setPreview(prev => prev!.map((row, j) => j === i ? { ...row, type: e.target.value as PreviewRow['type'] } : row))}
-                        className={`text-xs font-semibold rounded px-1 py-0.5 border-0 outline-none ${
-                          r.type === 'compra' ? 'bg-gray-100 text-gray-600' : r.type === 'venta' ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-700'
-                        }`}
-                      >
-                        <option value="compra">Compra</option>
-                        <option value="venta">Venta</option>
-                        <option value="dividendo">Dividendo</option>
-                      </select>
-                    </td>
-                    <td className="py-1 text-right">
-                      <input type="number" step="0.01" defaultValue={r.amount ?? ''} onBlur={e => setPreview(prev => prev!.map((row, j) => j === i ? { ...row, amount: e.target.value === '' ? null : Number(e.target.value) } : row))}
-                        className="border border-transparent hover:border-gray-200 rounded px-1 outline-none w-24 text-right" />
-                    </td>
-                    <td className="py-1">{r.currency ?? '—'}</td>
-                    <td className="py-1">
-                      <button onClick={() => setPreview(prev => prev!.filter((_, j) => j !== i))} className="text-gray-300 hover:text-red-500">×</button>
-                    </td>
+            <div className="mobile-scroll-x">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-gray-200 text-left text-gray-400">
+                    <th className="py-1 w-6" />
+                    <th className="py-1">Fecha</th>
+                    <th className="py-1">Fondo</th>
+                    <th className="py-1 w-24">Tipo</th>
+                    <th className="py-1 text-right">Monto</th>
+                    <th className="py-1 w-14">Moneda</th>
+                    <th className="py-1"></th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {preview.map((r, i) => (
+                    <tr key={i} className={`border-b border-gray-50 ${r.isDuplicate ? 'bg-gray-50 text-gray-400' : ''}`}>
+                      <td className="py-1"><input type="checkbox" checked={previewChecked[i]} onChange={e => setPreviewChecked(prev => prev.map((v, j) => j === i ? e.target.checked : v))} /></td>
+                      <td className="py-1">
+                        <input type="date" defaultValue={r.date ?? ''} onBlur={e => setPreview(prev => prev!.map((row, j) => j === i ? { ...row, date: e.target.value || null } : row))}
+                          className="border border-transparent hover:border-gray-200 rounded px-1 outline-none w-28" />
+                      </td>
+                      <td className="py-1">
+                        <input defaultValue={r.fundName} onBlur={e => setPreview(prev => prev!.map((row, j) => j === i ? { ...row, fundName: e.target.value } : row))}
+                          className="border border-transparent hover:border-gray-200 rounded px-1 outline-none w-full" />
+                      </td>
+                      <td className="py-1">
+                        <select
+                          defaultValue={r.type}
+                          onChange={e => setPreview(prev => prev!.map((row, j) => j === i ? { ...row, type: e.target.value as PreviewRow['type'] } : row))}
+                          className={`text-xs font-semibold rounded px-1 py-0.5 border-0 outline-none ${
+                            r.type === 'compra' ? 'bg-gray-100 text-gray-600' : r.type === 'venta' ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-700'
+                          }`}
+                        >
+                          <option value="compra">Compra</option>
+                          <option value="venta">Venta</option>
+                          <option value="dividendo">Dividendo</option>
+                        </select>
+                      </td>
+                      <td className="py-1 text-right">
+                        <input type="number" step="0.01" defaultValue={r.amount ?? ''} onBlur={e => setPreview(prev => prev!.map((row, j) => j === i ? { ...row, amount: e.target.value === '' ? null : Number(e.target.value) } : row))}
+                          className="border border-transparent hover:border-gray-200 rounded px-1 outline-none w-24 text-right" />
+                      </td>
+                      <td className="py-1">{r.currency ?? '—'}</td>
+                      <td className="py-1">
+                        <button onClick={() => setPreview(prev => prev!.filter((_, j) => j !== i))} className="text-gray-300 hover:text-red-500">×</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
             <div className="flex justify-end gap-2 mt-4">
               <button onClick={() => setPreview(null)} className="text-xs font-semibold px-3 py-2 rounded-lg text-gray-500 hover:bg-gray-100">Cancelar</button>
               <button onClick={confirmImport} disabled={importing} className="text-xs font-semibold px-4 py-2 rounded-lg text-white bg-[#2E7D52] disabled:opacity-50">
@@ -350,74 +352,76 @@ export default function DividendosTab({ accountNumber, positions }: { accountNum
         </div>
       ) : (
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-[#1B2E3C] text-left">
-                <th className="px-4 py-2.5 text-[10px] font-semibold uppercase text-white">Fondo</th>
-                <th className="px-4 py-2.5 text-[10px] font-semibold uppercase text-white text-right">Dividendos cobrados</th>
-                <th className="px-4 py-2.5 text-[10px] font-semibold uppercase text-white text-right">Tasa anualizada</th>
-                <th className="w-8" />
-              </tr>
-            </thead>
-            <tbody>
-              {results.map(({ group, result, fundValue }) => {
-                const isOpen = expandedKey === group.key
-                return (
-                  <Fragment key={group.key}>
-                    <tr
-                      onClick={() => setExpandedKey(isOpen ? null : group.key)}
-                      className="border-b border-gray-100 cursor-pointer hover:bg-gray-50"
-                    >
-                      <td className="px-4 py-2.5 font-medium text-gray-800">
-                        <span className="inline-block w-3 text-gray-400">{isOpen ? '▾' : '▸'}</span> {group.label}
-                      </td>
-                      <td className="px-4 py-2.5 text-right font-semibold text-gray-900">{fmtUSD2(result.totalCollected)}</td>
-                      <td className={`px-4 py-2.5 text-right font-semibold ${result.annualizedYieldPct != null ? 'text-emerald-600' : 'text-amber-600 text-xs'}`}>{fmtYield(result.annualizedYieldPct, result.totalCollected)}</td>
-                      <td />
-                    </tr>
-                    {isOpen && (
-                      <tr key={group.key + '-detail'} className="border-b border-gray-100 bg-gray-50/60">
-                        <td colSpan={4} className="px-4 py-3">
-                          <div className="flex items-center justify-between mb-2">
-                            <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Detalle por dividendo — control y auditoría</p>
-                            <button onClick={e => { e.stopPropagation(); setEditingGroupKey(group.key) }} className="text-[11px] font-medium text-[#2E7D52] hover:underline">
-                              Editar movimientos
-                            </button>
-                          </div>
-                          {result.history.length === 0 ? (
-                            <p className="text-xs text-gray-400">Sin dividendos cargados para este fondo. Valor del fondo (posición actual): {fmtUSD2(fundValue)}.</p>
-                          ) : (
-                            <table className="w-full text-xs">
-                              <thead>
-                                <tr className="text-left text-gray-400 border-b border-gray-200">
-                                  <th className="py-1">Fecha</th>
-                                  <th className="py-1 text-right">Dividendo</th>
-                                  <th className="py-1 text-right">Capital correspondiente</th>
-                                  <th className="py-1 text-right">Yield</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {result.history.map(h => (
-                                  <tr key={h.id} className="border-b border-gray-100">
-                                    <td className="py-1 text-gray-600">{fmtDate(h.date)}</td>
-                                    <td className="py-1 text-right font-semibold text-gray-800">{fmtUSD2(h.collected)}</td>
-                                    <td className="py-1 text-right text-gray-500">{h.capitalAtPayment != null ? fmtUSD2(h.capitalAtPayment) : '—'}</td>
-                                    <td className="py-1 text-right">
-                                      {h.yieldPct != null ? <span className="font-semibold text-emerald-600">{fmtPct(h.yieldPct)}</span> : <span className="text-amber-600 text-[10px]">pendiente de revisar</span>}
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          )}
+          <div className="mobile-scroll-x">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-[#1B2E3C] text-left">
+                  <th className="px-4 py-2.5 text-[10px] font-semibold uppercase text-white">Fondo</th>
+                  <th className="px-4 py-2.5 text-[10px] font-semibold uppercase text-white text-right">Dividendos cobrados</th>
+                  <th className="px-4 py-2.5 text-[10px] font-semibold uppercase text-white text-right">Tasa anualizada</th>
+                  <th className="w-8" />
+                </tr>
+              </thead>
+              <tbody>
+                {results.map(({ group, result, fundValue }) => {
+                  const isOpen = expandedKey === group.key
+                  return (
+                    <Fragment key={group.key}>
+                      <tr
+                        onClick={() => setExpandedKey(isOpen ? null : group.key)}
+                        className="border-b border-gray-100 cursor-pointer hover:bg-gray-50"
+                      >
+                        <td className="px-4 py-2.5 font-medium text-gray-800">
+                          <span className="inline-block w-3 text-gray-400">{isOpen ? '▾' : '▸'}</span> {group.label}
                         </td>
+                        <td className="px-4 py-2.5 text-right font-semibold text-gray-900">{fmtUSD2(result.totalCollected)}</td>
+                        <td className={`px-4 py-2.5 text-right font-semibold ${result.annualizedYieldPct != null ? 'text-emerald-600' : 'text-amber-600 text-xs'}`}>{fmtYield(result.annualizedYieldPct, result.totalCollected)}</td>
+                        <td />
                       </tr>
-                    )}
-                  </Fragment>
-                )
-              })}
-            </tbody>
-          </table>
+                      {isOpen && (
+                        <tr key={group.key + '-detail'} className="border-b border-gray-100 bg-gray-50/60">
+                          <td colSpan={4} className="px-4 py-3">
+                            <div className="flex items-center justify-between mb-2">
+                              <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Detalle por dividendo — control y auditoría</p>
+                              <button onClick={e => { e.stopPropagation(); setEditingGroupKey(group.key) }} className="text-[11px] font-medium text-[#2E7D52] hover:underline">
+                                Editar movimientos
+                              </button>
+                            </div>
+                            {result.history.length === 0 ? (
+                              <p className="text-xs text-gray-400">Sin dividendos cargados para este fondo. Valor del fondo (posición actual): {fmtUSD2(fundValue)}.</p>
+                            ) : (
+                              <table className="w-full text-xs">
+                                <thead>
+                                  <tr className="text-left text-gray-400 border-b border-gray-200">
+                                    <th className="py-1">Fecha</th>
+                                    <th className="py-1 text-right">Dividendo</th>
+                                    <th className="py-1 text-right">Capital correspondiente</th>
+                                    <th className="py-1 text-right">Yield</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {result.history.map(h => (
+                                    <tr key={h.id} className="border-b border-gray-100">
+                                      <td className="py-1 text-gray-600">{fmtDate(h.date)}</td>
+                                      <td className="py-1 text-right font-semibold text-gray-800">{fmtUSD2(h.collected)}</td>
+                                      <td className="py-1 text-right text-gray-500">{h.capitalAtPayment != null ? fmtUSD2(h.capitalAtPayment) : '—'}</td>
+                                      <td className="py-1 text-right">
+                                        {h.yieldPct != null ? <span className="font-semibold text-emerald-600">{fmtPct(h.yieldPct)}</span> : <span className="text-amber-600 text-[10px]">pendiente de revisar</span>}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            )}
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
@@ -429,104 +433,106 @@ export default function DividendosTab({ accountNumber, positions }: { accountNum
               <p className="text-sm font-bold text-gray-900">Movimientos — {editingGroup.group.label}</p>
               <button onClick={() => setEditingGroupKey(null)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
             </div>
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-100 text-left text-gray-400">
-                  <th className="px-3 py-1.5 text-[10px] font-semibold uppercase w-40" title="Si esta fila quedó con el nombre tipeado distinto a las demás del mismo fondo, corregilo acá para que se agrupen juntas.">Fondo</th>
-                  <th className="px-3 py-1.5 text-[10px] font-semibold uppercase w-28">Tipo</th>
-                  <th className="px-3 py-1.5 text-[10px] font-semibold uppercase w-32">Fecha</th>
-                  <th className="px-3 py-1.5 text-[10px] font-semibold uppercase w-32 text-right">Monto</th>
-                  <th className="px-3 py-1.5 text-[10px] font-semibold uppercase">Notas</th>
-                  <th className="px-3 py-1.5 text-[10px] font-semibold uppercase w-16">Origen</th>
-                  <th className="w-8" />
-                </tr>
-              </thead>
-              <tbody>
-                {editingGroup.group.entries.map(r => (
-                  <tr key={r.id} className="border-b border-gray-50 last:border-0">
-                    <td className="px-3 py-1.5">
-                      <input
-                        key={r.id + r.fund_name}
-                        type="text"
-                        disabled={saving === r.id}
-                        defaultValue={r.fund_name}
-                        onBlur={e => { const v = e.target.value.trim(); if (v && v !== r.fund_name) patchRow(r.id, { fund_name: v }) }}
-                        className="text-xs text-gray-700 border border-transparent hover:border-gray-200 focus:border-[#2E7D52]/50 rounded px-1 py-0.5 outline-none w-full"
-                      />
-                    </td>
-                    <td className="px-3 py-1.5">
-                      <select
-                        defaultValue={r.entry_type}
-                        disabled={saving === r.id}
-                        onChange={e => patchRow(r.id, { entry_type: e.target.value })}
-                        className={`text-xs font-semibold rounded px-1.5 py-0.5 border-0 outline-none ${
-                          r.entry_type === 'compra' ? 'bg-gray-100 text-gray-600'
-                          : r.entry_type === 'venta' ? 'bg-red-50 text-red-600'
-                          : r.entry_type === 'dividendo_total' ? 'bg-blue-50 text-blue-700'
-                          : 'bg-emerald-50 text-emerald-700'
-                        }`}
-                      >
-                        <option value="compra">Compra</option>
-                        <option value="venta">Venta</option>
-                        <option value="dividendo">Dividendo</option>
-                        <option value="dividendo_total">Total acumulado</option>
-                      </select>
-                    </td>
-                    <td className="px-3 py-1.5">
-                      <input
-                        key={r.id + (r.entry_date ?? '')}
-                        type="date"
-                        disabled={saving === r.id}
-                        defaultValue={r.entry_date ?? ''}
-                        onBlur={e => { if (e.target.value !== (r.entry_date ?? '')) patchRow(r.id, { entry_date: e.target.value || null }) }}
-                        className="text-xs text-gray-700 border border-transparent hover:border-gray-200 focus:border-[#2E7D52]/50 rounded px-1 py-0.5 outline-none w-full"
-                      />
-                    </td>
-                    <td className="px-3 py-1.5 text-right">
-                      <input
-                        key={r.id + (r.amount ?? '')}
-                        type="number"
-                        step="0.01"
-                        disabled={saving === r.id}
-                        defaultValue={r.amount ?? ''}
-                        placeholder="—"
-                        onBlur={e => { const v = e.target.value.trim(); patchRow(r.id, { amount: v === '' ? null : Number(v) }) }}
-                        className="text-xs font-semibold text-gray-800 text-right border border-transparent hover:border-gray-200 focus:border-[#2E7D52]/50 rounded px-1 py-0.5 outline-none w-full"
-                      />
-                    </td>
-                    <td className="px-3 py-1.5">
-                      <input
-                        key={r.id + (r.notes ?? '')}
-                        type="text"
-                        disabled={saving === r.id}
-                        defaultValue={r.notes ?? ''}
-                        placeholder="—"
-                        onBlur={e => { if (e.target.value !== (r.notes ?? '')) patchRow(r.id, { notes: e.target.value }) }}
-                        className="text-xs text-gray-600 border border-transparent hover:border-gray-200 focus:border-[#2E7D52]/50 rounded px-1 py-0.5 outline-none w-full"
-                      />
-                    </td>
-                    <td className="px-3 py-1.5 text-[10px] text-gray-400">{r.custodian ? `${r.custodian}` : ''}</td>
-                    <td className="px-1">
-                      <button onClick={() => deleteRow(r.id)} title="Borrar fila" className="text-gray-300 hover:text-red-500 text-sm px-1">×</button>
+            <div className="mobile-scroll-x">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-100 text-left text-gray-400">
+                    <th className="px-3 py-1.5 text-[10px] font-semibold uppercase w-40" title="Si esta fila quedó con el nombre tipeado distinto a las demás del mismo fondo, corregilo acá para que se agrupen juntas.">Fondo</th>
+                    <th className="px-3 py-1.5 text-[10px] font-semibold uppercase w-28">Tipo</th>
+                    <th className="px-3 py-1.5 text-[10px] font-semibold uppercase w-32">Fecha</th>
+                    <th className="px-3 py-1.5 text-[10px] font-semibold uppercase w-32 text-right">Monto</th>
+                    <th className="px-3 py-1.5 text-[10px] font-semibold uppercase">Notas</th>
+                    <th className="px-3 py-1.5 text-[10px] font-semibold uppercase w-16">Origen</th>
+                    <th className="w-8" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {editingGroup.group.entries.map(r => (
+                    <tr key={r.id} className="border-b border-gray-50 last:border-0">
+                      <td className="px-3 py-1.5">
+                        <input
+                          key={r.id + r.fund_name}
+                          type="text"
+                          disabled={saving === r.id}
+                          defaultValue={r.fund_name}
+                          onBlur={e => { const v = e.target.value.trim(); if (v && v !== r.fund_name) patchRow(r.id, { fund_name: v }) }}
+                          className="text-xs text-gray-700 border border-transparent hover:border-gray-200 focus:border-[#2E7D52]/50 rounded px-1 py-0.5 outline-none w-full"
+                        />
+                      </td>
+                      <td className="px-3 py-1.5">
+                        <select
+                          defaultValue={r.entry_type}
+                          disabled={saving === r.id}
+                          onChange={e => patchRow(r.id, { entry_type: e.target.value })}
+                          className={`text-xs font-semibold rounded px-1.5 py-0.5 border-0 outline-none ${
+                            r.entry_type === 'compra' ? 'bg-gray-100 text-gray-600'
+                            : r.entry_type === 'venta' ? 'bg-red-50 text-red-600'
+                            : r.entry_type === 'dividendo_total' ? 'bg-blue-50 text-blue-700'
+                            : 'bg-emerald-50 text-emerald-700'
+                          }`}
+                        >
+                          <option value="compra">Compra</option>
+                          <option value="venta">Venta</option>
+                          <option value="dividendo">Dividendo</option>
+                          <option value="dividendo_total">Total acumulado</option>
+                        </select>
+                      </td>
+                      <td className="px-3 py-1.5">
+                        <input
+                          key={r.id + (r.entry_date ?? '')}
+                          type="date"
+                          disabled={saving === r.id}
+                          defaultValue={r.entry_date ?? ''}
+                          onBlur={e => { if (e.target.value !== (r.entry_date ?? '')) patchRow(r.id, { entry_date: e.target.value || null }) }}
+                          className="text-xs text-gray-700 border border-transparent hover:border-gray-200 focus:border-[#2E7D52]/50 rounded px-1 py-0.5 outline-none w-full"
+                        />
+                      </td>
+                      <td className="px-3 py-1.5 text-right">
+                        <input
+                          key={r.id + (r.amount ?? '')}
+                          type="number"
+                          step="0.01"
+                          disabled={saving === r.id}
+                          defaultValue={r.amount ?? ''}
+                          placeholder="—"
+                          onBlur={e => { const v = e.target.value.trim(); patchRow(r.id, { amount: v === '' ? null : Number(v) }) }}
+                          className="text-xs font-semibold text-gray-800 text-right border border-transparent hover:border-gray-200 focus:border-[#2E7D52]/50 rounded px-1 py-0.5 outline-none w-full"
+                        />
+                      </td>
+                      <td className="px-3 py-1.5">
+                        <input
+                          key={r.id + (r.notes ?? '')}
+                          type="text"
+                          disabled={saving === r.id}
+                          defaultValue={r.notes ?? ''}
+                          placeholder="—"
+                          onBlur={e => { if (e.target.value !== (r.notes ?? '')) patchRow(r.id, { notes: e.target.value }) }}
+                          className="text-xs text-gray-600 border border-transparent hover:border-gray-200 focus:border-[#2E7D52]/50 rounded px-1 py-0.5 outline-none w-full"
+                        />
+                      </td>
+                      <td className="px-3 py-1.5 text-[10px] text-gray-400">{r.custodian ? `${r.custodian}` : ''}</td>
+                      <td className="px-1">
+                        <button onClick={() => deleteRow(r.id)} title="Borrar fila" className="text-gray-300 hover:text-red-500 text-sm px-1">×</button>
+                      </td>
+                    </tr>
+                  ))}
+                  <tr>
+                    <td colSpan={7} className="px-3 py-1.5">
+                      <div className="flex gap-2">
+                        <button onClick={() => addRow(editingGroup.group.label, 'compra')} className="text-[11px] font-medium text-gray-500 hover:text-[#2E7D52]">+ compra</button>
+                        <button onClick={() => addRow(editingGroup.group.label, 'venta')} className="text-[11px] font-medium text-gray-500 hover:text-red-600">+ venta</button>
+                        <button onClick={() => addRow(editingGroup.group.label, 'dividendo')} className="text-[11px] font-medium text-gray-500 hover:text-[#2E7D52]">+ dividendo</button>
+                        {editingGroup.group.entries.every(r => r.entry_type !== 'dividendo_total') && (
+                          <button onClick={() => addRow(editingGroup.group.label, 'dividendo_total')} className="text-[11px] font-medium text-gray-500 hover:text-blue-600" title="Cargar un solo monto acumulado en vez de fila por fila">
+                            + total acumulado
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
-                ))}
-                <tr>
-                  <td colSpan={7} className="px-3 py-1.5">
-                    <div className="flex gap-2">
-                      <button onClick={() => addRow(editingGroup.group.label, 'compra')} className="text-[11px] font-medium text-gray-500 hover:text-[#2E7D52]">+ compra</button>
-                      <button onClick={() => addRow(editingGroup.group.label, 'venta')} className="text-[11px] font-medium text-gray-500 hover:text-red-600">+ venta</button>
-                      <button onClick={() => addRow(editingGroup.group.label, 'dividendo')} className="text-[11px] font-medium text-gray-500 hover:text-[#2E7D52]">+ dividendo</button>
-                      {editingGroup.group.entries.every(r => r.entry_type !== 'dividendo_total') && (
-                        <button onClick={() => addRow(editingGroup.group.label, 'dividendo_total')} className="text-[11px] font-medium text-gray-500 hover:text-blue-600" title="Cargar un solo monto acumulado en vez de fila por fila">
-                          + total acumulado
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}

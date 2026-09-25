@@ -118,7 +118,7 @@ export default function FondosClient({ managers }: Props) {
       {/* Header */}
       <div className="bg-white border-b border-gray-100 px-8 py-6">
         <div className="max-w-6xl mx-auto">
-          <div className="flex items-start justify-between mb-6">
+          <div className="flex items-start justify-between flex-wrap gap-3 mb-6">
             <div>
               <h1 className="text-2xl font-bold text-gray-900">Fondos</h1>
               <p className="text-sm text-gray-500 mt-0.5">
@@ -175,7 +175,7 @@ export default function FondosClient({ managers }: Props) {
       </div>
 
       {/* Grid */}
-      <div className="max-w-6xl mx-auto px-8 py-8">
+      <div className="max-w-6xl mx-auto px-4 py-4 md:px-8 md:py-8">
         {filtered.length === 0 ? (
           <div className="text-center py-16 text-gray-400">
             <p className="text-sm">No se encontró ninguna gestora</p>

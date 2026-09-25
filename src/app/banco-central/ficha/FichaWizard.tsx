@@ -38,7 +38,7 @@ export default function FichaWizard({ onConfirm }: Props) {
   const canProceed = empresa && tipo
 
   return (
-    <div className="min-h-screen bg-[#F4F6F8] flex items-center justify-center p-6">
+    <div className="min-h-screen bg-[#F4F6F8] flex items-center justify-center p-4 md:p-6">
       <div className="w-full max-w-xl">
         <div className="mb-8 text-center">
           <h1 className="text-2xl font-semibold text-[#2D3F52]">Nueva Ficha BCU</h1>

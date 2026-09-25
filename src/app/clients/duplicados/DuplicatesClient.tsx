@@ -72,39 +72,41 @@ export default function DuplicatesClient({ initialGroups }: { initialGroups: Dup
             <span className="text-sm font-medium text-gray-800">{g.clients[0].first_name} {g.clients[0].last_name}</span>
             {g.safe && <span className="text-[10px] font-medium px-2 py-0.5 rounded border bg-emerald-50 text-emerald-700 border-emerald-200">par seguro</span>}
           </div>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-[11px] uppercase tracking-wide text-gray-400">
-                <th className="px-4 py-2">Cliente</th><th className="px-4 py-2">N° Banco Central</th>
-                <th className="px-4 py-2">Carpeta</th><th className="px-4 py-2">Estado</th>
-                <th className="px-4 py-2">Aperturas</th><th className="px-4 py-2">Legajos BC</th><th className="px-4 py-2"></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {g.clients.map(c => (
-                <tr key={c.id}>
-                  <td className="px-4 py-2">
-                    <Link href={`/clients/${c.id}`} className="text-blue-600 hover:underline">{c.first_name} {c.last_name}</Link>
-                    <div className="text-[11px] text-gray-400">{c.email ?? '—'} · {c.phone ?? '—'}</div>
-                  </td>
-                  <td className="px-4 py-2 font-mono text-xs">{c.client_number ?? '—'}</td>
-                  <td className="px-4 py-2 text-xs">{c.has_folder ? '✓ sí' : '— no'}</td>
-                  <td className="px-4 py-2 text-xs">{c.status === 'prospecto' ? 'pendiente' : c.status}</td>
-                  <td className="px-4 py-2 text-xs">{c.openings}</td>
-                  <td className="px-4 py-2 text-xs">{c.bc_records}</td>
-                  <td className="px-4 py-2 text-right">
-                    <button
-                      onClick={() => mergeGroup(g, c.id)}
-                      disabled={busy !== null}
-                      className={`px-2.5 py-1 text-xs rounded border disabled:opacity-50 ${c.id === g.suggested_keep ? 'border-[#16A34A] text-[#16A34A] hover:bg-green-50' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}
-                    >
-                      {busy === g.key ? '…' : c.id === g.suggested_keep ? 'Conservar este (sugerido)' : 'Conservar este'}
-                    </button>
-                  </td>
+          <div className="mobile-scroll-x">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-[11px] uppercase tracking-wide text-gray-400">
+                  <th className="px-4 py-2">Cliente</th><th className="px-4 py-2">N° Banco Central</th>
+                  <th className="px-4 py-2">Carpeta</th><th className="px-4 py-2">Estado</th>
+                  <th className="px-4 py-2">Aperturas</th><th className="px-4 py-2">Legajos BC</th><th className="px-4 py-2"></th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {g.clients.map(c => (
+                  <tr key={c.id}>
+                    <td className="px-4 py-2">
+                      <Link href={`/clients/${c.id}`} className="text-blue-600 hover:underline">{c.first_name} {c.last_name}</Link>
+                      <div className="text-[11px] text-gray-400">{c.email ?? '—'} · {c.phone ?? '—'}</div>
+                    </td>
+                    <td className="px-4 py-2 font-mono text-xs">{c.client_number ?? '—'}</td>
+                    <td className="px-4 py-2 text-xs">{c.has_folder ? '✓ sí' : '— no'}</td>
+                    <td className="px-4 py-2 text-xs">{c.status === 'prospecto' ? 'pendiente' : c.status}</td>
+                    <td className="px-4 py-2 text-xs">{c.openings}</td>
+                    <td className="px-4 py-2 text-xs">{c.bc_records}</td>
+                    <td className="px-4 py-2 text-right">
+                      <button
+                        onClick={() => mergeGroup(g, c.id)}
+                        disabled={busy !== null}
+                        className={`px-2.5 py-1 text-xs rounded border disabled:opacity-50 ${c.id === g.suggested_keep ? 'border-[#16A34A] text-[#16A34A] hover:bg-green-50' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+                      >
+                        {busy === g.key ? '…' : c.id === g.suggested_keep ? 'Conservar este (sugerido)' : 'Conservar este'}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       ))}
     </div>

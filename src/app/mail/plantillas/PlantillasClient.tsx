@@ -436,7 +436,7 @@ export default function PlantillasClient({ gmailConnected }: Props) {
   const hasBlocks = blocks.length > 0
 
   return (
-    <div className="flex gap-5">
+    <div className="flex flex-col lg:flex-row gap-5">
 
       {/* ── Left: form ── */}
       <div className="flex-1 min-w-0 space-y-4">
@@ -444,7 +444,7 @@ export default function PlantillasClient({ gmailConnected }: Props) {
         {/* Client info */}
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
           <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-3">Información general</h3>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="col-span-1">
               <label className={labelCls}>Nombre del cliente</label>
               <input className={inputCls} placeholder="Ej: Juan García" value={clientName} onChange={e => { setClientName(e.target.value); setPreview(null) }} />
@@ -518,7 +518,7 @@ export default function PlantillasClient({ gmailConnected }: Props) {
       </div>
 
       {/* ── Right: email destination + preview ── */}
-      <div className="w-[380px] shrink-0 space-y-4">
+      <div className="w-full lg:w-[380px] lg:shrink-0 space-y-4">
 
         {/* Send panel */}
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 space-y-3">
