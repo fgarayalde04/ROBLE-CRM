@@ -139,7 +139,7 @@ function headerVal(headers: Array<{ name: string; value: string }>, name: string
 export async function getInboxMessage(accessToken: string, id: string): Promise<(InboxMessage & { labelIds: string[] }) | null> {
   const msgRes = await fetch(
     `${GMAIL_BASE}/users/me/messages/${id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=Date`,
-    { headers: { Authorization: `Bearer ${accessToken}` } }
+    { headers: { Authorization: `Bearer ${accessToken}` }, cache: 'no-store' }
   )
   // 404: el mensaje ya no existe (borrado entre el aviso y la lectura) — no es un error.
   if (msgRes.status === 404) return null
@@ -189,6 +189,7 @@ async function listInboxByQuery(
 
   const listRes = await fetch(listUrl.toString(), {
     headers: { Authorization: `Bearer ${accessToken}` },
+    cache: 'no-store',
   })
 
   if (!listRes.ok) {
@@ -243,7 +244,11 @@ export async function listInboxSince(
 // nuevos se leen con history.list desde el último historyId ya procesado.
 
 async function gmailJson<T>(accessToken: string, url: string, init?: RequestInit): Promise<T> {
+  // cache: 'no-store' es clave: Next 14 guarda en su caché de datos los fetch
+  // GET que no lo aclaran, y el chequeo periódico recibía siempre el mismo
+  // historyId viejo — las respuestas recién aparecían al reiniciar la app (deploy).
   const res = await fetch(url, {
+    cache: 'no-store',
     ...init,
     headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json', ...init?.headers },
   })
@@ -253,6 +258,70 @@ async function gmailJson<T>(accessToken: string, url: string, init?: RequestInit
     throw e
   }
   return res.json()
+}
+
+/** Casilla a la que pertenece el token (emailAddress) y su historyId actual. */
+export async function getMailboxProfile(accessToken: string): Promise<{ emailAddress: string; historyId: string }> {
+  const profile = await gmailJson<{ emailAddress: string; historyId: string }>(accessToken, `${GMAIL_BASE}/users/me/profile`)
+  return { emailAddress: profile.emailAddress, historyId: String(profile.historyId) }
+}
+
+/** historyId actual del buzón — punto de partida para "solo lo que llegue de ahora en más". */
+export async function getMailboxHistoryId(accessToken: string): Promise<string> {
+  const profile = await gmailJson<{ historyId: string }>(accessToken, `${GMAIL_BASE}/users/me/profile`)
+  return String(profile.historyId)
+}
+
+/** Registra (o renueva) el watch de la bandeja de entrada. Vence a los 7 días como máximo. */
+export async function watchInbox(accessToken: string, topicName: string): Promise<{ historyId: string; expiration: Date }> {
+  const data = await gmailJson<{ historyId: string; expiration: string }>(
+    accessToken,
+    `${GMAIL_BASE}/users/me/watch`,
+    { method: 'POST', body: JSON.stringify({ topicName, labelIds: ['INBOX'], labelFilterBehavior: 'INCLUDE' }) }
+  )
+  return { historyId: String(data.historyId), expiration: new Date(Number(data.expiration)) }
+}
+
+/**
+ * Ids de mensajes que llegaron a la bandeja de entrada después de startHistoryId,
+ * y el historyId hasta el que se leyó. Lanza error con status 404 si Gmail ya
+ * no guarda ese historial (demasiado viejo) — el llamador debe re-sembrar.
+ */
+export async function listInboxMessageIdsSince(
+  accessToken: string,
+  startHistoryId: string
+): Promise<{ messageIds: string[]; historyId: string }> {
+  const ids = new Set<string>()
+  let pageToken: string | undefined
+  let historyId = startHistoryId
+
+  do {
+    const url = new URL(`${GMAIL_BASE}/users/me/history`)
+    url.searchParams.set('startHistoryId', startHistoryId)
+    url.searchParams.set('historyTypes', 'messageAdded')
+    url.searchParams.set('labelId', 'INBOX')
+    url.searchParams.set('maxResults', '100')
+    if (pageToken) url.searchParams.set('pageToken', pageToken)
+
+    const data = await gmailJson<{
+      history?: Array<{ messagesAdded?: Array<{ message: { id: string; labelIds?: string[] } }> }>
+      nextPageToken?: string
+      historyId?: string
+    }>(accessToken, url.toString())
+
+    for (const h of data.history ?? []) {
+      for (const added of h.messagesAdded ?? []) {
+        // labelId=INBOX ya filtra, pero un mensaje que entra y sale de la
+        // bandeja en el mismo tramo puede colarse — el labelIds del propio
+        // evento es la referencia.
+        if (added.message.labelIds?.includes('INBOX')) ids.add(added.message.id)
+      }
+    }
+    if (data.historyId) historyId = String(data.historyId)
+    pageToken = data.nextPageToken
+  } while (pageToken)
+
+  return { messageIds: Array.from(ids), historyId }
 }
 
 // ─── Email templates ──────────────────────────────────────────────────────────

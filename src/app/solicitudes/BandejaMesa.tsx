@@ -311,7 +311,8 @@ export default function BandejaMesa({ isMesa, userName }: { isMesa: boolean; use
       }),
     })
     if (res.ok) {
-      await patch('mail_enviado', { asunto: emailAsunto, cuerpo: emailCuerpo })
+      const data = await res.json()
+      await patch('mail_enviado', { asunto: emailAsunto, cuerpo: emailCuerpo, mail_thread_id: data.thread_id ?? null, mail_message_id: data.message_id ?? null })
       setShowEmail(false)
     } else {
       const j = await res.json()
@@ -523,7 +524,10 @@ export default function BandejaMesa({ isMesa, userName }: { isMesa: boolean; use
                           subject: emailAsunto, body: emailCuerpo,
                           client_name: selected.client_name, client_number: selected.client_number, solicitud_uuid: selected.id, viaMesa: true }),
                       })
-                      if (res.ok) { await patch('mail_enviado', { asunto: emailAsunto, cuerpo: emailCuerpo }) }
+                      if (res.ok) {
+                        const data = await res.json()
+                        await patch('mail_enviado', { asunto: emailAsunto, cuerpo: emailCuerpo, mail_thread_id: data.thread_id ?? null, mail_message_id: data.message_id ?? null })
+                      }
                       else { const j = await res.json(); alert(j.error ?? 'Error al enviar') }
                       setSendingEmail(false)
                     }} disabled={actionLoading || sendingEmail}
