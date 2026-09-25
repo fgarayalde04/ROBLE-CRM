@@ -307,7 +307,7 @@ export default function BandejaMesa({ isMesa, userName }: { isMesa: boolean; use
         body: emailCuerpo,
         client_name: selected!.client_name,
         client_number: selected!.client_number,
-        viaMesa: true,
+        solicitud_uuid: selected!.id, viaMesa: true,
       }),
     })
     if (res.ok) {
@@ -521,7 +521,7 @@ export default function BandejaMesa({ isMesa, userName }: { isMesa: boolean; use
                         body: JSON.stringify({ to: to.length > 1 ? to : selected.client_email,
                           cc: (selected.cc_emails?.length ?? 0) > 0 ? selected.cc_emails : undefined,
                           subject: emailAsunto, body: emailCuerpo,
-                          client_name: selected.client_name, client_number: selected.client_number, viaMesa: true }),
+                          client_name: selected.client_name, client_number: selected.client_number, solicitud_uuid: selected.id, viaMesa: true }),
                       })
                       if (res.ok) { await patch('mail_enviado', { asunto: emailAsunto, cuerpo: emailCuerpo }) }
                       else { const j = await res.json(); alert(j.error ?? 'Error al enviar') }

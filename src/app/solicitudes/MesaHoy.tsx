@@ -258,7 +258,7 @@ function DetailPanel({
     const res = await fetch('/api/gmail/send', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ to: to.length > 1 ? to : (to[0] ?? sol.client_email), cc, subject: emailAsunto, body: emailCuerpo,
-        client_name: sol.client_name, client_number: sol.client_number, viaMesa: true }),
+        client_name: sol.client_name, client_number: sol.client_number, solicitud_uuid: sol.id, viaMesa: true }),
     })
     const data = await res.json()
     if (res.ok) {
@@ -318,7 +318,7 @@ function DetailPanel({
                 const res = await fetch('/api/gmail/send', {
                   method: 'POST', headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ to: to.length > 1 ? to : sol.client_email, cc, subject: emailAsunto, body: emailCuerpo,
-                    client_name: sol.client_name, client_number: sol.client_number, viaMesa: true }),
+                    client_name: sol.client_name, client_number: sol.client_number, solicitud_uuid: sol.id, viaMesa: true }),
                 })
                 const data = await res.json()
                 if (res.ok) { await onAction('mail_enviado', { asunto: emailAsunto, cuerpo: emailCuerpo, mail_thread_id: data.thread_id ?? null, mail_message_id: data.message_id ?? null }) }

@@ -200,3 +200,12 @@ export async function getUserIdsByEmails(emails: string[]): Promise<Set<string>>
   )
   return new Set(rows.map((r) => r.id as string))
 }
+
+// Email del usuario activo con ese id — p. ej. el asesor dueño de una orden.
+export async function getActiveUserEmail(userId: string): Promise<string | null> {
+  const { rows } = await pool.query(
+    `select email from crm_users where id = $1 and active = true`,
+    [userId]
+  )
+  return rows[0]?.email ?? null
+}

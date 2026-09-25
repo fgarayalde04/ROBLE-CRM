@@ -6,6 +6,8 @@ import {
   getValidGoogleToken, getGoogleEmail, getGoogleName,
 } from '@/lib/google/tokens'
 import { sendEmail } from '@/lib/google/gmail'
+import { getSolicitud } from '@/lib/db/solicitudes'
+import { getActiveUserEmail } from '@/lib/db/users'
 
 export const dynamic = 'force-dynamic'
 
@@ -13,7 +15,7 @@ export async function POST(req: NextRequest) {
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
 
-  const { to, cc, subject, body, replyTo, viaMesa } = await req.json()
+  const { to, cc, subject, body, replyTo, viaMesa, solicitud_uuid } = await req.json()
   if (!to || !subject || !body) {
     return NextResponse.json({ error: 'to, subject y body son requeridos' }, { status: 400 })
   }
@@ -39,10 +41,23 @@ export async function POST(req: NextRequest) {
     }
     const tradingName = process.env.TRADING_NAME ?? 'Mesa de Operaciones | Roble Capital'
     fromHeader = `"${tradingName}" <${MESA_GOOGLE_CONNECTION_KEY}>`
-    // Reply-To incluye siempre trading@ + el mail de quien mandó la orden —
-    // así si el cliente responde, le llega a los dos, no solo a la casilla
-    // compartida (que puede tardar más en ser vista que el propio asesor/mesa).
-    effectiveReplyTo = [MESA_GOOGLE_CONNECTION_KEY, session.email].filter(Boolean).join(', ')
+    // Reply-To: siempre trading@ + el asesor dueño de la orden — así la
+    // respuesta del cliente le llega directo a los dos, no solo a la casilla
+    // compartida. Si la manda Mesa, el asesor sale de la orden (solicitud_uuid);
+    // si no hay orden asociada, quien envía es el asesor.
+    let asesorEmail: string | null = session.email ?? null
+    if (solicitud_uuid) {
+      try {
+        const sol = await getSolicitud(solicitud_uuid)
+        if (sol?.asesor_id) asesorEmail = (await getActiveUserEmail(sol.asesor_id)) ?? asesorEmail
+      } catch (err: any) {
+        // No trabar el envío por esto: queda quien envía como Reply-To.
+        console.error('[gmail/send] No se pudo obtener el asesor de la orden:', err.message)
+      }
+    }
+    effectiveReplyTo = Array.from(new Set(
+      [MESA_GOOGLE_CONNECTION_KEY, asesorEmail].filter(Boolean).map((e) => e!.toLowerCase())
+    )).join(', ')
   } else {
     accessToken = await getValidGoogleToken()
     if (!accessToken) {
