@@ -16,7 +16,7 @@ import {
   listUnnotifiedEmailReplies, type EmailReplyRow, type EmailReplyMatchMethod,
 } from '@/lib/db/emailReplies'
 import { notifyClienteRespondio } from '@/lib/notifications/orderEvents'
-import { stripReplyPrefixes, hasReplyPrefix, isAutomatedSender, looksLikeReply } from './replyMatching'
+import { stripReplyPrefixes, hasReplyPrefix, isAutomatedSender, looksLikeReply, extractReplyText } from './replyMatching'
 
 /**
  * Interruptor general. Apagado por defecto: desarrollo tiene una copia de la DB
@@ -201,10 +201,11 @@ async function deliver(row: EmailReplyRow) {
   )
 
   if (solicitud) {
+    const replyText = extractReplyText(row.snippet ?? '')
     await insertSolicitudEvento({
       solicitud_id: solicitud.id,
       tipo: 'cliente_respondio',
-      descripcion: `${solicitud.client_name ?? 'El cliente'} respondió al mail de confirmación${row.match_method === 'subject_fallback' ? ' (coincidencia por asunto)' : ''}.`,
+      descripcion: `${solicitud.client_name ?? 'El cliente'} respondió al mail de confirmación${row.match_method === 'subject_fallback' ? ' (coincidencia por asunto)' : ''}${replyText ? `: "${replyText}"` : '.'}`,
       usuario: 'Sistema',
       usuario_id: null,
     })

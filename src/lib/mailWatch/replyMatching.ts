@@ -29,3 +29,31 @@ export function isAutomatedSender(fromEmail: string): boolean {
 export function looksLikeReply(msg: { id: string; threadId: string; subject: string }): boolean {
   return msg.threadId !== msg.id || hasReplyPrefix(msg.subject)
 }
+
+// Corte del texto citado: lo que el cliente escribió va antes de la cita del
+// mail original ("El jue, 25 sept 2026 a las 16:19, Mesa ... escribió:",
+// "On ... wrote:", "-----Mensaje original-----", "De: ...", firma del celular).
+const QUOTE_MARKERS = [
+  /\s(El|On)\s[^]{0,200}?(escribió|escribio|wrote)\s*:/,
+  /-{2,}\s*(Mensaje original|Original Message|Forwarded message|Mensaje reenviado)/i,
+  /_{5,}/,
+  /\s(De|From)\s*:\s*\S+@\S+/,
+  /\s(Enviado desde mi|Sent from my|Obtener Outlook para)\s/i,
+]
+
+/**
+ * Texto de la respuesta del cliente a partir del snippet de Gmail: decodifica
+ * entidades HTML, colapsa espacios y deja solo lo que escribió él (sin la cita
+ * del mail original). Si todo el snippet es cita, devuelve ''.
+ */
+export function extractReplyText(snippet: string): string {
+  let text = ` ${snippet}`
+    .replace(/&#39;|&apos;/g, "'").replace(/&quot;/g, '"').replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&nbsp;/g, ' ')
+    .replace(/\s+/g, ' ')
+  for (const re of QUOTE_MARKERS) {
+    const m = re.exec(text)
+    if (m) text = text.slice(0, m.index)
+  }
+  return text.trim()
+}

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useSearchParams } from 'next/navigation'
 import NuevaSolicitudForm from './NuevaSolicitudForm'
 import MesaHoy from './MesaHoy'
+import RespuestasClientes from './RespuestasClientes'
 import { useAdvisorModeCtx } from '@/contexts/AdvisorModeContext'
 
 interface Props { isMesa: boolean; userName: string; userEmail: string; gmailConnected: boolean }
@@ -50,6 +51,7 @@ export default function SolicitudesClient({ isMesa, userName, userEmail, gmailCo
   const { advisorMode } = useAdvisorModeCtx()
   const searchParams = useSearchParams()
   const openId = searchParams.get('open')
+  const openRespuestas = searchParams.get('respuestas') === '1'
   // En modo asesor (toggle activo) siempre mostrar el formulario abierto
   const showEnviar = !isMesa || advisorMode
 
@@ -82,6 +84,16 @@ export default function SolicitudesClient({ isMesa, userName, userEmail, gmailCo
             <MesaHoy isMesa={isMesa} userName={userName} openId={openId} />
           </Section>
         )}
+
+        <Section
+          title="Respuestas de clientes"
+          subtitle={isMesa ? 'Lo que respondieron los clientes a los mails de orden' : 'Lo que respondieron tus clientes a los mails de orden'}
+          accent="blue"
+          defaultOpen
+          forceOpen={openRespuestas}
+        >
+          <RespuestasClientes isMesa={isMesa} />
+        </Section>
 
       </div>
     </div>

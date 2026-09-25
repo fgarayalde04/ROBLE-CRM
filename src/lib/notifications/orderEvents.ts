@@ -6,6 +6,7 @@
 import { createNotification } from '@/lib/db/notifications'
 import { getUsersByRoles, getUserIdsByEmails } from '@/lib/db/users'
 import { sendPushNotification } from '@/lib/push/server'
+import { extractReplyText } from '@/lib/mailWatch/replyMatching'
 
 const MESA_ROLES = ['admin', 'ceo', 'direccion', 'mesa', 'asistente']
 
@@ -182,19 +183,15 @@ export interface ReplyCtx {
 }
 
 const PUSH_SNIPPET_MAX = 110
+const MESSAGE_SNIPPET_MAX = 240
 
 // "Re: Confirmacion de orden - 1234 - 2026-09-18" → "Confirmacion de orden - 1234 - 2026-09-18"
 function cleanSubject(subject: string) {
   return subject.replace(/^\s*((re|rv|fwd|fw)\s*:\s*)+/i, '').trim()
 }
 
-// Gmail devuelve el snippet con entidades HTML (&#39; &amp; ...) y espacios raros.
-function cleanSnippet(snippet: string) {
-  const text = snippet
-    .replace(/&#39;|&apos;/g, "'").replace(/&quot;/g, '"').replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<').replace(/&gt;/g, '>')
-    .replace(/\s+/g, ' ').trim()
-  return text.length > PUSH_SNIPPET_MAX ? `${text.slice(0, PUSH_SNIPPET_MAX - 1).trimEnd()}…` : text
+function truncate(text: string, max: number) {
+  return text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text
 }
 
 // El cliente respondió un mail enviado desde trading@ — interna + push, al
@@ -211,18 +208,21 @@ export async function notifyClienteRespondio(reply: ReplyCtx, asesor: { id: stri
   const isUnmatched = reply.matchMethod === 'unmatched'
   const who = reply.clientName ?? reply.fromEmail
   const subject = cleanSubject(reply.subject)
-  const preview = cleanSnippet(reply.snippet)
+  // Lo que escribió el cliente (sin la cita del mail original) es lo que
+  // importa: con eso se sabe si aprobó o no sin abrir el mail.
+  const replyText = extractReplyText(reply.snippet)
   const suffix = reply.matchMethod === 'subject_fallback' ? ' (asociada por asunto)' : ''
 
   const title = isUnmatched ? '💬 Respuesta sin identificar' : `💬 ${who} respondió`
+  const said = replyText ? `: "${truncate(replyText, MESSAGE_SNIPPET_MAX)}"` : ''
   const message = isUnmatched
-    ? `${reply.fromEmail} respondió "${subject}" y no se pudo asociar a ninguna orden — revisar manualmente.`
-    : `${who} respondió al mail de su orden: "${subject}".${suffix}`
-  const url = reply.solicitudId ? orderUrl(reply.solicitudId) : '/solicitudes'
+    ? `${reply.fromEmail} respondió "${subject}"${said} — no se pudo asociar a ninguna orden, revisar manualmente.`
+    : `${who} respondió${said} — ${subject}.${suffix}`
+  const url = reply.solicitudId ? orderUrl(reply.solicitudId) : '/solicitudes?respuestas=1'
   const push = {
     title,
-    // Subject arriba, extracto de lo que escribió abajo — se entiende sin abrir el CRM.
-    body: preview ? `${subject}\n${preview}` : subject,
+    // Lo que respondió arriba, el asunto (qué orden) abajo.
+    body: replyText ? `"${truncate(replyText, PUSH_SNIPPET_MAX)}"\n${subject}` : subject,
     tag: `mail-reply-${reply.threadId}`,
   }
 

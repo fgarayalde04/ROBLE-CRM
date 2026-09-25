@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { stripReplyPrefixes, hasReplyPrefix, isAutomatedSender, looksLikeReply } from './replyMatching'
+import { stripReplyPrefixes, hasReplyPrefix, isAutomatedSender, looksLikeReply, extractReplyText } from './replyMatching'
 
 describe('stripReplyPrefixes', () => {
   it('quita Re:/RV:/Fwd: repetidos, sin importar mayúsculas', () => {
@@ -38,5 +38,27 @@ describe('looksLikeReply', () => {
   })
   it('un mensaje nuevo con prefijo Re: sí (respuesta desde otra cuenta, hilo nuevo)', () => {
     expect(looksLikeReply({ id: 'c3', threadId: 'c3', subject: 'Re: Confirmacion de orden' })).toBe(true)
+  })
+})
+
+describe('extractReplyText', () => {
+  it('deja solo lo que escribió el cliente, sin la cita de Gmail', () => {
+    expect(extractReplyText('Ok, confirmo. Gracias El jue, 25 sept 2026 a las 16:19, Mesa de Operaciones | Roble Capital (&lt;trading@roblecapital.net&gt;) escribió: Estimado'))
+      .toBe('Ok, confirmo. Gracias')
+  })
+  it('corta citas en inglés, de Outlook y firmas del celular', () => {
+    expect(extractReplyText('Approved On Thu, Sep 25, 2026 at 4:19 PM Mesa wrote: hi')).toBe('Approved')
+    expect(extractReplyText('Dale adelante ________________________________ De: Mesa')).toBe('Dale adelante')
+    expect(extractReplyText('Si Enviado desde mi iPhone El 25 sep 2026, a las 16:19, Mesa escribió:')).toBe('Si')
+  })
+  it('decodifica entidades y colapsa espacios', () => {
+    expect(extractReplyText('It&#39;s   ok &amp; go')).toBe("It's ok & go")
+  })
+  it('no corta el texto propio aunque diga "el" o "escribió"', () => {
+    expect(extractReplyText('Confirmo el bono, de acuerdo con lo que escribió Juan: ok'))
+      .toBe('Confirmo el bono, de acuerdo con lo que escribió Juan: ok')
+  })
+  it('devuelve vacío si todo es cita', () => {
+    expect(extractReplyText('El jue, 25 sept 2026, Mesa escribió: texto')).toBe('')
   })
 })
