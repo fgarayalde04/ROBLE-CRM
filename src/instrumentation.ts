@@ -10,13 +10,26 @@
 export async function register() {
   if (process.env.NEXT_RUNTIME !== 'nodejs') return
 
-  // Antes que cualquier sync: el esquema de esta base tiene que estar al día.
-  try {
-    const { runPendingMigrations } = await import('@/lib/db/migrate')
-    await runPendingMigrations()
-  } catch (e) {
-    console.error('[migrate] Error al aplicar migraciones:', e)
-  }
+  // El esquema de esta base tiene que estar al día. Va por fetch a su propia
+  // ruta /api/cron/migrate: importar pg/fs acá rompe el bundle de edge (mismo
+  // motivo que el Monitor de Fondos). Reintenta hasta que el server escuche.
+  ;(async () => {
+    const port = process.env.PORT ?? '3000'
+    const headers: Record<string, string> = {}
+    if (process.env.CRON_SECRET) headers.Authorization = `Bearer ${process.env.CRON_SECRET}`
+    for (let i = 0; i < 6; i++) {
+      await new Promise((r) => setTimeout(r, 5000))
+      try {
+        const res = await fetch(`http://127.0.0.1:${port}/api/cron/migrate`, { headers })
+        if (res.ok) return
+        console.error('[migrate] respuesta', res.status)
+        return
+      } catch {
+        // el server todavía no está escuchando
+      }
+    }
+    console.error('[migrate] no se pudo contactar a la app para migrar')
+  })()
 
   // Independiente del sync de Microsoft/SharePoint de abajo — no debe
   // quedar sin registrarse solo porque esa integración no está configurada.
