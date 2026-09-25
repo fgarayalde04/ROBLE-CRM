@@ -10,6 +10,14 @@
 export async function register() {
   if (process.env.NEXT_RUNTIME !== 'nodejs') return
 
+  // Antes que cualquier sync: el esquema de esta base tiene que estar al día.
+  try {
+    const { runPendingMigrations } = await import('@/lib/db/migrate')
+    await runPendingMigrations()
+  } catch (e) {
+    console.error('[migrate] Error al aplicar migraciones:', e)
+  }
+
   // Independiente del sync de Microsoft/SharePoint de abajo — no debe
   // quedar sin registrarse solo porque esa integración no está configurada.
   await registerFundMonitorSync()
