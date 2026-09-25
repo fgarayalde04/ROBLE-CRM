@@ -18,6 +18,7 @@ const PUBLIC_PATHS = [
 // Paths accessible to users with modo_asesor enabled (server-controlled)
 const ASESOR_ALLOWED = [
   '/ordenes',
+  '/solicitudes',
   '/mail',
   '/inbox',
   '/settings',

@@ -11,13 +11,15 @@ import InstrumentsManager from './InstrumentsManager'
 import BlotterTable from './BlotterTable'
 import BlotterSolicitudes from '../solicitudes/BlotterSolicitudes'
 import MesaHoy from '../solicitudes/MesaHoy'
+import NuevaSolicitudForm from '../solicitudes/NuevaSolicitudForm'
 import type { Instrument } from '@/app/api/instruments/route'
 import { useAdvisorModeCtx } from '@/contexts/AdvisorModeContext'
+import { useRouter } from 'next/navigation'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type OrderType = 'acciones' | 'fondos' | 'bonos'
-type Tab = 'nueva' | 'blotter' | 'mesa' | 'mis-ordenes' | 'instrumentos' | 'mis-solicitudes' | 'enviar' | 'blotter-asesor'
+type Tab = 'nueva' | 'blotter' | 'mesa' | 'mis-ordenes' | 'instrumentos' | 'mis-solicitudes' | 'enviar' | 'blotter-asesor' | 'historial'
 
 interface AccionesBlock {
   type: 'acciones'; id: string; nombre: string; ticker: string
@@ -377,12 +379,35 @@ export default function OrdenesClient({ gmailConnected, initialTab, isAdmin = fa
   const { advisorMode } = useAdvisorModeCtx()
   // En modo asesor, un admin ve tabs de asesor
   const effectiveAdmin = isAdmin && !advisorMode
-  // El Blotter es solo para ver órdenes (hechas o pendientes); las órdenes se
-  // cargan desde /solicitudes, así que acá no hay tab para enviar.
-  const defaultTab: Tab = effectiveAdmin ? 'mesa' : 'blotter-asesor'
-  const [tab, setTab] = useState<Tab>(
-    initialTab && initialTab !== 'enviar' && initialTab !== 'nueva' ? initialTab : defaultTab
-  )
+  // Admin: Mesa / Blotter / Instrumentos. Asesor: una tab para enviar órdenes
+  // y otra con el historial de sus propias órdenes (?tab=historial, que es a
+  // donde apuntan BottomNav y el menú de modo asesor).
+  const tabItems: { t: Tab; label: string; short: string }[] = effectiveAdmin
+    ? [
+        { t: 'mesa',         label: 'Mesa de hoy',  short: 'Mesa' },
+        { t: 'blotter',      label: 'Blotter',      short: 'Blotter' },
+        { t: 'instrumentos', label: 'Instrumentos', short: 'Instr.' },
+      ]
+    : [
+        { t: 'enviar',          label: 'Enviar órdenes', short: 'Enviar órdenes' },
+        { t: 'mis-solicitudes', label: 'Historial',      short: 'Historial' },
+      ]
+  const normalizeTab = (t?: Tab): Tab | undefined =>
+    t === 'historial' || t === 'blotter-asesor' || t === 'mis-ordenes' ? 'mis-solicitudes'
+    : t === 'nueva' ? 'enviar'
+    : t
+  const [requestedTab, setTab] = useState<Tab | undefined>(normalizeTab(initialTab))
+  // Navegar entre /ordenes y /ordenes?tab=historial no remonta el componente
+  useEffect(() => { setTab(normalizeTab(initialTab)) }, [initialTab])
+  // Si la tab pedida no corresponde al modo actual (ej. el modo asesor se
+  // inicializa después del primer render), caer en la primera disponible.
+  const tab: Tab = tabItems.some(i => i.t === requestedTab) ? requestedTab! : tabItems[0].t
+  const router = useRouter()
+  // Asesor: reflejar la tab en la URL para que BottomNav / menú marquen la correcta
+  const selectTab = (t: Tab) => {
+    setTab(t)
+    if (!effectiveAdmin) router.replace(t === 'mis-solicitudes' ? '/ordenes?tab=historial' : '/ordenes', { scroll: false })
+  }
   const [blocks, setBlocks]             = useState<OrderBlock[]>([])
   const [clientId, setClientId]         = useState('')
   const [clientName, setClientName]     = useState('')
@@ -538,22 +563,14 @@ export default function OrdenesClient({ gmailConnected, initialTab, isAdmin = fa
       {/* Header */}
       <div className="hidden md:flex items-center justify-between mb-5">
         <div>
-          <h1 className="text-xl font-semibold text-[#2D3F52]">Mesa de Operaciones</h1>
-          <p className="text-sm text-gray-400 mt-0.5">Blotter · trazabilidad completa de órdenes</p>
+          <h1 className="text-xl font-semibold text-[#2D3F52]">{effectiveAdmin ? 'Mesa de Operaciones' : 'Órdenes'}</h1>
+          <p className="text-sm text-gray-400 mt-0.5">
+            {effectiveAdmin ? 'Blotter · trazabilidad completa de órdenes' : 'Enviá órdenes a Mesa y consultá tu historial'}
+          </p>
         </div>
         <div className="flex gap-1 bg-white border border-gray-200 rounded-lg p-0.5 shadow-sm">
-          {(effectiveAdmin
-            ? [
-                { t: 'mesa'         as Tab, label: 'Mesa de hoy' },
-                { t: 'blotter'      as Tab, label: 'Blotter' },
-                { t: 'instrumentos' as Tab, label: 'Instrumentos' },
-              ]
-            : [
-                { t: 'blotter-asesor'  as Tab, label: 'Blotter' },
-                { t: 'mis-solicitudes' as Tab, label: 'Mis solicitudes' },
-              ]
-          ).map(({ t, label }) => (
-            <button key={t} onClick={() => setTab(t)}
+          {tabItems.map(({ t, label }) => (
+            <button key={t} onClick={() => selectTab(t)}
               className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${
                 tab === t ? 'bg-[#2D3F52] text-white shadow-sm' : 'text-gray-500 hover:text-[#2D3F52]'
               }`}>
@@ -565,18 +582,8 @@ export default function OrdenesClient({ gmailConnected, initialTab, isAdmin = fa
 
       {/* Mobile tabs */}
       <div className="md:hidden flex gap-1 bg-white border border-gray-200 rounded-lg p-0.5 mb-4 overflow-x-auto">
-        {(effectiveAdmin
-          ? [
-              { t: 'mesa'         as Tab, label: 'Mesa' },
-              { t: 'blotter'      as Tab, label: 'Blotter' },
-              { t: 'instrumentos' as Tab, label: 'Instr.' },
-            ]
-          : [
-              { t: 'blotter-asesor'  as Tab, label: 'Blotter' },
-              { t: 'mis-solicitudes' as Tab, label: 'Mis solicitudes' },
-            ]
-        ).map(({ t, label }) => (
-          <button key={t} onClick={() => setTab(t)}
+        {tabItems.map(({ t, short: label }) => (
+          <button key={t} onClick={() => selectTab(t)}
             className={`flex-1 py-2 text-xs font-medium rounded-md transition-colors whitespace-nowrap px-2 ${
               tab === t ? 'bg-[#2D3F52] text-white' : 'text-gray-500'
             }`}>
@@ -879,14 +886,16 @@ export default function OrdenesClient({ gmailConnected, initialTab, isAdmin = fa
         <MesaHoy isMesa={isMesa} userName={userName} />
       )}
 
-      {/* ── MIS SOLICITUDES (asesor - solo las propias) ── */}
-      {tab === 'mis-solicitudes' && (
-        <BlotterSolicitudes isMesa={false} userName={userName} />
+      {/* ── ENVIAR ÓRDENES (asesor) ── */}
+      {tab === 'enviar' && (
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 md:p-5">
+          <NuevaSolicitudForm gmailConnected={gmailConnected} userEmail={userEmail} />
+        </div>
       )}
 
-      {/* ── BLOTTER COMPLETO (asesor - historial total) ── */}
-      {tab === 'blotter-asesor' && (
-        <BlotterSolicitudes isMesa={true} userName={userName} />
+      {/* ── HISTORIAL (asesor - solo las propias) ── */}
+      {tab === 'mis-solicitudes' && (
+        <BlotterSolicitudes isMesa={false} userName={userName} />
       )}
 
       {tab === 'instrumentos' && (
