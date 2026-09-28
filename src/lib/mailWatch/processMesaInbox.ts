@@ -158,6 +158,11 @@ async function handleMessage(token: string, id: string): Promise<boolean> {
   // (otro hilo), pero trae la referencia de la orden en el texto.
   const ref = byThread ? null : extractAprobacionRef(extractReplyText(msg.snippet ?? ''))
   const byRef = ref ? await findSolicitudByAprobacionToken(ref) : null
+  // Trae un código de confirmación válido que no existe en esta base: es una
+  // orden del otro ambiente (dev y producción leen la misma casilla de
+  // trading@). Se ignora en silencio — si no, cada prueba en dev le llegaba a
+  // la Mesa de producción como "Respuesta sin identificar".
+  if (ref && !byRef) { dbg(id, 'ignorado: código', ref, 'de una orden de otro ambiente'); return false }
   if (byThread) {
     solicitud = byThread
     matchMethod = 'thread_id'
