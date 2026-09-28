@@ -1950,7 +1950,11 @@ export default function ProposalEditor({
         <div className="grid grid-cols-1 xl:grid-cols-[1fr_280px] gap-6 items-start">
 
           {/* ── Left: composer ── */}
-          <div className="space-y-6">
+          {/* min-w-0: sin esto, las tablas de fondos/bonos (min-w-[1520/1560px],
+              para que entren todas las columnas de años y ventas/compras) fuerzan
+              el ancho de esta columna "1fr" y desencuadran toda la grilla —
+              empujan el panel de asignación fuera de la vista. */}
+          <div className="space-y-6 min-w-0">
 
             {/* Header info */}
             <div className="bg-white border border-[#E2E8F0] rounded-xl p-5">
