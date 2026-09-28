@@ -33,6 +33,11 @@ describe('parseAprobacion', () => {
     expect(parseAprobacion('Apruebo. Saludos')).toEqual({ decision: 'aprobada', comentario: 'Saludos' })
     expect(parseAprobacion('no aprobado, prefiero esperar')).toEqual({ decision: 'rechazada', comentario: 'prefiero esperar' })
   })
+  it('frases actuales de los links', () => {
+    expect(parseAprobacion('Confirmo la orden Código de confirmación: ABCD2345 Comentarios: gracias')).toEqual({ decision: 'aprobada', comentario: 'gracias' })
+    expect(parseAprobacion('Prefiero no avanzar Código de confirmación: ABCD2345 Comentarios:')).toEqual({ decision: 'rechazada', comentario: null })
+    expect(parseAprobacion('Confirmo que recibí el mail')).toBeNull()
+  })
   it('un "apruebo" que no está al comienzo no cuenta', () => {
     expect(parseAprobacion('Consulta: si apruebo hoy, cuándo se ejecuta?')).toBeNull()
     expect(parseAprobacion('Gracias!')).toBeNull()
@@ -62,18 +67,18 @@ describe('buildAprobacionEmail', () => {
     expect(si.pathname).toBe('trading@roblecapital.net')
     expect(si.searchParams.get('cc')).toBe('asesor@roblecapital.net')
     expect(si.searchParams.get('subject')).toBe('Re: Confirmacion de orden - 1234')
-    expect(si.searchParams.get('body')).toMatch(/^Apruebo\r\nCódigo de confirmación: ABCD2345/)
-    expect(no.searchParams.get('body')).toMatch(/^No apruebo\r\n/)
+    expect(si.searchParams.get('body')).toMatch(/^Confirmo la orden\r\nCódigo de confirmación: ABCD2345/)
+    expect(no.searchParams.get('body')).toMatch(/^Prefiero no avanzar\r\n/)
     // El cliente ve el detalle de la orden mientras responde
     expect(si.searchParams.get('body')).toContain('----- Detalle de la orden -----\r\nDetalle <orden>')
   })
   it('los botones aparecen solo después del detalle', () => {
     const detalle = built.html.indexOf('Detalle &lt;orden&gt;')
-    expect(built.html.indexOf('Aprobar esta orden')).toBeGreaterThan(detalle)
+    expect(built.html.indexOf('Confirmo la orden')).toBeGreaterThan(detalle)
   })
   it('escapa el cuerpo en el HTML y deja instrucciones en el texto plano', () => {
     expect(built.html).toContain('Detalle &lt;orden&gt;')
-    expect(built.text).toContain('Apruebo')
+    expect(built.text).toContain('Confirmo la orden')
     expect(built.text).toContain('Código de confirmación: ABCD2345')
   })
 })
