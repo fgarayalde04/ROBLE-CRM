@@ -173,17 +173,83 @@ export async function getUpcomingDeadlinesForDashboard(isWideRole: boolean, user
   return rows.map(shapeClient)
 }
 
+// Qué pasó con cada orden, en el lenguaje de "Actividad reciente". Los tipos que
+// no están (email generado, edición) no se muestran.
+const ORDEN_EVENTO_LABEL: Record<string, string> = {
+  creada: 'Orden pendiente',
+  creada_revision: 'Orden pendiente',
+  creada_directo: 'Orden enviada al cliente',
+  tomada: 'Orden en revisión',
+  devuelta: 'Orden devuelta',
+  mail_enviado: 'Orden enviada al cliente',
+  cliente_aprobo: 'Cliente aprobó la orden',
+  cliente_rechazo: 'Cliente no aprobó la orden',
+  cliente_respondio: 'Cliente respondió',
+  en_ejecucion: 'Orden en ejecución',
+  ejecutada: 'Orden ejecutada',
+  cancelada: 'Orden cancelada',
+}
+
+// Textos viejos de activity_log → "Qué pasó · a quién".
+const ACTIVITY_REWRITES: [RegExp, string][] = [
+  [/^Cliente (.+) creado$/, 'Cliente nuevo · $1'],
+  [/^Tarea "(.+)" creada$/, 'Tarea nueva · $1'],
+  [/^Documento "(.+)" creado$/, 'Documento nuevo · $1'],
+  [/^Vencimiento "(.+)" creado$/, 'Vencimiento nuevo · $1'],
+  [/^Apertura iniciada: (.+)$/, 'Apertura iniciada · $1'],
+]
+
+// Actividad reciente: activity_log (sin "Cliente actualizado" ni los mails de
+// plantilla, que no dicen nada) + los pasos de cada orden desde solicitud_eventos,
+// todo como "Qué pasó · Cliente".
 export async function getRecentActivityForDashboard(isWideRole: boolean, userName: string, limit: number, sinceDate: string) {
-  const where: string[] = [`created_at >= $1`]
-  const params: any[] = [sinceDate]
-  if (!isWideRole) { params.push(userName); where.push(`user_name = $${params.length}`) }
+  const params: any[] = [sinceDate, Object.keys(ORDEN_EVENTO_LABEL)]
+  let logUser = ''
+  let evUser = ''
+  if (!isWideRole) {
+    params.push(userName)
+    logUser = `and a.user_name = $${params.length}`
+    // Un asesor ve también lo que pasa con sus órdenes (ej. el cliente aprobó)
+    evUser = `and (ev.usuario = $${params.length} or s.asesor = $${params.length})`
+  }
   params.push(limit)
   const { rows } = await pool.query(
-    `select id, description, user_name, entity_type, entity_id, created_at
-     from activity_log where ${where.join(' and ')} order by created_at desc limit $${params.length}`,
+    `select * from (
+       select a.id::text as id, a.description, a.user_name, a.entity_type, a.entity_id::text as entity_id,
+              a.action, a.created_at, null::text as tipo,
+              trim(coalesce(c.first_name, '') || ' ' || coalesce(c.last_name, '')) as client_name
+         from activity_log a
+         left join clients c on a.entity_type = 'client' and c.id::text = a.entity_id::text
+        where a.created_at >= $1 ${logUser}
+          and not (a.entity_type = 'client' and a.action = 'actualizar')
+          and a.description not like 'Plantilla enviada%'
+       union all
+       select ev.id::text, ev.descripcion, ev.usuario, 'solicitud', s.id::text,
+              null, ev.created_at, ev.tipo, s.client_name
+         from solicitud_eventos ev
+         join solicitudes s on s.id = ev.solicitud_id
+        where ev.created_at >= $1 and ev.tipo = any($2::text[]) ${evUser}
+     ) x
+     order by created_at desc
+     limit $${params.length}`,
     params
   )
-  return rows
+  return rows.map((r: any) => {
+    let description: string = r.description ?? ''
+    if (r.entity_type === 'solicitud') {
+      description = `${ORDEN_EVENTO_LABEL[r.tipo]} · ${r.client_name || 'Cliente'}`
+    } else if (r.action === 'email_enviado') {
+      description = `Mail enviado · ${r.client_name || description.replace(/^Email enviado a ([^:]+):.*$/, '$1')}`
+    } else {
+      for (const [re, rep] of ACTIVITY_REWRITES) {
+        if (re.test(description)) { description = description.replace(re, rep); break }
+      }
+    }
+    return {
+      id: r.id, description, entity_type: r.entity_type, entity_id: r.entity_id, created_at: r.created_at,
+      user_name: r.user_name === 'Sistema' ? null : r.user_name,
+    }
+  })
 }
 
 export async function getCompletedTaskIds(ids: string[]) {
