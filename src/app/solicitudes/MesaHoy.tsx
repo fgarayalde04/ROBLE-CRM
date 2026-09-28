@@ -578,8 +578,8 @@ export default function MesaHoy({ isMesa, userName, openId }: { isMesa: boolean;
   const [verSolo, setVerSolo]   = useState<'hoy' | 'semana' | 'todo'>('hoy')
   const [counts, setCounts]     = useState<Record<string, number>>({})
   const [total, setTotal]       = useState(0)
-  // Tocar un contador filtra la tabla por ese estado (null = todos).
-  const [estadoFiltro, setEstadoFiltro] = useState<string | null>(null)
+  // Tocar un contador filtra la tabla por ese grupo de estados (null = todos).
+  const [grupoFiltro, setGrupoFiltro] = useState<string | null>(null)
 
   // Fecha en hora Uruguay (UTC-3)
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Montevideo' })
@@ -594,16 +594,13 @@ export default function MesaHoy({ isMesa, userName, openId }: { isMesa: boolean;
       from.setDate(from.getDate() - 7)
       p.set('dateFrom', from.toLocaleDateString('en-CA', { timeZone: 'America/Montevideo' }))
     }
-    if (estadoFiltro) p.set('estado', estadoFiltro)
     const res = await fetch('/api/solicitudes?' + p)
     const json = await res.json()
     setRows(json.solicitudes ?? [])
     setTotal(json.total ?? 0)
-    // Con un estado elegido el conteo de la API viene acotado a ese estado:
-    // se conservan los contadores del resto para poder cambiar de filtro.
-    if (!estadoFiltro) setCounts(json.countsByEstado ?? {})
+    setCounts(json.countsByEstado ?? {})
     setLoading(false)
-  }, [today, verSolo, estadoFiltro])
+  }, [today, verSolo])
 
   useEffect(() => { fetchRows() }, [fetchRows])
 
@@ -632,40 +629,35 @@ export default function MesaHoy({ isMesa, userName, openId }: { isMesa: boolean;
     fetchRows()
   }
 
-  // Un contador por estado exacto, en el orden del circuito; solo los que
-  // tienen órdenes en el período elegido.
-  const ESTADO_ORDEN = [
-    'pendiente_revision', 'mesa_operaciones', 'en_revision', 'devuelta', 'mail_enviado',
-    'aprobada_cliente', 'rechazada_cliente', 'en_ejecucion', 'ejecutada', 'cancelada',
+  // Cuatro etapas del circuito (siempre visibles) + las frenadas, que solo
+  // aparecen si hay. Conteo de la base sobre todo el período elegido.
+  const GRUPOS: { key: string; label: string; estados: string[]; color: string; bg: string; siempre: boolean }[] = [
+    { key: 'revisar',   label: 'Por revisar',       estados: ['pendiente_revision', 'mesa_operaciones', 'en_revision'], color: 'text-amber-700',   bg: 'bg-amber-50',   siempre: true },
+    { key: 'cliente',   label: 'Esperando cliente', estados: ['mail_enviado'],                                        color: 'text-indigo-700',  bg: 'bg-indigo-50',  siempre: true },
+    { key: 'ejecutar',  label: 'Para ejecutar',     estados: ['aprobada_cliente', 'en_ejecucion'],                    color: 'text-purple-700',  bg: 'bg-purple-50',  siempre: true },
+    { key: 'ejecutada', label: 'Ejecutadas',        estados: ['ejecutada'],                                           color: 'text-emerald-700', bg: 'bg-emerald-50', siempre: true },
+    { key: 'frenadas',  label: 'Devueltas / rechazadas / canceladas', estados: ['devuelta', 'rechazada_cliente', 'cancelada'], color: 'text-gray-600', bg: 'bg-gray-100', siempre: false },
   ]
-  const kpis = [
-    ...ESTADO_ORDEN,
-    ...Object.keys(counts).filter(e => !ESTADO_ORDEN.includes(e)),
-  ].filter(e => (counts[e] ?? 0) > 0)
-  const totalPeriodo = Object.values(counts).reduce((a, b) => a + b, 0)
+  const countGrupo = (g: typeof GRUPOS[number]) => g.estados.reduce((a, e) => a + (counts[e] ?? 0), 0)
+  const kpis = GRUPOS.filter(g => g.siempre || countGrupo(g) > 0)
+  const grupoActivo = GRUPOS.find(g => g.key === grupoFiltro) ?? null
+  const visibleRows = grupoActivo ? rows.filter(r => grupoActivo.estados.includes(r.estado)) : rows
 
   return (
     <div className="space-y-3">
       {/* KPIs */}
-      <div className="flex flex-wrap gap-2">
-        <button
-          onClick={() => setEstadoFiltro(null)}
-          className={`rounded-lg px-3 py-2 text-left border transition ${estadoFiltro === null ? 'border-[#2D3F52] bg-white' : 'border-transparent bg-gray-50 hover:bg-gray-100'}`}
-        >
-          <p className="text-[10px] text-gray-500 whitespace-nowrap">Todas</p>
-          <p className="text-lg font-bold mt-0.5 text-[#2D3F52]">{totalPeriodo}</p>
-        </button>
-        {kpis.map(e => {
-          const cfg = ESTADO_CFG[e] ?? { label: e, color: 'text-gray-700', bg: 'bg-gray-50' }
-          const active = estadoFiltro === e
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        {kpis.map(g => {
+          const active = grupoFiltro === g.key
           return (
             <button
-              key={e}
-              onClick={() => setEstadoFiltro(active ? null : e)}
-              className={`${cfg.bg} rounded-lg px-3 py-2 text-left border transition ${active ? 'border-current ' + cfg.color : 'border-transparent hover:brightness-95'}`}
+              key={g.key}
+              onClick={() => setGrupoFiltro(active ? null : g.key)}
+              title={g.estados.map(e => ESTADO_CFG[e]?.label ?? e).join(' · ')}
+              className={`${g.bg} rounded-lg px-3 py-2.5 text-left border transition ${g.siempre ? '' : 'col-span-2 sm:col-span-4'} ${active ? 'border-current ' + g.color : 'border-transparent hover:brightness-95'}`}
             >
-              <p className="text-[10px] text-gray-500 whitespace-nowrap">{cfg.label}</p>
-              <p className={`text-lg font-bold mt-0.5 ${cfg.color}`}>{counts[e]}</p>
+              <p className="text-[10px] text-gray-500">{g.label}</p>
+              <p className={`text-xl font-bold mt-0.5 ${g.color}`}>{countGrupo(g)}</p>
             </button>
           )
         })}
@@ -677,11 +669,11 @@ export default function MesaHoy({ isMesa, userName, openId }: { isMesa: boolean;
         <div className="flex-1 min-w-0 bg-white rounded-lg border border-gray-200 overflow-hidden">
           <div className="px-4 py-2.5 border-b border-gray-100 flex items-center justify-between gap-3">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider shrink-0">
-              {total} solicitud{total !== 1 ? 'es' : ''}{estadoFiltro ? ` · ${ESTADO_CFG[estadoFiltro]?.label ?? estadoFiltro}` : ''}
+              {grupoActivo ? visibleRows.length : total} solicitud{(grupoActivo ? visibleRows.length : total) !== 1 ? 'es' : ''}{grupoActivo ? ` · ${grupoActivo.label}` : ''}
             </p>
             <div className="flex items-center gap-1">
               {(['hoy','semana','todo'] as const).map(v => (
-                <button key={v} onClick={() => { setVerSolo(v); setEstadoFiltro(null) }}
+                <button key={v} onClick={() => { setVerSolo(v); setGrupoFiltro(null) }}
                   className={`px-2.5 py-1 text-[11px] font-medium rounded-md transition ${
                     verSolo === v ? 'bg-[#2D3F52] text-white' : 'text-gray-500 hover:bg-gray-100'
                   }`}>
@@ -693,7 +685,7 @@ export default function MesaHoy({ isMesa, userName, openId }: { isMesa: boolean;
           </div>
           {loading ? (
             <div className="p-6 text-center text-sm text-gray-400">Cargando…</div>
-          ) : rows.length === 0 ? (
+          ) : visibleRows.length === 0 ? (
             <div className="p-6 text-center text-sm text-gray-400">
               No hay solicitudes {verSolo === 'hoy' ? 'para hoy' : verSolo === 'semana' ? 'en los últimos 7 días' : ''}.
             </div>
@@ -710,7 +702,7 @@ export default function MesaHoy({ isMesa, userName, openId }: { isMesa: boolean;
                 <tbody className="divide-y divide-gray-50">
                   {(() => {
                     let lastDay = ''
-                    return expandRows(rows).map(line => {
+                    return expandRows(visibleRows).map(line => {
                       const row = line.row
                       const cfg = ESTADO_CFG[row.estado] ?? ESTADO_CFG.mesa_operaciones
                       const day = new Date(row.created_at).toLocaleDateString('en-CA', { timeZone: 'America/Montevideo' })
