@@ -39,6 +39,8 @@ const QUOTE_MARKERS = [
   /_{5,}/,
   /\s(De|From)\s*:\s*\S+@\S+/,
   /\s(Enviado desde mi|Sent from my|Obtener Outlook para)\s/i,
+  // Detalle de la orden que traen las respuestas armadas por Apruebo / No apruebo
+  /-{3,}\s*Detalle de la orden/i,
 ]
 
 /**

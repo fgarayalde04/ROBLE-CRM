@@ -32,7 +32,17 @@ function mailtoLink(to: string, cc: string | null, subject: string, body: string
   return `mailto:${to}?${params.join('&')}`
 }
 
-// El texto original del mail + los botones (HTML) o las instrucciones (texto).
+// Separa, en la respuesta armada por los botones, lo que escribe el cliente del
+// detalle de la orden que va debajo (para que lo vea mientras responde).
+export const DETALLE_MARKER = '----- Detalle de la orden -----'
+
+// Algunos programas de mail (Outlook en Windows) cortan los links mailto muy
+// largos: el detalle dentro de la respuesta se acota. El mail original lo
+// tiene siempre completo.
+const DETALLE_EN_RESPUESTA_MAX = 1500
+
+// El mail de la orden: botones Apruebo / No apruebo arriba (bien visibles),
+// el detalle completo de la orden, y los botones de nuevo al final.
 export function buildAprobacionEmail(opts: {
   body: string
   subject: string
@@ -42,24 +52,32 @@ export function buildAprobacionEmail(opts: {
 }): { text: string; html: string } {
   const replySubject = `Re: ${opts.subject}`
   const cc = opts.asesorEmail && opts.asesorEmail.toLowerCase() !== opts.replyTo.toLowerCase() ? opts.asesorEmail : null
-  const draft = (decision: string) => `${decision}\r\n${REF_LABEL}: ${opts.ref}\r\n\r\nComentarios:\r\n`
+  const detalle = opts.body.length > DETALLE_EN_RESPUESTA_MAX
+    ? `${opts.body.slice(0, DETALLE_EN_RESPUESTA_MAX).trimEnd()}\r\n[…ver el detalle completo en el mail original]`
+    : opts.body
+  // La referencia va arriba: es lo que la app lee para saber de qué orden se trata.
+  const draft = (decision: string) =>
+    `${decision}\r\n${REF_LABEL}: ${opts.ref}\r\n\r\nComentarios:\r\n\r\n\r\n\r\n${DETALLE_MARKER}\r\n${detalle.replace(/\r?\n/g, '\r\n')}`
   const aprueboHref = mailtoLink(opts.replyTo, cc, replySubject, draft('APRUEBO'))
   const noAprueboHref = mailtoLink(opts.replyTo, cc, replySubject, draft('NO APRUEBO'))
 
-  const text = `${opts.body}\n\n—\nPara aprobar esta orden respondé este mail con la palabra APRUEBO; para rechazarla, con NO APRUEBO. Podés agregar comentarios debajo.\n${REF_LABEL}: ${opts.ref}`
+  const instrucciones = 'Para aprobar esta orden respondé este mail con la palabra APRUEBO; para rechazarla, con NO APRUEBO. Podés agregar comentarios debajo.'
+  const text = `${instrucciones}\n\n${opts.body}\n\n—\n${instrucciones}\n${REF_LABEL}: ${opts.ref}`
 
   const button = (href: string, label: string, bg: string) =>
     `<a href="${escapeHtml(href)}" style="display:inline-block;padding:12px 28px;margin:0 8px 8px 0;border-radius:8px;background:${bg};color:#ffffff;font-weight:600;font-size:15px;text-decoration:none">${label}</a>`
+  const bloque = (titulo: string) => `<div style="padding:18px 20px;border:1px solid #e5e7eb;border-radius:12px;background:#f9fafb">
+<p style="margin:0 0 12px;font-weight:600;color:#2D3F52">${titulo}</p>
+${button(aprueboHref, 'Apruebo', '#2E7D52')}${button(noAprueboHref, 'No apruebo', '#B42318')}
+<p style="margin:8px 0 0;font-size:12px;color:#6b7280">Al tocar un botón se abre tu respuesta con el detalle de la orden, lista para enviar. Podés agregar comentarios. También podés responder este mail escribiendo APRUEBO o NO APRUEBO.</p>
+</div>`
 
   const html = `<!doctype html><html><body style="margin:0;padding:0">
 <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5;color:#1f2937;max-width:640px">
-<div style="white-space:pre-wrap">${escapeHtml(opts.body)}</div>
-<div style="margin-top:24px;padding:20px;border:1px solid #e5e7eb;border-radius:12px;background:#f9fafb">
-<p style="margin:0 0 14px;font-weight:600;color:#2D3F52">¿Aprobás esta orden?</p>
-${button(aprueboHref, 'Apruebo', '#2E7D52')}${button(noAprueboHref, 'No apruebo', '#B42318')}
-<p style="margin:10px 0 0;font-size:12px;color:#6b7280">Al tocar un botón se abre una respuesta lista para enviar, donde podés escribir tus comentarios. También podés responder este mail con APRUEBO o NO APRUEBO.</p>
-<p style="margin:6px 0 0;font-size:11px;color:#9ca3af">${REF_LABEL}: ${opts.ref}</p>
-</div>
+${bloque('¿Aprobás esta orden?')}
+<div style="margin:20px 0;white-space:pre-wrap">${escapeHtml(opts.body)}</div>
+${bloque('Confirmá tu respuesta')}
+<p style="margin:10px 0 0;font-size:11px;color:#9ca3af">${REF_LABEL}: ${opts.ref}</p>
 </div></body></html>`
 
   return { text, html }
@@ -90,6 +108,7 @@ export function parseAprobacion(replyText: string): { decision: 'aprobada' | 're
   if (!decision) return null
 
   const comentario = rest
+    .split(DETALLE_MARKER)[0]
     .replace(new RegExp(`Ref\\.?\\s*orden\\s*:?\\s*[${REF_ALPHABET}]{8}\\b`, 'i'), '')
     .replace(/^\s*Comentarios?\s*:\s*/i, '')
     .replace(/\s*Comentarios?\s*:\s*$/i, '')
