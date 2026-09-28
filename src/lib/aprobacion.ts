@@ -61,10 +61,10 @@ export function buildAprobacionEmail(opts: {
   // La referencia va arriba: es lo que la app lee para saber de qué orden se trata.
   const draft = (decision: string) =>
     `${decision}\r\n${REF_LABEL}: ${opts.ref}\r\n\r\nComentarios:\r\n\r\n\r\n\r\n${DETALLE_MARKER}\r\n${detalle.replace(/\r?\n/g, '\r\n')}`
-  const aprueboHref = mailtoLink(opts.replyTo, cc, replySubject, draft('APRUEBO'))
-  const noAprueboHref = mailtoLink(opts.replyTo, cc, replySubject, draft('NO APRUEBO'))
+  const aprueboHref = mailtoLink(opts.replyTo, cc, replySubject, draft('Apruebo'))
+  const noAprueboHref = mailtoLink(opts.replyTo, cc, replySubject, draft('No apruebo'))
 
-  const instrucciones = 'Para aprobar esta orden respondé este mail con la palabra APRUEBO; para rechazarla, con NO APRUEBO. Podés agregar comentarios debajo.'
+  const instrucciones = 'Para confirmar la orden, responda este mail con "Apruebo". Si prefiere no seguir adelante, responda "No apruebo". Puede agregar cualquier comentario debajo.'
   const text = `${opts.body}\n\n—\n${instrucciones}\n${REF_LABEL}: ${opts.ref}`
 
   const button = (href: string, label: string, bg: string) =>
@@ -72,7 +72,7 @@ export function buildAprobacionEmail(opts: {
   const bloque = (titulo: string) => `<div style="padding:18px 20px;border:1px solid #e5e7eb;border-radius:12px;background:#f9fafb">
 <p style="margin:0 0 12px;font-weight:600;color:#2D3F52">${titulo}</p>
 ${button(aprueboHref, 'Aprobar esta orden', '#2E7D52')}${button(noAprueboHref, 'No apruebo', '#6B7280')}
-<p style="margin:8px 0 0;font-size:12px;color:#6b7280">Al tocar un botón se abre tu respuesta con el detalle de la orden, lista para enviar. Podés agregar comentarios. También podés responder este mail escribiendo APRUEBO o NO APRUEBO.</p>
+<p style="margin:8px 0 0;font-size:12px;color:#6b7280">Al tocar un botón se abre un mail de respuesta ya preparado; solo tiene que enviarlo. Si lo desea, puede agregar un comentario. Ante cualquier duda, estamos a su disposición.</p>
 </div>`
 
   const html = `<!doctype html><html><body style="margin:0;padding:0">

@@ -62,8 +62,8 @@ describe('buildAprobacionEmail', () => {
     expect(si.pathname).toBe('trading@roblecapital.net')
     expect(si.searchParams.get('cc')).toBe('asesor@roblecapital.net')
     expect(si.searchParams.get('subject')).toBe('Re: Confirmacion de orden - 1234')
-    expect(si.searchParams.get('body')).toMatch(/^APRUEBO\r\nCódigo de confirmación: ABCD2345/)
-    expect(no.searchParams.get('body')).toMatch(/^NO APRUEBO\r\n/)
+    expect(si.searchParams.get('body')).toMatch(/^Apruebo\r\nCódigo de confirmación: ABCD2345/)
+    expect(no.searchParams.get('body')).toMatch(/^No apruebo\r\n/)
     // El cliente ve el detalle de la orden mientras responde
     expect(si.searchParams.get('body')).toContain('----- Detalle de la orden -----\r\nDetalle <orden>')
   })
@@ -73,7 +73,7 @@ describe('buildAprobacionEmail', () => {
   })
   it('escapa el cuerpo en el HTML y deja instrucciones en el texto plano', () => {
     expect(built.html).toContain('Detalle &lt;orden&gt;')
-    expect(built.text).toContain('APRUEBO')
+    expect(built.text).toContain('Apruebo')
     expect(built.text).toContain('Código de confirmación: ABCD2345')
   })
 })
