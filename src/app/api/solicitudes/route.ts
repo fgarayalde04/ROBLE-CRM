@@ -24,12 +24,12 @@ export async function GET(req: NextRequest) {
   const limit    = Math.min(parseInt(searchParams.get('limit') ?? '100', 10), 500)
   const page     = Math.max(parseInt(searchParams.get('page')  ?? '0',   10), 0)
 
-  const { data, total } = await listSolicitudes({
+  const { data, total, countsByEstado } = await listSolicitudes({
     asesorFilter: !isMesa ? session.name : null,
     asesor, estado, q, dateFrom, dateTo, limit, page,
   })
 
-  return NextResponse.json({ solicitudes: data, isMesa, total, page, limit })
+  return NextResponse.json({ solicitudes: data, isMesa, total, countsByEstado, page, limit })
 }
 
 // POST /api/solicitudes — crear solicitud

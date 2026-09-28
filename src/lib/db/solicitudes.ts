@@ -53,15 +53,20 @@ export async function listSolicitudes(filters: ListSolicitudesFilters) {
   const limit = filters.limit
   const offset = filters.page * filters.limit
 
-  const [{ rows }, { rows: countRows }] = await Promise.all([
+  const [{ rows }, { rows: countRows }, { rows: estadoRows }] = await Promise.all([
     pool.query(
       `select ${LIST_COLUMNS} from solicitudes ${whereClause} order by created_at desc limit $${params.length + 1} offset $${params.length + 2}`,
       [...params, limit, offset]
     ),
     pool.query(`select count(*) from solicitudes ${whereClause}`, params),
+    // Conteo por estado exacto sobre todo el filtro (no solo la página cargada).
+    pool.query(`select estado, count(*) from solicitudes ${whereClause} group by estado`, params),
   ])
 
-  return { data: rows, total: parseInt(countRows[0].count, 10) }
+  const countsByEstado: Record<string, number> = {}
+  for (const r of estadoRows) countsByEstado[r.estado] = parseInt(r.count, 10)
+
+  return { data: rows, total: parseInt(countRows[0].count, 10), countsByEstado }
 }
 
 // Órdenes propias que ya se enviaron pero todavía no se ejecutaron ni

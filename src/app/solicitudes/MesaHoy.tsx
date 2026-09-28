@@ -575,7 +575,11 @@ export default function MesaHoy({ isMesa, userName, openId }: { isMesa: boolean;
   const [loading, setLoading]   = useState(true)
   const [selected, setSelected] = useState<Solicitud | null>(null)
   const [eventos, setEventos]   = useState<Evento[]>([])
-  const [verSolo, setVerSolo]   = useState<'hoy' | 'semana' | 'todo'>('todo')
+  const [verSolo, setVerSolo]   = useState<'hoy' | 'semana' | 'todo'>('hoy')
+  const [counts, setCounts]     = useState<Record<string, number>>({})
+  const [total, setTotal]       = useState(0)
+  // Tocar un contador filtra la tabla por ese estado (null = todos).
+  const [estadoFiltro, setEstadoFiltro] = useState<string | null>(null)
 
   // Fecha en hora Uruguay (UTC-3)
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Montevideo' })
@@ -590,11 +594,16 @@ export default function MesaHoy({ isMesa, userName, openId }: { isMesa: boolean;
       from.setDate(from.getDate() - 7)
       p.set('dateFrom', from.toLocaleDateString('en-CA', { timeZone: 'America/Montevideo' }))
     }
+    if (estadoFiltro) p.set('estado', estadoFiltro)
     const res = await fetch('/api/solicitudes?' + p)
     const json = await res.json()
     setRows(json.solicitudes ?? [])
+    setTotal(json.total ?? 0)
+    // Con un estado elegido el conteo de la API viene acotado a ese estado:
+    // se conservan los contadores del resto para poder cambiar de filtro.
+    if (!estadoFiltro) setCounts(json.countsByEstado ?? {})
     setLoading(false)
-  }, [today, verSolo])
+  }, [today, verSolo, estadoFiltro])
 
   useEffect(() => { fetchRows() }, [fetchRows])
 
@@ -623,22 +632,43 @@ export default function MesaHoy({ isMesa, userName, openId }: { isMesa: boolean;
     fetchRows()
   }
 
-  const kpis = [
-    { label: 'Pendiente',    val: rows.filter(r => ['mesa_operaciones','pendiente_revision','en_revision','devuelta'].includes(r.estado)).length, color:'text-amber-700',  bg:'bg-amber-50' },
-    { label: 'Mail enviado', val: rows.filter(r => ['mail_enviado','aprobada_cliente','rechazada_cliente','en_ejecucion'].includes(r.estado)).length,    color:'text-indigo-700', bg:'bg-indigo-50' },
-    { label: 'Ejecutadas',   val: rows.filter(r => r.estado === 'ejecutada').length,       color:'text-emerald-700',bg:'bg-emerald-50' },
+  // Un contador por estado exacto, en el orden del circuito; solo los que
+  // tienen órdenes en el período elegido.
+  const ESTADO_ORDEN = [
+    'pendiente_revision', 'mesa_operaciones', 'en_revision', 'devuelta', 'mail_enviado',
+    'aprobada_cliente', 'rechazada_cliente', 'en_ejecucion', 'ejecutada', 'cancelada',
   ]
+  const kpis = [
+    ...ESTADO_ORDEN,
+    ...Object.keys(counts).filter(e => !ESTADO_ORDEN.includes(e)),
+  ].filter(e => (counts[e] ?? 0) > 0)
+  const totalPeriodo = Object.values(counts).reduce((a, b) => a + b, 0)
 
   return (
     <div className="space-y-3">
       {/* KPIs */}
-      <div className="grid grid-cols-3 gap-2">
-        {kpis.map(k => (
-          <div key={k.label} className={`${k.bg} rounded-lg px-3 py-2.5`}>
-            <p className="text-[10px] text-gray-500">{k.label}</p>
-            <p className={`text-xl font-bold mt-0.5 ${k.color}`}>{k.val}</p>
-          </div>
-        ))}
+      <div className="flex flex-wrap gap-2">
+        <button
+          onClick={() => setEstadoFiltro(null)}
+          className={`rounded-lg px-3 py-2 text-left border transition ${estadoFiltro === null ? 'border-[#2D3F52] bg-white' : 'border-transparent bg-gray-50 hover:bg-gray-100'}`}
+        >
+          <p className="text-[10px] text-gray-500 whitespace-nowrap">Todas</p>
+          <p className="text-lg font-bold mt-0.5 text-[#2D3F52]">{totalPeriodo}</p>
+        </button>
+        {kpis.map(e => {
+          const cfg = ESTADO_CFG[e] ?? { label: e, color: 'text-gray-700', bg: 'bg-gray-50' }
+          const active = estadoFiltro === e
+          return (
+            <button
+              key={e}
+              onClick={() => setEstadoFiltro(active ? null : e)}
+              className={`${cfg.bg} rounded-lg px-3 py-2 text-left border transition ${active ? 'border-current ' + cfg.color : 'border-transparent hover:brightness-95'}`}
+            >
+              <p className="text-[10px] text-gray-500 whitespace-nowrap">{cfg.label}</p>
+              <p className={`text-lg font-bold mt-0.5 ${cfg.color}`}>{counts[e]}</p>
+            </button>
+          )
+        })}
       </div>
 
       {/* Tabla + Panel detalle — apilados en mobile, lado a lado en desktop */}
@@ -647,11 +677,11 @@ export default function MesaHoy({ isMesa, userName, openId }: { isMesa: boolean;
         <div className="flex-1 min-w-0 bg-white rounded-lg border border-gray-200 overflow-hidden">
           <div className="px-4 py-2.5 border-b border-gray-100 flex items-center justify-between gap-3">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider shrink-0">
-              {rows.length} solicitud{rows.length !== 1 ? 'es' : ''}
+              {total} solicitud{total !== 1 ? 'es' : ''}{estadoFiltro ? ` · ${ESTADO_CFG[estadoFiltro]?.label ?? estadoFiltro}` : ''}
             </p>
             <div className="flex items-center gap-1">
               {(['hoy','semana','todo'] as const).map(v => (
-                <button key={v} onClick={() => setVerSolo(v)}
+                <button key={v} onClick={() => { setVerSolo(v); setEstadoFiltro(null) }}
                   className={`px-2.5 py-1 text-[11px] font-medium rounded-md transition ${
                     verSolo === v ? 'bg-[#2D3F52] text-white' : 'text-gray-500 hover:bg-gray-100'
                   }`}>
