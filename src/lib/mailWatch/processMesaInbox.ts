@@ -80,8 +80,8 @@ async function runOnce(source: 'push' | 'poll'): Promise<ProcessResult> {
   try {
     const result = await withMesaToken((token) => scan(token))
     if (!result) {
-      await recordCheck('skipped', 'Casilla de Mesa no conectada o token inválido', { fromPush })
-      return { ok: true, skipped: true, reason: 'Casilla de Mesa no conectada o token inválido' }
+      await recordCheck('skipped', 'Casilla de Trading Desk no conectada o token inválido', { fromPush })
+      return { ok: true, skipped: true, reason: 'Casilla de Trading Desk no conectada o token inválido' }
     }
     await recordCheck('ok', JSON.stringify(result), { fromPush })
     return result

@@ -59,14 +59,14 @@ export default function SolicitudesClient({ isMesa, userName, userEmail, gmailCo
     <div className="p-4 md:p-6 bg-[#F4F6F8] min-h-screen">
       <div className="mb-6">
         <h1 className="text-xl font-semibold text-[#2D3F52]">Órdenes</h1>
-        <p className="text-sm text-gray-400 mt-0.5">Enviá órdenes a Mesa y seguí el estado del día</p>
+        <p className="text-sm text-gray-400 mt-0.5">Enviá órdenes a Trading Desk y seguí el estado del día</p>
       </div>
 
       <div className="space-y-4">
 
         <Section
           title="Enviar órdenes"
-          subtitle="Crear una solicitud para Mesa de Operaciones"
+          subtitle="Crear una solicitud para Trading Desk"
           accent="blue"
           defaultOpen={showEnviar}
         >
@@ -75,7 +75,7 @@ export default function SolicitudesClient({ isMesa, userName, userEmail, gmailCo
 
         {!advisorMode && (
           <Section
-            title="Mesa de hoy"
+            title="Trading Desk hoy"
             subtitle="Solicitudes del día — estados y acciones"
             accent="amber"
             defaultOpen={isMesa}

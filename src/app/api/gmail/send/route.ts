@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
     accessToken = await getValidMesaGoogleToken()
     if (!accessToken) {
       return NextResponse.json({
-        error: 'La casilla de Mesa (trading@roblecapital.net) no está conectada. Un administrador debe conectarla en Configuración.',
+        error: 'La casilla de Trading Desk (trading@roblecapital.net) no está conectada. Un administrador debe conectarla en Configuración.',
       }, { status: 403 })
     }
     const tradingName = process.env.TRADING_NAME ?? 'Trading Desk | Roble Capital'

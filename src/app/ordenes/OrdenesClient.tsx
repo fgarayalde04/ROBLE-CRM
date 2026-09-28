@@ -384,7 +384,7 @@ export default function OrdenesClient({ gmailConnected, initialTab, isAdmin = fa
   // donde apuntan BottomNav y el menú de modo asesor).
   const tabItems: { t: Tab; label: string; short: string }[] = effectiveAdmin
     ? [
-        { t: 'mesa',         label: 'Mesa de hoy',  short: 'Mesa' },
+        { t: 'mesa',         label: 'Trading Desk hoy',  short: 'Trading' },
         { t: 'blotter',      label: 'Blotter',      short: 'Blotter' },
         { t: 'instrumentos', label: 'Instrumentos', short: 'Instr.' },
       ]
@@ -563,9 +563,9 @@ export default function OrdenesClient({ gmailConnected, initialTab, isAdmin = fa
       {/* Header */}
       <div className="hidden md:flex items-center justify-between mb-5">
         <div>
-          <h1 className="text-xl font-semibold text-[#2D3F52]">{effectiveAdmin ? 'Mesa de Operaciones' : 'Órdenes'}</h1>
+          <h1 className="text-xl font-semibold text-[#2D3F52]">{effectiveAdmin ? 'Trading Desk' : 'Órdenes'}</h1>
           <p className="text-sm text-gray-400 mt-0.5">
-            {effectiveAdmin ? 'Blotter · trazabilidad completa de órdenes' : 'Enviá órdenes a Mesa y consultá tu historial'}
+            {effectiveAdmin ? 'Blotter · trazabilidad completa de órdenes' : 'Enviá órdenes a Trading Desk y consultá tu historial'}
           </p>
         </div>
         <div className="flex gap-1 bg-white border border-gray-200 rounded-lg p-0.5 shadow-sm">

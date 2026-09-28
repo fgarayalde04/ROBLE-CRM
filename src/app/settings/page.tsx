@@ -160,13 +160,13 @@ export default async function SettingsPage({
           )}
         </div>
 
-        {/* Casilla de Mesa (trading@roblecapital.net) — admin only */}
+        {/* Casilla de Trading Desk (trading@roblecapital.net) — admin only */}
         {isAdmin && (
           <div className="bg-white border border-[#E2E8F0] rounded-lg p-5">
             <div className="flex items-center gap-2 mb-1">
               <GoogleIcon />
               <h2 className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest">
-                Casilla de Mesa
+                Casilla de Trading Desk
               </h2>
             </div>
             <p className="text-xs text-gray-400 mb-4">
@@ -179,12 +179,12 @@ export default async function SettingsPage({
             {/* Status banners */}
             {mesaStatusBanner === 'connected' && (
               <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded text-sm text-green-700">
-                ✓ Casilla de Mesa conectada correctamente.
+                ✓ Casilla de Trading Desk conectada correctamente.
               </div>
             )}
             {mesaStatusBanner === 'forbidden' && (
               <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-sm text-red-700">
-                Solo un administrador puede conectar la casilla de Mesa.
+                Solo un administrador puede conectar la casilla de Trading Desk.
               </div>
             )}
 
@@ -212,7 +212,7 @@ export default async function SettingsPage({
                 className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50 transition-colors shadow-sm"
               >
                 <GoogleIcon />
-                Conectar casilla de Mesa
+                Conectar casilla de Trading Desk
               </a>
             )}
           </div>

@@ -225,7 +225,7 @@ export async function PATCH(
     const isOwner = sol.asesor === session.name
     if (!isMesa && !isOwner) return NextResponse.json({ error: 'Sin permiso' }, { status: 403 })
     if (!['mesa_operaciones', 'pendiente_revision', 'devuelta'].includes(sol.estado))
-      return NextResponse.json({ error: 'Solo editable antes de ser tomada por Mesa' }, { status: 400 })
+      return NextResponse.json({ error: 'Solo editable antes de ser tomada por Trading Desk' }, { status: 400 })
     const allowed = ['tipo_operacion','instrumento_tipo','instrumento_nombre','clase','moneda',
       'monto','cantidad','fecha_operacion','observaciones','symbol','cusip_isin',
       'precio_tipo','precio_limite','vigencia','maturity','cupon','comision']

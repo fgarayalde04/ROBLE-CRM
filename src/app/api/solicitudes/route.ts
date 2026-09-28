@@ -138,7 +138,7 @@ export async function POST(req: NextRequest) {
     ? `Orden creada con envío directo al cliente por ${session.name}`
     : hasAssets
     ? `Orden completa enviada a revisión interna por ${session.name} (${body.assets_json.length} activo${body.assets_json.length !== 1 ? 's' : ''})`
-    : `Solicitud creada por ${session.name} — derivada a Mesa de Operaciones`
+    : `Solicitud creada por ${session.name} — derivada a Trading Desk`
 
   await insertSolicitudEvento({
     solicitud_id: data.id,

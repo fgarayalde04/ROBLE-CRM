@@ -143,7 +143,7 @@ function DetalleSolicitud({ sol, eventos, isMesa, userName, onAction, onClose, o
           <div className="flex justify-between mt-1">
             {(['mesa_operaciones'].includes(sol.estado) ? ESTADO_STEPS_OLD : ESTADO_STEPS_NEW).map((s: string) => (
               <span key={s} className={`text-[9px] ${sol.estado === s ? 'font-bold text-[#2D3F52]' : 'text-gray-300'}`}>
-                {s === 'mesa_operaciones' ? 'Mesa' : s === 'pendiente_revision' ? 'Pend.' : s === 'en_revision' ? 'Rev.' : s === 'mail_enviado' ? 'Mail' : s === 'aprobada_cliente' ? 'Aprob.' : s === 'en_ejecucion' ? 'Ejec.' : 'Lista'}
+                {s === 'mesa_operaciones' ? 'Trading' : s === 'pendiente_revision' ? 'Pend.' : s === 'en_revision' ? 'Rev.' : s === 'mail_enviado' ? 'Mail' : s === 'aprobada_cliente' ? 'Aprob.' : s === 'en_ejecucion' ? 'Ejec.' : 'Lista'}
               </span>
             ))}
           </div>
@@ -213,9 +213,9 @@ function DetalleSolicitud({ sol, eventos, isMesa, userName, onAction, onClose, o
                 sol.maturity     ? ['Vencimiento', sol.maturity]                             : null,
                 sol.cupon        ? ['Cupón', sol.cupon + '%']                                : null,
                 ['Asesor', sol.asesor],
-                ['Ingresada por', ingresadaPorBlotter(sol) === 'mesa' ? 'Mesa' : 'Asesor'],
-                sol.canal        ? ['Canal', sol.canal === 'directo_asesor' ? 'Envío directo por asesor' : sol.canal === 'directo_mesa' ? 'Envío directo por Mesa' : 'Derivada a Mesa'] : null,
-                ['Opera', sol.opera_asesor ? 'Asesor' : 'Mesa'],
+                ['Ingresada por', ingresadaPorBlotter(sol) === 'mesa' ? 'Trading Desk' : 'Asesor'],
+                sol.canal        ? ['Canal', sol.canal === 'directo_asesor' ? 'Envío directo por asesor' : sol.canal === 'directo_mesa' ? 'Envío directo por Trading Desk' : 'Derivada a Trading Desk'] : null,
+                ['Opera', sol.opera_asesor ? 'Asesor' : 'Trading Desk'],
                 sol.operador     ? ['Operador', sol.operador]                                : null,
                 sol.precio_ejecutado ? ['Precio ejec.', String(sol.precio_ejecutado)]       : null,
                 sol.valor_efectivo   ? ['Valor ef.', `${sol.moneda} ${Number(sol.valor_efectivo).toLocaleString('es-UY')}`] : null,
@@ -361,7 +361,7 @@ const ESTADO_CFG: Record<string, { label: string; color: string; dot: string }> 
   pendiente_revision: { label: 'Pendiente revisión', color: 'text-amber-700',   dot: 'bg-amber-400' },
   en_revision:        { label: 'En revisión',        color: 'text-blue-700',    dot: 'bg-blue-400' },
   devuelta:           { label: 'Devuelta',           color: 'text-orange-700',  dot: 'bg-orange-400' },
-  mesa_operaciones:   { label: 'Mesa de Operaciones',color: 'text-amber-700',   dot: 'bg-amber-400' },
+  mesa_operaciones:   { label: 'Trading Desk',color: 'text-amber-700',   dot: 'bg-amber-400' },
   mail_enviado:       { label: 'Mail enviado',       color: 'text-indigo-700',  dot: 'bg-indigo-400' },
   aprobada_cliente:   { label: 'Aprobada por cliente', color: 'text-teal-700',  dot: 'bg-teal-500' },
   rechazada_cliente:  { label: 'Rechazada por cliente', color: 'text-red-700',  dot: 'bg-red-500' },
@@ -440,7 +440,7 @@ function exportCSV(rows: Solicitud[]) {
     l.row.fecha_operacion,
     format(new Date(l.row.created_at), 'HH:mm'),
     l.row.client_name, l.row.client_number, l.row.asesor,
-    l.row.opera_asesor ? 'Asesor' : 'Mesa',
+    l.row.opera_asesor ? 'Asesor' : 'Trading Desk',
     OP_LABEL[l.operacion ?? ''] ?? l.operacion,
     l.tipo,
     l.instrumento_nombre,
@@ -703,7 +703,7 @@ export default function BlotterSolicitudes({ isMesa, userName }: { isMesa: boole
                       {row.opera_asesor ? (
                         <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-sky-100 text-sky-700">Asesor</span>
                       ) : (
-                        <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">Mesa</span>
+                        <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">Trading</span>
                       )}
                     </td>
                     <td className="px-3 py-2 text-xs font-medium text-gray-700 whitespace-nowrap">{OP_LABEL[line.operacion ?? ''] ?? line.operacion}</td>
