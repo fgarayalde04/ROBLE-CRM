@@ -1,7 +1,7 @@
 -- ============================================================
--- Aprobación del cliente desde el mail de la orden.
--- El mail lleva un link /aprobar/<token> con "Apruebo" / "No apruebo" y un
--- campo para comentarios. Se aplica sola al arrancar (src/lib/db/migrate.ts).
+-- Aprobación del cliente desde el mail de la orden (ver src/lib/aprobacion.ts
+-- y solicitudes_aprobacion_cliente_mail.sql). Se aplica sola al arrancar
+-- (src/lib/db/migrate.ts).
 -- Idempotente.
 -- ============================================================
 

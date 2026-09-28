@@ -179,7 +179,7 @@ export interface ReplyCtx {
   fromEmail: string
   subject: string
   snippet: string
-  matchMethod: 'thread_id' | 'subject_fallback' | 'unmatched'
+  matchMethod: 'thread_id' | 'referencia' | 'subject_fallback' | 'unmatched'
 }
 
 const PUSH_SNIPPET_MAX = 110
@@ -204,7 +204,11 @@ function truncate(text: string, max: number) {
 // clientes) + toda la Mesa/admin/asistentes (ven todo, incluidas las que no se
 // pudieron asociar a una orden, para revisarlas a mano). Si el asesor además
 // tiene rol de Mesa, el dedup hace que reciba una sola.
-export async function notifyClienteRespondio(reply: ReplyCtx, asesor: { id: string | null; name: string } | null) {
+export async function notifyClienteRespondio(
+  reply: ReplyCtx,
+  asesor: { id: string | null; name: string } | null,
+  decision: 'aprobada' | 'rechazada' | null = null,
+) {
   const isUnmatched = reply.matchMethod === 'unmatched'
   const who = reply.clientName ?? reply.fromEmail
   const subject = cleanSubject(reply.subject)
@@ -213,7 +217,10 @@ export async function notifyClienteRespondio(reply: ReplyCtx, asesor: { id: stri
   const replyText = extractReplyText(reply.snippet)
   const suffix = reply.matchMethod === 'subject_fallback' ? ' (asociada por asunto)' : ''
 
-  const title = isUnmatched ? '💬 Respuesta sin identificar' : `💬 ${who} respondió`
+  const title = isUnmatched ? '💬 Respuesta sin identificar'
+    : decision === 'aprobada' ? `✅ ${who} aprobó la orden`
+    : decision === 'rechazada' ? `❌ ${who} no aprobó la orden`
+    : `💬 ${who} respondió`
   const said = replyText ? `: "${truncate(replyText, MESSAGE_SNIPPET_MAX)}"` : ''
   const message = isUnmatched
     ? `${reply.fromEmail} respondió "${subject}"${said} — no se pudo asociar a ninguna orden, revisar manualmente.`
@@ -261,31 +268,4 @@ async function clientResponseRecipients(asesor: { id: string | null; name: strin
     }
   }
   return recipients
-}
-
-// El cliente tocó Apruebo / No apruebo en el mail de la orden — interna + push
-// al asesor y a Mesa. Solo se registra una respuesta por orden, así que el
-// dedup por (orden, evento, usuario) alcanza.
-export async function notifyClienteAprobacion(
-  order: OrderCtx,
-  decision: 'aprobada' | 'rechazada',
-  comentario: string | null,
-) {
-  const client = order.clientName ?? 'El cliente'
-  const aprobo = decision === 'aprobada'
-  const title = aprobo ? `✅ ${client} aprobó la orden` : `❌ ${client} no aprobó la orden`
-  const said = comentario ? `: "${truncate(comentario, MESSAGE_SNIPPET_MAX)}"` : ''
-  const recipients = await clientResponseRecipients({ id: order.asesorId, name: order.asesorName })
-  await Promise.all(Array.from(recipients, ([userId, userName]) =>
-    notifyAndMaybePush({
-      userId, userName,
-      notifType: aprobo ? 'cliente_aprobo' : 'cliente_rechazo',
-      title,
-      message: `${title}${said}`,
-      clientName: order.clientName,
-      entityId: order.id,
-      url: orderUrl(order.id),
-      push: { title, body: comentario ? `"${truncate(comentario, PUSH_SNIPPET_MAX)}"` : (aprobo ? 'Aprobada desde el mail' : 'Rechazada desde el mail') },
-    })
-  ))
 }

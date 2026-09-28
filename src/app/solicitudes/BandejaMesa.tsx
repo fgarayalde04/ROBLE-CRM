@@ -61,8 +61,8 @@ interface Evento {
   created_at: string
 }
 
-const ESTADO_STEPS_NEW  = ['pendiente_revision','en_revision','mail_enviado','en_ejecucion','ejecutada'] as const
-const ESTADO_STEPS_OLD  = ['mesa_operaciones','mail_enviado','en_ejecucion','ejecutada'] as const
+const ESTADO_STEPS_NEW  = ['pendiente_revision','en_revision','mail_enviado','aprobada_cliente','en_ejecucion','ejecutada'] as const
+const ESTADO_STEPS_OLD  = ['mesa_operaciones','mail_enviado','aprobada_cliente','en_ejecucion','ejecutada'] as const
 
 const ESTADO_CFG: Record<string, { label: string; color: string; bg: string }> = {
   pendiente_revision: { label: 'Pendiente de revisión', color: 'text-amber-700',  bg: 'bg-amber-100' },
@@ -70,6 +70,8 @@ const ESTADO_CFG: Record<string, { label: string; color: string; bg: string }> =
   devuelta:           { label: 'Devuelta al asesor',    color: 'text-orange-700', bg: 'bg-orange-100' },
   mesa_operaciones:   { label: 'Mesa de Operaciones',   color: 'text-amber-700',  bg: 'bg-amber-100' },
   mail_enviado:       { label: 'Mail enviado',          color: 'text-indigo-700', bg: 'bg-indigo-100' },
+  aprobada_cliente:   { label: 'Aprobada por cliente',  color: 'text-teal-700',   bg: 'bg-teal-100' },
+  rechazada_cliente:  { label: 'Rechazada por cliente', color: 'text-red-700',    bg: 'bg-red-100' },
   en_ejecucion:       { label: 'En ejecución',          color: 'text-purple-700', bg: 'bg-purple-100' },
   ejecutada:          { label: 'Ejecutada',             color: 'text-emerald-700',bg: 'bg-emerald-100' },
   cancelada:          { label: 'Cancelada',             color: 'text-gray-500',   bg: 'bg-gray-100' },
@@ -134,8 +136,9 @@ function expandRows(rows: Solicitud[]): BlotterLine[] {
 }
 
 function ProgressBar({ estado }: { estado: string }) {
+  if (estado === 'rechazada_cliente') return <span className="text-xs text-red-600 font-medium">✕ Rechazada por el cliente</span>
   const isNewFlow = ['pendiente_revision','en_revision','devuelta'].includes(estado)
-    || (estado === 'mail_enviado' || estado === 'en_ejecucion' || estado === 'ejecutada')
+    || (estado === 'mail_enviado' || estado === 'aprobada_cliente' || estado === 'rechazada_cliente' || estado === 'en_ejecucion' || estado === 'ejecutada')
   const steps = isNewFlow && !['mesa_operaciones'].includes(estado) ? ESTADO_STEPS_NEW : ESTADO_STEPS_OLD
   const idx = steps.indexOf(estado as any)
   return (
@@ -341,7 +344,7 @@ export default function BandejaMesa({ isMesa, userName }: { isMesa: boolean; use
   const kpis = {
     pendiente:    rows.filter(r => ['mesa_operaciones','pendiente_revision','devuelta'].includes(r.estado)).length,
     en_revision:  rows.filter(r => r.estado === 'en_revision').length,
-    mail_enviado: rows.filter(r => r.estado === 'mail_enviado').length,
+    mail_enviado: rows.filter(r => ['mail_enviado', 'aprobada_cliente', 'rechazada_cliente'].includes(r.estado)).length,
     en_ejecucion: rows.filter(r => r.estado === 'en_ejecucion').length,
     ejecutada:    rows.filter(r => r.estado === 'ejecutada').length,
   }
@@ -504,7 +507,7 @@ export default function BandejaMesa({ isMesa, userName }: { isMesa: boolean; use
                 <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Acciones</p>
 
                 {/* Tomar: when not yet taken and in a takeable state */}
-                {!selected.operador && !['mail_enviado','en_ejecucion','ejecutada'].includes(selected.estado) && (
+                {!selected.operador && !['mail_enviado','aprobada_cliente','en_ejecucion','ejecutada'].includes(selected.estado) && (
                   <button onClick={handleTomar} disabled={actionLoading}
                     className="w-full py-2 text-sm font-medium bg-[#2D3F52] text-white rounded-lg hover:bg-[#354A5E] disabled:opacity-50">
                     Tomar solicitud
@@ -552,14 +555,14 @@ export default function BandejaMesa({ isMesa, userName }: { isMesa: boolean; use
                   </button>
                 )}
 
-                {selected.estado === 'mail_enviado' && (
+                {(selected.estado === 'mail_enviado' || selected.estado === 'aprobada_cliente') && (
                   <button onClick={handleEnEjecucion} disabled={actionLoading}
                     className="w-full py-2 text-sm font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50">
                     Marcar en ejecución
                   </button>
                 )}
 
-                {(selected.estado === 'mail_enviado' || selected.estado === 'en_ejecucion') && (
+                {(selected.estado === 'mail_enviado' || selected.estado === 'aprobada_cliente' || selected.estado === 'en_ejecucion') && (
                   <button onClick={() => setShowEjecucion(true)}
                     className="w-full py-2 text-sm font-medium bg-emerald-600 text-white rounded-lg hover:bg-emerald-700">
                     Marcar como ejecutada

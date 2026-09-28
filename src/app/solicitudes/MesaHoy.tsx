@@ -62,14 +62,16 @@ interface Evento {
   usuario: string; datos: unknown; created_at: string
 }
 
-const ESTADO_STEPS_NEW = ['pendiente_revision','en_revision','mail_enviado','en_ejecucion','ejecutada'] as const
-const ESTADO_STEPS_OLD = ['mesa_operaciones','mail_enviado','en_ejecucion','ejecutada'] as const
+const ESTADO_STEPS_NEW = ['pendiente_revision','en_revision','mail_enviado','aprobada_cliente','en_ejecucion','ejecutada'] as const
+const ESTADO_STEPS_OLD = ['mesa_operaciones','mail_enviado','aprobada_cliente','en_ejecucion','ejecutada'] as const
 const ESTADO_CFG: Record<string, { label: string; color: string; bg: string; dot: string }> = {
   pendiente_revision: { label:'Pendiente revisión', color:'text-amber-700',   bg:'bg-amber-50',   dot:'bg-amber-400' },
   en_revision:        { label:'En revisión',        color:'text-blue-700',    bg:'bg-blue-50',    dot:'bg-blue-400' },
   devuelta:           { label:'Devuelta',            color:'text-orange-700',  bg:'bg-orange-50',  dot:'bg-orange-400' },
   mesa_operaciones:   { label:'Mesa de Operaciones', color:'text-amber-700',   bg:'bg-amber-50',   dot:'bg-amber-400' },
   mail_enviado:       { label:'Mail enviado',        color:'text-indigo-700',  bg:'bg-indigo-50',  dot:'bg-indigo-400' },
+  aprobada_cliente:   { label:'Aprobada por cliente', color:'text-teal-700',   bg:'bg-teal-50',    dot:'bg-teal-500' },
+  rechazada_cliente:  { label:'Rechazada por cliente', color:'text-red-700',   bg:'bg-red-50',     dot:'bg-red-500' },
   en_ejecucion:       { label:'En ejecución',        color:'text-purple-700',  bg:'bg-purple-50',  dot:'bg-purple-400' },
   ejecutada:          { label:'Ejecutada',           color:'text-emerald-700', bg:'bg-emerald-50', dot:'bg-emerald-500' },
   cancelada:          { label:'Cancelada',           color:'text-gray-400',    bg:'bg-gray-50',    dot:'bg-gray-300' },
@@ -158,6 +160,7 @@ function expandRows(rows: Solicitud[]): BlotterLine[] {
 function ProgressBar({ estado }: { estado: string }) {
   if (estado === 'cancelada') return <span className="text-xs text-gray-400 italic">Cancelada</span>
   if (estado === 'devuelta')  return <span className="text-xs text-orange-600 font-medium">↩ Devuelta al asesor</span>
+  if (estado === 'rechazada_cliente') return <span className="text-xs text-red-600 font-medium">✕ Rechazada por el cliente</span>
   const steps = ['mesa_operaciones'].includes(estado) ? ESTADO_STEPS_OLD : ESTADO_STEPS_NEW
   const idx = steps.indexOf(estado as any)
   return (
@@ -292,7 +295,7 @@ function DetailPanel({
           <div className="flex justify-between mt-1">
             {(['mesa_operaciones'].includes(sol.estado) ? ESTADO_STEPS_OLD : ESTADO_STEPS_NEW).map((s: string) => (
               <span key={s} className={`text-[9px] ${sol.estado === s ? 'font-bold text-[#2D3F52]' : 'text-gray-300'}`}>
-                {s === 'mesa_operaciones' ? 'Mesa' : s === 'pendiente_revision' ? 'Pend.' : s === 'en_revision' ? 'Rev.' : s === 'mail_enviado' ? 'Mail' : s === 'en_ejecucion' ? 'Ejec.' : 'Lista'}
+                {s === 'mesa_operaciones' ? 'Mesa' : s === 'pendiente_revision' ? 'Pend.' : s === 'en_revision' ? 'Rev.' : s === 'mail_enviado' ? 'Mail' : s === 'aprobada_cliente' ? 'Aprob.' : s === 'en_ejecucion' ? 'Ejec.' : 'Lista'}
               </span>
             ))}
           </div>
@@ -302,7 +305,7 @@ function DetailPanel({
       {/* Acciones Mesa — fijas arriba de las solapas, siempre a mano sin importar qué solapa esté abierta */}
       {canAct && (
         <div className="px-4 py-3 space-y-1.5 border-b border-gray-100 shrink-0">
-          {!sol.operador && !['mail_enviado','en_ejecucion','ejecutada'].includes(sol.estado) && (
+          {!sol.operador && !['mail_enviado','aprobada_cliente','en_ejecucion','ejecutada'].includes(sol.estado) && (
             <button onClick={() => act('tomar')} disabled={busy}
               className="w-full py-2 text-xs font-semibold bg-[#2D3F52] text-white rounded-lg hover:bg-[#354A5E] disabled:opacity-50">
               Tomar solicitud
@@ -343,13 +346,13 @@ function DetailPanel({
               Devolver al asesor
             </button>
           )}
-          {sol.estado === 'mail_enviado' && (
+          {(sol.estado === 'mail_enviado' || sol.estado === 'aprobada_cliente') && (
             <button onClick={() => act('en_ejecucion')} disabled={busy}
               className="w-full py-2 text-xs font-semibold bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50">
               Marcar en ejecución
             </button>
           )}
-          {(sol.estado === 'mail_enviado' || sol.estado === 'en_ejecucion') && (
+          {(sol.estado === 'mail_enviado' || sol.estado === 'aprobada_cliente' || sol.estado === 'en_ejecucion') && (
             <button onClick={() => setShowEjecutar(true)}
               className="w-full py-2 text-xs font-semibold bg-emerald-600 text-white rounded-lg hover:bg-emerald-700">
               Marcar como ejecutada
@@ -622,7 +625,7 @@ export default function MesaHoy({ isMesa, userName, openId }: { isMesa: boolean;
 
   const kpis = [
     { label: 'Pendiente',    val: rows.filter(r => ['mesa_operaciones','pendiente_revision','en_revision','devuelta'].includes(r.estado)).length, color:'text-amber-700',  bg:'bg-amber-50' },
-    { label: 'Mail enviado', val: rows.filter(r => ['mail_enviado','en_ejecucion'].includes(r.estado)).length,    color:'text-indigo-700', bg:'bg-indigo-50' },
+    { label: 'Mail enviado', val: rows.filter(r => ['mail_enviado','aprobada_cliente','rechazada_cliente','en_ejecucion'].includes(r.estado)).length,    color:'text-indigo-700', bg:'bg-indigo-50' },
     { label: 'Ejecutadas',   val: rows.filter(r => r.estado === 'ejecutada').length,       color:'text-emerald-700',bg:'bg-emerald-50' },
   ]
 

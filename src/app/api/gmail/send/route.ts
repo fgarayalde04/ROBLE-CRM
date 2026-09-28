@@ -32,6 +32,7 @@ export async function POST(req: NextRequest) {
   let accessToken: string | null
   let fromHeader: string
   let effectiveReplyTo: string | undefined
+  let asesorEmail: string | null = null
 
   if (viaMesa) {
     accessToken = await getValidMesaGoogleToken()
@@ -46,7 +47,7 @@ export async function POST(req: NextRequest) {
     // respuesta del cliente le llega directo a los dos, no solo a la casilla
     // compartida. Si la manda Mesa, el asesor sale de la orden (solicitud_uuid);
     // si no hay orden asociada, quien envía es el asesor.
-    let asesorEmail: string | null = session.email ?? null
+    asesorEmail = session.email ?? null
     if (solicitud_uuid) {
       try {
         const sol = await getSolicitud(solicitud_uuid)
@@ -73,10 +74,10 @@ export async function POST(req: NextRequest) {
     effectiveReplyTo = replyTo ?? undefined
   }
 
-  // Mail de orden (desde trading@): lleva los botones Apruebo / No apruebo.
-  // Con solicitud_uuid (lo manda Mesa) el token queda guardado en la orden;
-  // con con_aprobacion (envío directo del asesor, la orden todavía no existe)
-  // se devuelve para que se guarde al registrarla.
+  // Mail de orden (desde trading@): lleva los botones Apruebo / No apruebo
+  // (ver src/lib/aprobacion.ts). Con solicitud_uuid (lo manda Mesa) la
+  // referencia queda guardada en la orden; con con_aprobacion (envío directo
+  // del asesor, la orden todavía no existe) se devuelve para guardarla al registrarla.
   let aprobacionToken: string | null = null
   let mailText: string = body
   let mailHtml: string | undefined
@@ -86,10 +87,9 @@ export async function POST(req: NextRequest) {
         ? await ensureAprobacionToken(solicitud_uuid, newAprobacionToken())
         : newAprobacionToken()
       if (aprobacionToken) {
-        const proto = req.headers.get('x-forwarded-proto') ?? 'https'
-        const host = req.headers.get('x-forwarded-host') ?? req.headers.get('host')
-        const baseUrl = host ? `${proto}://${host}` : (process.env.NEXT_PUBLIC_APP_URL ?? req.nextUrl.origin)
-        const built = buildAprobacionEmail(body, baseUrl, aprobacionToken)
+        const built = buildAprobacionEmail({
+          body, subject, replyTo: MESA_GOOGLE_CONNECTION_KEY, asesorEmail, ref: aprobacionToken,
+        })
         mailText = built.text
         mailHtml = built.html
       }

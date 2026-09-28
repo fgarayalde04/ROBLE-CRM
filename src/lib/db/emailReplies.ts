@@ -1,6 +1,6 @@
 import { pool } from './pool'
 
-export type EmailReplyMatchMethod = 'thread_id' | 'subject_fallback' | 'unmatched'
+export type EmailReplyMatchMethod = 'thread_id' | 'referencia' | 'subject_fallback' | 'unmatched'
 
 export interface EmailReplyInsert {
   gmail_message_id: string

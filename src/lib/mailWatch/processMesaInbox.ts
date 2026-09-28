@@ -10,7 +10,11 @@
 
 import { getValidMesaGoogleToken, invalidateMesaGoogleToken, MESA_GOOGLE_CONNECTION_KEY } from '@/lib/google/tokens'
 import { getInboxMessage, getMailboxHistoryId, getMailboxProfile, listInboxMessageIdsSince } from '@/lib/google/gmail'
-import { findSolicitudByThreadId, findSolicitudesByAsunto, getSolicitud, insertSolicitudEvento } from '@/lib/db/solicitudes'
+import {
+  findSolicitudByThreadId, findSolicitudesByAsunto, findSolicitudByAprobacionToken, getSolicitud,
+  insertSolicitudEvento, registrarRespuestaCliente,
+} from '@/lib/db/solicitudes'
+import { extractAprobacionRef, parseAprobacion } from '@/lib/aprobacion'
 import {
   insertEmailReply, markEmailReplyNotified, getMailWatchState, saveHistoryId, recordCheck,
   listUnnotifiedEmailReplies, type EmailReplyRow, type EmailReplyMatchMethod,
@@ -150,9 +154,16 @@ async function handleMessage(token: string, id: string): Promise<boolean> {
   let matchMethod: EmailReplyMatchMethod = 'unmatched'
 
   const byThread = await findSolicitudByThreadId(msg.threadId)
+  // Respuesta armada con los botones Apruebo / No apruebo: es un mail nuevo
+  // (otro hilo), pero trae la referencia de la orden en el texto.
+  const ref = byThread ? null : extractAprobacionRef(extractReplyText(msg.snippet ?? ''))
+  const byRef = ref ? await findSolicitudByAprobacionToken(ref) : null
   if (byThread) {
     solicitud = byThread
     matchMethod = 'thread_id'
+  } else if (byRef) {
+    solicitud = byRef
+    matchMethod = 'referencia'
   } else if (hasReplyPrefix(msg.subject)) {
     const candidates = await findSolicitudesByAsunto(stripReplyPrefixes(msg.subject))
     if (candidates.length === 1) {
@@ -185,6 +196,12 @@ async function handleMessage(token: string, id: string): Promise<boolean> {
 
 async function deliver(row: EmailReplyRow) {
   const solicitud = row.solicitud_id ? await getSolicitud(row.solicitud_id) : null
+  const replyText = extractReplyText(row.snippet ?? '')
+  // "APRUEBO" / "NO APRUEBO" al comienzo de la respuesta → actualiza el estado de la orden.
+  const aprobacion = solicitud ? parseAprobacion(replyText) : null
+  const cambio = aprobacion && solicitud
+    ? await registrarRespuestaCliente(solicitud.id, aprobacion.decision, aprobacion.comentario)
+    : null
 
   await notifyClienteRespondio(
     {
@@ -197,15 +214,25 @@ async function deliver(row: EmailReplyRow) {
       snippet:     row.snippet ?? '',
       matchMethod: row.match_method,
     },
-    solicitud ? { id: solicitud.asesor_id, name: solicitud.asesor } : null
+    solicitud ? { id: solicitud.asesor_id, name: solicitud.asesor } : null,
+    aprobacion?.decision ?? null,
   )
 
   if (solicitud) {
-    const replyText = extractReplyText(row.snippet ?? '')
-    await insertSolicitudEvento({
+    const client = solicitud.client_name ?? 'El cliente'
+    const byAsunto = row.match_method === 'subject_fallback' ? ' (coincidencia por asunto)' : ''
+    await insertSolicitudEvento(aprobacion ? {
+      solicitud_id: solicitud.id,
+      tipo: aprobacion.decision === 'aprobada' ? 'cliente_aprobo' : 'cliente_rechazo',
+      descripcion: `${client} ${aprobacion.decision === 'aprobada' ? 'aprobó' : 'no aprobó'} la orden por mail${byAsunto}${aprobacion.comentario ? `: "${aprobacion.comentario}"` : '.'}`
+        + (cambio?.cambioEstado ? ` Estado → ${aprobacion.decision === 'aprobada' ? 'Aprobada' : 'Rechazada'} por cliente.` : ''),
+      usuario: 'Sistema',
+      usuario_id: null,
+      datos: { decision: aprobacion.decision, comentario: aprobacion.comentario },
+    } : {
       solicitud_id: solicitud.id,
       tipo: 'cliente_respondio',
-      descripcion: `${solicitud.client_name ?? 'El cliente'} respondió al mail de confirmación${row.match_method === 'subject_fallback' ? ' (coincidencia por asunto)' : ''}${replyText ? `: "${replyText}"` : '.'}`,
+      descripcion: `${client} respondió al mail de confirmación${byAsunto}${replyText ? `: "${replyText}"` : '.'}`,
       usuario: 'Sistema',
       usuario_id: null,
     })

@@ -106,10 +106,13 @@ export async function getSolicitud(id: string) {
   return rows[0] ?? null
 }
 
-// ── Aprobación del cliente desde el mail (/aprobar/<token>) ──────────────────
+// ── Aprobación del cliente desde el mail ──────────────────────────────────────
+// Cada mail de orden lleva una referencia corta (aprobacion_token) en los
+// botones Apruebo / No apruebo: la respuesta que arman es un mail nuevo (no
+// queda en el mismo hilo), así que la referencia es lo que la vincula a la orden.
 
-// Devuelve el token de la orden, creándolo si todavía no tiene. Si Mesa reenvía
-// el mail, el link sigue siendo el mismo.
+// Devuelve la referencia de la orden, creándola si todavía no tiene. Si Mesa
+// reenvía el mail, sigue siendo la misma.
 export async function ensureAprobacionToken(id: string, newToken: string): Promise<string | null> {
   const { rows } = await pool.query(
     `update solicitudes set aprobacion_token = coalesce(aprobacion_token, $2) where id = $1 returning aprobacion_token`,
@@ -118,21 +121,31 @@ export async function ensureAprobacionToken(id: string, newToken: string): Promi
   return rows[0]?.aprobacion_token ?? null
 }
 
-export async function getSolicitudByAprobacionToken(token: string) {
-  const { rows } = await pool.query(`select * from solicitudes where aprobacion_token = $1`, [token])
+export async function findSolicitudByAprobacionToken(token: string) {
+  const { rows } = await pool.query(
+    `select id, client_name, asesor, asesor_id, mail_asunto from solicitudes where aprobacion_token = $1 limit 1`,
+    [token]
+  )
   return rows[0] ?? null
 }
 
-// Solo la primera respuesta cuenta: si ya contestó, no se pisa (devuelve null).
-export async function registrarAprobacionCliente(token: string, decision: 'aprobada' | 'rechazada', comentario: string | null) {
+// Estados en los que la respuesta del cliente mueve el estado de la orden. Si
+// Mesa ya la puso en ejecución (o terminó), la respuesta se guarda y se avisa,
+// pero el estado no retrocede.
+const ESTADOS_ESPERANDO_CLIENTE = ['mail_enviado', 'aprobada_cliente', 'rechazada_cliente']
+
+// Gana la última respuesta: si el cliente cambia de opinión, se actualiza.
+export async function registrarRespuestaCliente(id: string, decision: 'aprobada' | 'rechazada', comentario: string | null) {
+  const nuevoEstado = decision === 'aprobada' ? 'aprobada_cliente' : 'rechazada_cliente'
   const { rows } = await pool.query(
     `update solicitudes
-        set aprobacion_cliente = $2, aprobacion_comentario = $3, aprobacion_at = now(), updated_at = now()
-      where aprobacion_token = $1 and aprobacion_cliente is null
-      returning *`,
-    [token, decision, comentario]
+        set aprobacion_cliente = $2, aprobacion_comentario = $3, aprobacion_at = now(), updated_at = now(),
+            estado = case when estado = any($4::text[]) then $5 else estado end
+      where id = $1
+      returning estado`,
+    [id, decision, comentario, ESTADOS_ESPERANDO_CLIENTE, nuevoEstado]
   )
-  return rows[0] ?? null
+  return rows[0] ? { estado: rows[0].estado as string, cambioEstado: rows[0].estado === nuevoEstado } : null
 }
 
 export async function getSolicitudEventos(solicitudId: string) {

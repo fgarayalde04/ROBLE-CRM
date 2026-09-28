@@ -106,6 +106,8 @@ export async function PATCH(
       estado: 'mail_enviado',
       mail_enviado_at: new Date().toISOString(),
       mail_enviado_by: session.name,
+      // Mail nuevo (ej. reenvío tras un rechazo): la respuesta anterior del cliente ya no aplica
+      aprobacion_cliente: null, aprobacion_comentario: null, aprobacion_at: null,
       ...(body.asunto ? { mail_asunto: body.asunto } : {}),
       ...(body.cuerpo ? { mail_cuerpo: body.cuerpo } : {}),
       ...(body.mail_thread_id ? { mail_thread_id: body.mail_thread_id } : {}),
@@ -122,7 +124,7 @@ export async function PATCH(
     // mismo puede llevar el ciclo completo, sin pasar por Mesa.
     const isOwnerDirecto = sol.canal === 'directo_asesor' && sol.asesor === session.name
     if (!isMesa && !isOwnerDirecto) return NextResponse.json({ error: 'Sin permiso' }, { status: 403 })
-    if (sol.estado !== 'mail_enviado')
+    if (sol.estado !== 'mail_enviado' && sol.estado !== 'aprobada_cliente')
       return NextResponse.json({ error: 'Requiere mail enviado primero' }, { status: 400 })
 
     const data = await updateSolicitud(params.id, { estado: 'en_ejecucion' })

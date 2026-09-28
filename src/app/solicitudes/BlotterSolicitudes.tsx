@@ -38,12 +38,13 @@ interface Evento {
   usuario: string; created_at: string
 }
 
-const ESTADO_STEPS_NEW = ['pendiente_revision','en_revision','mail_enviado','en_ejecucion','ejecutada'] as const
-const ESTADO_STEPS_OLD = ['mesa_operaciones','mail_enviado','en_ejecucion','ejecutada'] as const
+const ESTADO_STEPS_NEW = ['pendiente_revision','en_revision','mail_enviado','aprobada_cliente','en_ejecucion','ejecutada'] as const
+const ESTADO_STEPS_OLD = ['mesa_operaciones','mail_enviado','aprobada_cliente','en_ejecucion','ejecutada'] as const
 
 function ProgressBar({ estado }: { estado: string }) {
   if (estado === 'cancelada') return <span className="text-xs text-gray-400 italic">Cancelada</span>
   if (estado === 'devuelta')  return <span className="text-xs text-orange-600 font-medium">↩ Devuelta</span>
+  if (estado === 'rechazada_cliente') return <span className="text-xs text-red-600 font-medium">✕ Rechazada por el cliente</span>
   const steps = ['mesa_operaciones'].includes(estado) ? ESTADO_STEPS_OLD : ESTADO_STEPS_NEW
   const idx = steps.indexOf(estado as never)
   return (
@@ -142,7 +143,7 @@ function DetalleSolicitud({ sol, eventos, isMesa, userName, onAction, onClose, o
           <div className="flex justify-between mt-1">
             {(['mesa_operaciones'].includes(sol.estado) ? ESTADO_STEPS_OLD : ESTADO_STEPS_NEW).map((s: string) => (
               <span key={s} className={`text-[9px] ${sol.estado === s ? 'font-bold text-[#2D3F52]' : 'text-gray-300'}`}>
-                {s === 'mesa_operaciones' ? 'Mesa' : s === 'pendiente_revision' ? 'Pend.' : s === 'en_revision' ? 'Rev.' : s === 'mail_enviado' ? 'Mail' : s === 'en_ejecucion' ? 'Ejec.' : 'Lista'}
+                {s === 'mesa_operaciones' ? 'Mesa' : s === 'pendiente_revision' ? 'Pend.' : s === 'en_revision' ? 'Rev.' : s === 'mail_enviado' ? 'Mail' : s === 'aprobada_cliente' ? 'Aprob.' : s === 'en_ejecucion' ? 'Ejec.' : 'Lista'}
               </span>
             ))}
           </div>
@@ -152,13 +153,13 @@ function DetalleSolicitud({ sol, eventos, isMesa, userName, onAction, onClose, o
       {/* Acciones (solo nuevas solicitudes con isMesa) — fijas arriba de las solapas */}
       {canAct && (
         <div className="px-4 py-3 space-y-1.5 border-b border-gray-100 shrink-0">
-          {sol.estado === 'mail_enviado' && (
+          {(sol.estado === 'mail_enviado' || sol.estado === 'aprobada_cliente') && (
             <button onClick={() => act('en_ejecucion')} disabled={busy}
               className="w-full py-2 text-xs font-semibold bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50">
               Marcar en ejecución
             </button>
           )}
-          {(sol.estado === 'mail_enviado' || sol.estado === 'en_ejecucion') && (
+          {(sol.estado === 'mail_enviado' || sol.estado === 'aprobada_cliente' || sol.estado === 'en_ejecucion') && (
             <button onClick={() => setShowEjecutar(true)}
               className="w-full py-2 text-xs font-semibold bg-emerald-600 text-white rounded-lg hover:bg-emerald-700">
               Marcar como ejecutada
@@ -362,6 +363,8 @@ const ESTADO_CFG: Record<string, { label: string; color: string; dot: string }> 
   devuelta:           { label: 'Devuelta',           color: 'text-orange-700',  dot: 'bg-orange-400' },
   mesa_operaciones:   { label: 'Mesa de Operaciones',color: 'text-amber-700',   dot: 'bg-amber-400' },
   mail_enviado:       { label: 'Mail enviado',       color: 'text-indigo-700',  dot: 'bg-indigo-400' },
+  aprobada_cliente:   { label: 'Aprobada por cliente', color: 'text-teal-700',  dot: 'bg-teal-500' },
+  rechazada_cliente:  { label: 'Rechazada por cliente', color: 'text-red-700',  dot: 'bg-red-500' },
   en_ejecucion:       { label: 'En ejecución',       color: 'text-purple-700',  dot: 'bg-purple-400' },
   ejecutada:          { label: 'Ejecutada',          color: 'text-emerald-700', dot: 'bg-emerald-500' },
   cancelada:          { label: 'Cancelada',          color: 'text-gray-400',    dot: 'bg-gray-300' },
@@ -724,7 +727,7 @@ export default function BlotterSolicitudes({ isMesa, userName }: { isMesa: boole
                       <div className="flex items-center gap-1.5">
                         <div className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
                         <span className={`text-[10px] font-semibold ${cfg.color}`}>{cfg.label}</span>
-                        {row.aprobacion_cliente && (
+                        {row.aprobacion_cliente && !['aprobada_cliente', 'rechazada_cliente'].includes(row.estado) && (
                           <span title={row.aprobacion_cliente === 'aprobada' ? 'El cliente aprobó' : 'El cliente no aprobó'} className="text-[11px]">
                             {row.aprobacion_cliente === 'aprobada' ? '✅' : '❌'}
                           </span>
