@@ -166,7 +166,7 @@ export default function TabTareas({ tasks: initialTasks, openingId }: Props) {
   return (
     <div className="space-y-5">
       {/* Header + add button */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
           <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-widest">Tareas</h2>
           <p className="text-xs text-gray-400 mt-0.5">{pendingCount} pendientes de {tasks.length}</p>
@@ -198,7 +198,7 @@ export default function TabTareas({ tasks: initialTasks, openingId }: Props) {
               rows={2}
               className="w-full text-sm border border-gray-200 rounded px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none"
             />
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs text-gray-400 mb-1">Responsable</label>
                 <input
@@ -321,7 +321,7 @@ export default function TabTareas({ tasks: initialTasks, openingId }: Props) {
 
                   {isExpanded && (
                     <div className="border-t border-gray-50 px-4 py-4 bg-gray-50/50 space-y-3">
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
                           <label className="block text-xs text-gray-400 mb-1">Titulo</label>
                           <input

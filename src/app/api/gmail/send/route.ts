@@ -6,6 +6,9 @@ import {
   getValidGoogleToken, getGoogleEmail, getGoogleName,
 } from '@/lib/google/tokens'
 import { sendEmail } from '@/lib/google/gmail'
+import { getSolicitud, ensureAprobacionToken } from '@/lib/db/solicitudes'
+import { newAprobacionToken, buildAprobacionEmail } from '@/lib/aprobacion'
+import { getActiveUserEmail } from '@/lib/db/users'
 
 export const dynamic = 'force-dynamic'
 
@@ -13,7 +16,7 @@ export async function POST(req: NextRequest) {
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
 
-  const { to, cc, subject, body, replyTo, viaMesa } = await req.json()
+  const { to, cc, subject, body, replyTo, viaMesa, solicitud_uuid, con_aprobacion } = await req.json()
   if (!to || !subject || !body) {
     return NextResponse.json({ error: 'to, subject y body son requeridos' }, { status: 400 })
   }
@@ -29,6 +32,7 @@ export async function POST(req: NextRequest) {
   let accessToken: string | null
   let fromHeader: string
   let effectiveReplyTo: string | undefined
+  let asesorEmail: string | null = null
 
   if (viaMesa) {
     accessToken = await getValidMesaGoogleToken()
@@ -39,10 +43,23 @@ export async function POST(req: NextRequest) {
     }
     const tradingName = process.env.TRADING_NAME ?? 'Mesa de Operaciones | Roble Capital'
     fromHeader = `"${tradingName}" <${MESA_GOOGLE_CONNECTION_KEY}>`
-    // Reply-To incluye siempre trading@ + el mail de quien mandó la orden —
-    // así si el cliente responde, le llega a los dos, no solo a la casilla
-    // compartida (que puede tardar más en ser vista que el propio asesor/mesa).
-    effectiveReplyTo = [MESA_GOOGLE_CONNECTION_KEY, session.email].filter(Boolean).join(', ')
+    // Reply-To: siempre trading@ + el asesor dueño de la orden — así la
+    // respuesta del cliente le llega directo a los dos, no solo a la casilla
+    // compartida. Si la manda Mesa, el asesor sale de la orden (solicitud_uuid);
+    // si no hay orden asociada, quien envía es el asesor.
+    asesorEmail = session.email ?? null
+    if (solicitud_uuid) {
+      try {
+        const sol = await getSolicitud(solicitud_uuid)
+        if (sol?.asesor_id) asesorEmail = (await getActiveUserEmail(sol.asesor_id)) ?? asesorEmail
+      } catch (err: any) {
+        // No trabar el envío por esto: queda quien envía como Reply-To.
+        console.error('[gmail/send] No se pudo obtener el asesor de la orden:', err.message)
+      }
+    }
+    effectiveReplyTo = Array.from(new Set(
+      [MESA_GOOGLE_CONNECTION_KEY, asesorEmail].filter(Boolean).map((e) => e!.toLowerCase())
+    )).join(', ')
   } else {
     accessToken = await getValidGoogleToken()
     if (!accessToken) {
@@ -57,8 +74,34 @@ export async function POST(req: NextRequest) {
     effectiveReplyTo = replyTo ?? undefined
   }
 
+  // Mail de orden (desde trading@): lleva los botones Apruebo / No apruebo
+  // (ver src/lib/aprobacion.ts). Con solicitud_uuid (lo manda Mesa) la
+  // referencia queda guardada en la orden; con con_aprobacion (envío directo
+  // del asesor, la orden todavía no existe) se devuelve para guardarla al registrarla.
+  let aprobacionToken: string | null = null
+  let mailText: string = body
+  let mailHtml: string | undefined
+  if (viaMesa && (solicitud_uuid || con_aprobacion)) {
+    try {
+      aprobacionToken = solicitud_uuid
+        ? await ensureAprobacionToken(solicitud_uuid, newAprobacionToken())
+        : newAprobacionToken()
+      if (aprobacionToken) {
+        const built = buildAprobacionEmail({
+          body, subject, replyTo: MESA_GOOGLE_CONNECTION_KEY, asesorEmail, ref: aprobacionToken,
+        })
+        mailText = built.text
+        mailHtml = built.html
+      }
+    } catch (err: any) {
+      // Sin botones antes que sin mail: el cliente igual puede responder.
+      console.error('[gmail/send] No se pudo preparar la aprobación:', err.message)
+      aprobacionToken = null
+    }
+  }
+
   async function trySend(token: string) {
-    return sendEmail(token, { from: fromHeader, to, cc, subject, body, replyTo: effectiveReplyTo })
+    return sendEmail(token, { from: fromHeader, to, cc, subject, body: mailText, html: mailHtml, replyTo: effectiveReplyTo })
   }
 
   try {
@@ -89,7 +132,7 @@ export async function POST(req: NextRequest) {
       user_name:   session.name,
     })
 
-    return NextResponse.json({ ok: true, message_id: message.id, thread_id: message.threadId })
+    return NextResponse.json({ ok: true, message_id: message.id, thread_id: message.threadId, aprobacion_token: aprobacionToken })
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 400 })
   }

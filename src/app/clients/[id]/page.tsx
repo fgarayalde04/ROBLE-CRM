@@ -64,7 +64,7 @@ export default async function ClientDetailPage({ params }: Props) {
   const pendingDocs = documents.filter((d) => d.status === 'pendiente' || d.status === 'revisar')
 
   return (
-    <div className="p-8">
+    <div className="p-4 md:p-8">
       {/* Breadcrumb */}
       <div className="flex items-center gap-2 text-xs text-gray-400 mb-6">
         <Link href="/clients" className="hover:text-gray-600">Clientes</Link>
@@ -90,10 +90,10 @@ export default async function ClientDetailPage({ params }: Props) {
       )}
 
       {/* Header */}
-      <div className="flex items-start justify-between mb-6">
+      <div className="flex items-start justify-between flex-wrap gap-3 mb-6">
         <div>
-          <div className="flex items-center gap-3">
-            <h1 className={`text-2xl font-semibold ${client.status === 'inactivo' ? 'text-gray-400' : 'text-gray-900'}`}>
+          <div className="flex items-center flex-wrap gap-x-3 gap-y-1">
+            <h1 className={`text-xl md:text-2xl font-semibold ${client.status === 'inactivo' ? 'text-gray-400' : 'text-gray-900'}`}>
               {client.first_name} {client.last_name}
             </h1>
             <StatusBadge type="client_status" value={client.status} />
@@ -103,7 +103,7 @@ export default async function ClientDetailPage({ params }: Props) {
             {client.advisor ? ` · Asesor: ${client.advisor}` : ''}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center flex-wrap gap-2">
           {((client.drive_id && client.item_id) || client.web_url || client.onedrive_folder_url) && (
             <OneDriveFolderButton
               driveId={client.drive_id}
@@ -138,12 +138,12 @@ export default async function ClientDetailPage({ params }: Props) {
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         {/* Datos del cliente */}
         <div className="xl:col-span-1 space-y-4">
-          <div className="bg-white rounded-lg border border-gray-200 p-5">
+          <div className="bg-white rounded-lg border border-gray-200 p-4 md:p-5">
             <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-4">Datos de contacto</h2>
             <dl className="space-y-3">
               <div>
                 <dt className="text-xs text-gray-400">Nombre completo</dt>
-                <dd className="text-sm text-gray-900 mt-0.5">{client.first_name} {client.last_name}</dd>
+                <dd className="text-sm text-gray-900 mt-0.5 break-words">{client.first_name} {client.last_name}</dd>
               </div>
               <div>
                 <dt className="text-xs text-gray-400">N° de cliente</dt>
@@ -152,19 +152,19 @@ export default async function ClientDetailPage({ params }: Props) {
               {client.phone && (
                 <div>
                   <dt className="text-xs text-gray-400">Teléfono</dt>
-                  <dd className="text-sm text-gray-900 mt-0.5">{client.phone}</dd>
+                  <dd className="text-sm text-gray-900 mt-0.5 break-words">{client.phone}</dd>
                 </div>
               )}
               {client.address && (
                 <div>
                   <dt className="text-xs text-gray-400">Dirección</dt>
-                  <dd className="text-sm text-gray-900 mt-0.5">{client.address}</dd>
+                  <dd className="text-sm text-gray-900 mt-0.5 break-words">{client.address}</dd>
                 </div>
               )}
               {client.document_number && (
                 <div>
                   <dt className="text-xs text-gray-400">Documento</dt>
-                  <dd className="text-sm text-gray-900 mt-0.5">
+                  <dd className="text-sm text-gray-900 mt-0.5 break-words">
                     {[client.document_type, client.document_number].filter(Boolean).join(' ')}
                   </dd>
                 </div>
@@ -172,7 +172,7 @@ export default async function ClientDetailPage({ params }: Props) {
               {client.birth_date && (
                 <div>
                   <dt className="text-xs text-gray-400">Fecha de nacimiento</dt>
-                  <dd className="text-sm text-gray-900 mt-0.5">
+                  <dd className="text-sm text-gray-900 mt-0.5 break-words">
                     {format(new Date(client.birth_date), "d 'de' MMMM yyyy", { locale: es })}
                   </dd>
                 </div>
@@ -182,7 +182,7 @@ export default async function ClientDetailPage({ params }: Props) {
 
           <ClientEmailsManager clientId={client.id} primaryEmail={client.email} />
 
-          <div className="bg-white rounded-lg border border-gray-200 p-5">
+          <div className="bg-white rounded-lg border border-gray-200 p-4 md:p-5">
             <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-4">Perfil</h2>
             <dl className="space-y-3">
               <div>
@@ -192,18 +192,18 @@ export default async function ClientDetailPage({ params }: Props) {
               {client.risk_profile && (
                 <div>
                   <dt className="text-xs text-gray-400">Perfil de riesgo</dt>
-                  <dd className="text-sm text-gray-900 mt-0.5">{riskLabel[client.risk_profile]}</dd>
+                  <dd className="text-sm text-gray-900 mt-0.5 break-words">{riskLabel[client.risk_profile]}</dd>
                 </div>
               )}
               {client.advisor && (
                 <div>
                   <dt className="text-xs text-gray-400">Asesor</dt>
-                  <dd className="text-sm text-gray-900 mt-0.5">{client.advisor}</dd>
+                  <dd className="text-sm text-gray-900 mt-0.5 break-words">{client.advisor}</dd>
                 </div>
               )}
               <div>
                 <dt className="text-xs text-gray-400">Alta</dt>
-                <dd className="text-sm text-gray-900 mt-0.5">
+                <dd className="text-sm text-gray-900 mt-0.5 break-words">
                   {format(new Date(client.created_at), "d 'de' MMMM yyyy", { locale: es })}
                 </dd>
               </div>
@@ -219,7 +219,7 @@ export default async function ClientDetailPage({ params }: Props) {
           )}
 
           {((client.drive_id && client.item_id) || client.web_url || client.onedrive_folder_url) && (
-            <div className="bg-white rounded-lg border border-gray-200 p-5">
+            <div className="bg-white rounded-lg border border-gray-200 p-4 md:p-5">
               <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-3">Carpeta</h2>
               <OneDriveFolderButton
                 driveId={client.drive_id}
@@ -232,7 +232,7 @@ export default async function ClientDetailPage({ params }: Props) {
           )}
 
           {client.notes && (
-            <div className="bg-white rounded-lg border border-gray-200 p-5">
+            <div className="bg-white rounded-lg border border-gray-200 p-4 md:p-5">
               <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-3">Notas</h2>
               <p className="text-sm text-gray-700 whitespace-pre-wrap">{client.notes}</p>
             </div>
@@ -272,26 +272,28 @@ export default async function ClientDetailPage({ params }: Props) {
             {documents.length === 0 ? (
               <p className="px-5 py-4 text-sm text-gray-400">Sin documentos.</p>
             ) : (
-              <table className="w-full text-sm">
-                <tbody className="divide-y divide-gray-50">
-                  {documents.slice(0, 5).map((d) => (
-                    <tr key={d.id} className="hover:bg-gray-50">
-                      <td className="px-5 py-2.5">
-                        <p className="font-medium text-gray-900">{d.name}</p>
-                        <p className="text-xs text-gray-400">{categoryLabel[d.category] ?? d.category}</p>
-                      </td>
-                      <td className="px-5 py-2.5"><StatusBadge type="document_status" value={d.status} /></td>
-                      <td className="px-5 py-2.5 text-right">
-                        {d.onedrive_url ? (
-                          <a href={d.onedrive_url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline">
-                            Abrir
-                          </a>
-                        ) : <span className="text-xs text-gray-300">—</span>}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <div className="mobile-scroll-x">
+                <table className="w-full text-sm">
+                  <tbody className="divide-y divide-gray-50">
+                    {documents.slice(0, 5).map((d) => (
+                      <tr key={d.id} className="hover:bg-gray-50">
+                        <td className="px-5 py-2.5">
+                          <p className="font-medium text-gray-900">{d.name}</p>
+                          <p className="text-xs text-gray-400">{categoryLabel[d.category] ?? d.category}</p>
+                        </td>
+                        <td className="px-5 py-2.5"><StatusBadge type="document_status" value={d.status} /></td>
+                        <td className="px-5 py-2.5 text-right">
+                          {d.onedrive_url ? (
+                            <a href={d.onedrive_url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline">
+                              Abrir
+                            </a>
+                          ) : <span className="text-xs text-gray-300">—</span>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </div>
 
@@ -304,24 +306,26 @@ export default async function ClientDetailPage({ params }: Props) {
             {openTasks.length === 0 ? (
               <p className="px-5 py-4 text-sm text-gray-400">Sin tareas abiertas.</p>
             ) : (
-              <table className="w-full text-sm">
-                <tbody className="divide-y divide-gray-50">
-                  {openTasks.slice(0, 5).map((t) => (
-                    <tr key={t.id} className="hover:bg-gray-50">
-                      <td className="px-5 py-2.5">
-                        <p className="font-medium text-gray-900">{t.title}</p>
-                        {t.due_date && (
-                          <p className="text-xs text-gray-400">
-                            Vence: {format(new Date(t.due_date + 'T00:00:00'), "d MMM yyyy", { locale: es })}
-                          </p>
-                        )}
-                      </td>
-                      <td className="px-5 py-2.5"><StatusBadge type="priority" value={t.priority} /></td>
-                      <td className="px-5 py-2.5"><StatusBadge type="task_status" value={t.status} /></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <div className="mobile-scroll-x">
+                <table className="w-full text-sm">
+                  <tbody className="divide-y divide-gray-50">
+                    {openTasks.slice(0, 5).map((t) => (
+                      <tr key={t.id} className="hover:bg-gray-50">
+                        <td className="px-5 py-2.5">
+                          <p className="font-medium text-gray-900">{t.title}</p>
+                          {t.due_date && (
+                            <p className="text-xs text-gray-400">
+                              Vence: {format(new Date(t.due_date + 'T00:00:00'), "d MMM yyyy", { locale: es })}
+                            </p>
+                          )}
+                        </td>
+                        <td className="px-5 py-2.5"><StatusBadge type="priority" value={t.priority} /></td>
+                        <td className="px-5 py-2.5"><StatusBadge type="task_status" value={t.status} /></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </div>
 
@@ -331,23 +335,25 @@ export default async function ClientDetailPage({ params }: Props) {
               <div className="px-5 py-4 border-b border-gray-100">
                 <h2 className="text-sm font-semibold text-gray-800">Vencimientos</h2>
               </div>
-              <table className="w-full text-sm">
-                <tbody className="divide-y divide-gray-50">
-                  {deadlines.slice(0, 5).map((d) => (
-                    <tr key={d.id} className="hover:bg-gray-50">
-                      <td className="px-5 py-2.5">
-                        <p className="font-medium text-gray-900">{d.title}</p>
-                        <p className="text-xs text-gray-400">
-                          {format(new Date(d.due_date + 'T00:00:00'), "d 'de' MMMM yyyy", { locale: es })}
-                        </p>
-                      </td>
-                      <td className="px-5 py-2.5">
-                        <StatusBadge type="task_status" value={d.status} />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <div className="mobile-scroll-x">
+                <table className="w-full text-sm">
+                  <tbody className="divide-y divide-gray-50">
+                    {deadlines.slice(0, 5).map((d) => (
+                      <tr key={d.id} className="hover:bg-gray-50">
+                        <td className="px-5 py-2.5">
+                          <p className="font-medium text-gray-900">{d.title}</p>
+                          <p className="text-xs text-gray-400">
+                            {format(new Date(d.due_date + 'T00:00:00'), "d 'de' MMMM yyyy", { locale: es })}
+                          </p>
+                        </td>
+                        <td className="px-5 py-2.5">
+                          <StatusBadge type="task_status" value={d.status} />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
 

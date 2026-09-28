@@ -14,7 +14,7 @@ export default async function DuplicadosPage() {
   noStore()
   const session = await getSession()
   if (!session || !ROLES.includes(session.role)) {
-    return <div className="p-8 text-sm text-gray-500">No tenés permiso para ver esta sección.</div>
+    return <div className="p-4 md:p-8 text-sm text-gray-500">No tenés permiso para ver esta sección.</div>
   }
   const groups = await findDuplicateGroups()
 

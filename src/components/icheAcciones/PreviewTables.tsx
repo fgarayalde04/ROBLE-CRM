@@ -63,28 +63,30 @@ export default function PreviewTables({ preview, fileName, uploadedItem, fileBas
 
       <div>
         <h3 className="mb-2 text-sm font-semibold text-[#2D3F52]">Resumen</h3>
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-gray-200 text-left text-gray-500">
-              <th className="py-1">Categoría</th>
-              <th>Costo</th>
-              <th>Valor</th>
-              <th>Ganancia/Pérdida</th>
-              <th>%</th>
-            </tr>
-          </thead>
-          <tbody>
-            {preview.resumen.map(r => (
-              <tr key={r.label} className="border-b border-gray-100">
-                <td className="py-1">{r.label}</td>
-                <td>{money(r.cost)}</td>
-                <td>{money(r.value)}</td>
-                <td className={r.gainLoss >= 0 ? 'text-green-700' : 'text-red-700'}>{money(r.gainLoss)}</td>
-                <td>{pct(r.gainLossPct)}</td>
+        <div className="mobile-scroll-x">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-200 text-left text-gray-500">
+                <th className="py-1">Categoría</th>
+                <th>Costo</th>
+                <th>Valor</th>
+                <th>Ganancia/Pérdida</th>
+                <th>%</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {preview.resumen.map(r => (
+                <tr key={r.label} className="border-b border-gray-100">
+                  <td className="py-1">{r.label}</td>
+                  <td>{money(r.cost)}</td>
+                  <td>{money(r.value)}</td>
+                  <td className={r.gainLoss >= 0 ? 'text-green-700' : 'text-red-700'}>{money(r.gainLoss)}</td>
+                  <td>{pct(r.gainLossPct)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
@@ -129,30 +131,32 @@ function PositionsTable({ title, rows }: { title: string; rows: GenerateResponse
   return (
     <div>
       <h3 className="mb-2 text-sm font-semibold text-[#2D3F52]">{title}</h3>
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b border-gray-200 text-left text-gray-500">
-            <th className="py-1">Ticker</th>
-            <th>Cantidad</th>
-            <th>Costo</th>
-            <th>Valor</th>
-            <th>Ganancia/Pérdida</th>
-            <th>%</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map(r => (
-            <tr key={r.ticker} className="border-b border-gray-100">
-              <td className="py-1 font-medium">{r.ticker}</td>
-              <td>{qty(r.quantity)}</td>
-              <td>{money(r.originalTotalCost)}</td>
-              <td>{money(r.marketValue)}</td>
-              <td className={r.gainLoss >= 0 ? 'text-green-700' : 'text-red-700'}>{money(r.gainLoss)}</td>
-              <td>{pct(r.gainLossPct)}</td>
+      <div className="mobile-scroll-x">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-gray-200 text-left text-gray-500">
+              <th className="py-1">Ticker</th>
+              <th>Cantidad</th>
+              <th>Costo</th>
+              <th>Valor</th>
+              <th>Ganancia/Pérdida</th>
+              <th>%</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {rows.map(r => (
+              <tr key={r.ticker} className="border-b border-gray-100">
+                <td className="py-1 font-medium">{r.ticker}</td>
+                <td>{qty(r.quantity)}</td>
+                <td>{money(r.originalTotalCost)}</td>
+                <td>{money(r.marketValue)}</td>
+                <td className={r.gainLoss >= 0 ? 'text-green-700' : 'text-red-700'}>{money(r.gainLoss)}</td>
+                <td>{pct(r.gainLossPct)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }

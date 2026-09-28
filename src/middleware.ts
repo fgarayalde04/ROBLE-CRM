@@ -18,6 +18,7 @@ const PUBLIC_PATHS = [
 // Paths accessible to users with modo_asesor enabled (server-controlled)
 const ASESOR_ALLOWED = [
   '/ordenes',
+  '/solicitudes',
   '/mail',
   '/inbox',
   '/settings',
@@ -59,6 +60,12 @@ export async function middleware(req: NextRequest) {
     if (auth && process.env.ZAPIA_WEBHOOK_SECRET && auth === `Bearer ${process.env.ZAPIA_WEBHOOK_SECRET}`) {
       return NextResponse.next()
     }
+  }
+
+  // Aviso push de Gmail (Pub/Sub → Roble). No trae sesión: la ruta valida por
+  // su cuenta el token secreto que va en la URL de la suscripción.
+  if (pathname === '/api/webhooks/gmail' && req.method === 'POST') {
+    return NextResponse.next()
   }
 
   // Cron routes — disparadas por instrumentation.ts (llamada interna a sí

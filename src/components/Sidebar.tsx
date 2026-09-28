@@ -127,6 +127,21 @@ interface Props { user: SessionUser; isOpen?: boolean; onToggle?: () => void }
 export default function Sidebar({ user, isOpen = false, onToggle }: Props) {
   const pathname = usePathname()
   const router = useRouter()
+
+  // Algunos Android no siguen ni el click del Link ni router.push() desde el
+  // menú y se quedaban sin navegar. Antes se forzaba siempre una recarga
+  // completa (lenta en el celular); ahora se navega con el router y, solo si a
+  // los 2,5 s la URL sigue igual, se cae a la recarga completa.
+  function navigate(href: string) {
+    const current = window.location.pathname + window.location.search
+    if (current === href) return
+    router.push(href)
+    setTimeout(() => {
+      if (window.location.pathname + window.location.search === current) {
+        window.location.href = href
+      }
+    }, 2500)
+  }
   const { advisorMode, setAdvisorMode, initialized, forcedByAdmin } = useAdvisorModeCtx()
   const [searchStr, setSearchStr] = useState('')
   useEffect(() => { setSearchStr(window.location.search) }, [pathname])
@@ -165,16 +180,16 @@ export default function Sidebar({ user, isOpen = false, onToggle }: Props) {
 
   // Simplified mobile nav items
   const advisorItems = [
-    { href: '/solicitudes',            label: 'Enviar órdenes', subtitle: 'Crear y enviar instrucciones', icon: OrdersIcon },
-    { href: '/ordenes',                label: 'Historial',       subtitle: 'Órdenes enviadas',             icon: ClockIcon },
+    { href: '/ordenes',                label: 'Solicitudes',     subtitle: 'Enviar a Mesa de Operaciones', icon: OrdersIcon },
+    { href: '/ordenes?tab=historial',  label: 'Blotter',         subtitle: 'Historial de órdenes',         icon: ClockIcon },
     { href: '/research',               label: 'Research & Novedades', subtitle: 'Morning Brief y publicaciones', icon: ResearchIcon },
     { href: '/mail',                   label: 'Mail',            subtitle: 'Bandeja de entrada Gmail',     icon: MailIcon },
     { href: '/settings',               label: 'Configuración',   subtitle: 'Cuenta y Gmail',               icon: SettingsIconFn },
   ]
 
   function advisorIsActive(href: string): boolean {
-    if (href === '/solicitudes') return pathname.startsWith('/solicitudes')
-    if (href === '/ordenes') return pathname === '/ordenes'
+    if (href === '/ordenes') return pathname.startsWith('/solicitudes') || (pathname === '/ordenes' && !searchStr.includes('tab=historial'))
+    if (href === '/ordenes?tab=historial') return pathname === '/ordenes' && searchStr.includes('tab=historial')
     if (href === '/research') return pathname.startsWith('/research')
     if (href === '/mail') return pathname.startsWith('/mail')
     if (href === '/settings') return pathname.startsWith('/settings')
@@ -226,10 +241,8 @@ export default function Sidebar({ user, isOpen = false, onToggle }: Props) {
                 key={href}
                 href={href}
                 onClick={(e) => {
-                  // Same reliability issue as the full nav below — force a real
-                  // browser navigation instead of relying on client-side routing.
                   e.preventDefault()
-                  window.location.href = href
+                  navigate(href)
                 }}
                 className={[
                   'flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-150',
@@ -273,13 +286,9 @@ export default function Sidebar({ user, isOpen = false, onToggle }: Props) {
                       href={href}
                       prefetch={false}
                       onClick={(e) => {
-                        // Some Android devices fail to follow both the native Link
-                        // click and router.push() here, leaving the drawer open with
-                        // no navigation at all. A real browser navigation is the only
-                        // thing that has proven reliable on those devices.
                         e.preventDefault()
                         onToggle?.()
-                        window.location.href = href
+                        navigate(href)
                       }}
                       className={clsx(
                         'flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-150',

@@ -130,7 +130,7 @@ export default async function BancoCentralPage({
               {/* Total general */}
               <div className="mb-6">
                 <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest mb-2">Total general</p>
-                <div className="grid grid-cols-5 gap-3">
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                   <KpiCard label="Total legajos" value={totalKpis.total} />
                   <KpiCard label="Completos"     value={totalKpis.completos}   accent="green" />
                   <KpiCard label="Incompletos"   value={totalKpis.incompletos} accent="amber" />
@@ -145,7 +145,7 @@ export default async function BancoCentralPage({
 
               {/* Stats pestaña activa */}
               <div className="bg-white border border-[#E2E8F0] rounded-xl px-5 py-4 mb-6">
-                <div className="grid grid-cols-5 gap-3">
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                   <KpiCard label="Total"        value={activeKpis.total} small />
                   <KpiCard label="Completos"    value={activeKpis.completos}   accent="green" small />
                   <KpiCard label="Incompletos"  value={activeKpis.incompletos} accent="amber" small />

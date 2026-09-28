@@ -12,8 +12,8 @@ export default async function EventsPage() {
   ])
 
   return (
-    <div className="p-6 bg-[#F4F6F8] min-h-screen">
-      <div className="flex items-center justify-between mb-5">
+    <div className="p-4 md:p-6 bg-[#F4F6F8] min-h-screen">
+      <div className="flex items-center justify-between flex-wrap gap-3 mb-5">
         <div>
           <h1 className="text-xl font-semibold text-[#2D3F52]">Agenda</h1>
           <p className="mt-0.5 text-sm text-gray-400">

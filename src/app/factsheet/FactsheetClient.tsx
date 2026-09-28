@@ -244,7 +244,7 @@ export default function FactsheetClient() {
     <div className="min-h-screen bg-gray-50">
 
       {/* ── Top bar ── */}
-      <div className="no-print bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between sticky top-0 z-20">
+      <div className="no-print bg-white border-b border-gray-200 px-4 md:px-6 py-3 flex items-center justify-between flex-wrap gap-2 sticky top-14 md:top-0 z-20">
         <div className="flex items-center gap-3">
           <div className="w-7 h-7 rounded-full bg-[#1B3A2B] flex items-center justify-center">
             <span className="text-white text-xs font-bold">RC</span>
@@ -284,7 +284,7 @@ export default function FactsheetClient() {
 
       {/* ── History modal ── */}
       {showHistory && (
-        <div className="no-print fixed inset-0 bg-black/40 z-50 flex items-center justify-center" onClick={() => setShowHistory(false)}>
+        <div className="no-print fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setShowHistory(false)}>
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[70vh] overflow-hidden" onClick={e => e.stopPropagation()}>
             <div className="p-5 border-b flex justify-between items-center">
               <h3 className="font-semibold text-gray-900">Historial de Factsheets</h3>

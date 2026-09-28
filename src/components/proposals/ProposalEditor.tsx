@@ -907,6 +907,11 @@ function FundsTable({
   const [sortKey, setSortKey] = useState<keyof Fund | null>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const backfilledInfo = useRef<Set<string>>(new Set())
+  // Última versión de la lista: los completados automáticos corren en paralelo
+  // y cada uno arma la lista nueva a partir de esta, no de la copia vieja de su
+  // render (si no, el último pisaba a los demás en pantalla).
+  const fundsRef = useRef(funds)
+  fundsRef.current = funds
 
   useEnsureInstruments(funds, f => (f.isin?.trim() && f.fund_name?.trim())
     ? { tipo_activo: 'fondo', nombre: f.fund_name, identificador: f.isin, emisor: f.issuer, categoria: f.fund_category }
@@ -940,10 +945,17 @@ function FundsTable({
       if (f.return_2022 == null && info.return_2022 != null) patch.return_2022 = info.return_2022
       if (f.return_2021 == null && info.return_2021 != null) patch.return_2021 = info.return_2021
       if (Object.keys(patch).length === 0) return
-      onUpdate(funds.map(x => x.id === f.id ? { ...x, ...patch } : x))
-      await fetch(`/api/proposals/${proposalId}/funds`, {
+      const next = fundsRef.current.map(x => x.id === f.id ? { ...x, ...patch } : x)
+      fundsRef.current = next
+      onUpdate(next)
+      const res = await fetch(`/api/proposals/${proposalId}/funds`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fund_id: f.id, ...patch }),
       })
+      if (!res.ok) {
+        // No quedó guardado: se reintenta en la próxima carga y se avisa en consola.
+        backfilledInfo.current.delete(f.id)
+        console.error('[propuestas] No se pudieron guardar los rendimientos del fondo', f.id, await res.text())
+      }
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [funds])
@@ -1845,8 +1857,8 @@ export default function ProposalEditor({
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#F4F6F8' }}>
       {/* ── Top bar ── */}
-      <div className="bg-white border-b border-gray-200 sticky top-0 z-20">
-        <div className="max-w-screen-xl mx-auto px-6 py-3 flex items-center justify-between gap-4">
+      <div className="bg-white border-b border-gray-200 sticky top-14 md:top-0 z-20">
+        <div className="max-w-screen-xl mx-auto px-4 md:px-6 py-3 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">
             <Link href="/propuestas" className="text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0">
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -1934,7 +1946,7 @@ export default function ProposalEditor({
       </div>
 
       {/* ── Body ── */}
-      <div className="max-w-screen-xl mx-auto px-6 py-6">
+      <div className="max-w-screen-xl mx-auto px-4 py-4 md:px-6 md:py-6">
         <div className="grid grid-cols-1 xl:grid-cols-[1fr_280px] gap-6 items-start">
 
           {/* ── Left: composer ── */}

@@ -55,8 +55,8 @@ export default function ClientLayout({ user, children }: Props) {
   // - Advisor mode: always pt-14 (MobileHeader) + pb-16 (BottomNav), no left offset
   // - Standard mode: mobile = pt-14 pb-16, desktop = md:pl-64 no top/bottom
   const contentCls = initialized && advisorMode
-    ? 'min-h-screen flex flex-col pt-14 pb-16'
-    : 'md:pl-64 min-h-screen flex flex-col pt-14 md:pt-0 pb-16 md:pb-0'
+    ? 'min-h-screen flex flex-col pt-14 pb-[calc(4rem+env(safe-area-inset-bottom))]'
+    : 'md:pl-64 min-h-screen flex flex-col pt-14 md:pt-0 pb-[calc(4rem+env(safe-area-inset-bottom))] md:pb-0'
 
   return (
     <ChatProvider>
@@ -78,9 +78,12 @@ export default function ClientLayout({ user, children }: Props) {
         {/* Top header — always visible */}
         <MobileHeader user={user} onMenuToggle={toggle} showHamburger={showSidebar} />
 
-        {/* Main content */}
+        {/* Main content — min-w-0 + overflow-x-clip: si algo es más ancho que
+            la pantalla se recorta acá en vez de ensanchar la página entera (en
+            el celular eso achica y corre todo). clip, no hidden, para no
+            romper los position: sticky de adentro. */}
         <div className={contentCls}>
-          <main className="flex-1">{children}</main>
+          <main className="flex-1 min-w-0 overflow-x-clip">{children}</main>
         </div>
 
         {/* Bottom nav — always visible in Advisor Mode, mobile-only otherwise */}

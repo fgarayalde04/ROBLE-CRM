@@ -42,7 +42,7 @@ export default function OpeningDetail({ opening, notes, tasks, documents }: Prop
   return (
     <div>
       {/* Tab bar */}
-      <div className="border-b border-gray-200 mb-6">
+      <div className="border-b border-gray-200 mb-6 overflow-x-auto">
         <nav className="flex gap-1" aria-label="Tabs">
           {TABS.map((tab) => {
             const isActive = activeTab === tab.id
@@ -54,7 +54,7 @@ export default function OpeningDetail({ opening, notes, tasks, documents }: Prop
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`relative px-4 py-2.5 text-sm font-medium transition-colors whitespace-nowrap ${
+                className={`relative px-3 md:px-4 py-2.5 text-sm font-medium transition-colors whitespace-nowrap ${
                   isActive
                     ? 'text-gray-900 border-b-2 border-[#2D3F52]'
                     : 'text-gray-500 hover:text-gray-700 border-b-2 border-transparent'

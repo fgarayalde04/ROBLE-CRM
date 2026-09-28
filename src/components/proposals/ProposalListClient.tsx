@@ -255,7 +255,7 @@ function CreateModal({ onClose, onCreate }: { onClose: () => void; onCreate: (id
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
         </div>
-        <div className="p-6 space-y-5">
+        <div className="p-4 md:p-6 space-y-5">
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1.5">Cliente</label>
             <div className="relative">
@@ -466,178 +466,180 @@ export default function ProposalListClient({
         </div>
       ) : (
         <div className="bg-white border border-[#E2E8F0] rounded-xl overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-100 bg-gray-50/50">
-                <th className="text-left px-5 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Propuesta</th>
-                <th className="text-left px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider hidden sm:table-cell">Cliente</th>
-                <th className="text-right px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Monto</th>
-                <th className="text-left px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Estado</th>
-                <th className="text-left px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider hidden md:table-cell">Asesor</th>
-                <th className="text-left px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider hidden xl:table-cell">Portafolio</th>
-                <th className="text-left px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider hidden lg:table-cell">Fecha</th>
-                <th className="text-left px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider hidden lg:table-cell">Visibilidad</th>
-                <th className="px-5 py-3" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {filtered.map(p => {
-                const st    = STATUS_LABELS[p.status] ?? STATUS_LABELS.draft
-                const stats = initialStats[p.id]
-                const hasAlloc = stats && (stats.funds_pct + stats.bonds_pct + stats.equities_pct) > 0
+          <div className="mobile-scroll-x">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-100 bg-gray-50/50">
+                  <th className="text-left px-5 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Propuesta</th>
+                  <th className="text-left px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider hidden sm:table-cell">Cliente</th>
+                  <th className="text-right px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Monto</th>
+                  <th className="text-left px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Estado</th>
+                  <th className="text-left px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider hidden md:table-cell">Asesor</th>
+                  <th className="text-left px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider hidden xl:table-cell">Portafolio</th>
+                  <th className="text-left px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider hidden lg:table-cell">Fecha</th>
+                  <th className="text-left px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider hidden lg:table-cell">Visibilidad</th>
+                  <th className="px-5 py-3" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {filtered.map(p => {
+                  const st    = STATUS_LABELS[p.status] ?? STATUS_LABELS.draft
+                  const stats = initialStats[p.id]
+                  const hasAlloc = stats && (stats.funds_pct + stats.bonds_pct + stats.equities_pct) > 0
 
-                return (
-                  <tr key={p.id}
-                    className="hover:bg-gray-50/60 transition-colors cursor-pointer group"
-                    onClick={() => router.push(`/propuestas/${p.id}`)}>
+                  return (
+                    <tr key={p.id}
+                      className="hover:bg-gray-50/60 transition-colors cursor-pointer group"
+                      onClick={() => router.push(`/propuestas/${p.id}`)}>
 
-                    {/* Propuesta — título editable */}
-                    <td className="px-5 py-3.5" onClick={e => e.stopPropagation()}>
-                      <InlineEdit
-                        value={p.title}
-                        placeholder="Sin título"
-                        onSave={v => patchProposal(p.id, { title: v || null })}
-                        className="font-medium text-gray-800"
-                      />
-                      <p className="text-[10px] text-gray-400 mt-0.5">{p.id.slice(0, 8)}…</p>
-                    </td>
+                      {/* Propuesta — título editable */}
+                      <td className="px-5 py-3.5" onClick={e => e.stopPropagation()}>
+                        <InlineEdit
+                          value={p.title}
+                          placeholder="Sin título"
+                          onSave={v => patchProposal(p.id, { title: v || null })}
+                          className="font-medium text-gray-800"
+                        />
+                        <p className="text-[10px] text-gray-400 mt-0.5">{p.id.slice(0, 8)}…</p>
+                      </td>
 
-                    {/* Cliente — inline editable */}
-                    <td className="px-4 py-3.5 hidden sm:table-cell" onClick={e => e.stopPropagation()}>
-                      <InlineEdit
-                        value={p.client_name}
-                        placeholder="Sin cliente"
-                        onSave={v => patchProposal(p.id, { client_name: v || null })}
-                        className="text-xs text-gray-600"
-                      />
-                    </td>
+                      {/* Cliente — inline editable */}
+                      <td className="px-4 py-3.5 hidden sm:table-cell" onClick={e => e.stopPropagation()}>
+                        <InlineEdit
+                          value={p.client_name}
+                          placeholder="Sin cliente"
+                          onSave={v => patchProposal(p.id, { client_name: v || null })}
+                          className="text-xs text-gray-600"
+                        />
+                      </td>
 
-                    {/* Monto */}
-                    <td className="px-4 py-3.5 text-right">
-                      <div className="text-sm font-semibold text-[#2D3F52] font-mono tabular-nums">
-                        {fmtMoney(p.total_amount, p.currency)}
-                      </div>
-                      {!!p.total_ventas && (
-                        <div className="text-[10px] text-gray-400 font-mono tabular-nums">
-                          Ventas {fmtMoney(p.total_ventas, p.currency)}
+                      {/* Monto */}
+                      <td className="px-4 py-3.5 text-right">
+                        <div className="text-sm font-semibold text-[#2D3F52] font-mono tabular-nums">
+                          {fmtMoney(p.total_amount, p.currency)}
                         </div>
-                      )}
-                    </td>
-
-                    {/* Estado */}
-                    <td className="px-4 py-3.5">
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${st.bg} ${st.color}`}>
-                        {st.label}
-                      </span>
-                    </td>
-
-                    {/* Asesor — inline editable */}
-                    <td className="px-4 py-3.5 hidden md:table-cell" onClick={e => e.stopPropagation()}>
-                      <InlineEdit
-                        value={p.advisor_name}
-                        placeholder="Sin asesor"
-                        onSave={v => patchProposal(p.id, { advisor_name: v || null })}
-                        className="text-xs text-gray-500"
-                      />
-                    </td>
-
-                    {/* Portafolio — asignación + yield */}
-                    <td className="px-4 py-3.5 hidden xl:table-cell">
-                      {hasAlloc ? (
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-3 flex-wrap">
-                            <AllocBar label="F" pct={stats.funds_pct}    color="bg-blue-400" />
-                            <AllocBar label="B" pct={stats.bonds_pct}    color="bg-amber-400" />
-                            <AllocBar label="A" pct={stats.equities_pct} color="bg-emerald-400" />
+                        {!!p.total_ventas && (
+                          <div className="text-[10px] text-gray-400 font-mono tabular-nums">
+                            Ventas {fmtMoney(p.total_ventas, p.currency)}
                           </div>
-                          {stats.avg_yield != null && (
-                            <div className="flex items-center gap-1">
-                              <span className="text-[10px] text-gray-400">Yield prom.</span>
-                              <span className="text-[10px] font-bold text-[#2D3F52] tabular-nums">{stats.avg_yield.toFixed(2)}%</span>
-                            </div>
-                          )}
-                        </div>
-                      ) : (
-                        <span className="text-[10px] text-gray-300">Sin activos</span>
-                      )}
-                    </td>
-
-                    {/* Fecha */}
-                    <td className="px-4 py-3.5 text-xs text-gray-400 hidden lg:table-cell">{fmtDate(p.created_at)}</td>
-
-                    {/* Visibilidad */}
-                    <td className="px-4 py-3.5 hidden lg:table-cell relative" onClick={e => e.stopPropagation()}>
-                      {p.advisor_id === currentUserId ? (
-                        <div className="relative inline-block">
-                          <button
-                            onClick={() => setShareMenuOpenId(shareMenuOpenId === p.id ? null : p.id)}
-                            disabled={sharingId === p.id}
-                            title="Click para elegir con quién compartir"
-                            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold transition-colors border ${
-                              p.shared_with_all
-                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
-                                : (p.shared_with_user_ids?.length ?? 0) > 0
-                                  ? 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100'
-                                  : 'bg-gray-50 text-gray-400 border-gray-200 hover:bg-gray-100 hover:text-gray-600'
-                            } ${sharingId === p.id ? 'opacity-50 pointer-events-none' : ''}`}
-                          >
-                            {sharingId === p.id
-                              ? <span className="w-2.5 h-2.5 border border-current/40 border-t-current rounded-full animate-spin" />
-                              : <EyeIcon open={p.shared_with_all || (p.shared_with_user_ids?.length ?? 0) > 0} />
-                            }
-                            {p.shared_with_all
-                              ? 'Visible para todos'
-                              : (p.shared_with_user_ids?.length ?? 0) > 0
-                                ? `Compartida (${p.shared_with_user_ids!.length})`
-                                : 'Solo yo'}
-                          </button>
-                          {shareMenuOpenId === p.id && (
-                            <ShareMenu
-                              proposal={p}
-                              teamMembers={teamMembers.filter(m => m.id !== currentUserId)}
-                              onClose={() => setShareMenuOpenId(null)}
-                              onChange={patch => updateSharing(p.id, patch)}
-                            />
-                          )}
-                        </div>
-                      ) : p.shared_with_all ? (
-                        <span className="flex items-center gap-1 text-[10px] text-emerald-600 font-medium">
-                          <EyeIcon open /> Compartida
-                        </span>
-                      ) : p.shared_with_user_ids?.includes(currentUserId) ? (
-                        <span className="flex items-center gap-1 text-[10px] text-blue-600 font-medium">
-                          <EyeIcon open /> Compartida con vos
-                        </span>
-                      ) : (
-                        <span className="text-[10px] text-gray-300">Privada</span>
-                      )}
-                    </td>
-
-                    {/* Acciones */}
-                    <td className="px-5 py-3.5" onClick={e => e.stopPropagation()}>
-                      <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button onClick={() => router.push(`/propuestas/${p.id}`)}
-                          className="text-xs text-blue-600 hover:text-blue-800 font-medium">
-                          Editar
-                        </button>
-                        <button onClick={() => handleDuplicate(p.id)} disabled={duplicatingId === p.id}
-                          title="Crear una copia completa (mismos activos) para otro cliente"
-                          className="text-xs text-gray-500 hover:text-[#2D3F52] font-medium disabled:opacity-40">
-                          {duplicatingId === p.id ? 'Duplicando…' : 'Duplicar'}
-                        </button>
-                        {p.advisor_id === currentUserId && (
-                          <button onClick={() => handleDelete(p.id)} disabled={deletingId === p.id}
-                            className="text-xs text-red-400 hover:text-red-600 disabled:opacity-40">
-                            {deletingId === p.id ? '...' : '×'}
-                          </button>
                         )}
-                      </div>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+                      </td>
+
+                      {/* Estado */}
+                      <td className="px-4 py-3.5">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${st.bg} ${st.color}`}>
+                          {st.label}
+                        </span>
+                      </td>
+
+                      {/* Asesor — inline editable */}
+                      <td className="px-4 py-3.5 hidden md:table-cell" onClick={e => e.stopPropagation()}>
+                        <InlineEdit
+                          value={p.advisor_name}
+                          placeholder="Sin asesor"
+                          onSave={v => patchProposal(p.id, { advisor_name: v || null })}
+                          className="text-xs text-gray-500"
+                        />
+                      </td>
+
+                      {/* Portafolio — asignación + yield */}
+                      <td className="px-4 py-3.5 hidden xl:table-cell">
+                        {hasAlloc ? (
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-3 flex-wrap">
+                              <AllocBar label="F" pct={stats.funds_pct}    color="bg-blue-400" />
+                              <AllocBar label="B" pct={stats.bonds_pct}    color="bg-amber-400" />
+                              <AllocBar label="A" pct={stats.equities_pct} color="bg-emerald-400" />
+                            </div>
+                            {stats.avg_yield != null && (
+                              <div className="flex items-center gap-1">
+                                <span className="text-[10px] text-gray-400">Yield prom.</span>
+                                <span className="text-[10px] font-bold text-[#2D3F52] tabular-nums">{stats.avg_yield.toFixed(2)}%</span>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-[10px] text-gray-300">Sin activos</span>
+                        )}
+                      </td>
+
+                      {/* Fecha */}
+                      <td className="px-4 py-3.5 text-xs text-gray-400 hidden lg:table-cell">{fmtDate(p.created_at)}</td>
+
+                      {/* Visibilidad */}
+                      <td className="px-4 py-3.5 hidden lg:table-cell relative" onClick={e => e.stopPropagation()}>
+                        {p.advisor_id === currentUserId ? (
+                          <div className="relative inline-block">
+                            <button
+                              onClick={() => setShareMenuOpenId(shareMenuOpenId === p.id ? null : p.id)}
+                              disabled={sharingId === p.id}
+                              title="Click para elegir con quién compartir"
+                              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold transition-colors border ${
+                                p.shared_with_all
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                                  : (p.shared_with_user_ids?.length ?? 0) > 0
+                                    ? 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100'
+                                    : 'bg-gray-50 text-gray-400 border-gray-200 hover:bg-gray-100 hover:text-gray-600'
+                              } ${sharingId === p.id ? 'opacity-50 pointer-events-none' : ''}`}
+                            >
+                              {sharingId === p.id
+                                ? <span className="w-2.5 h-2.5 border border-current/40 border-t-current rounded-full animate-spin" />
+                                : <EyeIcon open={p.shared_with_all || (p.shared_with_user_ids?.length ?? 0) > 0} />
+                              }
+                              {p.shared_with_all
+                                ? 'Visible para todos'
+                                : (p.shared_with_user_ids?.length ?? 0) > 0
+                                  ? `Compartida (${p.shared_with_user_ids!.length})`
+                                  : 'Solo yo'}
+                            </button>
+                            {shareMenuOpenId === p.id && (
+                              <ShareMenu
+                                proposal={p}
+                                teamMembers={teamMembers.filter(m => m.id !== currentUserId)}
+                                onClose={() => setShareMenuOpenId(null)}
+                                onChange={patch => updateSharing(p.id, patch)}
+                              />
+                            )}
+                          </div>
+                        ) : p.shared_with_all ? (
+                          <span className="flex items-center gap-1 text-[10px] text-emerald-600 font-medium">
+                            <EyeIcon open /> Compartida
+                          </span>
+                        ) : p.shared_with_user_ids?.includes(currentUserId) ? (
+                          <span className="flex items-center gap-1 text-[10px] text-blue-600 font-medium">
+                            <EyeIcon open /> Compartida con vos
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-gray-300">Privada</span>
+                        )}
+                      </td>
+
+                      {/* Acciones */}
+                      <td className="px-5 py-3.5" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button onClick={() => router.push(`/propuestas/${p.id}`)}
+                            className="text-xs text-blue-600 hover:text-blue-800 font-medium">
+                            Editar
+                          </button>
+                          <button onClick={() => handleDuplicate(p.id)} disabled={duplicatingId === p.id}
+                            title="Crear una copia completa (mismos activos) para otro cliente"
+                            className="text-xs text-gray-500 hover:text-[#2D3F52] font-medium disabled:opacity-40">
+                            {duplicatingId === p.id ? 'Duplicando…' : 'Duplicar'}
+                          </button>
+                          {p.advisor_id === currentUserId && (
+                            <button onClick={() => handleDelete(p.id)} disabled={deletingId === p.id}
+                              className="text-xs text-red-400 hover:text-red-600 disabled:opacity-40">
+                              {deletingId === p.id ? '...' : '×'}
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 

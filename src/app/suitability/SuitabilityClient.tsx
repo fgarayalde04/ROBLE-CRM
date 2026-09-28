@@ -140,10 +140,10 @@ export default function SuitabilityClient() {
   const advisors = Array.from(new Set(reviews.map(r => r.advisor).filter(Boolean) as string[])).sort()
 
   return (
-    <div className="p-6 max-w-6xl mx-auto space-y-5">
+    <div className="p-4 md:p-6 max-w-6xl mx-auto space-y-5">
 
       {/* ── Header ── */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-semibold text-gray-900">Suitability / Risk Monitor</h1>
           <p className="text-sm text-gray-500 mt-0.5">Historial de análisis de carteras por cliente</p>

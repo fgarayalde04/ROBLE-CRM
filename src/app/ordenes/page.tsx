@@ -24,7 +24,7 @@ export default async function OrdenesPage({ searchParams }: Props) {
   const isAdmin = ADMIN_ROLES.includes(session.role)
   const isMesa  = MESA_ROLES.includes(session.role)
 
-  const VALID_TABS = ['blotter', 'mesa', 'mis-ordenes', 'nueva', 'instrumentos', 'enviar', 'mis-solicitudes'] as const
+  const VALID_TABS = ['blotter', 'mesa', 'mis-ordenes', 'nueva', 'instrumentos', 'enviar', 'mis-solicitudes', 'historial'] as const
   type ValidTab = typeof VALID_TABS[number]
   const rawTab = searchParams.tab as string | undefined
   const initialTab: ValidTab | undefined = VALID_TABS.includes(rawTab as ValidTab)

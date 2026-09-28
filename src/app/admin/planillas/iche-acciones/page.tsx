@@ -17,7 +17,7 @@ export default async function IcheAccionesPage() {
   const latest = await getLatestGeneration()
 
   return (
-    <div className="p-6 bg-[#F4F6F8] min-h-screen">
+    <div className="p-4 md:p-6 bg-[#F4F6F8] min-h-screen">
       <div className="mb-6">
         <h1 className="text-xl font-semibold text-[#2D3F52]">Iche Acciones</h1>
         <p className="mt-0.5 text-sm text-gray-400">Actualización mensual de la planilla de acciones — cliente Isaac Shcolnik</p>

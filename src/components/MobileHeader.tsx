@@ -12,7 +12,8 @@ const PAGE_TITLES: [string, string][] = [
   ['/clients', 'Clientes'],
   ['/openings', 'Aperturas'],
   ['/banco-central', 'Banco Central'],
-  ['/ordenes', 'Enviar órdenes'],
+  ['/ordenes', 'Solicitudes'],
+  ['/solicitudes', 'Solicitudes'],
   ['/factsheet', 'Factsheet'],
   ['/propuestas', 'Propuestas'],
   ['/events', 'Agenda'],
@@ -33,7 +34,7 @@ const PAGE_TITLES: [string, string][] = [
 ]
 
 function getTitle(pathname: string, search: string): string {
-  if (pathname === '/ordenes' && search.includes('tab=historial')) return 'Historial de órdenes'
+  if (pathname === '/ordenes' && search.includes('tab=historial')) return 'Blotter'
   for (const [key, val] of PAGE_TITLES) {
     if (pathname === key) return val
   }

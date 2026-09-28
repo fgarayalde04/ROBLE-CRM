@@ -505,51 +505,53 @@ export default function UsersManager({ initialUsers, pendingUsers: initialPendin
             </span>
           </div>
           <div className="bg-white border border-amber-200 rounded-xl overflow-hidden">
-            <table className="w-full border-collapse">
-              <thead>
-                <tr className="bg-amber-50 border-b border-amber-200">
-                  <th className="text-left py-2.5 px-4 text-xs font-semibold text-amber-800 uppercase tracking-wide">Nombre</th>
-                  <th className="text-left py-2.5 px-4 text-xs font-semibold text-amber-800 uppercase tracking-wide">Email</th>
-                  <th className="text-left py-2.5 px-4 text-xs font-semibold text-amber-800 uppercase tracking-wide">Dominio</th>
-                  <th className="text-left py-2.5 px-4 text-xs font-semibold text-amber-800 uppercase tracking-wide">Solicitado</th>
-                  <th className="text-right py-2.5 px-4 text-xs font-semibold text-amber-800 uppercase tracking-wide">Acción</th>
-                </tr>
-              </thead>
-              <tbody>
-                {pending.map(u => {
-                  const domain = u.email?.split('@')[1] ?? '—'
-                  const fecha = new Date(u.created_at).toLocaleDateString('es-UY', {
-                    day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
-                  })
-                  return (
-                    <tr key={u.id} className="border-b border-gray-100 last:border-0">
-                      <td className="py-3 px-4 text-sm font-medium text-[#2D3F52]">{u.name}</td>
-                      <td className="py-3 px-4 text-sm text-gray-600">{u.email ?? '—'}</td>
-                      <td className="py-3 px-4">
-                        <span className="px-2 py-0.5 text-xs bg-blue-50 text-blue-700 rounded-full font-medium">@{domain}</span>
-                      </td>
-                      <td className="py-3 px-4 text-xs text-gray-400">{fecha}</td>
-                      <td className="py-3 px-4 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <button
-                            onClick={() => handleApprove(u.id)}
-                            className="px-3 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors"
-                          >
-                            Aprobar
-                          </button>
-                          <button
-                            onClick={() => handleReject(u.id, u.name)}
-                            className="px-3 py-1.5 text-xs font-semibold text-red-600 border border-red-200 hover:bg-red-50 rounded-lg transition-colors"
-                          >
-                            Rechazar
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
+            <div className="mobile-scroll-x">
+              <table className="w-full border-collapse">
+                <thead>
+                  <tr className="bg-amber-50 border-b border-amber-200">
+                    <th className="text-left py-2.5 px-4 text-xs font-semibold text-amber-800 uppercase tracking-wide">Nombre</th>
+                    <th className="text-left py-2.5 px-4 text-xs font-semibold text-amber-800 uppercase tracking-wide">Email</th>
+                    <th className="text-left py-2.5 px-4 text-xs font-semibold text-amber-800 uppercase tracking-wide">Dominio</th>
+                    <th className="text-left py-2.5 px-4 text-xs font-semibold text-amber-800 uppercase tracking-wide">Solicitado</th>
+                    <th className="text-right py-2.5 px-4 text-xs font-semibold text-amber-800 uppercase tracking-wide">Acción</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pending.map(u => {
+                    const domain = u.email?.split('@')[1] ?? '—'
+                    const fecha = new Date(u.created_at).toLocaleDateString('es-UY', {
+                      day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
+                    })
+                    return (
+                      <tr key={u.id} className="border-b border-gray-100 last:border-0">
+                        <td className="py-3 px-4 text-sm font-medium text-[#2D3F52]">{u.name}</td>
+                        <td className="py-3 px-4 text-sm text-gray-600">{u.email ?? '—'}</td>
+                        <td className="py-3 px-4">
+                          <span className="px-2 py-0.5 text-xs bg-blue-50 text-blue-700 rounded-full font-medium">@{domain}</span>
+                        </td>
+                        <td className="py-3 px-4 text-xs text-gray-400">{fecha}</td>
+                        <td className="py-3 px-4 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={() => handleApprove(u.id)}
+                              className="px-3 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors"
+                            >
+                              Aprobar
+                            </button>
+                            <button
+                              onClick={() => handleReject(u.id, u.name)}
+                              className="px-3 py-1.5 text-xs font-semibold text-red-600 border border-red-200 hover:bg-red-50 rounded-lg transition-colors"
+                            >
+                              Rechazar
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}
@@ -572,105 +574,107 @@ export default function UsersManager({ initialUsers, pendingUsers: initialPendin
 
       {/* Users table */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-gray-100 bg-gray-50/60">
-              <th className="text-left px-4 py-3 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Usuario</th>
-              <th className="text-left px-4 py-3 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Email</th>
-              <th className="text-left px-4 py-3 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Rol</th>
-              <th className="text-left px-4 py-3 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Estado</th>
-              <th className="text-left px-4 py-3 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">OneDrive</th>
-              <th className="px-4 py-3" />
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-50">
-            {users.map((user) => (
-              <tr key={user.id} className={`hover:bg-gray-50/60 transition-colors ${!user.active ? 'opacity-50' : ''}`}>
-                <td className="px-4 py-3">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-full bg-[#2D3F52]/10 flex items-center justify-center shrink-0">
-                      <span className="text-xs font-bold text-[#2D3F52]">{user.name.charAt(0).toUpperCase()}</span>
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-1.5">
-                        <p className="font-medium text-gray-900">{user.name}</p>
-                        {user.modo_asesor && (
-                          <span className="text-[9px] font-bold text-green-600 bg-green-50 border border-green-200 px-1.5 py-0.5 rounded">Modo Asesor</span>
+        <div className="mobile-scroll-x">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-100 bg-gray-50/60">
+                <th className="text-left px-4 py-3 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Usuario</th>
+                <th className="text-left px-4 py-3 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Email</th>
+                <th className="text-left px-4 py-3 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Rol</th>
+                <th className="text-left px-4 py-3 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Estado</th>
+                <th className="text-left px-4 py-3 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">OneDrive</th>
+                <th className="px-4 py-3" />
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {users.map((user) => (
+                <tr key={user.id} className={`hover:bg-gray-50/60 transition-colors ${!user.active ? 'opacity-50' : ''}`}>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-full bg-[#2D3F52]/10 flex items-center justify-center shrink-0">
+                        <span className="text-xs font-bold text-[#2D3F52]">{user.name.charAt(0).toUpperCase()}</span>
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          <p className="font-medium text-gray-900">{user.name}</p>
+                          {user.modo_asesor && (
+                            <span className="text-[9px] font-bold text-green-600 bg-green-50 border border-green-200 px-1.5 py-0.5 rounded">Modo Asesor</span>
+                          )}
+                        </div>
+                        {user.id === currentUserId && (
+                          <p className="text-[10px] text-[#16A34A] font-medium">Tú</p>
                         )}
                       </div>
-                      {user.id === currentUserId && (
-                        <p className="text-[10px] text-[#16A34A] font-medium">Tú</p>
-                      )}
                     </div>
-                  </div>
-                </td>
-                <td className="px-4 py-3 text-gray-500 text-xs">{user.email ?? '—'}</td>
-                <td className="px-4 py-3">
-                  <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${ROLE_COLORS[user.role]}`}>
-                    {ROLE_LABELS[user.role]}
-                  </span>
-                </td>
-                <td className="px-4 py-3">
-                  <button
-                    onClick={() => toggleActive(user)}
-                    disabled={user.id === currentUserId}
-                    title={user.id === currentUserId ? 'No podés desactivarte a vos mismo' : user.active ? 'Desactivar' : 'Activar'}
-                    className={`text-[11px] font-medium px-2 py-0.5 rounded-full transition-colors ${
-                      user.active
-                        ? 'bg-emerald-50 text-emerald-700 hover:bg-red-50 hover:text-red-600'
-                        : 'bg-gray-100 text-gray-500 hover:bg-emerald-50 hover:text-emerald-700'
-                    } disabled:cursor-not-allowed disabled:hover:bg-emerald-50 disabled:hover:text-emerald-700`}
-                  >
-                    {user.active ? 'Activo' : 'Inactivo'}
-                  </button>
-                </td>
-                <td className="px-4 py-3">
-                  {user.onedrive_folder_id ? (
-                    <span title={user.onedrive_folder_path ?? user.onedrive_folder_id} className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded text-[10px] font-medium max-w-[120px] truncate">
-                      <svg className="w-3 h-3 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" /></svg>
-                      <span className="truncate">{user.onedrive_folder_path?.split('/').pop() ?? 'Asignado'}</span>
+                  </td>
+                  <td className="px-4 py-3 text-gray-500 text-xs">{user.email ?? '—'}</td>
+                  <td className="px-4 py-3">
+                    <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${ROLE_COLORS[user.role]}`}>
+                      {ROLE_LABELS[user.role]}
                     </span>
-                  ) : (
-                    <span className="text-[10px] text-gray-300">—</span>
-                  )}
-                </td>
-                <td className="px-4 py-3">
-                  <div className="flex items-center gap-1 justify-end">
+                  </td>
+                  <td className="px-4 py-3">
                     <button
-                      onClick={() => openEdit(user)}
-                      className="p-1.5 text-gray-400 hover:text-[#2D3F52] hover:bg-gray-100 rounded transition-colors"
-                      title="Editar"
+                      onClick={() => toggleActive(user)}
+                      disabled={user.id === currentUserId}
+                      title={user.id === currentUserId ? 'No podés desactivarte a vos mismo' : user.active ? 'Desactivar' : 'Activar'}
+                      className={`text-[11px] font-medium px-2 py-0.5 rounded-full transition-colors ${
+                        user.active
+                          ? 'bg-emerald-50 text-emerald-700 hover:bg-red-50 hover:text-red-600'
+                          : 'bg-gray-100 text-gray-500 hover:bg-emerald-50 hover:text-emerald-700'
+                      } disabled:cursor-not-allowed disabled:hover:bg-emerald-50 disabled:hover:text-emerald-700`}
                     >
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                      </svg>
+                      {user.active ? 'Activo' : 'Inactivo'}
                     </button>
-                    <button
-                      onClick={() => openResetPassword(user)}
-                      className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded transition-colors"
-                      title="Resetear contraseña"
-                    >
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
-                      </svg>
-                    </button>
-                    {user.id !== currentUserId && (
+                  </td>
+                  <td className="px-4 py-3">
+                    {user.onedrive_folder_id ? (
+                      <span title={user.onedrive_folder_path ?? user.onedrive_folder_id} className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded text-[10px] font-medium max-w-[120px] truncate">
+                        <svg className="w-3 h-3 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" /></svg>
+                        <span className="truncate">{user.onedrive_folder_path?.split('/').pop() ?? 'Asignado'}</span>
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-gray-300">—</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-1 justify-end">
                       <button
-                        onClick={() => openDelete(user)}
-                        className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-                        title="Eliminar"
+                        onClick={() => openEdit(user)}
+                        className="p-1.5 text-gray-400 hover:text-[#2D3F52] hover:bg-gray-100 rounded transition-colors"
+                        title="Editar"
                       >
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                         </svg>
                       </button>
-                    )}
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                      <button
+                        onClick={() => openResetPassword(user)}
+                        className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded transition-colors"
+                        title="Resetear contraseña"
+                      >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                        </svg>
+                      </button>
+                      {user.id !== currentUserId && (
+                        <button
+                          onClick={() => openDelete(user)}
+                          className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                          title="Eliminar"
+                        >
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
         {users.length === 0 && (
           <div className="px-4 py-8 text-center text-sm text-gray-400">
             No hay usuarios registrados.
@@ -803,7 +807,7 @@ export default function UsersManager({ initialUsers, pendingUsers: initialPendin
                     ) : (
                       <div className="space-y-2">
                         {/* Grid of existing folders */}
-                        <div className="grid grid-cols-3 gap-1.5 max-h-36 overflow-y-auto pr-1">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 max-h-36 overflow-y-auto pr-1">
                           {/* "Sin asignar" option */}
                           <button
                             type="button"
@@ -1062,7 +1066,7 @@ export default function UsersManager({ initialUsers, pendingUsers: initialPendin
                     Cargar carpetas de OneDrive
                   </button>
                 ) : (
-                  <div className="grid grid-cols-3 gap-1.5 max-h-52 overflow-y-auto pr-1">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 max-h-52 overflow-y-auto pr-1">
                     {personalFolders.map(f => (
                       <button
                         key={f.id}

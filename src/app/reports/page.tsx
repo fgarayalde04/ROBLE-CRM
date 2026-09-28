@@ -102,7 +102,7 @@ export default async function ReportsPage() {
   }
 
   return (
-    <div className="p-8">
+    <div className="p-4 md:p-8">
       <div className="mb-6">
         <h1 className="text-2xl font-semibold text-gray-900">Reportes</h1>
         <p className="mt-1 text-sm text-gray-500">Resumen operativo generado en tiempo real</p>
@@ -120,32 +120,34 @@ export default async function ReportsPage() {
           {data.overdueTasks.length === 0 ? (
             <EmptyRow label="Sin tareas vencidas" />
           ) : (
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b border-gray-100">
-                <tr>
-                  <th className="px-4 py-2 text-left text-xs text-gray-500 font-medium">Tarea</th>
-                  <th className="px-4 py-2 text-left text-xs text-gray-500 font-medium">Cliente</th>
-                  <th className="px-4 py-2 text-left text-xs text-gray-500 font-medium">Responsable</th>
-                  <th className="px-4 py-2 text-left text-xs text-gray-500 font-medium">Prioridad</th>
-                  <th className="px-4 py-2 text-left text-xs text-gray-500 font-medium">Vencio</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {data.overdueTasks.map((t: any) => (
-                  <tr key={t.id} className="hover:bg-red-50/20">
-                    <td className="px-4 py-2 font-medium text-gray-900">{t.title}</td>
-                    <td className="px-4 py-2 text-gray-500">
-                      {t.client ? `${t.client.first_name} ${t.client.last_name}` : '—'}
-                    </td>
-                    <td className="px-4 py-2 text-gray-500">{t.responsible ?? '—'}</td>
-                    <td className="px-4 py-2"><StatusBadge type="priority" value={t.priority} /></td>
-                    <td className="px-4 py-2 text-red-600 font-medium">
-                      {t.due_date ? format(new Date(t.due_date + 'T00:00:00'), 'd MMM yyyy', { locale: es }) : '—'}
-                    </td>
+            <div className="mobile-scroll-x">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 border-b border-gray-100">
+                  <tr>
+                    <th className="px-4 py-2 text-left text-xs text-gray-500 font-medium">Tarea</th>
+                    <th className="px-4 py-2 text-left text-xs text-gray-500 font-medium">Cliente</th>
+                    <th className="px-4 py-2 text-left text-xs text-gray-500 font-medium">Responsable</th>
+                    <th className="px-4 py-2 text-left text-xs text-gray-500 font-medium">Prioridad</th>
+                    <th className="px-4 py-2 text-left text-xs text-gray-500 font-medium">Vencio</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {data.overdueTasks.map((t: any) => (
+                    <tr key={t.id} className="hover:bg-red-50/20">
+                      <td className="px-4 py-2 font-medium text-gray-900">{t.title}</td>
+                      <td className="px-4 py-2 text-gray-500">
+                        {t.client ? `${t.client.first_name} ${t.client.last_name}` : '—'}
+                      </td>
+                      <td className="px-4 py-2 text-gray-500">{t.responsible ?? '—'}</td>
+                      <td className="px-4 py-2"><StatusBadge type="priority" value={t.priority} /></td>
+                      <td className="px-4 py-2 text-red-600 font-medium">
+                        {t.due_date ? format(new Date(t.due_date + 'T00:00:00'), 'd MMM yyyy', { locale: es }) : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </ReportSection>
 
@@ -159,32 +161,34 @@ export default async function ReportsPage() {
           {data.upcomingDeadlines.length === 0 ? (
             <EmptyRow label="Sin vencimientos próximos" />
           ) : (
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b border-gray-100">
-                <tr>
-                  <th className="px-4 py-2 text-left text-xs text-gray-500 font-medium">Fecha</th>
-                  <th className="px-4 py-2 text-left text-xs text-gray-500 font-medium">Descripción</th>
-                  <th className="px-4 py-2 text-left text-xs text-gray-500 font-medium">Cliente</th>
-                  <th className="px-4 py-2 text-left text-xs text-gray-500 font-medium">Categoría</th>
-                  <th className="px-4 py-2 text-left text-xs text-gray-500 font-medium">Responsable</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {data.upcomingDeadlines.map((d: any) => (
-                  <tr key={d.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-2 font-medium text-gray-900 whitespace-nowrap">
-                      {format(new Date(d.due_date + 'T00:00:00'), 'd MMM', { locale: es })}
-                    </td>
-                    <td className="px-4 py-2 text-gray-700">{d.title}</td>
-                    <td className="px-4 py-2 text-gray-500">
-                      {d.client ? `${d.client.first_name} ${d.client.last_name}` : '—'}
-                    </td>
-                    <td className="px-4 py-2 text-gray-500">{deadlineCategoryLabel[d.category] ?? d.category}</td>
-                    <td className="px-4 py-2 text-gray-500">{d.responsible ?? '—'}</td>
+            <div className="mobile-scroll-x">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 border-b border-gray-100">
+                  <tr>
+                    <th className="px-4 py-2 text-left text-xs text-gray-500 font-medium">Fecha</th>
+                    <th className="px-4 py-2 text-left text-xs text-gray-500 font-medium">Descripción</th>
+                    <th className="px-4 py-2 text-left text-xs text-gray-500 font-medium">Cliente</th>
+                    <th className="px-4 py-2 text-left text-xs text-gray-500 font-medium">Categoría</th>
+                    <th className="px-4 py-2 text-left text-xs text-gray-500 font-medium">Responsable</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {data.upcomingDeadlines.map((d: any) => (
+                    <tr key={d.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-2 font-medium text-gray-900 whitespace-nowrap">
+                        {format(new Date(d.due_date + 'T00:00:00'), 'd MMM', { locale: es })}
+                      </td>
+                      <td className="px-4 py-2 text-gray-700">{d.title}</td>
+                      <td className="px-4 py-2 text-gray-500">
+                        {d.client ? `${d.client.first_name} ${d.client.last_name}` : '—'}
+                      </td>
+                      <td className="px-4 py-2 text-gray-500">{deadlineCategoryLabel[d.category] ?? d.category}</td>
+                      <td className="px-4 py-2 text-gray-500">{d.responsible ?? '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </ReportSection>
 
@@ -197,28 +201,30 @@ export default async function ReportsPage() {
           {data.docsToReview.length === 0 ? (
             <EmptyRow label="Sin documentos pendientes" />
           ) : (
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b border-gray-100">
-                <tr>
-                  <th className="px-4 py-2 text-left text-xs text-gray-500 font-medium">Documento</th>
-                  <th className="px-4 py-2 text-left text-xs text-gray-500 font-medium">Cliente</th>
-                  <th className="px-4 py-2 text-left text-xs text-gray-500 font-medium">Estado</th>
-                  <th className="px-4 py-2 text-left text-xs text-gray-500 font-medium">Responsable</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {data.docsToReview.map((d: any) => (
-                  <tr key={d.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-2 font-medium text-gray-900">{d.name}</td>
-                    <td className="px-4 py-2 text-gray-500">
-                      {d.client ? `${d.client.first_name} ${d.client.last_name}` : '—'}
-                    </td>
-                    <td className="px-4 py-2"><StatusBadge type="document_status" value={d.status} /></td>
-                    <td className="px-4 py-2 text-gray-500">{d.responsible ?? '—'}</td>
+            <div className="mobile-scroll-x">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 border-b border-gray-100">
+                  <tr>
+                    <th className="px-4 py-2 text-left text-xs text-gray-500 font-medium">Documento</th>
+                    <th className="px-4 py-2 text-left text-xs text-gray-500 font-medium">Cliente</th>
+                    <th className="px-4 py-2 text-left text-xs text-gray-500 font-medium">Estado</th>
+                    <th className="px-4 py-2 text-left text-xs text-gray-500 font-medium">Responsable</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {data.docsToReview.map((d: any) => (
+                    <tr key={d.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-2 font-medium text-gray-900">{d.name}</td>
+                      <td className="px-4 py-2 text-gray-500">
+                        {d.client ? `${d.client.first_name} ${d.client.last_name}` : '—'}
+                      </td>
+                      <td className="px-4 py-2"><StatusBadge type="document_status" value={d.status} /></td>
+                      <td className="px-4 py-2 text-gray-500">{d.responsible ?? '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </ReportSection>
 
@@ -231,28 +237,30 @@ export default async function ReportsPage() {
           {data.clientsPendingDoc.length === 0 ? (
             <EmptyRow label="Sin clientes con documentación pendiente" />
           ) : (
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b border-gray-100">
-                <tr>
-                  <th className="px-4 py-2 text-left text-xs text-gray-500 font-medium">N° Cliente</th>
-                  <th className="px-4 py-2 text-left text-xs text-gray-500 font-medium">Nombre</th>
-                  <th className="px-4 py-2 text-left text-xs text-gray-500 font-medium">Asesor</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {data.clientsPendingDoc.map((c: any) => (
-                  <tr key={c.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-2 font-mono text-xs text-gray-500">{c.client_number}</td>
-                    <td className="px-4 py-2">
-                      <Link href={`/clients/${c.id}`} className="font-medium text-gray-900 hover:text-blue-600 hover:underline">
-                        {c.first_name} {c.last_name}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-2 text-gray-500">{c.advisor ?? '—'}</td>
+            <div className="mobile-scroll-x">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 border-b border-gray-100">
+                  <tr>
+                    <th className="px-4 py-2 text-left text-xs text-gray-500 font-medium">N° Cliente</th>
+                    <th className="px-4 py-2 text-left text-xs text-gray-500 font-medium">Nombre</th>
+                    <th className="px-4 py-2 text-left text-xs text-gray-500 font-medium">Asesor</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {data.clientsPendingDoc.map((c: any) => (
+                    <tr key={c.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-2 font-mono text-xs text-gray-500">{c.client_number}</td>
+                      <td className="px-4 py-2">
+                        <Link href={`/clients/${c.id}`} className="font-medium text-gray-900 hover:text-blue-600 hover:underline">
+                          {c.first_name} {c.last_name}
+                        </Link>
+                      </td>
+                      <td className="px-4 py-2 text-gray-500">{c.advisor ?? '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </ReportSection>
 
@@ -285,32 +293,34 @@ export default async function ReportsPage() {
           {data.recentDocs.length === 0 ? (
             <EmptyRow label="Sin documentos recientes" />
           ) : (
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b border-gray-100">
-                <tr>
-                  <th className="px-4 py-2 text-left text-xs text-gray-500 font-medium">Documento</th>
-                  <th className="px-4 py-2 text-left text-xs text-gray-500 font-medium">Cliente</th>
-                  <th className="px-4 py-2 text-left text-xs text-gray-500 font-medium">Categoría</th>
-                  <th className="px-4 py-2 text-left text-xs text-gray-500 font-medium">Estado</th>
-                  <th className="px-4 py-2 text-left text-xs text-gray-500 font-medium">Fecha</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {data.recentDocs.map((d: any) => (
-                  <tr key={d.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-2 font-medium text-gray-900">{d.name}</td>
-                    <td className="px-4 py-2 text-gray-500">
-                      {d.client ? `${d.client.first_name} ${d.client.last_name}` : '—'}
-                    </td>
-                    <td className="px-4 py-2 text-gray-500">{categoryLabel[d.category] ?? d.category}</td>
-                    <td className="px-4 py-2"><StatusBadge type="document_status" value={d.status} /></td>
-                    <td className="px-4 py-2 text-gray-500">
-                      {format(new Date(d.created_at), 'd MMM', { locale: es })}
-                    </td>
+            <div className="mobile-scroll-x">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 border-b border-gray-100">
+                  <tr>
+                    <th className="px-4 py-2 text-left text-xs text-gray-500 font-medium">Documento</th>
+                    <th className="px-4 py-2 text-left text-xs text-gray-500 font-medium">Cliente</th>
+                    <th className="px-4 py-2 text-left text-xs text-gray-500 font-medium">Categoría</th>
+                    <th className="px-4 py-2 text-left text-xs text-gray-500 font-medium">Estado</th>
+                    <th className="px-4 py-2 text-left text-xs text-gray-500 font-medium">Fecha</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {data.recentDocs.map((d: any) => (
+                    <tr key={d.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-2 font-medium text-gray-900">{d.name}</td>
+                      <td className="px-4 py-2 text-gray-500">
+                        {d.client ? `${d.client.first_name} ${d.client.last_name}` : '—'}
+                      </td>
+                      <td className="px-4 py-2 text-gray-500">{categoryLabel[d.category] ?? d.category}</td>
+                      <td className="px-4 py-2"><StatusBadge type="document_status" value={d.status} /></td>
+                      <td className="px-4 py-2 text-gray-500">
+                        {format(new Date(d.created_at), 'd MMM', { locale: es })}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </ReportSection>
 

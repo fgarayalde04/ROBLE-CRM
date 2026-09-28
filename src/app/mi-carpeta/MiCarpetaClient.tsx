@@ -331,7 +331,7 @@ export default function MiCarpetaClient({ userName, driveId, rootFolderId, rootF
 
   if (!driveId || !rootFolderId) {
     return (
-      <div className="p-8 min-h-screen bg-[#F4F6F8] flex items-center justify-center">
+      <div className="p-4 md:p-8 min-h-screen bg-[#F4F6F8] flex items-center justify-center">
         <div className="text-center max-w-sm">
           <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
             <svg className="w-8 h-8 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -350,10 +350,10 @@ export default function MiCarpetaClient({ userName, driveId, rootFolderId, rootF
   // ─── Render ───────────────────────────────────────────────────────────────────
 
   return (
-    <div className="p-6 min-h-screen bg-[#F4F6F8]">
+    <div className="p-4 md:p-6 min-h-screen bg-[#F4F6F8]">
 
       {/* ── Header ── */}
-      <div className="mb-5 flex items-start justify-between gap-4">
+      <div className="mb-5 flex items-start justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-xl font-semibold text-[#2D3F52]">Mi carpeta</h1>
           <p className="text-xs text-gray-400 mt-0.5">{userName} · OneDrive</p>
@@ -554,84 +554,86 @@ function ListView({
   onDelete: (item: DriveItem) => void
 }) {
   return (
-    <table className="w-full text-sm">
-      <thead className="border-b border-gray-100 bg-gray-50/60">
-        <tr>
-          <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Nombre</th>
-          <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider hidden sm:table-cell">Tipo</th>
-          <th className="text-right px-4 py-2.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider hidden md:table-cell">Tamaño</th>
-          <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider hidden lg:table-cell">Modificado</th>
-          <th className="px-4 py-2.5 w-28" />
-        </tr>
-      </thead>
-      <tbody className="divide-y divide-gray-50">
-        {items.map(item => {
-          const info = item.isFolder ? { icon: '📁', color: 'text-amber-400', label: 'Carpeta' } : getFileInfo(item.mimeType)
-          const isDeleting = deletingId === item.id
-          return (
-            <tr key={item.id} className={`hover:bg-gray-50/60 transition-colors group ${isDeleting ? 'opacity-30' : ''}`}>
-              {/* Name */}
-              <td className="px-4 py-2.5">
-                {renamingId === item.id ? (
-                  <div className="flex items-center gap-2">
-                    <span className="text-base">{info.icon}</span>
-                    <input
-                      autoFocus
-                      value={renameValue}
-                      onChange={e => onRenameChange(e.target.value)}
-                      onKeyDown={e => { if (e.key === 'Enter') onRename(item); if (e.key === 'Escape') onCancelRename() }}
-                      onBlur={() => onRename(item)}
-                      className="flex-1 text-sm border border-blue-300 rounded px-2 py-0.5 outline-none focus:ring-1 focus:ring-blue-300"
-                    />
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => item.isFolder ? onEnter(item) : (!PREVIEWABLE.has(item.mimeType ?? '') ? window.open(item.webUrl, '_blank') : onPreview(item))}
-                    className="flex items-center gap-2 text-left w-full min-w-0"
-                  >
-                    <span className="text-base shrink-0">{info.icon}</span>
-                    <span className={`text-sm font-medium truncate ${item.isFolder ? 'text-[#2D3F52] hover:text-blue-600' : 'text-gray-800 hover:text-blue-600'} transition-colors`}>
-                      {item.name}
-                    </span>
-                  </button>
-                )}
-              </td>
-              {/* Type */}
-              <td className="px-4 py-2.5 hidden sm:table-cell">
-                <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded bg-gray-100 ${info.color}`}>{info.label}</span>
-              </td>
-              {/* Size */}
-              <td className="px-4 py-2.5 text-right text-xs text-gray-400 tabular-nums hidden md:table-cell">
-                {item.isFolder ? '—' : fmtSize(item.size)}
-              </td>
-              {/* Modified */}
-              <td className="px-4 py-2.5 text-xs text-gray-400 hidden lg:table-cell">
-                {fmtDate(item.lastModified)}
-              </td>
-              {/* Actions */}
-              <td className="px-4 py-2.5">
-                <div className="flex items-center justify-end gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                  {!item.isFolder && PREVIEWABLE.has(item.mimeType ?? '') && (
-                    <ActionBtn onClick={() => onPreview(item)} title="Vista previa">
-                      <EyeIcon />
-                    </ActionBtn>
+    <div className="mobile-scroll-x">
+      <table className="w-full text-sm">
+        <thead className="border-b border-gray-100 bg-gray-50/60">
+          <tr>
+            <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Nombre</th>
+            <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider hidden sm:table-cell">Tipo</th>
+            <th className="text-right px-4 py-2.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider hidden md:table-cell">Tamaño</th>
+            <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider hidden lg:table-cell">Modificado</th>
+            <th className="px-4 py-2.5 w-28" />
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-50">
+          {items.map(item => {
+            const info = item.isFolder ? { icon: '📁', color: 'text-amber-400', label: 'Carpeta' } : getFileInfo(item.mimeType)
+            const isDeleting = deletingId === item.id
+            return (
+              <tr key={item.id} className={`hover:bg-gray-50/60 transition-colors group ${isDeleting ? 'opacity-30' : ''}`}>
+                {/* Name */}
+                <td className="px-4 py-2.5">
+                  {renamingId === item.id ? (
+                    <div className="flex items-center gap-2">
+                      <span className="text-base">{info.icon}</span>
+                      <input
+                        autoFocus
+                        value={renameValue}
+                        onChange={e => onRenameChange(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') onRename(item); if (e.key === 'Escape') onCancelRename() }}
+                        onBlur={() => onRename(item)}
+                        className="flex-1 text-sm border border-blue-300 rounded px-2 py-0.5 outline-none focus:ring-1 focus:ring-blue-300"
+                      />
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => item.isFolder ? onEnter(item) : (!PREVIEWABLE.has(item.mimeType ?? '') ? window.open(item.webUrl, '_blank') : onPreview(item))}
+                      className="flex items-center gap-2 text-left w-full min-w-0"
+                    >
+                      <span className="text-base shrink-0">{info.icon}</span>
+                      <span className={`text-sm font-medium truncate ${item.isFolder ? 'text-[#2D3F52] hover:text-blue-600' : 'text-gray-800 hover:text-blue-600'} transition-colors`}>
+                        {item.name}
+                      </span>
+                    </button>
                   )}
-                  <ActionBtn onClick={() => window.open(item.webUrl, '_blank')} title="Abrir en OneDrive">
-                    <ExternalIcon />
-                  </ActionBtn>
-                  <ActionBtn onClick={() => onStartRename(item)} title="Renombrar">
-                    <PencilIcon />
-                  </ActionBtn>
-                  <ActionBtn onClick={() => onDelete(item)} title="Eliminar" danger>
-                    <TrashIcon />
-                  </ActionBtn>
-                </div>
-              </td>
-            </tr>
-          )
-        })}
-      </tbody>
-    </table>
+                </td>
+                {/* Type */}
+                <td className="px-4 py-2.5 hidden sm:table-cell">
+                  <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded bg-gray-100 ${info.color}`}>{info.label}</span>
+                </td>
+                {/* Size */}
+                <td className="px-4 py-2.5 text-right text-xs text-gray-400 tabular-nums hidden md:table-cell">
+                  {item.isFolder ? '—' : fmtSize(item.size)}
+                </td>
+                {/* Modified */}
+                <td className="px-4 py-2.5 text-xs text-gray-400 hidden lg:table-cell">
+                  {fmtDate(item.lastModified)}
+                </td>
+                {/* Actions */}
+                <td className="px-4 py-2.5">
+                  <div className="flex items-center justify-end gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                    {!item.isFolder && PREVIEWABLE.has(item.mimeType ?? '') && (
+                      <ActionBtn onClick={() => onPreview(item)} title="Vista previa">
+                        <EyeIcon />
+                      </ActionBtn>
+                    )}
+                    <ActionBtn onClick={() => window.open(item.webUrl, '_blank')} title="Abrir en OneDrive">
+                      <ExternalIcon />
+                    </ActionBtn>
+                    <ActionBtn onClick={() => onStartRename(item)} title="Renombrar">
+                      <PencilIcon />
+                    </ActionBtn>
+                    <ActionBtn onClick={() => onDelete(item)} title="Eliminar" danger>
+                      <TrashIcon />
+                    </ActionBtn>
+                  </div>
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
   )
 }
 

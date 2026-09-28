@@ -202,6 +202,7 @@ export async function getUnreadNotifications(userId: string, userName: string, l
     `with scoped as (
        select *, coalesce(entity_type || ':' || entity_id, 'row:' || id::text) as group_key
        from notifications where (user_id = $1 or user_name = $2) and read_at is null
+         and created_at >= (date_trunc('day', now() at time zone 'America/Montevideo') at time zone 'America/Montevideo')
      )
      select
        (array_agg(id order by created_at desc))[1] as id,

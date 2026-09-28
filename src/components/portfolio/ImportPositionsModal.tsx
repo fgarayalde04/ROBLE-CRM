@@ -203,24 +203,26 @@ export default function ImportPositionsModal({ accountNumber, onClose, onImporte
               <div>
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Vista previa</p>
                 <div className="border border-gray-200 rounded-lg overflow-hidden">
-                  <table className="w-full text-xs">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="text-left px-2.5 py-1.5 text-[10px] font-semibold text-gray-500">Activo</th>
-                        <th className="text-right px-2.5 py-1.5 text-[10px] font-semibold text-gray-500">Market Value</th>
-                        <th className="text-right px-2.5 py-1.5 text-[10px] font-semibold text-gray-500">%</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-50">
-                      {preview.parsed.positions.slice(0, 6).map((p, i) => (
-                        <tr key={i}>
-                          <td className="px-2.5 py-1.5 text-gray-700 truncate max-w-[220px]">{p.name}</td>
-                          <td className="px-2.5 py-1.5 text-right text-gray-700 font-mono">{fmtUSD(p.marketValue)}</td>
-                          <td className="px-2.5 py-1.5 text-right text-gray-500">{p.weight.toFixed(1)}%</td>
+                  <div className="mobile-scroll-x">
+                    <table className="w-full text-xs">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="text-left px-2.5 py-1.5 text-[10px] font-semibold text-gray-500">Activo</th>
+                          <th className="text-right px-2.5 py-1.5 text-[10px] font-semibold text-gray-500">Market Value</th>
+                          <th className="text-right px-2.5 py-1.5 text-[10px] font-semibold text-gray-500">%</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody className="divide-y divide-gray-50">
+                        {preview.parsed.positions.slice(0, 6).map((p, i) => (
+                          <tr key={i}>
+                            <td className="px-2.5 py-1.5 text-gray-700 truncate max-w-[220px]">{p.name}</td>
+                            <td className="px-2.5 py-1.5 text-right text-gray-700 font-mono">{fmtUSD(p.marketValue)}</td>
+                            <td className="px-2.5 py-1.5 text-right text-gray-500">{p.weight.toFixed(1)}%</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                   {preview.parsed.positions.length > 6 && (
                     <div className="px-2.5 py-1.5 text-[11px] text-gray-400 bg-gray-50">…y {preview.parsed.positions.length - 6} más</div>
                   )}

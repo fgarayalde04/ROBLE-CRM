@@ -186,13 +186,13 @@ export default function ReviewClient({ uploadId }: { uploadId: string }) {
   }
 
   if (loading) return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <div className="p-4 md:p-6 max-w-6xl mx-auto">
       <div className="py-24 text-center text-sm text-gray-400">Cargando análisis…</div>
     </div>
   )
 
   if (error) return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <div className="p-4 md:p-6 max-w-6xl mx-auto">
       <p className="text-red-500 text-sm">{error}</p>
     </div>
   )
@@ -214,7 +214,7 @@ export default function ReviewClient({ uploadId }: { uploadId: string }) {
   const acSorted = Object.entries(acBreakdown).sort((a, b) => b[1] - a[1])
 
   return (
-    <div className="p-6 max-w-6xl mx-auto space-y-6">
+    <div className="p-4 md:p-6 max-w-6xl mx-auto space-y-6">
       {/* Breadcrumb */}
       <div className="flex items-center gap-2 text-sm text-gray-500">
         <Link href="/suitability" className="hover:text-gray-700 transition-colors">Suitability</Link>

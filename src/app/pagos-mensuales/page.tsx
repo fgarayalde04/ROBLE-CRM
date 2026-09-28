@@ -113,7 +113,7 @@ export default async function PagosMensualesPage({
   const companyLabel = company === 'roble' ? 'Roble' : 'Geliene'
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 md:p-6 space-y-6">
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-[#2D3F52]">Pagos mensuales</h1>

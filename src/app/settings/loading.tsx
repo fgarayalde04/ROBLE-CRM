@@ -1,6 +1,6 @@
 export default function SettingsLoading() {
   return (
-    <div className="p-6 bg-[#F4F6F8] min-h-screen animate-pulse">
+    <div className="p-4 md:p-6 bg-[#F4F6F8] min-h-screen animate-pulse">
       <div className="mb-6 space-y-2">
         <div className="h-5 w-36 bg-gray-200 rounded" />
         <div className="h-3 w-48 bg-gray-200 rounded" />

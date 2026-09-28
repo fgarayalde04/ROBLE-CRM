@@ -232,7 +232,7 @@ export default function ImportWizard() {
       {/* Step 1: Seleccionar tipo */}
       <section className="bg-white rounded-lg border border-gray-200 p-5 space-y-4">
         <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-widest">1. Tipo de datos</h2>
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {FILE_TYPES.map((t) => (
             <button
               key={t.value}

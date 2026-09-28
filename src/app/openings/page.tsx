@@ -105,6 +105,22 @@ export default async function OpeningsPage({ searchParams }: Props) {
     { key: 'todas', label: 'Todas' },
   ]
 
+  function rowInfo(o: (typeof openings)[number]) {
+    const isTerminal = TERMINAL_STATUSES.includes(o.status as OpeningStatus)
+    const days = isTerminal && o.account_opened_at
+      ? differenceInDays(parseISO(o.account_opened_at), parseISO(o.start_date))
+      : differenceInDays(today, parseISO(o.start_date))
+    const checklist = o.checklist_items ?? []
+    return {
+      days,
+      isDelayed: !isTerminal && days > 30,
+      checklistDone: checklist.filter((i) => i.completed).length,
+      checklistTotal: checklist.length,
+      openNotes: openNotesByOpening[o.id] ?? 0,
+      pendingTasks: pendingTasksByOpening[o.id] ?? 0,
+    }
+  }
+
   return (
     <div className="p-4 md:p-8">
       <AutoRefresh intervalMs={5000} />
@@ -132,7 +148,7 @@ export default async function OpeningsPage({ searchParams }: Props) {
       </div>
 
       {/* KPI cards */}
-      <div className="grid grid-cols-4 gap-3 mb-5">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
         <div className="bg-white rounded-lg border border-[#E2E8F0] p-4">
           <p className="text-xs text-gray-400">Activas</p>
           <p className="text-2xl font-bold text-gray-900 mt-1">{kpiActivas}</p>
@@ -182,114 +198,167 @@ export default async function OpeningsPage({ searchParams }: Props) {
             </Link>
           </div>
         ) : (
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Cliente / Carpeta</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Estado</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Asesor</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Dias</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Checklist</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Notas</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Tareas</th>
-                <th className="px-4 py-3"></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {filtered.map((o) => {
-                const isTerminal = TERMINAL_STATUSES.includes(o.status as OpeningStatus)
-                const days = isTerminal && o.account_opened_at
-                  ? differenceInDays(parseISO(o.account_opened_at), parseISO(o.start_date))
-                  : differenceInDays(today, parseISO(o.start_date))
-                const isDelayed = !isTerminal && days > 30
-
-                const checklist = o.checklist_items ?? []
-                const checklistDone = checklist.filter((i) => i.completed).length
-                const checklistTotal = checklist.length
-
-                const openNotes = openNotesByOpening[o.id] ?? 0
-                const pendingTasks = pendingTasksByOpening[o.id] ?? 0
-
-                return (
-                  <tr key={o.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-4 py-3">
-                      <div>
-                        <Link
-                          href={`/openings/${o.id}`}
-                          className="font-medium text-gray-900 hover:text-blue-600 hover:underline"
-                        >
-                          {o.folder_name}
+          <>
+          {/* Celular: tarjetas en vez de tabla de 8 columnas */}
+          <ul className="md:hidden divide-y divide-gray-100">
+            {filtered.map((o) => {
+              const { days, isDelayed, checklistDone, checklistTotal, openNotes, pendingTasks } = rowInfo(o)
+              return (
+                <li key={o.id} className="px-4 py-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <Link href={`/openings/${o.id}`} className="block font-medium text-gray-900 truncate">
+                        {o.folder_name}
+                      </Link>
+                      {o.client && (
+                        <Link href={`/clients/${o.client.id}`} className="block text-xs text-gray-400 truncate">
+                          {o.client.first_name} {o.client.last_name}
                         </Link>
-                        {o.client && (
-                          <div className="mt-0.5">
-                            <Link
-                              href={`/clients/${o.client.id}`}
-                              className="text-xs text-gray-400 hover:text-blue-600 hover:underline"
-                            >
-                              {o.client.first_name} {o.client.last_name}
-                            </Link>
-                          </div>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className={`text-[10px] font-medium px-2 py-0.5 rounded border ${STATUS_COLOR[o.status as OpeningStatus]}`}>
-                          {STATUS_LABEL[o.status as OpeningStatus]}
-                        </span>
-                        {(o.priority === 'alta' || o.priority === 'urgente') && (
-                          <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${PRIORITY_COLOR[o.priority]}`}>
-                            {o.priority.charAt(0).toUpperCase() + o.priority.slice(1)}
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-gray-500 text-xs">{o.advisor ?? '—'}</td>
-                    <td className="px-4 py-3">
-                      <span className={`text-xs font-medium ${isDelayed ? 'text-red-600' : 'text-gray-500'}`}>
-                        {o.status === 'descartado' ? '—' : `${days}d`}
+                      )}
+                    </div>
+                    <span className={`shrink-0 text-xs font-medium ${isDelayed ? 'text-red-600' : 'text-gray-500'}`}>
+                      {o.status === 'descartado' ? '—' : `${days}d`}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
+                    <span className={`text-[10px] font-medium px-2 py-0.5 rounded border ${STATUS_COLOR[o.status as OpeningStatus]}`}>
+                      {STATUS_LABEL[o.status as OpeningStatus]}
+                    </span>
+                    {(o.priority === 'alta' || o.priority === 'urgente') && (
+                      <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${PRIORITY_COLOR[o.priority]}`}>
+                        {o.priority.charAt(0).toUpperCase() + o.priority.slice(1)}
                       </span>
-                    </td>
-                    <td className="px-4 py-3 text-xs text-gray-500">
-                      {checklistTotal > 0 ? `${checklistDone}/${checklistTotal}` : '—'}
-                    </td>
-                    <td className="px-4 py-3">
-                      {openNotes > 0 ? (
-                        <span className="text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
-                          {openNotes}
+                    )}
+                    {checklistTotal > 0 && (
+                      <span className="text-[10px] text-gray-500">Checklist {checklistDone}/{checklistTotal}</span>
+                    )}
+                    {openNotes > 0 && (
+                      <span className="text-[10px] font-medium text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
+                        {openNotes} nota{openNotes === 1 ? '' : 's'}
+                      </span>
+                    )}
+                    {pendingTasks > 0 && (
+                      <span className="text-[10px] font-medium text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded">
+                        {pendingTasks} tarea{pendingTasks === 1 ? '' : 's'}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 mt-2">
+                    <span className="text-xs text-gray-400 truncate min-w-0 flex-1">{o.advisor ?? ''}</span>
+                    {o.status === 'carpeta_creada' && (
+                      <StartOpeningButton openingId={o.id} clientId={o.client?.id ?? null} />
+                    )}
+                    <Link
+                      href={`/openings/${o.id}`}
+                      className="text-xs px-3 py-1.5 border border-gray-200 rounded text-gray-600 whitespace-nowrap"
+                    >
+                      Ver detalle
+                    </Link>
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
+          <div className="hidden md:block mobile-scroll-x">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Cliente / Carpeta</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Estado</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Asesor</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Dias</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Checklist</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Notas</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Tareas</th>
+                  <th className="px-4 py-3"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {filtered.map((o) => {
+                  const { days, isDelayed, checklistDone, checklistTotal, openNotes, pendingTasks } = rowInfo(o)
+
+                  return (
+                    <tr key={o.id} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-4 py-3">
+                        <div>
+                          <Link
+                            href={`/openings/${o.id}`}
+                            className="font-medium text-gray-900 hover:text-blue-600 hover:underline"
+                          >
+                            {o.folder_name}
+                          </Link>
+                          {o.client && (
+                            <div className="mt-0.5">
+                              <Link
+                                href={`/clients/${o.client.id}`}
+                                className="text-xs text-gray-400 hover:text-blue-600 hover:underline"
+                              >
+                                {o.client.first_name} {o.client.last_name}
+                              </Link>
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className={`text-[10px] font-medium px-2 py-0.5 rounded border ${STATUS_COLOR[o.status as OpeningStatus]}`}>
+                            {STATUS_LABEL[o.status as OpeningStatus]}
+                          </span>
+                          {(o.priority === 'alta' || o.priority === 'urgente') && (
+                            <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${PRIORITY_COLOR[o.priority]}`}>
+                              {o.priority.charAt(0).toUpperCase() + o.priority.slice(1)}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-gray-500 text-xs">{o.advisor ?? '—'}</td>
+                      <td className="px-4 py-3">
+                        <span className={`text-xs font-medium ${isDelayed ? 'text-red-600' : 'text-gray-500'}`}>
+                          {o.status === 'descartado' ? '—' : `${days}d`}
                         </span>
-                      ) : (
-                        <span className="text-gray-300 text-xs">—</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      {pendingTasks > 0 ? (
-                        <span className="text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded">
-                          {pendingTasks}
-                        </span>
-                      ) : (
-                        <span className="text-gray-300 text-xs">—</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-1">
-                        {o.status === 'carpeta_creada' && (
-                          <StartOpeningButton openingId={o.id} clientId={o.client?.id ?? null} />
+                      </td>
+                      <td className="px-4 py-3 text-xs text-gray-500">
+                        {checklistTotal > 0 ? `${checklistDone}/${checklistTotal}` : '—'}
+                      </td>
+                      <td className="px-4 py-3">
+                        {openNotes > 0 ? (
+                          <span className="text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
+                            {openNotes}
+                          </span>
+                        ) : (
+                          <span className="text-gray-300 text-xs">—</span>
                         )}
-                        <Link
-                          href={`/openings/${o.id}`}
-                          className="text-xs px-3 py-1 border border-gray-200 rounded text-gray-600 hover:bg-gray-50 transition-colors whitespace-nowrap"
-                        >
-                          Ver detalle
-                        </Link>
-                        <DeleteOpeningButton openingId={o.id} folderName={o.folder_name} />
-                      </div>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+                      </td>
+                      <td className="px-4 py-3">
+                        {pendingTasks > 0 ? (
+                          <span className="text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded">
+                            {pendingTasks}
+                          </span>
+                        ) : (
+                          <span className="text-gray-300 text-xs">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-1">
+                          {o.status === 'carpeta_creada' && (
+                            <StartOpeningButton openingId={o.id} clientId={o.client?.id ?? null} />
+                          )}
+                          <Link
+                            href={`/openings/${o.id}`}
+                            className="text-xs px-3 py-1 border border-gray-200 rounded text-gray-600 hover:bg-gray-50 transition-colors whitespace-nowrap"
+                          >
+                            Ver detalle
+                          </Link>
+                          <DeleteOpeningButton openingId={o.id} folderName={o.folder_name} />
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+          </>
         )}
       </div>
     </div>

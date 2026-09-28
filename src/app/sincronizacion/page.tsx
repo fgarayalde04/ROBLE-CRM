@@ -9,7 +9,7 @@ export default async function SincronizacionPage() {
   if (!session) redirect('/login')
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <div className="p-4 md:p-6 max-w-6xl mx-auto">
       <div className="mb-6">
         <h1 className="text-2xl font-semibold" style={{ color: '#2D3F52' }}>
           Sincronizacion

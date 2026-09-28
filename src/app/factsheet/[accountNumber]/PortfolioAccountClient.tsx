@@ -416,8 +416,8 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
         onAddMorgan={!isConsolidated && custodians.length === 1 && custodians[0]?.custodian === 'Pershing' ? () => setShowAddMorgan(true) : undefined} />
 
       {custodians.length > 1 && (
-        <div className="bg-white border-b border-gray-100 px-6">
-          <div className="max-w-6xl mx-auto flex items-center gap-1 py-2">
+        <div className="bg-white border-b border-gray-100 px-4 md:px-6">
+          <div className="max-w-6xl mx-auto flex items-center gap-1 py-2 overflow-x-auto">
             <span className="text-[11px] text-gray-400 mr-1">Custodio:</span>
             {[...custodians.map(c => c.custodian), 'consolidado'].map(c => {
               const active = (custodianParam ?? custodians[0]?.custodian) === c || (c === 'consolidado' && isConsolidated)
@@ -433,7 +433,7 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
         </div>
       )}
       {isConsolidated && consolidatedWarnings.length > 0 && (
-        <div className="max-w-6xl mx-auto px-6 pt-3">
+        <div className="max-w-6xl mx-auto px-4 md:px-6 pt-3">
           {consolidatedWarnings.map((w, i) => (
             <p key={i} className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-1">⚠ {w}</p>
           ))}
@@ -466,20 +466,20 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
         isConsolidated={isConsolidated} custodianByPositionId={custodianByPositionId} custodianBreakdown={custodianBreakdown} />
 
       {/* Tabs */}
-      <div className="bg-white border-b border-gray-200 px-6">
-        <div className="max-w-6xl mx-auto flex gap-1">
+      <div className="bg-white border-b border-gray-200 px-4 md:px-6">
+        <div className="max-w-6xl mx-auto flex gap-1 overflow-x-auto">
           {([
             ['resumen', 'Resumen'], ['posiciones', 'Posiciones'], ['rendimiento', 'Rendimiento'], ['movimientos', 'Movimientos'], ['dividendos', 'Dividendos'],
           ] as [Tab, string][]).map(([key, label]) => (
             <button key={key} onClick={() => setTab(key)}
-              className={`px-4 py-3 text-sm font-semibold border-b-2 transition ${tab === key ? 'border-[#2E7D52] text-[#1B3A2B]' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>
+              className={`px-3 md:px-4 py-3 text-sm font-semibold whitespace-nowrap border-b-2 transition ${tab === key ? 'border-[#2E7D52] text-[#1B3A2B]' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>
               {label}
             </button>
           ))}
         </div>
       </div>
 
-      <div className="max-w-6xl mx-auto p-6">
+      <div className="max-w-6xl mx-auto p-4 md:p-6">
         {tab === 'resumen' && (
           <ResumenTab
             accountNumber={accountNumber}
@@ -539,8 +539,8 @@ function Header({ router, account, accountNumber, importRow, onImport, onHistory
   const [nameDraft, setNameDraft] = useState('')
 
   return (
-    <div className="bg-white border-b border-gray-200 px-6 py-4 sticky top-0 z-10">
-      <div className="max-w-6xl mx-auto flex items-center justify-between gap-4">
+    <div className="bg-white border-b border-gray-200 px-4 md:px-6 py-3 md:py-4 sticky top-14 md:top-0 z-10">
+      <div className="max-w-6xl mx-auto flex items-center justify-between flex-wrap gap-4">
         <div className="min-w-0">
           <button onClick={() => router.push('/factsheet')} className="text-xs text-gray-400 hover:text-gray-600 transition mb-1">← Portafolio</button>
           {account?.clientName ? (
@@ -601,7 +601,7 @@ function Header({ router, account, accountNumber, importRow, onImport, onHistory
             )}
           </div>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center flex-wrap gap-2">
           <button onClick={onHistory} className="px-3 py-2 text-xs font-semibold text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 transition">
             Historial de importaciones
           </button>

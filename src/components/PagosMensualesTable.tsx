@@ -824,7 +824,7 @@ export default function PagosMensualesTable({
 
       {/* Copy month modal */}
       {showCopyModal && (
-        <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center">
+        <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl p-6 w-80 shadow-xl space-y-4">
             <h3 className="font-semibold text-[#2D3F52]">Copiar mes</h3>
             <div>

@@ -34,6 +34,11 @@ export interface NotificationRow {
 // group, keyed by their own id, so they display exactly as before.
 const GROUP_KEY = `coalesce(entity_type || ':' || entity_id, 'row:' || id::text)`
 
+// La campana se limpia sola cada día: solo cuenta y lista las notificaciones
+// creadas hoy (Montevideo). Las anteriores quedan en la tabla — no se borran,
+// así el dedup de createNotification sigue funcionando.
+const TODAY_ONLY = `created_at >= (date_trunc('day', now() at time zone 'America/Montevideo') at time zone 'America/Montevideo')`
+
 // Marca como leídas TODAS las notificaciones sin leer de un tipo dado, para
 // todos los usuarios — usado por avisos "de una vez al día" (ej. Morning
 // Brief) para que solo quede visible la del día que llega, en vez de
@@ -70,7 +75,7 @@ export async function listNotificationsForUser(userId: string, userName: string,
   const { rows } = await pool.query(
     `with scoped as (
        select *, ${GROUP_KEY} as group_key
-       from notifications where (user_id = $1 or user_name = $2) and read_at is null
+       from notifications where (user_id = $1 or user_name = $2) and read_at is null and ${TODAY_ONLY}
      )
      select
        (array_agg(id order by created_at desc))[1] as id,
@@ -99,7 +104,7 @@ export async function getUnreadCount(userId: string, userName: string) {
   const { rows } = await pool.query(
     `with scoped as (
        select *, ${GROUP_KEY} as group_key
-       from notifications where (user_id = $1 or user_name = $2)
+       from notifications where (user_id = $1 or user_name = $2) and ${TODAY_ONLY}
      )
      select count(*) from (
        select group_key from scoped group by group_key having bool_or(read_at is null)

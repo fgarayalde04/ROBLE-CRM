@@ -367,7 +367,7 @@ export default function CuadernoClient() {
     <div className="p-4 md:p-6 max-w-5xl">
 
       {/* Header */}
-      <div className="flex items-center justify-between mb-5">
+      <div className="flex items-center justify-between flex-wrap gap-3 mb-5">
         <div>
           <h1 className="text-xl font-semibold text-[#2D3F52]">Cuaderno</h1>
           <p className="text-sm text-gray-400 mt-0.5">Tareas y notas del día</p>

@@ -36,31 +36,33 @@ export default function MovimientosTab({
               {cashProjImport.total_cash_flow != null && <> Total proyectado: <strong className="text-gray-600">{fmtUSD2(Number(cashProjImport.total_cash_flow))}</strong>.</>}
             </p>
             <div className="border border-gray-200 rounded-lg overflow-hidden">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="text-left px-3 py-2 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Fecha de pago</th>
-                    <th className="text-left px-3 py-2 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Instrumento</th>
-                    <th className="text-left px-3 py-2 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Tipo</th>
-                    <th className="text-right px-3 py-2 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Monto estimado</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {cashProjRows.map(r => (
-                    <tr key={r.id}>
-                      <td className="px-3 py-2 text-gray-800 font-medium whitespace-nowrap">{fmtDate(r.pay_date)}</td>
-                      <td className="px-3 py-2 text-gray-600 max-w-[320px] truncate">{r.description}</td>
-                      <td className="px-3 py-2 text-gray-500">{r.distribution_type ?? '—'}</td>
-                      <td className="px-3 py-2 text-right text-gray-900 font-semibold font-mono">
-                        {r.estimated_amount != null ? fmtUSD2(Number(r.estimated_amount)) : '—'}
-                      </td>
+              <div className="mobile-scroll-x">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="text-left px-3 py-2 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Fecha de pago</th>
+                      <th className="text-left px-3 py-2 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Instrumento</th>
+                      <th className="text-left px-3 py-2 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Tipo</th>
+                      <th className="text-right px-3 py-2 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Monto estimado</th>
                     </tr>
-                  ))}
-                  {cashProjRows.length === 0 && (
-                    <tr><td colSpan={4} className="px-3 py-8 text-center text-sm text-gray-400">Sin pagos proyectados</td></tr>
-                  )}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {cashProjRows.map(r => (
+                      <tr key={r.id}>
+                        <td className="px-3 py-2 text-gray-800 font-medium whitespace-nowrap">{fmtDate(r.pay_date)}</td>
+                        <td className="px-3 py-2 text-gray-600 max-w-[320px] truncate">{r.description}</td>
+                        <td className="px-3 py-2 text-gray-500">{r.distribution_type ?? '—'}</td>
+                        <td className="px-3 py-2 text-right text-gray-900 font-semibold font-mono">
+                          {r.estimated_amount != null ? fmtUSD2(Number(r.estimated_amount)) : '—'}
+                        </td>
+                      </tr>
+                    ))}
+                    {cashProjRows.length === 0 && (
+                      <tr><td colSpan={4} className="px-3 py-8 text-center text-sm text-gray-400">Sin pagos proyectados</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
             <p className="text-[10px] text-gray-400 mt-2">
               Los montos son estimados a partir del cupón informado por el custodio — pueden variar frente al pago real.

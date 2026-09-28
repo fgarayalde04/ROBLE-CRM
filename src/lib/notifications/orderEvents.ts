@@ -4,8 +4,9 @@
 // "qué evento de Órdenes le corresponde a quién".
 
 import { createNotification } from '@/lib/db/notifications'
-import { getUsersByRoles } from '@/lib/db/users'
+import { getUsersByRoles, getUserIdsByEmails } from '@/lib/db/users'
 import { sendPushNotification } from '@/lib/push/server'
+import { extractReplyText } from '@/lib/mailWatch/replyMatching'
 
 const MESA_ROLES = ['admin', 'ceo', 'direccion', 'mesa', 'asistente']
 
@@ -166,4 +167,105 @@ export async function notifyOrdenEjecutada(order: OrderCtx) {
     url: orderUrl(order.id),
     push: { title: '✅ Orden ejecutada', body: `La operación de ${client} fue ejecutada correctamente.` },
   })
+}
+
+// ─── Respuestas de clientes en trading@ ──────────────────────────────────────
+
+export interface ReplyCtx {
+  replyId: string                              // email_replies.id — entity_id de la notificación
+  solicitudId: string | null                   // orden uuid — null si no se pudo asociar a ninguna
+  threadId: string                             // hilo de Gmail — agrupa los push del mismo hilo
+  clientName: string | null
+  fromEmail: string
+  subject: string
+  snippet: string
+  matchMethod: 'thread_id' | 'referencia' | 'subject_fallback' | 'unmatched'
+}
+
+const PUSH_SNIPPET_MAX = 110
+const MESSAGE_SNIPPET_MAX = 240
+
+// "Re: Confirmacion de orden - 1234 - 2026-09-18" → "Confirmacion de orden - 1234 - 2026-09-18"
+function cleanSubject(subject: string) {
+  return subject.replace(/^\s*((re|rv|fwd|fw)\s*:\s*)+/i, '').trim()
+}
+
+function truncate(text: string, max: number) {
+  return text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text
+}
+
+// El cliente respondió un mail enviado desde trading@ — interna + push, al
+// instante. entity_id es el id de la respuesta (email_replies.id), NO el de la
+// orden: si el cliente responde varias veces, cada respuesta es un mensaje de
+// Gmail distinto y debe generar su propia notificación — con el id de la orden
+// chocaría con el dedup (entity_id, notif_type, user_name) y la segunda se perdería.
+//
+// Destinatarios: el asesor dueño de la orden (solo ve las respuestas de sus
+// clientes) + toda la Mesa/admin/asistentes (ven todo, incluidas las que no se
+// pudieron asociar a una orden, para revisarlas a mano). Si el asesor además
+// tiene rol de Mesa, el dedup hace que reciba una sola.
+export async function notifyClienteRespondio(
+  reply: ReplyCtx,
+  asesor: { id: string | null; name: string } | null,
+  decision: 'aprobada' | 'rechazada' | null = null,
+) {
+  const isUnmatched = reply.matchMethod === 'unmatched'
+  const who = reply.clientName ?? reply.fromEmail
+  const subject = cleanSubject(reply.subject)
+  // Lo que escribió el cliente (sin la cita del mail original) es lo que
+  // importa: con eso se sabe si aprobó o no sin abrir el mail.
+  const replyText = extractReplyText(reply.snippet)
+  const suffix = reply.matchMethod === 'subject_fallback' ? ' (asociada por asunto)' : ''
+
+  const title = isUnmatched ? '💬 Respuesta sin identificar'
+    : decision === 'aprobada' ? `✅ ${who} aprobó la orden`
+    : decision === 'rechazada' ? `❌ ${who} no aprobó la orden`
+    : `💬 ${who} respondió`
+  const said = replyText ? `: "${truncate(replyText, MESSAGE_SNIPPET_MAX)}"` : ''
+  const message = isUnmatched
+    ? `${reply.fromEmail} respondió "${subject}"${said} — no se pudo asociar a ninguna orden, revisar manualmente.`
+    : `${who} respondió${said} — ${subject}.${suffix}`
+  const url = reply.solicitudId ? orderUrl(reply.solicitudId) : '/solicitudes?respuestas=1'
+  const push = {
+    title,
+    // Lo que respondió arriba, el asunto (qué orden) abajo.
+    body: replyText ? `"${truncate(replyText, PUSH_SNIPPET_MAX)}"\n${subject}` : subject,
+    tag: `mail-reply-${reply.threadId}`,
+  }
+
+  const common = {
+    notifType: 'cliente_respondio',
+    title,
+    message,
+    clientName: reply.clientName,
+    entityId: reply.replyId,
+    entityType: 'email_reply',
+    url,
+    push,
+  }
+
+  const recipients = await clientResponseRecipients(reply.solicitudId ? asesor : null)
+  await Promise.all(Array.from(recipients, ([userId, userName]) =>
+    notifyAndMaybePush({ ...common, userId, userName })
+  ))
+}
+
+// Quién se entera de lo que contesta un cliente: el asesor dueño de la orden +
+// toda la Mesa/admin/asistentes.
+async function clientResponseRecipients(asesor: { id: string | null; name: string } | null) {
+  const recipients = new Map<string, string>()
+  if (asesor?.id) recipients.set(asesor.id, asesor.name)
+  for (const r of await getUsersByRoles(MESA_ROLES)) recipients.set(r.id, r.name)
+
+  // Solo para probar: GMAIL_REPLY_NOTIFY_ONLY="a@x.com,b@y.com" acota los avisos a
+  // esos usuarios. Desarrollo tiene una copia de la DB de producción (con las
+  // suscripciones push de gente real) — sin esto, una prueba avisaría a todos.
+  const only = (process.env.GMAIL_REPLY_NOTIFY_ONLY ?? '').split(',').map((e) => e.trim()).filter(Boolean)
+  if (only.length > 0) {
+    const allowed = await getUserIdsByEmails(only)
+    for (const userId of Array.from(recipients.keys())) {
+      if (!allowed.has(userId)) recipients.delete(userId)
+    }
+  }
+  return recipients
 }

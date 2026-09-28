@@ -66,7 +66,7 @@ export default function BottomNav({ user, onMenuToggle }: Props) {
       {showAdvisorNav ? (
         /* ── Modo Asesor: 4 items ── */
         <>
-          {/* Órdenes */}
+          {/* Solicitudes */}
           <Link
             href="/ordenes"
             className={itemCls}
@@ -75,7 +75,7 @@ export default function BottomNav({ user, onMenuToggle }: Props) {
             <svg className="w-5 h-5" style={{ color: isOrdenes ? GREEN : GRAY }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
             </svg>
-            <span className="text-[10px] font-medium" style={{ color: isOrdenes ? GREEN : GRAY_LABEL }}>Órdenes</span>
+            <span className="text-[10px] font-medium" style={{ color: isOrdenes ? GREEN : GRAY_LABEL }}>Solicitudes</span>
           </Link>
 
           {/* Mail */}
@@ -125,7 +125,7 @@ export default function BottomNav({ user, onMenuToggle }: Props) {
             <svg className="w-5 h-5" style={{ color: isOrdenes ? GREEN : GRAY }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
             </svg>
-            <span className="text-[10px] font-medium" style={{ color: isOrdenes ? GREEN : GRAY_LABEL }}>Órdenes</span>
+            <span className="text-[10px] font-medium" style={{ color: isOrdenes ? GREEN : GRAY_LABEL }}>Solicitudes</span>
           </Link>
 
           <Link
@@ -136,7 +136,7 @@ export default function BottomNav({ user, onMenuToggle }: Props) {
             <svg className="w-5 h-5" style={{ color: isHistorial ? GREEN : GRAY }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <span className="text-[10px] font-medium" style={{ color: isHistorial ? GREEN : GRAY_LABEL }}>Historial</span>
+            <span className="text-[10px] font-medium" style={{ color: isHistorial ? GREEN : GRAY_LABEL }}>Blotter</span>
           </Link>
 
           <button

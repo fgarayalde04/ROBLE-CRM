@@ -9,7 +9,7 @@ export default async function ClavesPage() {
   if (!session) redirect('/login')
 
   return (
-    <div className="p-6 lg:p-8">
+    <div className="p-4 md:p-6 lg:p-8">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-[#2D3F52]">Claves</h1>
         <p className="text-sm text-gray-500 mt-1">Bóveda de accesos del equipo</p>

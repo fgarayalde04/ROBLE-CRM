@@ -27,3 +27,28 @@
     color: var(--text-primary);
   }
 }
+
+/* ── Celular ──────────────────────────────────────────────────────────────
+   - text-size-adjust: iOS no agranda letras solo al rotar.
+   - Inputs a 16px: con menos, iPhone hace zoom al tocar el campo y la
+     página queda agrandada y corrida hacia el costado.
+   - .mobile-scroll-x: contenedor para tablas anchas, que scrollean dentro
+     de su caja en vez de ensanchar toda la página. */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+@media (max-width: 767px) {
+  input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
+.mobile-scroll-x {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  max-width: 100%;
+}

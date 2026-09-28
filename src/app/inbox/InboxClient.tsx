@@ -334,7 +334,7 @@ export default function InboxClient({ initialData, todayEvents = [] }: { initial
     !showBcu
 
   return (
-    <div className="p-8 min-h-screen" style={{ backgroundColor: '#F4F6F8' }}>
+    <div className="p-4 md:p-8 min-h-screen" style={{ backgroundColor: '#F4F6F8' }}>
       {/* Header */}
       <div className="mb-6">
         <h1 className="text-2xl font-semibold text-[#2D3F52]">Inbox operativo</h1>

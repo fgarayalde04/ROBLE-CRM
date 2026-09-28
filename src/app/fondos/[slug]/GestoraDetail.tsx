@@ -106,63 +106,65 @@ function FondosTable({ rows, noSearch, total }: { rows: FondoWithFactsheet[]; no
 
   return (
     <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b border-gray-100 bg-gray-50/60">
-            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">Fondo</th>
-            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">Clase</th>
-            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">ISIN</th>
-            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">Moneda</th>
-            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">Factsheet</th>
-            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">Actualización</th>
-            <th className="px-4 py-3" />
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-gray-50">
-          {rows.map(f => (
-            <tr key={f.id} className="hover:bg-gray-50/50 transition-colors">
-              <td className="px-4 py-3.5">
-                <p className="font-medium text-gray-800 leading-tight">{f.name}</p>
-                {f.ticker && <p className="text-xs text-gray-400 mt-0.5">{f.ticker}</p>}
-              </td>
-              <td className="px-4 py-3.5 text-gray-500">{f.clase ?? '—'}</td>
-              <td className="px-4 py-3.5">
-                {f.isin ? (
-                  <span className="font-mono text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">{f.isin}</span>
-                ) : '—'}
-              </td>
-              <td className="px-4 py-3.5 text-gray-500">{f.moneda ?? '—'}</td>
-              <td className="px-4 py-3.5">
-                {f.latest_factsheet ? (
-                  <span className="text-xs text-gray-500">{f.latest_factsheet.file_name}</span>
-                ) : (
-                  <span className="text-xs text-gray-300">Sin factsheet</span>
-                )}
-              </td>
-              <td className="px-4 py-3.5 text-xs text-gray-400 whitespace-nowrap">
-                {f.latest_factsheet ? fmtDate(f.latest_factsheet.created_at) : '—'}
-              </td>
-              <td className="px-4 py-3.5">
-                {f.isin && f.latest_factsheet ? (
-                  <a
-                    href={`/api/fondos/factsheet/${f.isin}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-[#2D3F52] text-white rounded-lg text-xs font-medium hover:bg-opacity-90 transition-all whitespace-nowrap"
-                  >
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                    PDF
-                  </a>
-                ) : (
-                  <span className="text-xs text-gray-300">—</span>
-                )}
-              </td>
+      <div className="mobile-scroll-x">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-gray-100 bg-gray-50/60">
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">Fondo</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">Clase</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">ISIN</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">Moneda</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">Factsheet</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">Actualización</th>
+              <th className="px-4 py-3" />
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody className="divide-y divide-gray-50">
+            {rows.map(f => (
+              <tr key={f.id} className="hover:bg-gray-50/50 transition-colors">
+                <td className="px-4 py-3.5">
+                  <p className="font-medium text-gray-800 leading-tight">{f.name}</p>
+                  {f.ticker && <p className="text-xs text-gray-400 mt-0.5">{f.ticker}</p>}
+                </td>
+                <td className="px-4 py-3.5 text-gray-500">{f.clase ?? '—'}</td>
+                <td className="px-4 py-3.5">
+                  {f.isin ? (
+                    <span className="font-mono text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">{f.isin}</span>
+                  ) : '—'}
+                </td>
+                <td className="px-4 py-3.5 text-gray-500">{f.moneda ?? '—'}</td>
+                <td className="px-4 py-3.5">
+                  {f.latest_factsheet ? (
+                    <span className="text-xs text-gray-500">{f.latest_factsheet.file_name}</span>
+                  ) : (
+                    <span className="text-xs text-gray-300">Sin factsheet</span>
+                  )}
+                </td>
+                <td className="px-4 py-3.5 text-xs text-gray-400 whitespace-nowrap">
+                  {f.latest_factsheet ? fmtDate(f.latest_factsheet.created_at) : '—'}
+                </td>
+                <td className="px-4 py-3.5">
+                  {f.isin && f.latest_factsheet ? (
+                    <a
+                      href={`/api/fondos/factsheet/${f.isin}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-[#2D3F52] text-white rounded-lg text-xs font-medium hover:bg-opacity-90 transition-all whitespace-nowrap"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      PDF
+                    </a>
+                  ) : (
+                    <span className="text-xs text-gray-300">—</span>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }
@@ -183,36 +185,38 @@ function UnclassifiedTable({ rows }: { rows: Unclassified[] }) {
           Estos factsheets se importaron pero no se pudieron asociar a un fondo específico. Podés clasificarlos manualmente.
         </p>
       </div>
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b border-gray-100 bg-gray-50/60">
-            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">Archivo</th>
-            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">Fecha</th>
-            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">Importado</th>
-            <th className="px-4 py-3" />
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-gray-50">
-          {rows.map(u => (
-            <tr key={u.id} className="hover:bg-gray-50/50 transition-colors">
-              <td className="px-4 py-3.5 text-gray-700 font-medium">{u.file_name}</td>
-              <td className="px-4 py-3.5 text-gray-500 text-xs">{u.fecha_factsheet ? fmtDate(u.fecha_factsheet) : '—'}</td>
-              <td className="px-4 py-3.5 text-gray-400 text-xs">{fmtDate(u.created_at)}</td>
-              <td className="px-4 py-3.5">
-                {u.pdf_url && (
-                  <a href={u.pdf_url} target="_blank" rel="noopener noreferrer"
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-[#2D3F52] text-white rounded-lg text-xs font-medium hover:bg-opacity-90 transition-all">
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                    PDF
-                  </a>
-                )}
-              </td>
+      <div className="mobile-scroll-x">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-gray-100 bg-gray-50/60">
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">Archivo</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">Fecha</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">Importado</th>
+              <th className="px-4 py-3" />
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody className="divide-y divide-gray-50">
+            {rows.map(u => (
+              <tr key={u.id} className="hover:bg-gray-50/50 transition-colors">
+                <td className="px-4 py-3.5 text-gray-700 font-medium">{u.file_name}</td>
+                <td className="px-4 py-3.5 text-gray-500 text-xs">{u.fecha_factsheet ? fmtDate(u.fecha_factsheet) : '—'}</td>
+                <td className="px-4 py-3.5 text-gray-400 text-xs">{fmtDate(u.created_at)}</td>
+                <td className="px-4 py-3.5">
+                  {u.pdf_url && (
+                    <a href={u.pdf_url} target="_blank" rel="noopener noreferrer"
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-[#2D3F52] text-white rounded-lg text-xs font-medium hover:bg-opacity-90 transition-all">
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      PDF
+                    </a>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }

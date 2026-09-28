@@ -42,8 +42,8 @@ export default async function ProposalsPage() {
   }
 
   return (
-    <div className="p-8" style={{ backgroundColor: '#F4F6F8', minHeight: '100vh' }}>
-      <div className="flex items-start justify-between mb-8">
+    <div className="p-4 md:p-8" style={{ backgroundColor: '#F4F6F8', minHeight: '100vh' }}>
+      <div className="flex items-start justify-between flex-wrap gap-3 mb-8">
         <div>
           <h1 className="text-2xl font-semibold" style={{ color: '#2D3F52' }}>Propuestas de Inversión</h1>
           <p className="mt-1 text-sm text-gray-500">Creá, editá y generá propuestas profesionales para tus clientes</p>

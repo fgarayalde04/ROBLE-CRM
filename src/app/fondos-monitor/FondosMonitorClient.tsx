@@ -256,8 +256,8 @@ export default function FondosMonitorClient({ funds }: { funds: FundRow[] }) {
   }
 
   return (
-    <div className="max-w-[1900px] mx-auto p-6">
-      <div className="flex items-center justify-between mb-5">
+    <div className="max-w-[1900px] mx-auto p-4 md:p-6">
+      <div className="flex items-center justify-between flex-wrap gap-3 mb-5">
         <div>
           <h1 className="text-lg font-bold text-gray-900">Monitor de Fondos</h1>
           <p className="text-xs text-gray-400 mt-0.5">

@@ -211,7 +211,7 @@ export default function EventForm({ initial, mode }: Props) {
 
       <section className="bg-white rounded-lg border border-[#E2E8F0] p-5 space-y-4">
         <h2 className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest">Fecha y hora</h2>
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <Field label="Fecha *">
             <input required type="date" value={form.event_date} onChange={(e) => set('event_date', e.target.value)} className={inputClass} />
           </Field>

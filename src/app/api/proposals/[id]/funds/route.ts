@@ -15,6 +15,16 @@ function yearlyReturns(src: Record<string, unknown>) {
   return out
 }
 
+// Si la base todavía no tiene las columnas de años (migración pendiente en ese
+// ambiente), se guarda igual todo lo demás — un guardado nunca debe perder
+// YTD/1A/3A/5A por culpa de los años.
+function withoutYears<T extends Record<string, unknown>>(row: T): T {
+  const out: Record<string, unknown> = { ...row }
+  for (const c of YEAR_COLS) delete out[c]
+  return out as T
+}
+const isMissingColumn = (e: any) => e?.code === '42703'
+
 export async function POST(req: Request, { params }: { params: { id: string } }) {
   try {
     const session = await getSession()
@@ -23,7 +33,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     const body = await req.json()
     const position = await nextPosition(TABLE, params.id)
 
-    const data = await insertProposalLine(TABLE, {
+    const row = {
       proposal_id:      params.id,
       position,
       isin:             body.isin             ?? null,
@@ -45,7 +55,14 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       data_source:      body.data_source      ?? 'manual',
       needs_review:     body.needs_review     ?? false,
       extraction_notes: body.extraction_notes ?? null,
-    })
+    }
+    let data
+    try {
+      data = await insertProposalLine(TABLE, row)
+    } catch (e) {
+      if (!isMissingColumn(e)) throw e
+      data = await insertProposalLine(TABLE, withoutYears(row))
+    }
     return NextResponse.json(data)
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 })
@@ -66,7 +83,13 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       if (fields[c] !== undefined) allowed[c] = fields[c]
     }
 
-    const data = await updateProposalLine(TABLE, fund_id, params.id, allowed)
+    let data
+    try {
+      data = await updateProposalLine(TABLE, fund_id, params.id, allowed)
+    } catch (e) {
+      if (!isMissingColumn(e)) throw e
+      data = await updateProposalLine(TABLE, fund_id, params.id, withoutYears(allowed))
+    }
     return NextResponse.json(data)
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 })

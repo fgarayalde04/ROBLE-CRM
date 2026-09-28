@@ -14,7 +14,7 @@ export default async function LoginPage() {
     <div className="min-h-screen flex flex-col" style={{ backgroundColor: '#F0F2F5' }}>
       {/* Card */}
       <div className="flex-1 flex items-center justify-center px-4 py-8">
-        <div className="w-full max-w-md bg-white rounded-2xl shadow-md p-8">
+        <div className="w-full max-w-md bg-white rounded-2xl shadow-md p-6 md:p-8">
           {/* Logo */}
           <div className="flex justify-center mb-7">
             <Image

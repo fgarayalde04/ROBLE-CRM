@@ -6,7 +6,7 @@ export const metadata: Metadata = { title: 'Nuevo documento' }
 
 export default function NewDocumentPage() {
   return (
-    <div className="p-8">
+    <div className="p-4 md:p-8">
       <div className="flex items-center gap-2 text-xs text-gray-400 mb-6">
         <Link href="/documents" className="hover:text-gray-600">Documentos</Link>
         <span>/</span>

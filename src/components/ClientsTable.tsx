@@ -170,158 +170,162 @@ export default function ClientsTable({
             </p>
           </div>
         ) : isCerradosTab ? (
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-100">
-              <tr>
-                <th className="px-5 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide">
-                  <Link href={sortHrefs['nombre']} className="inline-flex items-center hover:text-[#2D3F52] transition-colors">
-                    Nombre<SortIcon col="nombre" />
-                  </Link>
-                </th>
-                <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Asesor</th>
-                <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Fecha cierre</th>
-                <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Cerrado por</th>
-                <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Motivo</th>
-                <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide">
-                  <Link href={sortHrefs['created_at']} className="inline-flex items-center hover:text-[#2D3F52] transition-colors">
-                    Fecha de alta<SortIcon col="created_at" />
-                  </Link>
-                </th>
-                <th className="px-4 py-3" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {clients.map((c) => (
-                <tr
-                  key={c.id}
-                  className={`hover:bg-gray-50/60 transition-colors bg-gray-50/30 cursor-pointer ${selectedId === c.id ? 'bg-blue-50/40' : ''}`}
-                  onClick={() => openPanel(c.id)}
-                >
-                  <td className="px-5 py-3">
-                    <span className="font-medium text-gray-500 hover:text-[#2D3F52] line-through decoration-gray-300">
-                      {c.first_name} {c.last_name}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    {c.advisor
-                      ? <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">{c.advisor}</span>
-                      : <span className="text-gray-300 text-xs">—</span>}
-                  </td>
-                  <td className="px-4 py-3 text-xs text-gray-500">
-                    {c.closed_at
-                      ? format(new Date(c.closed_at), "d MMM yyyy", { locale: es })
-                      : <span className="text-gray-300">—</span>}
-                  </td>
-                  <td className="px-4 py-3 text-xs text-gray-500">{c.closed_by ?? <span className="text-gray-300">—</span>}</td>
-                  <td className="px-4 py-3 text-xs text-gray-400 max-w-[200px] truncate">{c.close_reason ?? <span className="text-gray-300">—</span>}</td>
-                  <td className="px-4 py-3 text-xs text-gray-400">
-                    {c.created_at ? format(new Date(c.created_at), "d MMM yyyy", { locale: es }) : '—'}
-                  </td>
-                  <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                    <div className="flex items-center gap-1">
-                      <ClientStatusToggle
-                        clientId={c.id}
-                        clientName={`${c.first_name} ${c.last_name}`}
-                        isClosed={true}
-                        closedAt={c.closed_at}
-                        closedBy={c.closed_by}
-                        closeReason={c.close_reason}
-                      />
-                      <DeleteClientButton clientId={c.id} clientName={`${c.first_name} ${c.last_name}`} compact />
-                    </div>
-                  </td>
+          <div className="mobile-scroll-x">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 border-b border-gray-100">
+                <tr>
+                  <th className="px-5 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide">
+                    <Link href={sortHrefs['nombre']} className="inline-flex items-center hover:text-[#2D3F52] transition-colors">
+                      Nombre<SortIcon col="nombre" />
+                    </Link>
+                  </th>
+                  <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Asesor</th>
+                  <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Fecha cierre</th>
+                  <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Cerrado por</th>
+                  <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Motivo</th>
+                  <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide">
+                    <Link href={sortHrefs['created_at']} className="inline-flex items-center hover:text-[#2D3F52] transition-colors">
+                      Fecha de alta<SortIcon col="created_at" />
+                    </Link>
+                  </th>
+                  <th className="px-4 py-3" />
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        ) : (
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-100">
-              <tr>
-                <th className="px-5 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide">
-                  <Link href={sortHrefs['nombre']} className="inline-flex items-center hover:text-[#2D3F52] transition-colors">
-                    Nombre<SortIcon col="nombre" />
-                  </Link>
-                </th>
-                <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Asesor</th>
-                <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Estado</th>
-                <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Tareas</th>
-                <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide">
-                  <Link href={sortHrefs['created_at']} className="inline-flex items-center hover:text-[#2D3F52] transition-colors">
-                    Fecha de alta<SortIcon col="created_at" />
-                  </Link>
-                </th>
-                <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Carpeta</th>
-                <th className="px-3 py-3" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {clients.map((c) => {
-                const openTasks = taskCounts[c.id] ?? 0
-                const isClosed = c.status === 'inactivo'
-                return (
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {clients.map((c) => (
                   <tr
                     key={c.id}
-                    className={`hover:bg-gray-50/60 transition-colors cursor-pointer ${isClosed ? 'opacity-60' : ''} ${selectedId === c.id ? 'bg-blue-50/40' : ''}`}
+                    className={`hover:bg-gray-50/60 transition-colors bg-gray-50/30 cursor-pointer ${selectedId === c.id ? 'bg-blue-50/40' : ''}`}
                     onClick={() => openPanel(c.id)}
                   >
                     <td className="px-5 py-3">
-                      <span className={`font-medium ${isClosed ? 'text-gray-400 line-through decoration-gray-300' : 'text-[#2D3F52]'}`}>
+                      <span className="font-medium text-gray-500 hover:text-[#2D3F52] line-through decoration-gray-300">
                         {c.first_name} {c.last_name}
                       </span>
                     </td>
                     <td className="px-4 py-3">
                       {c.advisor
-                        ? <span className="text-xs font-medium text-[#2D3F52] bg-[#2D3F52]/5 px-2 py-0.5 rounded">{c.advisor}</span>
+                        ? <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">{c.advisor}</span>
                         : <span className="text-gray-300 text-xs">—</span>}
                     </td>
-                    <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                      {c.status === 'pendiente' || c.status === 'prospecto' ? (
-                        <span className="inline-flex items-center text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded">
-                          {c.status === 'prospecto' ? 'Pendiente' : 'En apertura'}
-                        </span>
-                      ) : (
-                        <ClientStatusToggle
-                          clientId={c.id}
-                          clientName={`${c.first_name} ${c.last_name}`}
-                          isClosed={isClosed}
-                          closedAt={c.closed_at}
-                          closedBy={c.closed_by}
-                          closeReason={c.close_reason}
-                        />
-                      )}
+                    <td className="px-4 py-3 text-xs text-gray-500">
+                      {c.closed_at
+                        ? format(new Date(c.closed_at), "d MMM yyyy", { locale: es })
+                        : <span className="text-gray-300">—</span>}
                     </td>
-                    <td className="px-4 py-3">
-                      {openTasks > 0 ? (
-                        <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded">
-                          <span>{openTasks}</span>
-                          <span className="text-amber-500">tarea{openTasks !== 1 ? 's' : ''}</span>
-                        </span>
-                      ) : <span className="text-gray-300 text-xs">—</span>}
-                    </td>
+                    <td className="px-4 py-3 text-xs text-gray-500">{c.closed_by ?? <span className="text-gray-300">—</span>}</td>
+                    <td className="px-4 py-3 text-xs text-gray-400 max-w-[200px] truncate">{c.close_reason ?? <span className="text-gray-300">—</span>}</td>
                     <td className="px-4 py-3 text-xs text-gray-400">
                       {c.created_at ? format(new Date(c.created_at), "d MMM yyyy", { locale: es }) : '—'}
                     </td>
                     <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                      <OneDriveFolderButton
-                        driveId={c.drive_id}
-                        itemId={c.item_id}
-                        webUrl={c.web_url ?? c.onedrive_folder_url}
-                        label="Abrir carpeta"
-                      />
-                    </td>
-                    <td className="px-3 py-3" onClick={(e) => e.stopPropagation()}>
-                      <DeleteClientButton
-                        clientId={c.id}
-                        clientName={`${c.first_name} ${c.last_name}`}
-                        compact
-                      />
+                      <div className="flex items-center gap-1">
+                        <ClientStatusToggle
+                          clientId={c.id}
+                          clientName={`${c.first_name} ${c.last_name}`}
+                          isClosed={true}
+                          closedAt={c.closed_at}
+                          closedBy={c.closed_by}
+                          closeReason={c.close_reason}
+                        />
+                        <DeleteClientButton clientId={c.id} clientName={`${c.first_name} ${c.last_name}`} compact />
+                      </div>
                     </td>
                   </tr>
-                )
-              })}
-            </tbody>
-          </table>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="mobile-scroll-x">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 border-b border-gray-100">
+                <tr>
+                  <th className="px-5 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide">
+                    <Link href={sortHrefs['nombre']} className="inline-flex items-center hover:text-[#2D3F52] transition-colors">
+                      Nombre<SortIcon col="nombre" />
+                    </Link>
+                  </th>
+                  <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Asesor</th>
+                  <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Estado</th>
+                  <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Tareas</th>
+                  <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide">
+                    <Link href={sortHrefs['created_at']} className="inline-flex items-center hover:text-[#2D3F52] transition-colors">
+                      Fecha de alta<SortIcon col="created_at" />
+                    </Link>
+                  </th>
+                  <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Carpeta</th>
+                  <th className="px-3 py-3" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {clients.map((c) => {
+                  const openTasks = taskCounts[c.id] ?? 0
+                  const isClosed = c.status === 'inactivo'
+                  return (
+                    <tr
+                      key={c.id}
+                      className={`hover:bg-gray-50/60 transition-colors cursor-pointer ${isClosed ? 'opacity-60' : ''} ${selectedId === c.id ? 'bg-blue-50/40' : ''}`}
+                      onClick={() => openPanel(c.id)}
+                    >
+                      <td className="px-5 py-3">
+                        <span className={`font-medium ${isClosed ? 'text-gray-400 line-through decoration-gray-300' : 'text-[#2D3F52]'}`}>
+                          {c.first_name} {c.last_name}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        {c.advisor
+                          ? <span className="text-xs font-medium text-[#2D3F52] bg-[#2D3F52]/5 px-2 py-0.5 rounded">{c.advisor}</span>
+                          : <span className="text-gray-300 text-xs">—</span>}
+                      </td>
+                      <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                        {c.status === 'pendiente' || c.status === 'prospecto' ? (
+                          <span className="inline-flex items-center text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded">
+                            {c.status === 'prospecto' ? 'Pendiente' : 'En apertura'}
+                          </span>
+                        ) : (
+                          <ClientStatusToggle
+                            clientId={c.id}
+                            clientName={`${c.first_name} ${c.last_name}`}
+                            isClosed={isClosed}
+                            closedAt={c.closed_at}
+                            closedBy={c.closed_by}
+                            closeReason={c.close_reason}
+                          />
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        {openTasks > 0 ? (
+                          <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded">
+                            <span>{openTasks}</span>
+                            <span className="text-amber-500">tarea{openTasks !== 1 ? 's' : ''}</span>
+                          </span>
+                        ) : <span className="text-gray-300 text-xs">—</span>}
+                      </td>
+                      <td className="px-4 py-3 text-xs text-gray-400">
+                        {c.created_at ? format(new Date(c.created_at), "d MMM yyyy", { locale: es }) : '—'}
+                      </td>
+                      <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                        <OneDriveFolderButton
+                          driveId={c.drive_id}
+                          itemId={c.item_id}
+                          webUrl={c.web_url ?? c.onedrive_folder_url}
+                          label="Abrir carpeta"
+                        />
+                      </td>
+                      <td className="px-3 py-3" onClick={(e) => e.stopPropagation()}>
+                        <DeleteClientButton
+                          clientId={c.id}
+                          clientName={`${c.first_name} ${c.last_name}`}
+                          compact
+                        />
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 

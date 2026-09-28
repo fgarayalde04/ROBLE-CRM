@@ -45,7 +45,7 @@ export default async function SettingsPage({
     : null
 
   return (
-    <div className="p-6 bg-[#F4F6F8] min-h-screen">
+    <div className="p-4 md:p-6 bg-[#F4F6F8] min-h-screen">
       <div className="mb-6">
         <h1 className="text-xl font-semibold text-[#2D3F52]">Configuración</h1>
         <p className="mt-0.5 text-sm text-gray-400">Perfil y conexiones externas</p>
