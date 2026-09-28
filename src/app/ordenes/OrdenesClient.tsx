@@ -389,8 +389,8 @@ export default function OrdenesClient({ gmailConnected, initialTab, isAdmin = fa
         { t: 'instrumentos', label: 'Instrumentos', short: 'Instr.' },
       ]
     : [
-        { t: 'enviar',          label: 'Enviar órdenes', short: 'Enviar órdenes' },
-        { t: 'mis-solicitudes', label: 'Historial',      short: 'Historial' },
+        { t: 'enviar',          label: 'Solicitudes', short: 'Solicitudes' },
+        { t: 'mis-solicitudes', label: 'Blotter',     short: 'Blotter' },
       ]
   const normalizeTab = (t?: Tab): Tab | undefined =>
     t === 'historial' || t === 'blotter-asesor' || t === 'mis-ordenes' ? 'mis-solicitudes'

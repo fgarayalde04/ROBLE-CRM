@@ -165,8 +165,8 @@ export default function Sidebar({ user, isOpen = false, onToggle }: Props) {
 
   // Simplified mobile nav items
   const advisorItems = [
-    { href: '/ordenes',                label: 'Enviar órdenes', subtitle: 'Crear y enviar instrucciones', icon: OrdersIcon },
-    { href: '/ordenes?tab=historial',  label: 'Historial',       subtitle: 'Órdenes enviadas',             icon: ClockIcon },
+    { href: '/ordenes',                label: 'Solicitudes',     subtitle: 'Enviar a Mesa de Operaciones', icon: OrdersIcon },
+    { href: '/ordenes?tab=historial',  label: 'Blotter',         subtitle: 'Historial de órdenes',         icon: ClockIcon },
     { href: '/research',               label: 'Research & Novedades', subtitle: 'Morning Brief y publicaciones', icon: ResearchIcon },
     { href: '/mail',                   label: 'Mail',            subtitle: 'Bandeja de entrada Gmail',     icon: MailIcon },
     { href: '/settings',               label: 'Configuración',   subtitle: 'Cuenta y Gmail',               icon: SettingsIconFn },
