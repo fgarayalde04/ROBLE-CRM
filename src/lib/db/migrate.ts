@@ -31,9 +31,11 @@ export async function runPendingMigrations() {
         await client.query('commit')
         console.log(`[migrate] aplicada ${file}`)
       } catch (e) {
+        // Se sigue con las demás: cortar acá dejaba sin aplicar todo lo que viene
+        // después en orden alfabético (factsheets.sql, de la época de Supabase,
+        // falla en Railway y bloqueaba las de solicitudes en producción).
         await client.query('rollback').catch(() => {})
         console.error(`[migrate] FALLÓ ${file}:`, e instanceof Error ? e.message : e)
-        return
       }
     }
   } finally {
