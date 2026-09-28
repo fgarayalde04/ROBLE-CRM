@@ -71,7 +71,7 @@ const ESTADO_CFG: Record<string, { label: string; color: string; bg: string; dot
   devuelta:           { label:'Devuelta',            color:'text-orange-700',  bg:'bg-orange-50',  dot:'bg-orange-400' },
   mesa_operaciones:   { label:'Trading Desk', color:'text-amber-700',   bg:'bg-amber-50',   dot:'bg-amber-400' },
   mail_enviado:       { label:'Mail enviado',        color:'text-indigo-700',  bg:'bg-indigo-50',  dot:'bg-indigo-400' },
-  aprobada_cliente:   { label:'Aprobada por cliente', color:'text-teal-700',   bg:'bg-teal-50',    dot:'bg-teal-500' },
+  aprobada_cliente:   { label:'Aprobada por cliente', color:'text-sky-700',   bg:'bg-sky-50',    dot:'bg-sky-500' },
   rechazada_cliente:  { label:'Rechazada por cliente', color:'text-red-700',   bg:'bg-red-50',     dot:'bg-red-500' },
   en_ejecucion:       { label:'En ejecución',        color:'text-purple-700',  bg:'bg-purple-50',  dot:'bg-purple-400' },
   ejecutada:          { label:'Ejecutada',           color:'text-emerald-700', bg:'bg-emerald-50', dot:'bg-emerald-500' },

@@ -99,8 +99,8 @@ function EstadoBadge({ estado }: { estado: string }) {
 // ─── Checkbox Cell ─────────────────────────────────────────────────────────────
 
 function CheckCell({
-  value, onChange, disabled, title
-}: { value: boolean; onChange?: () => void; disabled?: boolean; title?: string }) {
+  value, onChange, disabled, title, checkedClass = 'bg-emerald-500 border-emerald-500',
+}: { value: boolean; onChange?: () => void; disabled?: boolean; title?: string; checkedClass?: string }) {
   return (
     <div className="flex items-center justify-center">
       <button
@@ -109,7 +109,7 @@ function CheckCell({
         title={title}
         className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
           value
-            ? 'bg-emerald-500 border-emerald-500 text-white'
+            ? `${checkedClass} text-white`
             : 'border-gray-300 hover:border-gray-400 bg-white'
         } ${disabled || !onChange ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:scale-105'}`}
       >
@@ -128,7 +128,7 @@ function CheckCell({
 function HistorialModal({ modal, onClose }: { modal: HistorialModal; onClose: () => void }) {
   const TIPO_ICONS: Record<string, { icon: string; color: string }> = {
     orden_creada:            { icon: '📋', color: 'bg-blue-100' },
-    mail_respondido:         { icon: '✅', color: 'bg-green-100' },
+    mail_respondido:         { icon: '✅', color: 'bg-sky-100' },
     mail_respondido_revertido: { icon: '↩️', color: 'bg-yellow-100' },
     en_mercado:              { icon: '📈', color: 'bg-purple-100' },
     ejecutada:               { icon: '💰', color: 'bg-emerald-100' },
@@ -582,6 +582,7 @@ export default function BlotterTable({ isAdmin, userName, soloHoy = false }: Pro
                     <td className="px-2 py-2">
                       <CheckCell
                         value={row.mail_respondido}
+                        checkedClass="bg-sky-500 border-sky-500"
                         onChange={isAdmin && canEdit ? () => toggleMailRespondido(row) : undefined}
                         disabled={isPending || isCancelada}
                         title={row.mail_respondido_by ? `Registrado por ${row.mail_respondido_by} a las ${fmtTime(row.mail_respondido_at)}` : 'Sin respuesta aún'}

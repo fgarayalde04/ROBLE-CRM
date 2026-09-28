@@ -372,7 +372,7 @@ const ESTADO_CFG: Record<string, { label: string; color: string; dot: string }> 
   devuelta:           { label: 'Devuelta',           color: 'text-orange-700',  dot: 'bg-orange-400' },
   mesa_operaciones:   { label: 'Trading Desk',color: 'text-amber-700',   dot: 'bg-amber-400' },
   mail_enviado:       { label: 'Mail enviado',       color: 'text-indigo-700',  dot: 'bg-indigo-400' },
-  aprobada_cliente:   { label: 'Aprobada por cliente', color: 'text-teal-700',  dot: 'bg-teal-500' },
+  aprobada_cliente:   { label: 'Aprobada por cliente', color: 'text-sky-700',  dot: 'bg-sky-500' },
   rechazada_cliente:  { label: 'Rechazada por cliente', color: 'text-red-700',  dot: 'bg-red-500' },
   en_ejecucion:       { label: 'En ejecución',       color: 'text-purple-700',  dot: 'bg-purple-400' },
   ejecutada:          { label: 'Ejecutada',          color: 'text-emerald-700', dot: 'bg-emerald-500' },
