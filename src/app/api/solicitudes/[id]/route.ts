@@ -143,6 +143,8 @@ export async function PATCH(
 
     const data = await updateSolicitud(params.id, {
       estado: 'ejecutada', ejecutado_at: now, ejecutado_by: session.name,
+      // Operador = quien ejecuta la orden
+      operador: session.name, operador_id: session.id,
       precio_ejecutado: precioEjecutado, valor_efectivo: valorEfectivo,
     })
     await logEvento('ejecutada',
