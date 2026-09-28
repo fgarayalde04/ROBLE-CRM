@@ -33,6 +33,27 @@ describe('parseAprobacion', () => {
     expect(parseAprobacion('Apruebo. Saludos')).toEqual({ decision: 'aprobada', comentario: 'Saludos' })
     expect(parseAprobacion('no aprobado, prefiero esperar')).toEqual({ decision: 'rechazada', comentario: 'prefiero esperar' })
   })
+  it('frases actuales de los links', () => {
+    expect(parseAprobacion('Confirmo la orden Código de confirmación: ABCD2345 Comentarios: gracias')).toEqual({ decision: 'aprobada', comentario: 'gracias' })
+    expect(parseAprobacion('Prefiero no avanzar Código de confirmación: ABCD2345 Comentarios:')).toEqual({ decision: 'rechazada', comentario: null })
+    expect(parseAprobacion('Confirmo que recibí el mail')).toBeNull()
+  })
+  it('respuestas escritas a mano, cortas y claras', () => {
+    for (const t of ['Confirmado', 'Confirmado Juan Pérez', 'Hola, confirmado. Saludos', 'Ok, adelante', 'Sí, adelante',
+      'Dale!', 'Perfecto, muchas gracias', 'De acuerdo', 'No hay problema, adelante', 'Si. Gracias', 'Confirmo la operación, gracias']) {
+      expect(parseAprobacion(t)?.decision, t).toBe('aprobada')
+    }
+    for (const t of ['No, gracias', 'No gracias', 'Mejor no', 'Prefiero esperar', 'No.']) {
+      expect(parseAprobacion(t)?.decision, t).toBe('rechazada')
+    }
+  })
+  it('ante la duda no decide: queda para que lo lea el equipo', () => {
+    for (const t of ['Confirmo que recibí el mail', 'Si podés llamame', 'No sé, lo pienso', 'Ok pero comprá 50',
+      'Ok, pero comprá 50', 'Confirmado, pero solo la mitad', 'Ok, cambiá la cantidad', 'Dale, ¿a qué precio?',
+      'Gracias!', 'Recibido']) {
+      expect(parseAprobacion(t), t).toBeNull()
+    }
+  })
   it('un "apruebo" que no está al comienzo no cuenta', () => {
     expect(parseAprobacion('Consulta: si apruebo hoy, cuándo se ejecuta?')).toBeNull()
     expect(parseAprobacion('Gracias!')).toBeNull()
@@ -55,27 +76,25 @@ describe('buildAprobacionEmail', () => {
   })
   it('los botones arman una respuesta a trading@ con copia al asesor, la palabra clave y la referencia', () => {
     const hrefs = Array.from(built.html.matchAll(/href="([^"]+)"/g), (m) => m[1].replace(/&amp;/g, '&'))
-    // Dos arriba y los mismos dos al final
-    expect(hrefs).toHaveLength(4)
-    expect(hrefs.slice(2)).toEqual(hrefs.slice(0, 2))
+    // Un solo par de botones, al final
+    expect(hrefs).toHaveLength(2)
     const [si, no] = hrefs.map((h) => new URL(h))
     expect(si.protocol).toBe('mailto:')
     expect(si.pathname).toBe('trading@roblecapital.net')
     expect(si.searchParams.get('cc')).toBe('asesor@roblecapital.net')
     expect(si.searchParams.get('subject')).toBe('Re: Confirmacion de orden - 1234')
-    expect(si.searchParams.get('body')).toMatch(/^APRUEBO\r\nCódigo de confirmación: ABCD2345/)
-    expect(no.searchParams.get('body')).toMatch(/^NO APRUEBO\r\n/)
+    expect(si.searchParams.get('body')).toMatch(/^Confirmo la orden\r\nCódigo de confirmación: ABCD2345/)
+    expect(no.searchParams.get('body')).toMatch(/^Prefiero no avanzar\r\n/)
     // El cliente ve el detalle de la orden mientras responde
     expect(si.searchParams.get('body')).toContain('----- Detalle de la orden -----\r\nDetalle <orden>')
   })
-  it('los botones aparecen antes y después del detalle', () => {
+  it('los botones aparecen solo después del detalle', () => {
     const detalle = built.html.indexOf('Detalle &lt;orden&gt;')
-    expect(built.html.indexOf('Apruebo')).toBeLessThan(detalle)
-    expect(built.html.lastIndexOf('Apruebo')).toBeGreaterThan(detalle)
+    expect(built.html.indexOf('Confirmo la orden')).toBeGreaterThan(detalle)
   })
   it('escapa el cuerpo en el HTML y deja instrucciones en el texto plano', () => {
     expect(built.html).toContain('Detalle &lt;orden&gt;')
-    expect(built.text).toContain('APRUEBO')
+    expect(built.text).toContain('Confirmo la orden')
     expect(built.text).toContain('Código de confirmación: ABCD2345')
   })
 })

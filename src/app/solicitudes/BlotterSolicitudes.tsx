@@ -19,6 +19,7 @@ interface Solicitud {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   assets_json?: any[] | null
   precio_ejecutado?: number | null; valor_efectivo?: number | null
+  comentario_ejecucion?: string | null
   precio_tipo?: string | null; precio_limite?: string | null; vigencia?: string | null
   canal?: string | null; cc_emails?: string[] | null; opera_asesor?: boolean | null
   ingresada_por?: string | null
@@ -97,6 +98,7 @@ function DetalleSolicitud({ sol, eventos, isMesa, userName, onAction, onClose, o
   const [showCancelar, setShowCancelar] = useState(false)
   const [precio, setPrecio] = useState('')
   const [valor,  setValor]  = useState('')
+  const [comentarioEj, setComentarioEj] = useState('')
   const [motivo, setMotivo] = useState('')
   const [busy,   setBusy]   = useState(false)
   const [tab, setTab]       = useState<'posiciones' | 'mail' | 'timeline'>('posiciones')
@@ -143,7 +145,7 @@ function DetalleSolicitud({ sol, eventos, isMesa, userName, onAction, onClose, o
           <div className="flex justify-between mt-1">
             {(['mesa_operaciones'].includes(sol.estado) ? ESTADO_STEPS_OLD : ESTADO_STEPS_NEW).map((s: string) => (
               <span key={s} className={`text-[9px] ${sol.estado === s ? 'font-bold text-[#2D3F52]' : 'text-gray-300'}`}>
-                {s === 'mesa_operaciones' ? 'Mesa' : s === 'pendiente_revision' ? 'Pend.' : s === 'en_revision' ? 'Rev.' : s === 'mail_enviado' ? 'Mail' : s === 'aprobada_cliente' ? 'Aprob.' : s === 'en_ejecucion' ? 'Ejec.' : 'Lista'}
+                {s === 'mesa_operaciones' ? 'Trading' : s === 'pendiente_revision' ? 'Pend.' : s === 'en_revision' ? 'Rev.' : s === 'mail_enviado' ? 'Mail' : s === 'aprobada_cliente' ? 'Aprob.' : s === 'en_ejecucion' ? 'Ejec.' : 'Lista'}
               </span>
             ))}
           </div>
@@ -213,12 +215,13 @@ function DetalleSolicitud({ sol, eventos, isMesa, userName, onAction, onClose, o
                 sol.maturity     ? ['Vencimiento', sol.maturity]                             : null,
                 sol.cupon        ? ['Cupón', sol.cupon + '%']                                : null,
                 ['Asesor', sol.asesor],
-                ['Ingresada por', ingresadaPorBlotter(sol) === 'mesa' ? 'Mesa' : 'Asesor'],
-                sol.canal        ? ['Canal', sol.canal === 'directo_asesor' ? 'Envío directo por asesor' : sol.canal === 'directo_mesa' ? 'Envío directo por Mesa' : 'Derivada a Mesa'] : null,
-                ['Opera', sol.opera_asesor ? 'Asesor' : 'Mesa'],
+                ['Ingresada por', ingresadaPorBlotter(sol) === 'mesa' ? 'Trading Desk' : 'Asesor'],
+                sol.canal        ? ['Canal', sol.canal === 'directo_asesor' ? 'Envío directo por asesor' : sol.canal === 'directo_mesa' ? 'Envío directo por Trading Desk' : 'Derivada a Trading Desk'] : null,
+                ['Opera', sol.opera_asesor ? 'Asesor' : 'Trading Desk'],
                 sol.operador     ? ['Operador', sol.operador]                                : null,
                 sol.precio_ejecutado ? ['Precio ejec.', String(sol.precio_ejecutado)]       : null,
                 sol.valor_efectivo   ? ['Valor ef.', `${sol.moneda} ${Number(sol.valor_efectivo).toLocaleString('es-UY')}`] : null,
+                sol.comentario_ejecucion ? ['Comentario ejec.', sol.comentario_ejecucion] : null,
                 sol.comision     ? ['Comisión', sol.comision]                               : null,
               ] as ([string,string]|null)[]).filter(Boolean).map((entry) => {
                 const [label, value] = entry as [string, string]
@@ -293,10 +296,16 @@ function DetalleSolicitud({ sol, eventos, isMesa, userName, onAction, onClose, o
                 <input type="number" step="0.01" className="w-full border border-gray-200 rounded px-3 py-2 text-sm"
                   value={valor} onChange={e => setValor(e.target.value)} placeholder="0.00" />
               </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Comentario (opcional)</label>
+                <textarea rows={3} className="w-full border border-gray-200 rounded px-3 py-2 text-sm"
+                  value={comentarioEj} onChange={e => setComentarioEj(e.target.value)}
+                  placeholder="Ej.: se ejecutaron 90 nominales en lugar de 100" />
+              </div>
             </div>
             <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-2">
               <button onClick={() => setShowEjecutar(false)} className="px-4 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50">Cancelar</button>
-              <button onClick={async () => { await act('ejecutar', { precio_ejecutado: precio||null, valor_efectivo: valor||null }); setShowEjecutar(false); onRefresh() }}
+              <button onClick={async () => { await act('ejecutar', { precio_ejecutado: precio||null, valor_efectivo: valor||null, comentario: comentarioEj.trim() || null }); setShowEjecutar(false); onRefresh() }}
                 disabled={busy} className="px-4 py-2 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 font-medium">
                 Confirmar ejecución
               </button>
@@ -361,9 +370,9 @@ const ESTADO_CFG: Record<string, { label: string; color: string; dot: string }> 
   pendiente_revision: { label: 'Pendiente revisión', color: 'text-amber-700',   dot: 'bg-amber-400' },
   en_revision:        { label: 'En revisión',        color: 'text-blue-700',    dot: 'bg-blue-400' },
   devuelta:           { label: 'Devuelta',           color: 'text-orange-700',  dot: 'bg-orange-400' },
-  mesa_operaciones:   { label: 'Mesa de Operaciones',color: 'text-amber-700',   dot: 'bg-amber-400' },
+  mesa_operaciones:   { label: 'Trading Desk',color: 'text-amber-700',   dot: 'bg-amber-400' },
   mail_enviado:       { label: 'Mail enviado',       color: 'text-indigo-700',  dot: 'bg-indigo-400' },
-  aprobada_cliente:   { label: 'Aprobada por cliente', color: 'text-teal-700',  dot: 'bg-teal-500' },
+  aprobada_cliente:   { label: 'Aprobada por cliente', color: 'text-sky-700',  dot: 'bg-sky-500' },
   rechazada_cliente:  { label: 'Rechazada por cliente', color: 'text-red-700',  dot: 'bg-red-500' },
   en_ejecucion:       { label: 'En ejecución',       color: 'text-purple-700',  dot: 'bg-purple-400' },
   ejecutada:          { label: 'Ejecutada',          color: 'text-emerald-700', dot: 'bg-emerald-500' },
@@ -434,13 +443,13 @@ function expandRows(rows: Solicitud[]): BlotterLine[] {
 }
 
 function exportCSV(rows: Solicitud[]) {
-  const headers = ['N° Interno','Fecha','Hora','Cliente','N°','Asesor','Opera','Operación','Tipo','Instrumento','Moneda','Monto ($)','Cantidad','Estado','Operador','Fecha ejecución']
+  const headers = ['N° Interno','Fecha','Hora','Cliente','N°','Asesor','Opera','Operación','Tipo','Instrumento','Moneda','Monto ($)','Cantidad','Estado','Operador','Fecha ejecución','Comentario']
   const lines = expandRows(rows).map(l => [
     l.row.solicitud_id,
     l.row.fecha_operacion,
     format(new Date(l.row.created_at), 'HH:mm'),
     l.row.client_name, l.row.client_number, l.row.asesor,
-    l.row.opera_asesor ? 'Asesor' : 'Mesa',
+    l.row.opera_asesor ? 'Asesor' : 'Trading Desk',
     OP_LABEL[l.operacion ?? ''] ?? l.operacion,
     l.tipo,
     l.instrumento_nombre,
@@ -450,6 +459,7 @@ function exportCSV(rows: Solicitud[]) {
     ESTADO_CFG[l.row.estado]?.label ?? l.row.estado,
     l.row.operador ?? '',
     l.row.ejecutado_at ? format(new Date(l.row.ejecutado_at), 'dd/MM/yyyy HH:mm') : '',
+    l.row.comentario_ejecucion ?? '',
   ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))
   const csv = [headers.join(','), ...lines].join('\n')
   const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' })
@@ -671,14 +681,14 @@ export default function BlotterSolicitudes({ isMesa, userName }: { isMesa: boole
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-100">
               <tr>
-                {['N° Interno','Fecha','Hora','Cliente','Asesor','Opera','Operación','Tipo','Instrumento','Moneda','Monto ($)','Cantidad','Estado','Operador','Ejecutada',''].map(h => (
+                {['N° Interno','Fecha','Hora','Cliente','Asesor','Opera','Operación','Tipo','Instrumento','Moneda','Monto ($)','Cantidad','Estado','Operador','Ejecutada','Comentario',''].map(h => (
                   <th key={h} className="px-3 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
               {rows.length === 0 && !loading ? (
-                <tr><td colSpan={16} className="px-4 py-8 text-center text-sm text-gray-400">Sin resultados.</td></tr>
+                <tr><td colSpan={17} className="px-4 py-8 text-center text-sm text-gray-400">Sin resultados.</td></tr>
               ) : expandRows(rows).map(line => {
                 const row = line.row
                 const cfg = line.cancelada ? ESTADO_CFG.cancelada : (ESTADO_CFG[row.estado] ?? ESTADO_CFG.mesa_operaciones)
@@ -703,7 +713,7 @@ export default function BlotterSolicitudes({ isMesa, userName }: { isMesa: boole
                       {row.opera_asesor ? (
                         <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-sky-100 text-sky-700">Asesor</span>
                       ) : (
-                        <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">Mesa</span>
+                        <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">Trading</span>
                       )}
                     </td>
                     <td className="px-3 py-2 text-xs font-medium text-gray-700 whitespace-nowrap">{OP_LABEL[line.operacion ?? ''] ?? line.operacion}</td>
@@ -738,6 +748,7 @@ export default function BlotterSolicitudes({ isMesa, userName }: { isMesa: boole
                     <td className="px-3 py-2 text-xs text-gray-400 whitespace-nowrap">
                       {row.ejecutado_at ? format(new Date(row.ejecutado_at), 'dd/MM HH:mm') : '—'}
                     </td>
+                    <td className="px-3 py-2 text-xs text-gray-600 max-w-[220px] truncate" title={row.comentario_ejecucion ?? undefined}>{row.comentario_ejecucion ?? <span className="text-gray-300">—</span>}</td>
                     <td className="px-3 py-2 whitespace-nowrap">
                       {canCancel && (
                         <button

@@ -11,8 +11,6 @@ interface Respuesta {
   subject: string | null
   snippet: string | null
   match_method: 'thread_id' | 'subject_fallback' | 'unmatched'
-  reviewed_at: string | null
-  reviewed_by: string | null
   solicitud_uuid: string | null
   solicitud_id: string | null
   client_name: string | null
@@ -36,14 +34,12 @@ function fmtFecha(iso: string) {
 // orden); un asesor solo las de sus órdenes. Se refresca sola cada 30 s.
 export default function RespuestasClientes({ isMesa }: { isMesa: boolean }) {
   const [rows, setRows] = useState<Respuesta[]>([])
-  const [soloPendientes, setSoloPendientes] = useState(true)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [busyId, setBusyId] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch(`/api/email-replies${soloPendientes ? '?pendientes=1' : ''}`, { cache: 'no-store' })
+      const res = await fetch('/api/email-replies', { cache: 'no-store' })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Error al cargar')
       setRows(data.rows)
@@ -53,7 +49,7 @@ export default function RespuestasClientes({ isMesa }: { isMesa: boolean }) {
     } finally {
       setLoading(false)
     }
-  }, [soloPendientes])
+  }, [])
 
   useEffect(() => {
     setLoading(true)
@@ -62,28 +58,9 @@ export default function RespuestasClientes({ isMesa }: { isMesa: boolean }) {
     return () => clearInterval(t)
   }, [load])
 
-  async function toggleRevisada(r: Respuesta) {
-    setBusyId(r.id)
-    const res = await fetch(`/api/email-replies/${r.id}`, {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ reviewed: !r.reviewed_at }),
-    })
-    if (!res.ok) alert((await res.json()).error ?? 'Error')
-    await load()
-    setBusyId(null)
-  }
-
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex gap-1 bg-gray-100 rounded-lg p-0.5">
-          {[{ v: true, l: 'Pendientes' }, { v: false, l: 'Todas' }].map(o => (
-            <button key={o.l} onClick={() => setSoloPendientes(o.v)}
-              className={`px-3 py-1 text-xs font-medium rounded-md transition ${soloPendientes === o.v ? 'bg-white text-[#2D3F52] shadow-sm' : 'text-gray-500'}`}>
-              {o.l}
-            </button>
-          ))}
-        </div>
+      <div className="flex items-center justify-end gap-2">
         <button onClick={() => load()} className="text-xs text-gray-400 hover:text-[#2D3F52]">Actualizar</button>
       </div>
 
@@ -91,7 +68,7 @@ export default function RespuestasClientes({ isMesa }: { isMesa: boolean }) {
       {loading && rows.length === 0 && <p className="text-xs text-gray-400">Cargando…</p>}
       {!loading && rows.length === 0 && !error && (
         <p className="text-xs text-gray-400 py-4 text-center">
-          {soloPendientes ? 'No hay respuestas pendientes de revisar.' : 'Todavía no hay respuestas.'}
+          Todavía no hay respuestas.
         </p>
       )}
 
@@ -101,11 +78,17 @@ export default function RespuestasClientes({ isMesa }: { isMesa: boolean }) {
           const asunto = stripReplyPrefixes(r.subject ?? '')
           const sinOrden = r.match_method === 'unmatched'
           return (
-            <li key={r.id} className={`px-3 py-3 ${r.reviewed_at ? 'bg-gray-50/60' : ''}`}>
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0 flex-1">
+            <li key={r.id} className="px-3 py-3">
+              <div>
+                <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-sm font-semibold text-gray-800">{r.client_name ?? r.from_email}</span>
+                    {r.estado === 'aprobada_cliente' && (
+                      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">Aprobó</span>
+                    )}
+                    {r.estado === 'rechazada_cliente' && (
+                      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-red-50 text-red-700 border border-red-200">No aprobó</span>
+                    )}
                     {sinOrden && (
                       <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200">Sin orden asociada</span>
                     )}
@@ -135,17 +118,6 @@ export default function RespuestasClientes({ isMesa }: { isMesa: boolean }) {
                       </a>
                     )}
                   </div>
-                </div>
-                <div className="shrink-0 text-right">
-                  <button onClick={() => toggleRevisada(r)} disabled={busyId === r.id}
-                    className={`px-2.5 py-1 text-xs font-medium rounded-lg border disabled:opacity-50 ${r.reviewed_at
-                      ? 'border-gray-200 text-gray-500 hover:bg-white'
-                      : 'border-emerald-300 text-emerald-700 hover:bg-emerald-50'}`}>
-                    {r.reviewed_at ? 'Volver a pendiente' : 'Marcar revisada'}
-                  </button>
-                  {r.reviewed_at && (
-                    <p className="mt-1 text-[10px] text-gray-400">Revisada por {r.reviewed_by ?? '—'}</p>
-                  )}
                 </div>
               </div>
             </li>

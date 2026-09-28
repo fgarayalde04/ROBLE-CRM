@@ -139,15 +139,19 @@ export async function PATCH(
     if (!isMesa && !isOwnerDirecto) return NextResponse.json({ error: 'Sin permiso' }, { status: 403 })
     const precioEjecutado = body.precio_ejecutado != null ? Number(body.precio_ejecutado) : null
     const valorEfectivo   = body.valor_efectivo   != null ? Number(body.valor_efectivo)   : null
+    // Ej. corrección de cantidad: queda en la orden sin tener que editarla ni borrarla
+    const comentario = typeof body.comentario === 'string' && body.comentario.trim() ? body.comentario.trim() : null
     const now = new Date().toISOString()
 
     const data = await updateSolicitud(params.id, {
       estado: 'ejecutada', ejecutado_at: now, ejecutado_by: session.name,
-      precio_ejecutado: precioEjecutado, valor_efectivo: valorEfectivo,
+      // Operador = quien ejecuta la orden
+      operador: session.name, operador_id: session.id,
+      precio_ejecutado: precioEjecutado, valor_efectivo: valorEfectivo, comentario_ejecucion: comentario,
     })
     await logEvento('ejecutada',
-      `Operación ejecutada por ${session.name}${precioEjecutado ? ` a precio ${precioEjecutado}` : ''}`,
-      { precio_ejecutado: precioEjecutado, valor_efectivo: valorEfectivo }
+      `Operación ejecutada por ${session.name}${precioEjecutado ? ` a precio ${precioEjecutado}` : ''}${comentario ? ` — ${comentario}` : ''}`,
+      { precio_ejecutado: precioEjecutado, valor_efectivo: valorEfectivo, comentario }
     )
     await notifyOrdenEjecutada(orderCtx)
     return NextResponse.json({ ok: true, row: data })
@@ -223,7 +227,7 @@ export async function PATCH(
     const isOwner = sol.asesor === session.name
     if (!isMesa && !isOwner) return NextResponse.json({ error: 'Sin permiso' }, { status: 403 })
     if (!['mesa_operaciones', 'pendiente_revision', 'devuelta'].includes(sol.estado))
-      return NextResponse.json({ error: 'Solo editable antes de ser tomada por Mesa' }, { status: 400 })
+      return NextResponse.json({ error: 'Solo editable antes de ser tomada por Trading Desk' }, { status: 400 })
     const allowed = ['tipo_operacion','instrumento_tipo','instrumento_nombre','clase','moneda',
       'monto','cantidad','fecha_operacion','observaciones','symbol','cusip_isin',
       'precio_tipo','precio_limite','vigencia','maturity','cupon','comision']

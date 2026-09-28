@@ -136,7 +136,7 @@ function generateEmailText(blocks: OrderBlock[], clientName: string, clientNumbe
   lines.push(`Fecha de instrucción: ${fecha}`)
   lines.push(``)
   lines.push(`Saludos,`)
-  lines.push(`Mesa de Operaciones`)
+  lines.push(`Trading Desk`)
   lines.push(`Roble Capital`)
   return lines.join('\n')
 }
@@ -595,7 +595,7 @@ export default function FormularioDirecto({ onBack, gmailConnected = false }: Pr
       })
       const data = await res.json()
       if (!res.ok) {
-        setSubmitError((data.error ?? 'El email se envió, pero no se pudo registrar la orden') + ' — avisale a Mesa para que la carguen a mano.')
+        setSubmitError((data.error ?? 'El email se envió, pero no se pudo registrar la orden') + ' — avisale a Trading Desk para que la carguen a mano.')
         return
       }
       setSolicitudId(data.solicitud_id)
@@ -639,13 +639,13 @@ export default function FormularioDirecto({ onBack, gmailConnected = false }: Pr
         </div>
         <div>
           <p className="text-lg font-semibold text-gray-800">
-            {sentDirecto ? 'Orden enviada directamente al cliente' : 'Orden enviada a Mesa de Operaciones'}
+            {sentDirecto ? 'Orden enviada directamente al cliente' : 'Orden enviada a Trading Desk'}
           </p>
           {solicitudId && <p className="text-xs font-mono text-gray-400 mt-1">N° {solicitudId}</p>}
           <p className="text-sm text-gray-500 mt-3 leading-relaxed">
             {sentDirecto
               ? 'El mail ya se le envió al cliente. Cuando confirme la operación, marcá la orden como ejecutada desde el Blotter.'
-              : 'El equipo de Mesa de Operaciones revisará la orden y enviará el correo al cliente una vez aprobada.'}
+              : 'El equipo de Trading Desk revisará la orden y enviará el correo al cliente una vez aprobada.'}
           </p>
         </div>
         <div className="flex gap-3 justify-center pt-2">
@@ -808,7 +808,7 @@ export default function FormularioDirecto({ onBack, gmailConnected = false }: Pr
                   />
                   <span className="text-sm font-semibold text-gray-700">Opera asesor</span>
                   <span className="text-[11px] text-gray-400">
-                    {operaAsesor ? '— la ingresa el asesor directo' : '— la ingresa Mesa'}
+                    {operaAsesor ? '— la ingresa el asesor directo' : '— la ingresa Trading Desk'}
                   </span>
                 </label>
               </div>
@@ -940,7 +940,7 @@ export default function FormularioDirecto({ onBack, gmailConnected = false }: Pr
             <div>
               <p className="text-xs font-semibold text-amber-800">Dos formas de enviar</p>
               <p className="text-[11px] text-amber-700 mt-0.5 leading-relaxed">
-                <strong>Enviar a mesa:</strong> Mesa de Operaciones revisa la orden y envía el correo al cliente.{' '}
+                <strong>Enviar a Trading Desk:</strong> Trading Desk revisa la orden y envía el correo al cliente.{' '}
                 <strong>Enviar a cliente:</strong> el correo sale ya mismo con tu Gmail, y vos llevás la orden hasta que quede ejecutada.
               </p>
             </div>

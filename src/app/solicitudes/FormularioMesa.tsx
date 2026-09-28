@@ -85,7 +85,7 @@ export default function FormularioMesa({ onBack }: { onBack: () => void }) {
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error || 'Error al crear solicitud')
-      setSuccess(`Solicitud ${json.solicitud_id} enviada a Mesa de Operaciones`)
+      setSuccess(`Solicitud ${json.solicitud_id} enviada a Trading Desk`)
       setForm(empty)
       setTimeout(() => router.refresh(), 1500)
     } catch (err: any) {
@@ -109,7 +109,7 @@ export default function FormularioMesa({ onBack }: { onBack: () => void }) {
         </button>
         <div className="flex items-center gap-2">
           <div className="w-2 h-2 rounded-full bg-amber-400" />
-          <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Envío a Mesa de Operaciones</span>
+          <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Envío a Trading Desk</span>
         </div>
       </div>
 
@@ -192,10 +192,10 @@ export default function FormularioMesa({ onBack }: { onBack: () => void }) {
 
       {/* Observaciones */}
       <div className="bg-white rounded-lg border border-gray-200 p-5">
-        <Field label="Observaciones para la Mesa">
+        <Field label="Observaciones para Trading Desk">
           <textarea className={inputCls + ' min-h-[90px] resize-y'} value={form.observaciones}
             onChange={e => set('observaciones', e.target.value)}
-            placeholder="Instrucciones, contexto o detalle adicional para que la Mesa complete la operación…" />
+            placeholder="Instrucciones, contexto o detalle adicional para que Trading Desk complete la operación…" />
         </Field>
       </div>
 
@@ -214,11 +214,11 @@ export default function FormularioMesa({ onBack }: { onBack: () => void }) {
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
               </svg>
-              Enviar a Mesa de Operaciones
+              Enviar a Trading Desk
             </>
           )}
         </button>
-        <p className="text-xs text-gray-400">La Mesa completará el resto y enviará el correo al cliente.</p>
+        <p className="text-xs text-gray-400">Trading Desk completará el resto y enviará el correo al cliente.</p>
       </div>
     </form>
   )

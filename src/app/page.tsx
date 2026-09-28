@@ -766,10 +766,15 @@ export default async function PanelDelDiaPage({ searchParams }: PageProps) {
                       a.entity_type === 'client' ? 'bg-blue-400'
                       : a.entity_type === 'task' ? 'bg-emerald-400'
                       : a.entity_type === 'document' ? 'bg-purple-400'
+                      : a.entity_type === 'solicitud' ? 'bg-amber-400'
                       : 'bg-gray-300'
                     }`} />
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs text-gray-700 leading-snug">{a.description}</p>
+                      {a.entity_type === 'solicitud' ? (
+                        <Link href={`/solicitudes?open=${a.entity_id}`} className="text-xs text-gray-700 leading-snug hover:underline">{a.description}</Link>
+                      ) : (
+                        <p className="text-xs text-gray-700 leading-snug">{a.description}</p>
+                      )}
                       <p className="text-[10px] text-gray-400 mt-0.5">
                         {timeAgo(a.created_at)}
                         {a.user_name ? ` · ${a.user_name}` : ''}

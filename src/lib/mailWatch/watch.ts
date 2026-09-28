@@ -21,7 +21,7 @@ export async function ensureMailWatch(): Promise<WatchResult> {
   }
 
   const res = await withMesaToken((token) => watchInbox(token, topic))
-  if (!res) return { ok: true, skipped: true, reason: 'Casilla de Mesa no conectada o token inválido' }
+  if (!res) return { ok: true, skipped: true, reason: 'Casilla de Trading Desk no conectada o token inválido' }
 
   await saveWatchExpiration(res.expiration)
   // Si todavía no hay punto de partida, es este: nada de antes del watch se notifica.

@@ -38,6 +38,7 @@ interface Solicitud {
   assets_json?: any[] | null
   precio_ejecutado?: number | null
   valor_efectivo?: number | null
+  comentario_ejecucion?: string | null
   precio_tipo?: string | null
   precio_limite?: string | null
   vigencia?: string | null
@@ -68,9 +69,9 @@ const ESTADO_CFG: Record<string, { label: string; color: string; bg: string; dot
   pendiente_revision: { label:'Pendiente revisión', color:'text-amber-700',   bg:'bg-amber-50',   dot:'bg-amber-400' },
   en_revision:        { label:'En revisión',        color:'text-blue-700',    bg:'bg-blue-50',    dot:'bg-blue-400' },
   devuelta:           { label:'Devuelta',            color:'text-orange-700',  bg:'bg-orange-50',  dot:'bg-orange-400' },
-  mesa_operaciones:   { label:'Mesa de Operaciones', color:'text-amber-700',   bg:'bg-amber-50',   dot:'bg-amber-400' },
+  mesa_operaciones:   { label:'Trading Desk', color:'text-amber-700',   bg:'bg-amber-50',   dot:'bg-amber-400' },
   mail_enviado:       { label:'Mail enviado',        color:'text-indigo-700',  bg:'bg-indigo-50',  dot:'bg-indigo-400' },
-  aprobada_cliente:   { label:'Aprobada por cliente', color:'text-teal-700',   bg:'bg-teal-50',    dot:'bg-teal-500' },
+  aprobada_cliente:   { label:'Aprobada por cliente', color:'text-sky-700',   bg:'bg-sky-50',    dot:'bg-sky-500' },
   rechazada_cliente:  { label:'Rechazada por cliente', color:'text-red-700',   bg:'bg-red-50',     dot:'bg-red-500' },
   en_ejecucion:       { label:'En ejecución',        color:'text-purple-700',  bg:'bg-purple-50',  dot:'bg-purple-400' },
   ejecutada:          { label:'Ejecutada',           color:'text-emerald-700', bg:'bg-emerald-50', dot:'bg-emerald-500' },
@@ -192,6 +193,7 @@ function DetailPanel({
   const [showCancelar, setShowCancelar] = useState(false)
   const [precio, setPrecio]           = useState('')
   const [valor, setValor]             = useState('')
+  const [comentarioEj, setComentarioEj] = useState('')
   const [motivo, setMotivo]           = useState('')
   const [sendingMail, setSendingMail] = useState(false)
   const [busy, setBusy]               = useState(false)
@@ -227,7 +229,7 @@ function DetailPanel({
         sol.observaciones ?? '',
         '',
         'Saludos,',
-        'Mesa de Operaciones | Roble Capital',
+        'Trading Desk | Roble Capital',
       ].filter(l => l !== undefined)
       setEmailAsunto(`Confirmación de ${op} — ${sol.instrumento_nombre} — ${sol.client_name}`)
       setEmailCuerpo(lines.join('\n'))
@@ -295,7 +297,7 @@ function DetailPanel({
           <div className="flex justify-between mt-1">
             {(['mesa_operaciones'].includes(sol.estado) ? ESTADO_STEPS_OLD : ESTADO_STEPS_NEW).map((s: string) => (
               <span key={s} className={`text-[9px] ${sol.estado === s ? 'font-bold text-[#2D3F52]' : 'text-gray-300'}`}>
-                {s === 'mesa_operaciones' ? 'Mesa' : s === 'pendiente_revision' ? 'Pend.' : s === 'en_revision' ? 'Rev.' : s === 'mail_enviado' ? 'Mail' : s === 'aprobada_cliente' ? 'Aprob.' : s === 'en_ejecucion' ? 'Ejec.' : 'Lista'}
+                {s === 'mesa_operaciones' ? 'Trading' : s === 'pendiente_revision' ? 'Pend.' : s === 'en_revision' ? 'Rev.' : s === 'mail_enviado' ? 'Mail' : s === 'aprobada_cliente' ? 'Aprob.' : s === 'en_ejecucion' ? 'Ejec.' : 'Lista'}
               </span>
             ))}
           </div>
@@ -406,12 +408,13 @@ function DetailPanel({
                 sol.maturity   ? ['Vencimiento', sol.maturity]   : null,
                 sol.cupon      ? ['Cupón', sol.cupon + '%']       : null,
                 ['Asesor', sol.asesor],
-                ['Ingresada por', ingresadaPor(sol) === 'mesa' ? 'Mesa' : 'Asesor'],
-                sol.canal ? ['Canal', sol.canal === 'directo_asesor' ? 'Envío directo por asesor' : sol.canal === 'directo_mesa' ? 'Envío directo por Mesa' : 'Derivada a Mesa'] : null,
-                ['Opera', sol.opera_asesor ? 'Asesor' : 'Mesa'],
+                ['Ingresada por', ingresadaPor(sol) === 'mesa' ? 'Trading Desk' : 'Asesor'],
+                sol.canal ? ['Canal', sol.canal === 'directo_asesor' ? 'Envío directo por asesor' : sol.canal === 'directo_mesa' ? 'Envío directo por Trading Desk' : 'Derivada a Trading Desk'] : null,
+                ['Opera', sol.opera_asesor ? 'Asesor' : 'Trading Desk'],
                 sol.operador  ? ['Operador', sol.operador]        : null,
                 sol.precio_ejecutado ? ['Precio ejec.', String(sol.precio_ejecutado)] : null,
                 sol.valor_efectivo   ? ['Valor ef.', `${sol.moneda} ${Number(sol.valor_efectivo).toLocaleString('es-UY')}`] : null,
+                sol.comentario_ejecucion ? ['Comentario ejec.', sol.comentario_ejecucion] : null,
                 sol.comision  ? ['Comisión', sol.comision]        : null,
               ] as ([string,string]|null)[]).filter(Boolean).map((entry) => { const [label,value] = entry as [string,string]; return (
                 <div key={label} className="flex justify-between gap-2">
@@ -534,10 +537,16 @@ function DetailPanel({
                 <input type="number" step="0.01" className="w-full border border-gray-200 rounded px-3 py-2 text-sm"
                   value={valor} onChange={e => setValor(e.target.value)} placeholder="0.00" />
               </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Comentario (opcional)</label>
+                <textarea rows={3} className="w-full border border-gray-200 rounded px-3 py-2 text-sm"
+                  value={comentarioEj} onChange={e => setComentarioEj(e.target.value)}
+                  placeholder="Ej.: se ejecutaron 90 nominales en lugar de 100" />
+              </div>
             </div>
             <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-2">
               <button onClick={() => setShowEjecutar(false)} className="px-4 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50">Cancelar</button>
-              <button onClick={async () => { await act('ejecutar', { precio_ejecutado: precio||null, valor_efectivo: valor||null }); setShowEjecutar(false) }}
+              <button onClick={async () => { await act('ejecutar', { precio_ejecutado: precio||null, valor_efectivo: valor||null, comentario: comentarioEj.trim() || null }); setShowEjecutar(false) }}
                 disabled={busy} className="px-4 py-2 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 font-medium">
                 Confirmar ejecución
               </button>
@@ -694,7 +703,7 @@ export default function MesaHoy({ isMesa, userName, openId }: { isMesa: boolean;
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 border-b border-gray-100">
                   <tr>
-                    {['Hora','Cliente','Asesor','Opera','Operación','Instrumento','Monto ($)','Cantidad','Estado','Operador'].map(h => (
+                    {['Hora','Cliente','Asesor','Opera','Operación','Instrumento','Monto ($)','Cantidad','Estado','Operador','Comentario'].map(h => (
                       <th key={h} className="px-3 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
@@ -712,7 +721,7 @@ export default function MesaHoy({ isMesa, userName, openId }: { isMesa: boolean;
                         <Fragment key={line.key}>
                           {showHeader && (
                             <tr key={`h-${day}`} className="bg-gray-100/80">
-                              <td colSpan={10} className="px-3 py-1.5 text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                              <td colSpan={11} className="px-3 py-1.5 text-[10px] font-bold text-gray-500 uppercase tracking-wider">
                                 {day === today ? 'Hoy' : format(new Date(day + 'T12:00:00'), "EEEE d 'de' MMMM", { locale: es })}
                               </td>
                             </tr>
@@ -731,7 +740,7 @@ export default function MesaHoy({ isMesa, userName, openId }: { isMesa: boolean;
                           {row.opera_asesor ? (
                             <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-sky-100 text-sky-700">Asesor</span>
                           ) : (
-                            <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">Mesa</span>
+                            <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">Trading</span>
                           )}
                         </td>
                         <td className="px-3 py-2 text-xs font-medium text-gray-700 whitespace-nowrap">
@@ -765,6 +774,7 @@ export default function MesaHoy({ isMesa, userName, openId }: { isMesa: boolean;
                           </div>
                         </td>
                         <td className="px-3 py-2 text-xs text-gray-500 whitespace-nowrap">{row.operador ?? '—'}</td>
+                        <td className="px-3 py-2 text-xs text-gray-600 max-w-[220px] truncate" title={row.comentario_ejecucion ?? undefined}>{row.comentario_ejecucion ?? <span className="text-gray-300">—</span>}</td>
                       </tr>
                         </Fragment>
                       )

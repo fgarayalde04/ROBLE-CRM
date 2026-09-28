@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'No se pudo obtener el email del remitente.' }, { status: 403 })
   }
 
-  const tradingName  = process.env.TRADING_NAME  ?? 'Mesa de Operaciones | Roble Capital'
+  const tradingName  = process.env.TRADING_NAME  ?? 'Trading Desk | Roble Capital'
   const tradingEmail = process.env.TRADING_EMAIL ?? 'trading@roblecapital.net'
   const fromHeader   = `"${tradingName}" <${senderEmail}>`
   const effectiveReplyTo = replyTo ?? tradingEmail

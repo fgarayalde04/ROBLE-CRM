@@ -1403,10 +1403,10 @@ function BondsTable({
                     ['Precio (Ind.)', 'price'], ['Cantidad', 'quantity'], ['Moneda', null],
                     ['Vencimiento', 'maturity_date'], ['Cupón %', 'coupon'], ['Yield (Ind.) %', 'yield'],
                     ['Dur. (a)', 'duration'], ['Rating', null], ['Frecuencia', null], ['Día/360', null],
-                    ['%', 'pct'], ['Nominal', null], [sec.valueLabel, 'amount'], ['Cupón Corrido', null],
+                    ['%', 'pct'], ['Valor Nominal', null], [sec.valueLabel, 'amount'], ['Cupón Corrido', null],
                     [sec.cashLabel, null], ['', null],
                   ] as [string, keyof Bond | null][]).map(([h, key]) => (
-                    <th key={h} className={`px-3 py-2.5 text-[9px] font-semibold text-gray-400 uppercase tracking-wider ${h === '' ? 'w-8' : ['Nominal',sec.valueLabel,'Cupón Corrido',sec.cashLabel,'%','Precio (Ind.)','Cantidad'].includes(h) ? 'text-right' : h === 'Operación' ? 'text-center' : 'text-left'}`}>
+                    <th key={h} className={`px-3 py-2.5 text-[9px] font-semibold text-gray-400 uppercase tracking-wider ${h === '' ? 'w-8' : ['Valor Nominal',sec.valueLabel,'Cupón Corrido',sec.cashLabel,'%','Precio (Ind.)','Cantidad'].includes(h) ? 'text-right' : h === 'Operación' ? 'text-center' : 'text-left'}`}>
                       {key ? (
                         <button onClick={() => toggleSort(key)} className={`inline-flex items-center gap-0.5 hover:text-[#1B2E3C] transition-colors ${sortKey === key ? 'text-[#1B2E3C]' : ''}`}>
                           {h}
@@ -1465,7 +1465,7 @@ function BondsTable({
                       {total > 0 && b.amount > 0 ? `${((b.amount / total) * 100).toFixed(1)}%` : '—'}
                     </td>
                     <td className="px-3 py-2.5 text-right">
-                      <span className="text-xs text-gray-500 font-mono tabular-nums" title="Cantidad × 1000">
+                      <span className="text-sm font-bold font-mono tabular-nums text-[#1B2E3C]" title="Cantidad × 1000 — lo que se compra/vende">
                         {accrual.nominal > 0 ? accrual.nominal.toLocaleString('en-US', { maximumFractionDigits: 2 }) : '0'}
                       </span>
                     </td>
@@ -1720,6 +1720,7 @@ const HIDEABLE_COLUMNS: { key: string; label: string; group: string }[] = [
   { key: 'bonds.duration',      label: 'Duración',       group: 'Bonos' },
   { key: 'bonds.rating',        label: 'Rating',         group: 'Bonos' },
   { key: 'bonds.precio',        label: 'Precio (ind.)',  group: 'Bonos' },
+  { key: 'bonds.nominal',       label: 'Valor nominal',  group: 'Bonos' },
   { key: 'bonds.inversion',     label: 'Montos (compra, cupón, desembolso)', group: 'Bonos' },
   { key: 'equities.moneda',     label: 'Moneda',         group: 'Acciones' },
   { key: 'equities.ticker',     label: 'Ticker',         group: 'Acciones' },
@@ -1858,7 +1859,7 @@ export default function ProposalEditor({
     <div className="min-h-screen" style={{ backgroundColor: '#F4F6F8' }}>
       {/* ── Top bar ── */}
       <div className="bg-white border-b border-gray-200 sticky top-14 md:top-0 z-20">
-        <div className="max-w-screen-xl mx-auto px-4 md:px-6 py-3 flex items-center justify-between gap-4">
+        <div className="px-4 md:px-6 py-3 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">
             <Link href="/propuestas" className="text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0">
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -1946,7 +1947,7 @@ export default function ProposalEditor({
       </div>
 
       {/* ── Body ── */}
-      <div className="max-w-screen-xl mx-auto px-4 py-4 md:px-6 md:py-6">
+      <div className="px-4 py-4 md:px-6 md:py-6">
         <div className="grid grid-cols-1 xl:grid-cols-[1fr_280px] gap-6 items-start">
 
           {/* ── Left: composer ── */}

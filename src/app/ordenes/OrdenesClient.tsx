@@ -113,7 +113,7 @@ function generateEmailText(blocks: OrderBlock[], clientName: string, clientNumbe
   lines.push(`Fecha de instrucción: ${fecha}`)
   lines.push(``)
   lines.push(`Saludos,`)
-  lines.push(`Mesa de Operaciones`)
+  lines.push(`Trading Desk`)
   lines.push(`Roble Capital`)
   lines.push(``)
   lines.push(`─────────────────────────────────────────`)
@@ -384,7 +384,7 @@ export default function OrdenesClient({ gmailConnected, initialTab, isAdmin = fa
   // donde apuntan BottomNav y el menú de modo asesor).
   const tabItems: { t: Tab; label: string; short: string }[] = effectiveAdmin
     ? [
-        { t: 'mesa',         label: 'Mesa de hoy',  short: 'Mesa' },
+        { t: 'mesa',         label: 'Trading Desk hoy',  short: 'Trading' },
         { t: 'blotter',      label: 'Blotter',      short: 'Blotter' },
         { t: 'instrumentos', label: 'Instrumentos', short: 'Instr.' },
       ]
@@ -563,9 +563,9 @@ export default function OrdenesClient({ gmailConnected, initialTab, isAdmin = fa
       {/* Header */}
       <div className="hidden md:flex items-center justify-between mb-5">
         <div>
-          <h1 className="text-xl font-semibold text-[#2D3F52]">{effectiveAdmin ? 'Mesa de Operaciones' : 'Órdenes'}</h1>
+          <h1 className="text-xl font-semibold text-[#2D3F52]">{effectiveAdmin ? 'Trading Desk' : 'Órdenes'}</h1>
           <p className="text-sm text-gray-400 mt-0.5">
-            {effectiveAdmin ? 'Blotter · trazabilidad completa de órdenes' : 'Enviá órdenes a Mesa y consultá tu historial'}
+            {effectiveAdmin ? 'Blotter · trazabilidad completa de órdenes' : 'Enviá órdenes a Trading Desk y consultá tu historial'}
           </p>
         </div>
         <div className="flex gap-1 bg-white border border-gray-200 rounded-lg p-0.5 shadow-sm">
@@ -720,7 +720,7 @@ export default function OrdenesClient({ gmailConnected, initialTab, isAdmin = fa
               <div>
                 <label className={labelCls}>De</label>
                 <p className="text-sm px-3 py-2 rounded-lg border border-gray-100 bg-gray-50 text-gray-600">
-                  Mesa de Operaciones | Roble Capital
+                  Trading Desk | Roble Capital
                 </p>
               </div>
 
@@ -847,7 +847,7 @@ export default function OrdenesClient({ gmailConnected, initialTab, isAdmin = fa
                   {/* Email headers */}
                   <div className="px-4 py-3 border-b border-gray-100 bg-gray-50/60 space-y-1.5">
                     {[
-                      { label: 'De',            value: 'Mesa de Operaciones | Roble Capital' },
+                      { label: 'De',            value: 'Trading Desk | Roble Capital' },
                       { label: 'Para',          value: to || '—' },
                       { label: 'CC',            value: cc },
                       { label: 'Respuestas a',  value: TRADING_EMAIL },

@@ -119,12 +119,11 @@ export async function POST(req: NextRequest) {
       // Token del link Apruebo / No apruebo que ya salió en el mail
       ...(typeof body.aprobacion_token === 'string' && isAprobacionToken(body.aprobacion_token)
         ? { aprobacion_token: body.aprobacion_token } : {}),
-      ...(isMesa ? {
-        operador:    session.name,
-        operador_id: session.id,
-        tomado_at:   now,
-        notif_tomada_enviada: true,
-      } : {}),
+      // Envío directo: quien manda el mail (Mesa o el propio asesor) queda como operador
+      operador:    session.name,
+      operador_id: session.id,
+      tomado_at:   now,
+      notif_tomada_enviada: true,
     } : {}),
   }
 
@@ -139,7 +138,7 @@ export async function POST(req: NextRequest) {
     ? `Orden creada con envío directo al cliente por ${session.name}`
     : hasAssets
     ? `Orden completa enviada a revisión interna por ${session.name} (${body.assets_json.length} activo${body.assets_json.length !== 1 ? 's' : ''})`
-    : `Solicitud creada por ${session.name} — derivada a Mesa de Operaciones`
+    : `Solicitud creada por ${session.name} — derivada a Trading Desk`
 
   await insertSolicitudEvento({
     solicitud_id: data.id,

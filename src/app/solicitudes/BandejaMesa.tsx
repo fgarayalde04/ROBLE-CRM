@@ -22,6 +22,7 @@ interface Solicitud {
   client_number: string
   client_email: string | null
   operador: string | null
+  comentario_ejecucion?: string | null
   tomado_at: string | null
   mail_enviado_at: string | null
   ejecutado_at: string | null
@@ -68,9 +69,9 @@ const ESTADO_CFG: Record<string, { label: string; color: string; bg: string }> =
   pendiente_revision: { label: 'Pendiente de revisión', color: 'text-amber-700',  bg: 'bg-amber-100' },
   en_revision:        { label: 'En revisión',           color: 'text-blue-700',   bg: 'bg-blue-100' },
   devuelta:           { label: 'Devuelta al asesor',    color: 'text-orange-700', bg: 'bg-orange-100' },
-  mesa_operaciones:   { label: 'Mesa de Operaciones',   color: 'text-amber-700',  bg: 'bg-amber-100' },
+  mesa_operaciones:   { label: 'Trading Desk',   color: 'text-amber-700',  bg: 'bg-amber-100' },
   mail_enviado:       { label: 'Mail enviado',          color: 'text-indigo-700', bg: 'bg-indigo-100' },
-  aprobada_cliente:   { label: 'Aprobada por cliente',  color: 'text-teal-700',   bg: 'bg-teal-100' },
+  aprobada_cliente:   { label: 'Aprobada por cliente',  color: 'text-sky-700',   bg: 'bg-sky-100' },
   rechazada_cliente:  { label: 'Rechazada por cliente', color: 'text-red-700',    bg: 'bg-red-100' },
   en_ejecucion:       { label: 'En ejecución',          color: 'text-purple-700', bg: 'bg-purple-100' },
   ejecutada:          { label: 'Ejecutada',             color: 'text-emerald-700',bg: 'bg-emerald-100' },
@@ -185,6 +186,7 @@ export default function BandejaMesa({ isMesa, userName }: { isMesa: boolean; use
   const [showEjecucion, setShowEjecucion] = useState(false)
   const [precioEj, setPrecioEj] = useState('')
   const [valorEf, setValorEf]   = useState('')
+  const [comentarioEj, setComentarioEj] = useState('')
 
   // Cancelar modal
   const [showCancelar, setShowCancelar] = useState(false)
@@ -252,7 +254,7 @@ export default function BandejaMesa({ isMesa, userName }: { isMesa: boolean; use
       'Ante cualquier consulta, no dude en comunicarse.',
       '',
       'Saludos,',
-      'Mesa de Operaciones | Roble Capital',
+      'Trading Desk | Roble Capital',
     ].filter(l => l !== undefined)
     setEmailAsunto(asunto)
     setEmailCuerpo(lines.join('\n'))
@@ -330,9 +332,10 @@ export default function BandejaMesa({ isMesa, userName }: { isMesa: boolean; use
     await patch('ejecutar', {
       precio_ejecutado: precioEj ? Number(precioEj) : null,
       valor_efectivo:   valorEf  ? Number(valorEf)  : null,
+      comentario:       comentarioEj.trim() || null,
     })
     setShowEjecucion(false)
-    setPrecioEj(''); setValorEf('')
+    setPrecioEj(''); setValorEf(''); setComentarioEj('')
   }
 
   async function handleCancelar() {
@@ -394,7 +397,7 @@ export default function BandejaMesa({ isMesa, userName }: { isMesa: boolean; use
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 border-b border-gray-100">
                   <tr>
-                    {['ID','Cliente','Asesor','Operación','Instrumento','Monto','Estado','Operador'].map(h => (
+                    {['ID','Cliente','Asesor','Operación','Instrumento','Monto','Estado','Operador','Comentario'].map(h => (
                       <th key={h} className="px-3 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
@@ -432,6 +435,7 @@ export default function BandejaMesa({ isMesa, userName }: { isMesa: boolean; use
                           </span>
                         </td>
                         <td className="px-3 py-2.5 text-gray-500 whitespace-nowrap">{row.operador ?? <span className="text-gray-300">—</span>}</td>
+                        <td className="px-3 py-2.5 text-xs text-gray-600 max-w-[220px] truncate" title={row.comentario_ejecucion ?? undefined}>{row.comentario_ejecucion ?? <span className="text-gray-300">—</span>}</td>
                       </tr>
                     )
                   })}
@@ -483,6 +487,7 @@ export default function BandejaMesa({ isMesa, userName }: { isMesa: boolean; use
                 selected.cupon      ? ['Cupón', selected.cupon + '%']      : null,
                 ['Asesor', selected.asesor],
                 selected.operador   ? ['Operador', selected.operador]      : null,
+                selected.comentario_ejecucion ? ['Comentario ejec.', selected.comentario_ejecucion] : null,
                 selected.comision   ? ['Comisión', selected.comision]      : null,
               ].filter(Boolean).map((entry) => {
                 const [label, value] = entry as [string, string]
@@ -670,6 +675,12 @@ export default function BandejaMesa({ isMesa, userName }: { isMesa: boolean; use
                 <label className="block text-xs font-medium text-gray-500 mb-1">Valor efectivo (opcional)</label>
                 <input type="number" step="0.01" className="w-full border border-gray-200 rounded px-3 py-2 text-sm focus:outline-none"
                   value={valorEf} onChange={e => setValorEf(e.target.value)} placeholder="0.00" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Comentario (opcional)</label>
+                <textarea rows={3} className="w-full border border-gray-200 rounded px-3 py-2 text-sm"
+                  value={comentarioEj} onChange={e => setComentarioEj(e.target.value)}
+                  placeholder="Ej.: se ejecutaron 90 nominales en lugar de 100" />
               </div>
             </div>
             <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-2">
