@@ -119,12 +119,11 @@ export async function POST(req: NextRequest) {
       // Token del link Apruebo / No apruebo que ya salió en el mail
       ...(typeof body.aprobacion_token === 'string' && isAprobacionToken(body.aprobacion_token)
         ? { aprobacion_token: body.aprobacion_token } : {}),
-      ...(isMesa ? {
-        operador:    session.name,
-        operador_id: session.id,
-        tomado_at:   now,
-        notif_tomada_enviada: true,
-      } : {}),
+      // Envío directo: quien manda el mail (Mesa o el propio asesor) queda como operador
+      operador:    session.name,
+      operador_id: session.id,
+      tomado_at:   now,
+      notif_tomada_enviada: true,
     } : {}),
   }
 
