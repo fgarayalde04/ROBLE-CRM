@@ -363,7 +363,7 @@ export default function ChatWidget({ user }: { user: SessionUser }) {
       {(!initialized || !advisorMode) && (
         <button
           onClick={() => { setOpen((o) => !o); if (!open) setActiveConvId(null) }}
-          className="fixed bottom-6 right-6 z-50 w-12 h-12 rounded-full bg-[#2D3F52] shadow-lg flex items-center justify-center hover:bg-[#354A5E] transition-colors"
+          className="fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] right-4 md:bottom-6 md:right-6 z-50 w-12 h-12 rounded-full bg-[#2D3F52] shadow-lg flex items-center justify-center hover:bg-[#354A5E] transition-colors"
           title="Mensajes"
         >
           <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
@@ -384,7 +384,7 @@ export default function ChatWidget({ user }: { user: SessionUser }) {
             isMobile ? 'inset-0 w-full' : 'right-4 w-[calc(100vw-32px)] md:w-[720px] rounded-2xl border'
           }`}
           style={isMobile
-            ? { height: '100dvh' }
+            ? { height: '100dvh', paddingBottom: 'env(safe-area-inset-bottom)' }
             : { bottom: initialized && advisorMode ? '72px' : '80px', height: 'min(520px, calc(100vh - 130px))' }
           }
         >
@@ -396,7 +396,7 @@ export default function ChatWidget({ user }: { user: SessionUser }) {
               <span className="text-sm font-semibold text-[#2D3F52] flex-1">Mensajes</span>
               <button
                 onClick={openNewConv}
-                className="w-6 h-6 rounded-full bg-[#2D3F52] text-white flex items-center justify-center hover:bg-[#354A5E] transition-colors shrink-0"
+                className="w-8 h-8 md:w-6 md:h-6 rounded-full bg-[#2D3F52] text-white flex items-center justify-center hover:bg-[#354A5E] transition-colors shrink-0"
                 title="Nueva conversación"
               >
                 <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -405,7 +405,7 @@ export default function ChatWidget({ user }: { user: SessionUser }) {
               </button>
               <button
                 onClick={() => setOpen(false)}
-                className="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors shrink-0"
+                className="w-8 h-8 md:w-6 md:h-6 flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors shrink-0"
                 title="Cerrar chat"
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -481,7 +481,7 @@ export default function ChatWidget({ user }: { user: SessionUser }) {
                 {/* Thread header */}
                 <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-2.5">
                   {isMobile && (
-                    <button onClick={() => setActiveConvId(null)} title="Volver a conversaciones" className="text-gray-400 hover:text-gray-600 transition-colors shrink-0 -ml-1">
+                    <button onClick={() => setActiveConvId(null)} title="Volver a conversaciones" className="p-1.5 md:p-0 text-gray-400 hover:text-gray-600 transition-colors shrink-0 -ml-1">
                       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
                       </svg>

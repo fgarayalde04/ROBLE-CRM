@@ -35,6 +35,9 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
+  // cover: habilita env(safe-area-inset-*) para dejar lugar a la barra de
+  // gestos del iPhone debajo de la barra inferior.
+  viewportFit: 'cover',
   themeColor: '#1B2E3C',
 }
 

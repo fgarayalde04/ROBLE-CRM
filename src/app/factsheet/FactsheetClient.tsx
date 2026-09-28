@@ -244,7 +244,7 @@ export default function FactsheetClient() {
     <div className="min-h-screen bg-gray-50">
 
       {/* ── Top bar ── */}
-      <div className="no-print bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between sticky top-0 z-20">
+      <div className="no-print bg-white border-b border-gray-200 px-4 md:px-6 py-3 flex items-center justify-between flex-wrap gap-2 sticky top-14 md:top-0 z-20">
         <div className="flex items-center gap-3">
           <div className="w-7 h-7 rounded-full bg-[#1B3A2B] flex items-center justify-center">
             <span className="text-white text-xs font-bold">RC</span>

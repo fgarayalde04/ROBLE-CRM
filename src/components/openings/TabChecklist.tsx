@@ -93,7 +93,7 @@ export default function TabChecklist({ items, openingId }: Props) {
 
   return (
     <div className="bg-white border border-[#E2E8F0] rounded-lg p-5">
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between flex-wrap gap-2 mb-4">
         <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-widest">Checklist de apertura</h2>
         <span className="text-xs text-gray-500">{completed}/{total} — {pct}%</span>
       </div>
@@ -143,7 +143,7 @@ export default function TabChecklist({ items, openingId }: Props) {
 
               {isExpanded && (
                 <div className="border-t border-gray-100 px-4 py-3 space-y-3">
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs text-gray-400 mb-1">Responsable</label>
                       <input

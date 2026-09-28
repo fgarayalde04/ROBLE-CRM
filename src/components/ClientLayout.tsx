@@ -55,8 +55,8 @@ export default function ClientLayout({ user, children }: Props) {
   // - Advisor mode: always pt-14 (MobileHeader) + pb-16 (BottomNav), no left offset
   // - Standard mode: mobile = pt-14 pb-16, desktop = md:pl-64 no top/bottom
   const contentCls = initialized && advisorMode
-    ? 'min-h-screen flex flex-col pt-14 pb-16'
-    : 'md:pl-64 min-h-screen flex flex-col pt-14 md:pt-0 pb-16 md:pb-0'
+    ? 'min-h-screen flex flex-col pt-14 pb-[calc(4rem+env(safe-area-inset-bottom))]'
+    : 'md:pl-64 min-h-screen flex flex-col pt-14 md:pt-0 pb-[calc(4rem+env(safe-area-inset-bottom))] md:pb-0'
 
   return (
     <ChatProvider>

@@ -1857,7 +1857,7 @@ export default function ProposalEditor({
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#F4F6F8' }}>
       {/* ── Top bar ── */}
-      <div className="bg-white border-b border-gray-200 sticky top-0 z-20">
+      <div className="bg-white border-b border-gray-200 sticky top-14 md:top-0 z-20">
         <div className="max-w-screen-xl mx-auto px-4 md:px-6 py-3 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">
             <Link href="/propuestas" className="text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0">

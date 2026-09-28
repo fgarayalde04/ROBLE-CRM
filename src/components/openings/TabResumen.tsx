@@ -124,7 +124,7 @@ export default function TabResumen({ opening }: Props) {
       {/* Header info */}
       <div className="bg-white border border-[#E2E8F0] rounded-lg p-5">
         <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-4">Informacion general</h2>
-        <div className="grid grid-cols-2 gap-x-8 gap-y-4">
+        <div className="grid grid-cols-2 gap-x-4 md:gap-x-8 gap-y-4">
           {/* Cliente */}
           <div>
             <p className="text-xs text-gray-400 mb-1">Cliente</p>
@@ -195,7 +195,7 @@ export default function TabResumen({ opening }: Props) {
       {/* Fechas clave */}
       <div className="bg-white border border-[#E2E8F0] rounded-lg p-5">
         <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-4">Fechas clave</h2>
-        <div className="grid grid-cols-2 gap-x-8 gap-y-3">
+        <div className="grid grid-cols-2 gap-x-4 md:gap-x-8 gap-y-3">
           <div>
             <p className="text-xs text-gray-400">Inicio</p>
             <p className="text-sm text-gray-900 mt-0.5">{formatDate(opening.start_date)}</p>
