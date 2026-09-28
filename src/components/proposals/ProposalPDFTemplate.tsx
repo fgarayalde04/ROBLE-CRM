@@ -401,6 +401,7 @@ export default function ProposalPDFTemplate({
       duration:    !isHidden('bonds.duration'),
       rating:      !isHidden('bonds.rating'),
       precio:      !isHidden('bonds.precio'),
+      nominal:     !isHidden('bonds.nominal'),
       montos:      !isHidden('bonds.inversion'),
     }
     const labelColSpan = 2 + Object.values(show).filter(Boolean).length - (show.montos ? 1 : 0)
@@ -423,6 +424,7 @@ export default function ProposalPDFTemplate({
               {show.duration && <th style={{ ...bondTh, width: 42 }}>DUR. (A)</th>}
               {show.rating && <th style={{ ...bondTh, width: 44 }}>RATING</th>}
               {show.precio && <th style={{ ...bondTh, width: 58 }}>PRECIO (IND)</th>}
+              {show.nominal && <th style={{ ...bondTh, width: 72 }}>VALOR NOMINAL</th>}
               {show.montos && <th style={{ ...bondTh, width: mixedSale ? 96 : 72 }}>{valueLabel}</th>}
               {show.montos && <th style={{ ...bondTh, width: 72 }}>CUPÓN CORRIDO</th>}
               {show.montos && <th style={{ ...bondTh, width: mixedSale ? 110 : 80, borderRight: 'none' }}>{cashLabel}</th>}
@@ -444,6 +446,7 @@ export default function ProposalPDFTemplate({
                 {show.duration && <td style={bondTd}>{b.duration != null ? fmtNum(b.duration, 1) : '—'}</td>}
                 {show.rating && <td style={bondTd}>{b.rating ?? '—'}</td>}
                 {show.precio && <td style={bondTd}>{b.price != null ? fmtNum(b.price, 3) : '—'}</td>}
+                {show.nominal && <td style={{ ...bondTd, textAlign: 'right', fontWeight: 700 }}>{accrual.nominal > 0 ? fmtAmt(accrual.nominal) : '—'}</td>}
                 {show.montos && <td style={{ ...bondTd, textAlign: 'right', fontWeight: 600 }}>{fmtAmt(b.amount)}</td>}
                 {show.montos && <td style={{ ...bondTd, textAlign: 'right', fontWeight: 700, backgroundColor: '#FEF3C7' }}>{accrual.accruedInterest > 0 ? fmtAmt(accrual.accruedInterest) : '—'}</td>}
                 {show.montos && <td style={{ ...bondTd, textAlign: 'right', fontWeight: 700, borderRight: 'none', color: isVentaSide(b.operacion) ? '#15803D' : undefined }}>{fmtAmt(accrual.estimatedCashRequired)}</td>}
