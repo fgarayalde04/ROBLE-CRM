@@ -109,7 +109,7 @@ export function parseAprobacion(replyText: string): { decision: 'aprobada' | 're
   const si = /^(apruebo|aprobado|confirmo\s+la\s+orden)\b[.!,:]*/i.exec(text)
   if (no) { decision = 'rechazada'; rest = text.slice(no[0].length) }
   else if (si) { decision = 'aprobada'; rest = text.slice(si[0].length) }
-  if (!decision) return null
+  if (!decision) return parseRespuestaLibre(text)
 
   const comentario = rest
     .split(DETALLE_MARKER)[0]
@@ -118,4 +118,48 @@ export function parseAprobacion(replyText: string): { decision: 'aprobada' | 're
     .replace(/\s*Comentarios?\s*:\s*$/i, '')
     .trim()
   return { decision, comentario: comentario || null }
+}
+
+// ── Respuestas escritas a mano ("Confirmado", "Ok, adelante", "No, gracias") ──
+// Muchos clientes tocan "Responder" y escriben ellos. Se reconoce solo una
+// respuesta corta y clara; ante la mínima duda (una pregunta, un "pero", un
+// número, un cambio) devuelve null y la respuesta queda para que la lea el equipo.
+
+const SI_LIBRE = [
+  'confirmado', 'confirmada', 'confirmo', 'conforme', 'aprobado', 'aprobada', 'apruebo',
+  'autorizado', 'autorizada', 'autorizo', 'de acuerdo', 'ok', 'okey', 'okay', 'oka', 'dale',
+  'adelante', 'perfecto', 'perfecta', 'correcto', 'procedan', 'proceder', 'proceda',
+  'todo bien', 'está bien', 'esta bien', 'sin problema', 'no hay problema', 'sí', 'si',
+  'claro', 'excelente', 'genial',
+]
+const NO_LIBRE = [
+  'no', 'mejor no', 'no gracias', 'prefiero no avanzar', 'prefiero no', 'prefiero esperar',
+  'no avanzar', 'no avancen', 'no proceder', 'no procedan', 'no confirmo', 'no autorizo',
+  'no apruebo', 'cancelar', 'cancelen', 'cancelala',
+]
+const FRASES_LIBRES = [
+  ...SI_LIBRE.map((f) => ({ f, decision: 'aprobada' as const })),
+  ...NO_LIBRE.map((f) => ({ f, decision: 'rechazada' as const })),
+].sort((a, b) => b.f.length - a.f.length)   // la más larga primero: "no hay problema" antes que "no"
+
+// Lo que puede seguir a la palabra clave sin que cambie el sentido
+const SIGUE_OK = /^(gracias|muchas|mil|adelante|dale|ok|perfecto|saludos|slds|por favor|la orden|la operaci[oó]n|la compra|la venta|confirm|de acuerdo|claro|procedan|abrazo|atte|atentamente|cordialmente|un saludo|buen|quedo|enviado desde|s[ií]\b)/i
+const SALUDO_INICIAL = /^(hola|buen(os|as)?\s+(d[ií]as?|tardes|noches)|buenas)[\s,.!]*/i
+const FIRMA = /\b(gracias|saludos|slds|abrazo|atte|atentamente|cordialmente|enviado desde)\b/i
+const DUDA = /\?|\d|\b(pero|cambi\w*|modific\w*|en vez|en lugar|solo|sólo|salvo|excepto|menos|mitad|hasta|llam\w*|consult\w*|duda\w*)\b/i
+
+function parseRespuestaLibre(text: string): { decision: 'aprobada' | 'rechazada'; comentario: string | null } | null {
+  const t = text.replace(SALUDO_INICIAL, '')
+  const lower = t.toLowerCase()
+  const hit = FRASES_LIBRES.find(({ f }) => lower.startsWith(f) && !/[\p{L}\d]/u.test(t.charAt(f.length)))
+  if (!hit) return null
+
+  const after = t.slice(hit.f.length)
+  const afterTrim = after.replace(/^[\s.,!:;]+/, '')
+  const sigueBien = afterTrim === '' || /^[.,!:;]/.test(after) || SIGUE_OK.test(afterTrim) || /^\p{Lu}/u.test(afterTrim)
+  if (!sigueBien) return null   // "Confirmo que recibí…", "Si podés…", "No sé…"
+
+  const cuerpo = afterTrim.split(FIRMA)[0].replace(/[\s.,!:;]+$/, '').trim()
+  if (DUDA.test(cuerpo) || cuerpo.split(/\s+/).length > 12) return null
+  return { decision: hit.decision, comentario: afterTrim.trim() || null }
 }

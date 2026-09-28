@@ -38,6 +38,22 @@ describe('parseAprobacion', () => {
     expect(parseAprobacion('Prefiero no avanzar Código de confirmación: ABCD2345 Comentarios:')).toEqual({ decision: 'rechazada', comentario: null })
     expect(parseAprobacion('Confirmo que recibí el mail')).toBeNull()
   })
+  it('respuestas escritas a mano, cortas y claras', () => {
+    for (const t of ['Confirmado', 'Confirmado Juan Pérez', 'Hola, confirmado. Saludos', 'Ok, adelante', 'Sí, adelante',
+      'Dale!', 'Perfecto, muchas gracias', 'De acuerdo', 'No hay problema, adelante', 'Si. Gracias', 'Confirmo la operación, gracias']) {
+      expect(parseAprobacion(t)?.decision, t).toBe('aprobada')
+    }
+    for (const t of ['No, gracias', 'No gracias', 'Mejor no', 'Prefiero esperar', 'No.']) {
+      expect(parseAprobacion(t)?.decision, t).toBe('rechazada')
+    }
+  })
+  it('ante la duda no decide: queda para que lo lea el equipo', () => {
+    for (const t of ['Confirmo que recibí el mail', 'Si podés llamame', 'No sé, lo pienso', 'Ok pero comprá 50',
+      'Ok, pero comprá 50', 'Confirmado, pero solo la mitad', 'Ok, cambiá la cantidad', 'Dale, ¿a qué precio?',
+      'Gracias!', 'Recibido']) {
+      expect(parseAprobacion(t), t).toBeNull()
+    }
+  })
   it('un "apruebo" que no está al comienzo no cuenta', () => {
     expect(parseAprobacion('Consulta: si apruebo hoy, cuándo se ejecuta?')).toBeNull()
     expect(parseAprobacion('Gracias!')).toBeNull()
