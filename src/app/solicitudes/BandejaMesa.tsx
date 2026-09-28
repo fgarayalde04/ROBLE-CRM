@@ -252,7 +252,7 @@ export default function BandejaMesa({ isMesa, userName }: { isMesa: boolean; use
       'Ante cualquier consulta, no dude en comunicarse.',
       '',
       'Saludos,',
-      'Mesa de Operaciones | Roble Capital',
+      'Trading Desk | Roble Capital',
     ].filter(l => l !== undefined)
     setEmailAsunto(asunto)
     setEmailCuerpo(lines.join('\n'))

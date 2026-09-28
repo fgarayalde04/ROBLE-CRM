@@ -69,7 +69,7 @@ describe('buildAprobacionEmail', () => {
   })
   it('los botones aparecen solo después del detalle', () => {
     const detalle = built.html.indexOf('Detalle &lt;orden&gt;')
-    expect(built.html.indexOf('Apruebo')).toBeGreaterThan(detalle)
+    expect(built.html.indexOf('Aprobar esta orden')).toBeGreaterThan(detalle)
   })
   it('escapa el cuerpo en el HTML y deja instrucciones en el texto plano', () => {
     expect(built.html).toContain('Detalle &lt;orden&gt;')

@@ -113,7 +113,7 @@ function generateEmailText(blocks: OrderBlock[], clientName: string, clientNumbe
   lines.push(`Fecha de instrucción: ${fecha}`)
   lines.push(``)
   lines.push(`Saludos,`)
-  lines.push(`Mesa de Operaciones`)
+  lines.push(`Trading Desk`)
   lines.push(`Roble Capital`)
   lines.push(``)
   lines.push(`─────────────────────────────────────────`)
@@ -720,7 +720,7 @@ export default function OrdenesClient({ gmailConnected, initialTab, isAdmin = fa
               <div>
                 <label className={labelCls}>De</label>
                 <p className="text-sm px-3 py-2 rounded-lg border border-gray-100 bg-gray-50 text-gray-600">
-                  Mesa de Operaciones | Roble Capital
+                  Trading Desk | Roble Capital
                 </p>
               </div>
 
@@ -847,7 +847,7 @@ export default function OrdenesClient({ gmailConnected, initialTab, isAdmin = fa
                   {/* Email headers */}
                   <div className="px-4 py-3 border-b border-gray-100 bg-gray-50/60 space-y-1.5">
                     {[
-                      { label: 'De',            value: 'Mesa de Operaciones | Roble Capital' },
+                      { label: 'De',            value: 'Trading Desk | Roble Capital' },
                       { label: 'Para',          value: to || '—' },
                       { label: 'CC',            value: cc },
                       { label: 'Respuestas a',  value: TRADING_EMAIL },

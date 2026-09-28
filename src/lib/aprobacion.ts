@@ -71,14 +71,14 @@ export function buildAprobacionEmail(opts: {
     `<a href="${escapeHtml(href)}" style="display:inline-block;padding:12px 28px;margin:0 8px 8px 0;border-radius:8px;background:${bg};color:#ffffff;font-weight:600;font-size:15px;text-decoration:none">${label}</a>`
   const bloque = (titulo: string) => `<div style="padding:18px 20px;border:1px solid #e5e7eb;border-radius:12px;background:#f9fafb">
 <p style="margin:0 0 12px;font-weight:600;color:#2D3F52">${titulo}</p>
-${button(aprueboHref, 'Apruebo', '#2E7D52')}${button(noAprueboHref, 'No apruebo', '#B42318')}
+${button(aprueboHref, 'Aprobar esta orden', '#2E7D52')}${button(noAprueboHref, 'No apruebo', '#6B7280')}
 <p style="margin:8px 0 0;font-size:12px;color:#6b7280">Al tocar un botón se abre tu respuesta con el detalle de la orden, lista para enviar. Podés agregar comentarios. También podés responder este mail escribiendo APRUEBO o NO APRUEBO.</p>
 </div>`
 
   const html = `<!doctype html><html><body style="margin:0;padding:0">
 <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5;color:#1f2937;max-width:640px">
 <div style="margin:0 0 20px;white-space:pre-wrap">${escapeHtml(opts.body)}</div>
-${bloque('¿Aprobás esta orden?')}
+${bloque('Confirme su respuesta')}
 <p style="margin:10px 0 0;font-size:11px;color:#9ca3af">${REF_LABEL}: ${opts.ref}</p>
 </div></body></html>`
 

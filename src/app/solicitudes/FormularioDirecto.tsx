@@ -136,7 +136,7 @@ function generateEmailText(blocks: OrderBlock[], clientName: string, clientNumbe
   lines.push(`Fecha de instrucción: ${fecha}`)
   lines.push(``)
   lines.push(`Saludos,`)
-  lines.push(`Mesa de Operaciones`)
+  lines.push(`Trading Desk`)
   lines.push(`Roble Capital`)
   return lines.join('\n')
 }

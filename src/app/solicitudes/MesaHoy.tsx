@@ -227,7 +227,7 @@ function DetailPanel({
         sol.observaciones ?? '',
         '',
         'Saludos,',
-        'Mesa de Operaciones | Roble Capital',
+        'Trading Desk | Roble Capital',
       ].filter(l => l !== undefined)
       setEmailAsunto(`Confirmación de ${op} — ${sol.instrumento_nombre} — ${sol.client_name}`)
       setEmailCuerpo(lines.join('\n'))
