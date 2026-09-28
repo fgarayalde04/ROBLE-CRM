@@ -721,7 +721,7 @@ export default function MesaHoy({ isMesa, userName, openId }: { isMesa: boolean;
                         <Fragment key={line.key}>
                           {showHeader && (
                             <tr key={`h-${day}`} className="bg-gray-100/80">
-                              <td colSpan={10} className="px-3 py-1.5 text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                              <td colSpan={11} className="px-3 py-1.5 text-[10px] font-bold text-gray-500 uppercase tracking-wider">
                                 {day === today ? 'Hoy' : format(new Date(day + 'T12:00:00'), "EEEE d 'de' MMMM", { locale: es })}
                               </td>
                             </tr>

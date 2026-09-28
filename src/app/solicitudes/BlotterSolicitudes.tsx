@@ -688,7 +688,7 @@ export default function BlotterSolicitudes({ isMesa, userName }: { isMesa: boole
             </thead>
             <tbody className="divide-y divide-gray-50">
               {rows.length === 0 && !loading ? (
-                <tr><td colSpan={16} className="px-4 py-8 text-center text-sm text-gray-400">Sin resultados.</td></tr>
+                <tr><td colSpan={17} className="px-4 py-8 text-center text-sm text-gray-400">Sin resultados.</td></tr>
               ) : expandRows(rows).map(line => {
                 const row = line.row
                 const cfg = line.cancelada ? ESTADO_CFG.cancelada : (ESTADO_CFG[row.estado] ?? ESTADO_CFG.mesa_operaciones)
