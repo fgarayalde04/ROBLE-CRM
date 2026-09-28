@@ -20,7 +20,10 @@ export function isAprobacionToken(token: string): boolean {
   return new RegExp(`^[${REF_ALPHABET}]{8}$`).test(token)
 }
 
-const REF_LABEL = 'Ref. orden'
+const REF_LABEL = 'Código de confirmación'
+// Rótulos que se reconocen al leer la respuesta: el actual y el anterior
+// ("Ref. orden"), para los mails que ya salieron con ese texto.
+const REF_LABEL_RE = String.raw`(?:C[oó]digo\s+de\s+confirmaci[oó]n|Ref\.?\s*orden)`
 
 function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
@@ -85,9 +88,9 @@ ${bloque('Confirmá tu respuesta')}
 
 // ── Lectura de la respuesta ───────────────────────────────────────────────────
 
-/** Referencia de la orden dentro de la respuesta ("Ref. orden: ABCD2345"), si está. */
+/** Código de la orden dentro de la respuesta ("Código de confirmación: ABCD2345"), si está. */
 export function extractAprobacionRef(text: string): string | null {
-  const m = new RegExp(`Ref\\.?\\s*orden\\s*:?\\s*([${REF_ALPHABET}]{8})\\b`, 'i').exec(text)
+  const m = new RegExp(`${REF_LABEL_RE}\\s*:?\\s*([${REF_ALPHABET}]{8})\\b`, 'i').exec(text)
   return m ? m[1].toUpperCase() : null
 }
 
@@ -109,7 +112,7 @@ export function parseAprobacion(replyText: string): { decision: 'aprobada' | 're
 
   const comentario = rest
     .split(DETALLE_MARKER)[0]
-    .replace(new RegExp(`Ref\\.?\\s*orden\\s*:?\\s*[${REF_ALPHABET}]{8}\\b`, 'i'), '')
+    .replace(new RegExp(`${REF_LABEL_RE}\\s*:?\\s*[${REF_ALPHABET}]{8}\\b`, 'i'), '')
     .replace(/^\s*Comentarios?\s*:\s*/i, '')
     .replace(/\s*Comentarios?\s*:\s*$/i, '')
     .trim()
