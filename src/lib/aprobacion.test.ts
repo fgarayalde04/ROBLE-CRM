@@ -55,9 +55,8 @@ describe('buildAprobacionEmail', () => {
   })
   it('los botones arman una respuesta a trading@ con copia al asesor, la palabra clave y la referencia', () => {
     const hrefs = Array.from(built.html.matchAll(/href="([^"]+)"/g), (m) => m[1].replace(/&amp;/g, '&'))
-    // Dos arriba y los mismos dos al final
-    expect(hrefs).toHaveLength(4)
-    expect(hrefs.slice(2)).toEqual(hrefs.slice(0, 2))
+    // Un solo par de botones, al final
+    expect(hrefs).toHaveLength(2)
     const [si, no] = hrefs.map((h) => new URL(h))
     expect(si.protocol).toBe('mailto:')
     expect(si.pathname).toBe('trading@roblecapital.net')
@@ -68,10 +67,9 @@ describe('buildAprobacionEmail', () => {
     // El cliente ve el detalle de la orden mientras responde
     expect(si.searchParams.get('body')).toContain('----- Detalle de la orden -----\r\nDetalle <orden>')
   })
-  it('los botones aparecen antes y después del detalle', () => {
+  it('los botones aparecen solo después del detalle', () => {
     const detalle = built.html.indexOf('Detalle &lt;orden&gt;')
-    expect(built.html.indexOf('Apruebo')).toBeLessThan(detalle)
-    expect(built.html.lastIndexOf('Apruebo')).toBeGreaterThan(detalle)
+    expect(built.html.indexOf('Apruebo')).toBeGreaterThan(detalle)
   })
   it('escapa el cuerpo en el HTML y deja instrucciones en el texto plano', () => {
     expect(built.html).toContain('Detalle &lt;orden&gt;')

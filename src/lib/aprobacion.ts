@@ -44,8 +44,8 @@ export const DETALLE_MARKER = '----- Detalle de la orden -----'
 // tiene siempre completo.
 const DETALLE_EN_RESPUESTA_MAX = 1500
 
-// El mail de la orden: botones Apruebo / No apruebo arriba (bien visibles),
-// el detalle completo de la orden, y los botones de nuevo al final.
+// El mail de la orden: el detalle completo de la orden y, al final, los
+// botones Apruebo / No apruebo.
 export function buildAprobacionEmail(opts: {
   body: string
   subject: string
@@ -65,7 +65,7 @@ export function buildAprobacionEmail(opts: {
   const noAprueboHref = mailtoLink(opts.replyTo, cc, replySubject, draft('NO APRUEBO'))
 
   const instrucciones = 'Para aprobar esta orden respondé este mail con la palabra APRUEBO; para rechazarla, con NO APRUEBO. Podés agregar comentarios debajo.'
-  const text = `${instrucciones}\n\n${opts.body}\n\n—\n${instrucciones}\n${REF_LABEL}: ${opts.ref}`
+  const text = `${opts.body}\n\n—\n${instrucciones}\n${REF_LABEL}: ${opts.ref}`
 
   const button = (href: string, label: string, bg: string) =>
     `<a href="${escapeHtml(href)}" style="display:inline-block;padding:12px 28px;margin:0 8px 8px 0;border-radius:8px;background:${bg};color:#ffffff;font-weight:600;font-size:15px;text-decoration:none">${label}</a>`
@@ -77,9 +77,8 @@ ${button(aprueboHref, 'Apruebo', '#2E7D52')}${button(noAprueboHref, 'No apruebo'
 
   const html = `<!doctype html><html><body style="margin:0;padding:0">
 <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5;color:#1f2937;max-width:640px">
+<div style="margin:0 0 20px;white-space:pre-wrap">${escapeHtml(opts.body)}</div>
 ${bloque('¿Aprobás esta orden?')}
-<div style="margin:20px 0;white-space:pre-wrap">${escapeHtml(opts.body)}</div>
-${bloque('Confirmá tu respuesta')}
 <p style="margin:10px 0 0;font-size:11px;color:#9ca3af">${REF_LABEL}: ${opts.ref}</p>
 </div></body></html>`
 
