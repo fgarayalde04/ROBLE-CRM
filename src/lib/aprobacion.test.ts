@@ -10,6 +10,11 @@ describe('referencia de la orden', () => {
     expect(extractAprobacionRef('APRUEBO Ref. orden: ABCD2345 Comentarios: dale')).toBe('ABCD2345')
     expect(extractAprobacionRef('no apruebo ref orden abcd2345')).toBe('ABCD2345')
   })
+  it('lee el rótulo nuevo, con o sin tildes', () => {
+    expect(extractAprobacionRef('APRUEBO Código de confirmación: ABCD2345')).toBe('ABCD2345')
+    expect(extractAprobacionRef('no apruebo codigo de confirmacion abcd2345')).toBe('ABCD2345')
+    expect(parseAprobacion('APRUEBO Código de confirmación: ABCD2345 Comentarios: dale')).toEqual({ decision: 'aprobada', comentario: 'dale' })
+  })
   it('sin referencia → null', () => {
     expect(extractAprobacionRef('Apruebo, gracias')).toBeNull()
   })
@@ -58,7 +63,7 @@ describe('buildAprobacionEmail', () => {
     expect(si.pathname).toBe('trading@roblecapital.net')
     expect(si.searchParams.get('cc')).toBe('asesor@roblecapital.net')
     expect(si.searchParams.get('subject')).toBe('Re: Confirmacion de orden - 1234')
-    expect(si.searchParams.get('body')).toMatch(/^APRUEBO\r\nRef\. orden: ABCD2345/)
+    expect(si.searchParams.get('body')).toMatch(/^APRUEBO\r\nCódigo de confirmación: ABCD2345/)
     expect(no.searchParams.get('body')).toMatch(/^NO APRUEBO\r\n/)
     // El cliente ve el detalle de la orden mientras responde
     expect(si.searchParams.get('body')).toContain('----- Detalle de la orden -----\r\nDetalle <orden>')
@@ -71,6 +76,6 @@ describe('buildAprobacionEmail', () => {
   it('escapa el cuerpo en el HTML y deja instrucciones en el texto plano', () => {
     expect(built.html).toContain('Detalle &lt;orden&gt;')
     expect(built.text).toContain('APRUEBO')
-    expect(built.text).toContain('Ref. orden: ABCD2345')
+    expect(built.text).toContain('Código de confirmación: ABCD2345')
   })
 })
