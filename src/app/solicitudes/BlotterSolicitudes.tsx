@@ -19,6 +19,7 @@ interface Solicitud {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   assets_json?: any[] | null
   precio_ejecutado?: number | null; valor_efectivo?: number | null
+  comentario_ejecucion?: string | null
   precio_tipo?: string | null; precio_limite?: string | null; vigencia?: string | null
   canal?: string | null; cc_emails?: string[] | null; opera_asesor?: boolean | null
   ingresada_por?: string | null
@@ -97,6 +98,7 @@ function DetalleSolicitud({ sol, eventos, isMesa, userName, onAction, onClose, o
   const [showCancelar, setShowCancelar] = useState(false)
   const [precio, setPrecio] = useState('')
   const [valor,  setValor]  = useState('')
+  const [comentarioEj, setComentarioEj] = useState('')
   const [motivo, setMotivo] = useState('')
   const [busy,   setBusy]   = useState(false)
   const [tab, setTab]       = useState<'posiciones' | 'mail' | 'timeline'>('posiciones')
@@ -219,6 +221,7 @@ function DetalleSolicitud({ sol, eventos, isMesa, userName, onAction, onClose, o
                 sol.operador     ? ['Operador', sol.operador]                                : null,
                 sol.precio_ejecutado ? ['Precio ejec.', String(sol.precio_ejecutado)]       : null,
                 sol.valor_efectivo   ? ['Valor ef.', `${sol.moneda} ${Number(sol.valor_efectivo).toLocaleString('es-UY')}`] : null,
+                sol.comentario_ejecucion ? ['Comentario ejec.', sol.comentario_ejecucion] : null,
                 sol.comision     ? ['Comisión', sol.comision]                               : null,
               ] as ([string,string]|null)[]).filter(Boolean).map((entry) => {
                 const [label, value] = entry as [string, string]
@@ -293,10 +296,16 @@ function DetalleSolicitud({ sol, eventos, isMesa, userName, onAction, onClose, o
                 <input type="number" step="0.01" className="w-full border border-gray-200 rounded px-3 py-2 text-sm"
                   value={valor} onChange={e => setValor(e.target.value)} placeholder="0.00" />
               </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Comentario (opcional)</label>
+                <textarea rows={3} className="w-full border border-gray-200 rounded px-3 py-2 text-sm"
+                  value={comentarioEj} onChange={e => setComentarioEj(e.target.value)}
+                  placeholder="Ej.: se ejecutaron 90 nominales en lugar de 100" />
+              </div>
             </div>
             <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-2">
               <button onClick={() => setShowEjecutar(false)} className="px-4 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50">Cancelar</button>
-              <button onClick={async () => { await act('ejecutar', { precio_ejecutado: precio||null, valor_efectivo: valor||null }); setShowEjecutar(false); onRefresh() }}
+              <button onClick={async () => { await act('ejecutar', { precio_ejecutado: precio||null, valor_efectivo: valor||null, comentario: comentarioEj.trim() || null }); setShowEjecutar(false); onRefresh() }}
                 disabled={busy} className="px-4 py-2 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 font-medium">
                 Confirmar ejecución
               </button>

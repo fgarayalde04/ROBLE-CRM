@@ -48,6 +48,7 @@ interface SolicitudDetail extends Solicitud {
   assets_json: any[] | null
   precio_ejecutado: number | null
   valor_efectivo: number | null
+  comentario_ejecucion?: string | null
   cancelado_at: string | null
   cancelado_motivo: string | null
 }
@@ -185,6 +186,7 @@ export default function BandejaMesa({ isMesa, userName }: { isMesa: boolean; use
   const [showEjecucion, setShowEjecucion] = useState(false)
   const [precioEj, setPrecioEj] = useState('')
   const [valorEf, setValorEf]   = useState('')
+  const [comentarioEj, setComentarioEj] = useState('')
 
   // Cancelar modal
   const [showCancelar, setShowCancelar] = useState(false)
@@ -330,9 +332,10 @@ export default function BandejaMesa({ isMesa, userName }: { isMesa: boolean; use
     await patch('ejecutar', {
       precio_ejecutado: precioEj ? Number(precioEj) : null,
       valor_efectivo:   valorEf  ? Number(valorEf)  : null,
+      comentario:       comentarioEj.trim() || null,
     })
     setShowEjecucion(false)
-    setPrecioEj(''); setValorEf('')
+    setPrecioEj(''); setValorEf(''); setComentarioEj('')
   }
 
   async function handleCancelar() {
@@ -483,6 +486,7 @@ export default function BandejaMesa({ isMesa, userName }: { isMesa: boolean; use
                 selected.cupon      ? ['Cupón', selected.cupon + '%']      : null,
                 ['Asesor', selected.asesor],
                 selected.operador   ? ['Operador', selected.operador]      : null,
+                selected.comentario_ejecucion ? ['Comentario ejec.', selected.comentario_ejecucion] : null,
                 selected.comision   ? ['Comisión', selected.comision]      : null,
               ].filter(Boolean).map((entry) => {
                 const [label, value] = entry as [string, string]
@@ -670,6 +674,12 @@ export default function BandejaMesa({ isMesa, userName }: { isMesa: boolean; use
                 <label className="block text-xs font-medium text-gray-500 mb-1">Valor efectivo (opcional)</label>
                 <input type="number" step="0.01" className="w-full border border-gray-200 rounded px-3 py-2 text-sm focus:outline-none"
                   value={valorEf} onChange={e => setValorEf(e.target.value)} placeholder="0.00" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Comentario (opcional)</label>
+                <textarea rows={3} className="w-full border border-gray-200 rounded px-3 py-2 text-sm"
+                  value={comentarioEj} onChange={e => setComentarioEj(e.target.value)}
+                  placeholder="Ej.: se ejecutaron 90 nominales en lugar de 100" />
               </div>
             </div>
             <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-2">

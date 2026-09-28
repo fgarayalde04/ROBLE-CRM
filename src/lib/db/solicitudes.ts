@@ -21,7 +21,7 @@ const LIST_COLUMNS = `
   precio_tipo, precio_limite, vigencia,
   operador, tomado_at, mail_enviado_at, ejecutado_at,
   created_at, updated_at, cc_emails, additional_emails, assets_json,
-  aprobacion_cliente, aprobacion_comentario, aprobacion_at
+  aprobacion_cliente, aprobacion_comentario, aprobacion_at, comentario_ejecucion
 `
 
 export interface ListSolicitudesFilters {
