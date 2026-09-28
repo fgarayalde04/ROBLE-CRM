@@ -443,7 +443,7 @@ function expandRows(rows: Solicitud[]): BlotterLine[] {
 }
 
 function exportCSV(rows: Solicitud[]) {
-  const headers = ['N° Interno','Fecha','Hora','Cliente','N°','Asesor','Opera','Operación','Tipo','Instrumento','Moneda','Monto ($)','Cantidad','Estado','Operador','Fecha ejecución']
+  const headers = ['N° Interno','Fecha','Hora','Cliente','N°','Asesor','Opera','Operación','Tipo','Instrumento','Moneda','Monto ($)','Cantidad','Estado','Operador','Fecha ejecución','Comentario']
   const lines = expandRows(rows).map(l => [
     l.row.solicitud_id,
     l.row.fecha_operacion,
@@ -459,6 +459,7 @@ function exportCSV(rows: Solicitud[]) {
     ESTADO_CFG[l.row.estado]?.label ?? l.row.estado,
     l.row.operador ?? '',
     l.row.ejecutado_at ? format(new Date(l.row.ejecutado_at), 'dd/MM/yyyy HH:mm') : '',
+    l.row.comentario_ejecucion ?? '',
   ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))
   const csv = [headers.join(','), ...lines].join('\n')
   const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' })
@@ -680,7 +681,7 @@ export default function BlotterSolicitudes({ isMesa, userName }: { isMesa: boole
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-100">
               <tr>
-                {['N° Interno','Fecha','Hora','Cliente','Asesor','Opera','Operación','Tipo','Instrumento','Moneda','Monto ($)','Cantidad','Estado','Operador','Ejecutada',''].map(h => (
+                {['N° Interno','Fecha','Hora','Cliente','Asesor','Opera','Operación','Tipo','Instrumento','Moneda','Monto ($)','Cantidad','Estado','Operador','Ejecutada','Comentario',''].map(h => (
                   <th key={h} className="px-3 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -747,6 +748,7 @@ export default function BlotterSolicitudes({ isMesa, userName }: { isMesa: boole
                     <td className="px-3 py-2 text-xs text-gray-400 whitespace-nowrap">
                       {row.ejecutado_at ? format(new Date(row.ejecutado_at), 'dd/MM HH:mm') : '—'}
                     </td>
+                    <td className="px-3 py-2 text-xs text-gray-600 max-w-[220px] truncate" title={row.comentario_ejecucion ?? undefined}>{row.comentario_ejecucion ?? <span className="text-gray-300">—</span>}</td>
                     <td className="px-3 py-2 whitespace-nowrap">
                       {canCancel && (
                         <button

@@ -22,6 +22,7 @@ interface Solicitud {
   client_number: string
   client_email: string | null
   operador: string | null
+  comentario_ejecucion?: string | null
   tomado_at: string | null
   mail_enviado_at: string | null
   ejecutado_at: string | null
@@ -48,7 +49,6 @@ interface SolicitudDetail extends Solicitud {
   assets_json: any[] | null
   precio_ejecutado: number | null
   valor_efectivo: number | null
-  comentario_ejecucion?: string | null
   cancelado_at: string | null
   cancelado_motivo: string | null
 }
@@ -397,7 +397,7 @@ export default function BandejaMesa({ isMesa, userName }: { isMesa: boolean; use
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 border-b border-gray-100">
                   <tr>
-                    {['ID','Cliente','Asesor','Operación','Instrumento','Monto','Estado','Operador'].map(h => (
+                    {['ID','Cliente','Asesor','Operación','Instrumento','Monto','Estado','Operador','Comentario'].map(h => (
                       <th key={h} className="px-3 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
@@ -435,6 +435,7 @@ export default function BandejaMesa({ isMesa, userName }: { isMesa: boolean; use
                           </span>
                         </td>
                         <td className="px-3 py-2.5 text-gray-500 whitespace-nowrap">{row.operador ?? <span className="text-gray-300">—</span>}</td>
+                        <td className="px-3 py-2.5 text-xs text-gray-600 max-w-[220px] truncate" title={row.comentario_ejecucion ?? undefined}>{row.comentario_ejecucion ?? <span className="text-gray-300">—</span>}</td>
                       </tr>
                     )
                   })}

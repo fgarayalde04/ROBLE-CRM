@@ -703,7 +703,7 @@ export default function MesaHoy({ isMesa, userName, openId }: { isMesa: boolean;
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 border-b border-gray-100">
                   <tr>
-                    {['Hora','Cliente','Asesor','Opera','Operación','Instrumento','Monto ($)','Cantidad','Estado','Operador'].map(h => (
+                    {['Hora','Cliente','Asesor','Opera','Operación','Instrumento','Monto ($)','Cantidad','Estado','Operador','Comentario'].map(h => (
                       <th key={h} className="px-3 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
@@ -774,6 +774,7 @@ export default function MesaHoy({ isMesa, userName, openId }: { isMesa: boolean;
                           </div>
                         </td>
                         <td className="px-3 py-2 text-xs text-gray-500 whitespace-nowrap">{row.operador ?? '—'}</td>
+                        <td className="px-3 py-2 text-xs text-gray-600 max-w-[220px] truncate" title={row.comentario_ejecucion ?? undefined}>{row.comentario_ejecucion ?? <span className="text-gray-300">—</span>}</td>
                       </tr>
                         </Fragment>
                       )
