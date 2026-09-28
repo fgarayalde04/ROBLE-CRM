@@ -151,12 +151,12 @@ const DUDA = /\?|\d|\b(pero|cambi\w*|modific\w*|en vez|en lugar|solo|sólo|salvo
 function parseRespuestaLibre(text: string): { decision: 'aprobada' | 'rechazada'; comentario: string | null } | null {
   const t = text.replace(SALUDO_INICIAL, '')
   const lower = t.toLowerCase()
-  const hit = FRASES_LIBRES.find(({ f }) => lower.startsWith(f) && !/[\p{L}\d]/u.test(t.charAt(f.length)))
+  const hit = FRASES_LIBRES.find(({ f }) => lower.startsWith(f) && !/[A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9]/.test(t.charAt(f.length)))
   if (!hit) return null
 
   const after = t.slice(hit.f.length)
   const afterTrim = after.replace(/^[\s.,!:;]+/, '')
-  const sigueBien = afterTrim === '' || /^[.,!:;]/.test(after) || SIGUE_OK.test(afterTrim) || /^\p{Lu}/u.test(afterTrim)
+  const sigueBien = afterTrim === '' || /^[.,!:;]/.test(after) || SIGUE_OK.test(afterTrim) || /^[A-ZÁÉÍÓÚÜÑ]/.test(afterTrim)
   if (!sigueBien) return null   // "Confirmo que recibí…", "Si podés…", "No sé…"
 
   const cuerpo = afterTrim.split(FIRMA)[0].replace(/[\s.,!:;]+$/, '').trim()
