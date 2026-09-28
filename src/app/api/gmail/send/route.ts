@@ -6,7 +6,8 @@ import {
   getValidGoogleToken, getGoogleEmail, getGoogleName,
 } from '@/lib/google/tokens'
 import { sendEmail } from '@/lib/google/gmail'
-import { getSolicitud } from '@/lib/db/solicitudes'
+import { getSolicitud, ensureAprobacionToken } from '@/lib/db/solicitudes'
+import { newAprobacionToken, buildAprobacionEmail } from '@/lib/aprobacion'
 import { getActiveUserEmail } from '@/lib/db/users'
 
 export const dynamic = 'force-dynamic'
@@ -15,7 +16,7 @@ export async function POST(req: NextRequest) {
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
 
-  const { to, cc, subject, body, replyTo, viaMesa, solicitud_uuid } = await req.json()
+  const { to, cc, subject, body, replyTo, viaMesa, solicitud_uuid, con_aprobacion } = await req.json()
   if (!to || !subject || !body) {
     return NextResponse.json({ error: 'to, subject y body son requeridos' }, { status: 400 })
   }
@@ -72,8 +73,35 @@ export async function POST(req: NextRequest) {
     effectiveReplyTo = replyTo ?? undefined
   }
 
+  // Mail de orden (desde trading@): lleva los botones Apruebo / No apruebo.
+  // Con solicitud_uuid (lo manda Mesa) el token queda guardado en la orden;
+  // con con_aprobacion (envío directo del asesor, la orden todavía no existe)
+  // se devuelve para que se guarde al registrarla.
+  let aprobacionToken: string | null = null
+  let mailText: string = body
+  let mailHtml: string | undefined
+  if (viaMesa && (solicitud_uuid || con_aprobacion)) {
+    try {
+      aprobacionToken = solicitud_uuid
+        ? await ensureAprobacionToken(solicitud_uuid, newAprobacionToken())
+        : newAprobacionToken()
+      if (aprobacionToken) {
+        const proto = req.headers.get('x-forwarded-proto') ?? 'https'
+        const host = req.headers.get('x-forwarded-host') ?? req.headers.get('host')
+        const baseUrl = host ? `${proto}://${host}` : (process.env.NEXT_PUBLIC_APP_URL ?? req.nextUrl.origin)
+        const built = buildAprobacionEmail(body, baseUrl, aprobacionToken)
+        mailText = built.text
+        mailHtml = built.html
+      }
+    } catch (err: any) {
+      // Sin botones antes que sin mail: el cliente igual puede responder.
+      console.error('[gmail/send] No se pudo preparar la aprobación:', err.message)
+      aprobacionToken = null
+    }
+  }
+
   async function trySend(token: string) {
-    return sendEmail(token, { from: fromHeader, to, cc, subject, body, replyTo: effectiveReplyTo })
+    return sendEmail(token, { from: fromHeader, to, cc, subject, body: mailText, html: mailHtml, replyTo: effectiveReplyTo })
   }
 
   try {
@@ -104,7 +132,7 @@ export async function POST(req: NextRequest) {
       user_name:   session.name,
     })
 
-    return NextResponse.json({ ok: true, message_id: message.id, thread_id: message.threadId })
+    return NextResponse.json({ ok: true, message_id: message.id, thread_id: message.threadId, aprobacion_token: aprobacionToken })
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 400 })
   }

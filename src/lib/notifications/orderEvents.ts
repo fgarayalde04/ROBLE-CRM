@@ -237,8 +237,17 @@ export async function notifyClienteRespondio(reply: ReplyCtx, asesor: { id: stri
     push,
   }
 
+  const recipients = await clientResponseRecipients(reply.solicitudId ? asesor : null)
+  await Promise.all(Array.from(recipients, ([userId, userName]) =>
+    notifyAndMaybePush({ ...common, userId, userName })
+  ))
+}
+
+// Quién se entera de lo que contesta un cliente: el asesor dueño de la orden +
+// toda la Mesa/admin/asistentes.
+async function clientResponseRecipients(asesor: { id: string | null; name: string } | null) {
   const recipients = new Map<string, string>()
-  if (reply.solicitudId && asesor?.id) recipients.set(asesor.id, asesor.name)
+  if (asesor?.id) recipients.set(asesor.id, asesor.name)
   for (const r of await getUsersByRoles(MESA_ROLES)) recipients.set(r.id, r.name)
 
   // Solo para probar: GMAIL_REPLY_NOTIFY_ONLY="a@x.com,b@y.com" acota los avisos a
@@ -251,8 +260,32 @@ export async function notifyClienteRespondio(reply: ReplyCtx, asesor: { id: stri
       if (!allowed.has(userId)) recipients.delete(userId)
     }
   }
+  return recipients
+}
 
+// El cliente tocó Apruebo / No apruebo en el mail de la orden — interna + push
+// al asesor y a Mesa. Solo se registra una respuesta por orden, así que el
+// dedup por (orden, evento, usuario) alcanza.
+export async function notifyClienteAprobacion(
+  order: OrderCtx,
+  decision: 'aprobada' | 'rechazada',
+  comentario: string | null,
+) {
+  const client = order.clientName ?? 'El cliente'
+  const aprobo = decision === 'aprobada'
+  const title = aprobo ? `✅ ${client} aprobó la orden` : `❌ ${client} no aprobó la orden`
+  const said = comentario ? `: "${truncate(comentario, MESSAGE_SNIPPET_MAX)}"` : ''
+  const recipients = await clientResponseRecipients({ id: order.asesorId, name: order.asesorName })
   await Promise.all(Array.from(recipients, ([userId, userName]) =>
-    notifyAndMaybePush({ ...common, userId, userName })
+    notifyAndMaybePush({
+      userId, userName,
+      notifType: aprobo ? 'cliente_aprobo' : 'cliente_rechazo',
+      title,
+      message: `${title}${said}`,
+      clientName: order.clientName,
+      entityId: order.id,
+      url: orderUrl(order.id),
+      push: { title, body: comentario ? `"${truncate(comentario, PUSH_SNIPPET_MAX)}"` : (aprobo ? 'Aprobada desde el mail' : 'Rechazada desde el mail') },
+    })
   ))
 }

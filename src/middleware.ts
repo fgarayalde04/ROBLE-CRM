@@ -13,6 +13,9 @@ const PUBLIC_PATHS = [
   '/sw.js',
   '/icons/',
   '/apple-touch-icon.png',
+  // Link del mail de orden: el cliente aprueba o rechaza sin cuenta en el CRM.
+  // La página solo responde a un token aleatorio de 64 caracteres.
+  '/aprobar/',
 ]
 
 // Paths accessible to users with modo_asesor enabled (server-controlled)

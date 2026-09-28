@@ -8,6 +8,7 @@ export interface SendEmailInput {
   cc?: string | string[]
   subject: string
   body: string          // plain text body
+  html?: string         // versión HTML opcional — se manda como multipart/alternative junto al texto
   replyTo?: string
 }
 
@@ -18,8 +19,30 @@ export interface GmailMessage {
   snippet?: string
 }
 
+// Texto + HTML: el cliente de mail muestra el HTML (con botones) y cae al
+// texto si no lo soporta. Cada parte en base64 para no romper acentos.
+function multipartBody(text: string, html: string): string[] {
+  const boundary = `roble_${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`
+  const b64 = (str: string) => (Buffer.from(str, 'utf8').toString('base64').match(/.{1,76}/g) ?? []).join('\r\n')
+  return [
+    `Content-Type: multipart/alternative; boundary="${boundary}"`,
+    '',
+    `--${boundary}`,
+    'Content-Type: text/plain; charset=UTF-8',
+    'Content-Transfer-Encoding: base64',
+    '',
+    b64(text),
+    `--${boundary}`,
+    'Content-Type: text/html; charset=UTF-8',
+    'Content-Transfer-Encoding: base64',
+    '',
+    b64(html),
+    `--${boundary}--`,
+  ]
+}
+
 /**
- * Encode a plain-text email as RFC 2822 base64url for Gmail API
+ * Encode an email (plain text, or text + HTML) as RFC 2822 base64url for Gmail API
  */
 function encodeEmail(input: SendEmailInput): string {
   const toAddresses = Array.isArray(input.to) ? input.to.join(', ') : input.to
@@ -33,10 +56,8 @@ function encodeEmail(input: SendEmailInput): string {
     ccAddresses ? `Cc: ${ccAddresses}` : null,
     input.replyTo ? `Reply-To: ${input.replyTo}` : null,
     `Subject: ${input.subject}`,
-    'Content-Type: text/plain; charset=UTF-8',
     'MIME-Version: 1.0',
-    '',
-    input.body,
+    ...(input.html ? multipartBody(input.body, input.html) : ['Content-Type: text/plain; charset=UTF-8', '', input.body]),
   ]
     .filter((l) => l !== null)
     .join('\r\n')

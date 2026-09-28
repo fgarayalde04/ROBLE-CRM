@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { generateSolicitudId, listSolicitudes, createSolicitud, insertSolicitudEvento } from '@/lib/db/solicitudes'
 import { notifyNuevaOrden } from '@/lib/notifications/orderEvents'
+import { isAprobacionToken } from '@/lib/aprobacion'
 
 const MESA_ROLES  = ['admin', 'ceo', 'direccion', 'mesa', 'asistente']
 const ADMIN_ROLES = ['admin', 'ceo', 'direccion']
@@ -115,6 +116,9 @@ export async function POST(req: NextRequest) {
       mail_thread_id:    body.mail_thread_id  ?? null,
       mail_message_id:   body.mail_message_id ?? null,
       notif_mail_enviada: true,
+      // Token del link Apruebo / No apruebo que ya salió en el mail
+      ...(typeof body.aprobacion_token === 'string' && isAprobacionToken(body.aprobacion_token)
+        ? { aprobacion_token: body.aprobacion_token } : {}),
       ...(isMesa ? {
         operador:    session.name,
         operador_id: session.id,

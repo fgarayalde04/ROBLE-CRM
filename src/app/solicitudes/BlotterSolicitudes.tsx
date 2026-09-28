@@ -22,6 +22,8 @@ interface Solicitud {
   precio_tipo?: string | null; precio_limite?: string | null; vigencia?: string | null
   canal?: string | null; cc_emails?: string[] | null; opera_asesor?: boolean | null
   ingresada_por?: string | null
+  aprobacion_cliente?: 'aprobada' | 'rechazada' | null
+  aprobacion_comentario?: string | null; aprobacion_at?: string | null
   _legacy?: boolean
 }
 
@@ -121,6 +123,17 @@ function DetalleSolicitud({ sol, eventos, isMesa, userName, onAction, onClose, o
         </div>
         <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl shrink-0 leading-none">×</button>
       </div>
+
+      {/* Respuesta del cliente desde los botones del mail */}
+      {sol.aprobacion_cliente && (
+        <div className={`mx-4 mt-3 rounded-lg border px-3 py-2 shrink-0 ${sol.aprobacion_cliente === 'aprobada' ? 'border-emerald-200 bg-emerald-50' : 'border-red-200 bg-red-50'}`}>
+          <p className={`text-xs font-semibold ${sol.aprobacion_cliente === 'aprobada' ? 'text-emerald-800' : 'text-red-800'}`}>
+            {sol.aprobacion_cliente === 'aprobada' ? '✅ El cliente aprobó la orden' : '❌ El cliente no aprobó la orden'}
+            {sol.aprobacion_at && <span className="font-normal text-gray-500"> · {format(new Date(sol.aprobacion_at), "d MMM HH:mm", { locale: es })}</span>}
+          </p>
+          {sol.aprobacion_comentario && <p className="mt-0.5 text-[11px] text-gray-700 whitespace-pre-wrap">“{sol.aprobacion_comentario}”</p>}
+        </div>
+      )}
 
       {/* Progress — fijo, no scrollea */}
       {!sol._legacy && sol.estado !== 'cancelada' && (
@@ -250,7 +263,7 @@ function DetalleSolicitud({ sol, eventos, isMesa, userName, onAction, onClose, o
               <ul className="space-y-2">
                 {eventos.map(ev => (
                   <li key={ev.id} className="flex gap-2">
-                    <div className="w-1.5 h-1.5 rounded-full bg-gray-300 mt-1.5 shrink-0" />
+                    <div className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${ev.tipo === 'cliente_aprobo' ? 'bg-emerald-500' : ev.tipo === 'cliente_rechazo' ? 'bg-red-500' : ev.tipo === 'cliente_respondio' ? 'bg-blue-400' : 'bg-gray-300'}`} />
                     <div>
                       <p className="text-[11px] text-gray-700">{ev.descripcion}</p>
                       <p className="text-[10px] text-gray-400">{format(new Date(ev.created_at), "d MMM HH:mm", { locale: es })}</p>
@@ -711,6 +724,11 @@ export default function BlotterSolicitudes({ isMesa, userName }: { isMesa: boole
                       <div className="flex items-center gap-1.5">
                         <div className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
                         <span className={`text-[10px] font-semibold ${cfg.color}`}>{cfg.label}</span>
+                        {row.aprobacion_cliente && (
+                          <span title={row.aprobacion_cliente === 'aprobada' ? 'El cliente aprobó' : 'El cliente no aprobó'} className="text-[11px]">
+                            {row.aprobacion_cliente === 'aprobada' ? '✅' : '❌'}
+                          </span>
+                        )}
                       </div>
                     </td>
                     <td className="px-3 py-2 text-xs text-gray-500 whitespace-nowrap">{row.operador ?? '—'}</td>

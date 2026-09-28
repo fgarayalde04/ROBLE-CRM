@@ -20,7 +20,8 @@ const LIST_COLUMNS = `
   fecha_operacion, client_name, client_number, client_email,
   precio_tipo, precio_limite, vigencia,
   operador, tomado_at, mail_enviado_at, ejecutado_at,
-  created_at, updated_at, cc_emails, additional_emails, assets_json
+  created_at, updated_at, cc_emails, additional_emails, assets_json,
+  aprobacion_cliente, aprobacion_comentario, aprobacion_at
 `
 
 export interface ListSolicitudesFilters {
@@ -102,6 +103,35 @@ export async function insertSolicitudEvento(evento: Record<string, any>) {
 
 export async function getSolicitud(id: string) {
   const { rows } = await pool.query(`select * from solicitudes where id = $1`, [id])
+  return rows[0] ?? null
+}
+
+// ── Aprobación del cliente desde el mail (/aprobar/<token>) ──────────────────
+
+// Devuelve el token de la orden, creándolo si todavía no tiene. Si Mesa reenvía
+// el mail, el link sigue siendo el mismo.
+export async function ensureAprobacionToken(id: string, newToken: string): Promise<string | null> {
+  const { rows } = await pool.query(
+    `update solicitudes set aprobacion_token = coalesce(aprobacion_token, $2) where id = $1 returning aprobacion_token`,
+    [id, newToken]
+  )
+  return rows[0]?.aprobacion_token ?? null
+}
+
+export async function getSolicitudByAprobacionToken(token: string) {
+  const { rows } = await pool.query(`select * from solicitudes where aprobacion_token = $1`, [token])
+  return rows[0] ?? null
+}
+
+// Solo la primera respuesta cuenta: si ya contestó, no se pisa (devuelve null).
+export async function registrarAprobacionCliente(token: string, decision: 'aprobada' | 'rechazada', comentario: string | null) {
+  const { rows } = await pool.query(
+    `update solicitudes
+        set aprobacion_cliente = $2, aprobacion_comentario = $3, aprobacion_at = now(), updated_at = now()
+      where aprobacion_token = $1 and aprobacion_cliente is null
+      returning *`,
+    [token, decision, comentario]
+  )
   return rows[0] ?? null
 }
 

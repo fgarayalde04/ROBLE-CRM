@@ -553,6 +553,7 @@ export default function FormularioDirecto({ onBack, gmailConnected = false }: Pr
           subject: asunto,
           body: emailBody,
           viaMesa: true,
+          con_aprobacion: true,
         }),
       })
       const sendData = await sendRes.json()
@@ -589,6 +590,7 @@ export default function FormularioDirecto({ onBack, gmailConnected = false }: Pr
           directo:            true,
           mail_thread_id:     sendData.thread_id ?? null,
           mail_message_id:    sendData.message_id ?? null,
+          aprobacion_token:   sendData.aprobacion_token ?? null,
         }),
       })
       const data = await res.json()
