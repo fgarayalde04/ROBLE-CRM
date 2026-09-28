@@ -58,8 +58,6 @@ export interface EmailReplyInboxRow {
   subject: string | null
   snippet: string | null
   match_method: EmailReplyMatchMethod
-  reviewed_at: string | null
-  reviewed_by: string | null
   solicitud_uuid: string | null
   solicitud_id: string | null
   client_name: string | null
@@ -72,7 +70,6 @@ export interface EmailReplyInboxRow {
 // se pudieron asociar a una orden solo las ve Mesa.
 export async function listEmailRepliesInbox(opts: {
   soloAsesor: { id: string; name: string } | null
-  pendientes: boolean
   limit: number
 }): Promise<EmailReplyInboxRow[]> {
   const where: string[] = []
@@ -81,11 +78,9 @@ export async function listEmailRepliesInbox(opts: {
     params.push(opts.soloAsesor.id, opts.soloAsesor.name)
     where.push(`(s.asesor_id = $${params.length - 1} or (s.asesor_id is null and s.asesor = $${params.length}))`)
   }
-  if (opts.pendientes) where.push('e.reviewed_at is null')
   params.push(opts.limit)
   const { rows } = await pool.query(
     `select e.id, e.gmail_thread_id, e.from_email, e.received_at, e.subject, e.snippet, e.match_method,
-            e.reviewed_at, e.reviewed_by,
             s.id as solicitud_uuid, s.solicitud_id, s.client_name, s.asesor, s.estado
        from email_replies e
        left join solicitudes s on s.id = e.solicitud_id
@@ -95,23 +90,6 @@ export async function listEmailRepliesInbox(opts: {
     params
   )
   return rows as EmailReplyInboxRow[]
-}
-
-export async function getEmailReplyAsesorId(id: string): Promise<{ exists: boolean; asesorId: string | null; asesor: string | null }> {
-  const { rows } = await pool.query(
-    `select s.asesor_id, s.asesor from email_replies e left join solicitudes s on s.id = e.solicitud_id where e.id = $1`,
-    [id]
-  )
-  if (!rows[0]) return { exists: false, asesorId: null, asesor: null }
-  return { exists: true, asesorId: rows[0].asesor_id ?? null, asesor: rows[0].asesor ?? null }
-}
-
-// reviewed=false la vuelve a dejar pendiente.
-export async function setEmailReplyReviewed(id: string, reviewedBy: string | null) {
-  await pool.query(
-    `update email_replies set reviewed_at = case when $2::text is null then null else now() end, reviewed_by = $2 where id = $1`,
-    [id, reviewedBy]
-  )
 }
 
 // ─── Estado del watch de Gmail (fila única) ──────────────────────────────────
