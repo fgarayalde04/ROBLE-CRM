@@ -1,7 +1,7 @@
 import { randomInt } from 'crypto'
 
-// Aprobación del cliente directo desde el mail de la orden. Los links
-// "Confirmo la orden" / "Prefiero no avanzar" son mailto: abren en el programa de mail del
+// Aprobación del cliente directo desde el mail de la orden. El botón
+// "Confirmar la orden" es un mailto: abren en el programa de mail del
 // cliente una respuesta ya armada a trading@ (con copia al asesor), donde puede
 // escribir comentarios antes de enviarla. Esa respuesta la lee el chequeo de la
 // casilla de Mesa (processMesaInbox) y actualiza el estado de la orden.
@@ -44,12 +44,12 @@ export const DETALLE_MARKER = '----- Detalle de la orden -----'
 // tiene siempre completo.
 const DETALLE_EN_RESPUESTA_MAX = 1500
 
-// Frases de la respuesta armada por los links (y las que se reconocen al leerla).
+// Frase con la que empieza la respuesta armada por el botón.
 const FRASE_SI = 'Confirmo la orden'
-const FRASE_NO = 'Prefiero no avanzar'
 
-// El mail de la orden: el detalle completo y, al pie, una línea discreta con
-// dos links que arman la respuesta.
+// El mail de la orden: arriba, un botón verde "Confirmar la orden" que arma la
+// respuesta; debajo, el detalle completo. Si el cliente no quiere avanzar,
+// simplemente no responde.
 export function buildAprobacionEmail(opts: {
   body: string
   subject: string
@@ -66,20 +66,17 @@ export function buildAprobacionEmail(opts: {
   const draft = (decision: string) =>
     `${decision}\r\n${REF_LABEL}: ${opts.ref}\r\n\r\nComentarios:\r\n\r\n\r\n\r\n${DETALLE_MARKER}\r\n${detalle.replace(/\r?\n/g, '\r\n')}`
   const aprueboHref = mailtoLink(opts.replyTo, cc, replySubject, draft(FRASE_SI))
-  const noAprueboHref = mailtoLink(opts.replyTo, cc, replySubject, draft(FRASE_NO))
 
-  const text = `${opts.body}\n\n—\nPara agilizar su respuesta, puede contestar este mail con "${FRASE_SI}" o "${FRASE_NO}".\n${REF_LABEL}: ${opts.ref}`
+  const text = `Para confirmar la orden, responda este mail con "${FRASE_SI}".\n\n${opts.body}\n\n${REF_LABEL}: ${opts.ref}`
 
-  // Discreto: una línea chica al pie del mail, sin cuadro ni botones.
-  const link = (href: string, label: string, color: string) =>
-    `<a href="${escapeHtml(href)}" style="color:${color};text-decoration:underline">${label}</a>`
   const html = `<!doctype html><html><body style="margin:0;padding:0">
 <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5;color:#1f2937;max-width:640px">
-<div style="white-space:pre-wrap">${escapeHtml(opts.body)}</div>
-<div style="margin:24px 0 0;padding:12px 0 0;border-top:1px solid #eef0f2;font-size:12px;color:#9ca3af">
-Para agilizar su respuesta: ${link(aprueboHref, FRASE_SI, '#2E7D52')} &nbsp;·&nbsp; ${link(noAprueboHref, FRASE_NO, '#6b7280')}
-<br><span style="font-size:11px">${REF_LABEL}: ${opts.ref}</span>
+<div style="margin:0 0 24px">
+<a href="${escapeHtml(aprueboHref)}" style="display:inline-block;padding:10px 22px;border-radius:8px;background:#2E7D52;color:#ffffff;font-weight:600;font-size:14px;text-decoration:none">Confirmar la orden</a>
+<p style="margin:6px 0 0;font-size:12px;color:#9ca3af">Se abre su respuesta lista para enviar.</p>
 </div>
+<div style="white-space:pre-wrap">${escapeHtml(opts.body)}</div>
+<p style="margin:20px 0 0;font-size:11px;color:#9ca3af">${REF_LABEL}: ${opts.ref}</p>
 </div></body></html>`
 
   return { text, html }

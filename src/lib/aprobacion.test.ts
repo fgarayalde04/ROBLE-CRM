@@ -76,21 +76,21 @@ describe('buildAprobacionEmail', () => {
   })
   it('los botones arman una respuesta a trading@ con copia al asesor, la palabra clave y la referencia', () => {
     const hrefs = Array.from(built.html.matchAll(/href="([^"]+)"/g), (m) => m[1].replace(/&amp;/g, '&'))
-    // Un solo par de botones, al final
-    expect(hrefs).toHaveLength(2)
-    const [si, no] = hrefs.map((h) => new URL(h))
+    // Un solo botón: Confirmar la orden
+    expect(hrefs).toHaveLength(1)
+    const [si] = hrefs.map((h) => new URL(h))
     expect(si.protocol).toBe('mailto:')
     expect(si.pathname).toBe('trading@roblecapital.net')
     expect(si.searchParams.get('cc')).toBe('asesor@roblecapital.net')
     expect(si.searchParams.get('subject')).toBe('Re: Confirmacion de orden - 1234')
     expect(si.searchParams.get('body')).toMatch(/^Confirmo la orden\r\nCódigo de confirmación: ABCD2345/)
-    expect(no.searchParams.get('body')).toMatch(/^Prefiero no avanzar\r\n/)
     // El cliente ve el detalle de la orden mientras responde
     expect(si.searchParams.get('body')).toContain('----- Detalle de la orden -----\r\nDetalle <orden>')
   })
-  it('los botones aparecen solo después del detalle', () => {
+  it('el botón va arriba del detalle, sin opción de no avanzar', () => {
     const detalle = built.html.indexOf('Detalle &lt;orden&gt;')
-    expect(built.html.indexOf('Confirmo la orden')).toBeGreaterThan(detalle)
+    expect(built.html.indexOf('Confirmar la orden')).toBeLessThan(detalle)
+    expect(built.html).not.toContain('Prefiero no avanzar')
   })
   it('escapa el cuerpo en el HTML y deja instrucciones en el texto plano', () => {
     expect(built.html).toContain('Detalle &lt;orden&gt;')
