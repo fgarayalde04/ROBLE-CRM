@@ -17,10 +17,9 @@ export interface FundSyncSkipped { skipped: true; reason: string }
 
 // Sincroniza como mucho una vez por día: si ya se corrió hoy, no vuelve a
 // pegarle a Davinci (ver Fase 6 — "actualizar como máximo una vez por
-// día"). Solo se marca al terminar la corrida completa (login + loop de
-// fondos) sin excepción — un login fallido no la marca, así que tanto un
-// reintento manual como el scheduler de instrumentation.ts la vuelven a
-// intentar más tarde el mismo día.
+// día"). Un login fallido también cuenta como el intento del día, para no
+// repetir logins cada 15 minutos (Davinci bloquea la cuenta); se puede
+// forzar a mano con ?force=1.
 let lastSyncDay = ''
 
 export async function syncFundMonitor(opts?: { force?: boolean }): Promise<FundSyncResult | FundSyncSkipped> {
@@ -80,7 +79,11 @@ export async function syncFundMonitor(opts?: { force?: boolean }): Promise<FundS
       }
     }
   } catch (e: any) {
-    throw new Error(`No se pudo iniciar sesión en Davinci: ${e.message}`)
+    // Un login fallido NO se reintenta en el día: el scheduler chequea cada 15
+    // minutos y reintentar el login con la misma cuenta desde dev y prod hizo
+    // que Davinci bloqueara el usuario. Se vuelve a probar mañana (o forzando).
+    lastSyncDay = today
+    throw new Error(`No se pudo iniciar sesión en Davinci (no se reintenta hasta mañana): ${e.message}`)
   } finally {
     await context.close()
   }
