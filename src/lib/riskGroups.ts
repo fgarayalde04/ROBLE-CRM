@@ -49,6 +49,62 @@ export function perfilFromPuntaje(p: number): Perfil {
   return 'agresivo'
 }
 
+// ── Perfil asignado al cliente vs. riesgo de su cartera ──────────────────────
+// El perfil del cliente (clients.risk_profile) puede ser también
+// "moderado_agresivo"; su tope es 7.
+
+export type PerfilCliente = Perfil | 'moderado_agresivo'
+
+export const PERFIL_CLIENTE: Record<PerfilCliente, { label: string; tope: number }> = {
+  conservador:       { label: 'Conservador',       tope: 3 },
+  moderado:          { label: 'Moderado',          tope: 6 },
+  moderado_agresivo: { label: 'Moderado agresivo', tope: 7 },
+  agresivo:          { label: 'Agresivo',          tope: 10 },
+}
+
+export function isPerfilCliente(p: unknown): p is PerfilCliente {
+  return typeof p === 'string' && p in PERFIL_CLIENTE
+}
+
+export interface ItemCartera { monto: number | null; puntaje: number | null; grupo: RiskGroup | null }
+
+export interface RiesgoCartera {
+  /** Promedio del puntaje ponderado por monto (solo lo clasificado); null sin datos */
+  puntaje: number | null
+  perfil: Perfil | null
+  montoTotal: number
+  montoClasificado: number
+  /** Monto por grupo de riesgo (sin_clasificar para lo que no tiene puntaje) */
+  composicion: { grupo: RiskGroup | 'sin_clasificar'; monto: number; pct: number }[]
+}
+
+export function calcularRiesgoCartera(items: ItemCartera[]): RiesgoCartera {
+  let montoTotal = 0, montoClasificado = 0, suma = 0
+  const porGrupo = new Map<RiskGroup | 'sin_clasificar', number>()
+  for (const it of items) {
+    const monto = Number(it.monto)
+    if (!Number.isFinite(monto) || monto <= 0) continue
+    montoTotal += monto
+    const g = it.grupo && it.puntaje != null ? it.grupo : 'sin_clasificar'
+    porGrupo.set(g, (porGrupo.get(g) ?? 0) + monto)
+    if (it.puntaje != null) { montoClasificado += monto; suma += monto * it.puntaje }
+  }
+  const puntaje = montoClasificado > 0 ? Math.round((suma / montoClasificado) * 10) / 10 : null
+  const orden = [...RISK_GROUP_ORDER, 'sin_clasificar'] as const
+  const composicion = orden
+    .filter(g => porGrupo.has(g))
+    .map(g => ({ grupo: g, monto: porGrupo.get(g)!, pct: montoTotal > 0 ? (porGrupo.get(g)! / montoTotal) * 100 : 0 }))
+  return { puntaje, perfil: puntaje != null ? perfilFromPuntaje(puntaje) : null, montoTotal, montoClasificado, composicion }
+}
+
+export type EstadoPerfil = 'dentro' | 'excedido' | 'sin_perfil' | 'sin_posiciones'
+
+export function compararConPerfil(perfil: PerfilCliente | null, puntaje: number | null): EstadoPerfil {
+  if (!perfil) return 'sin_perfil'
+  if (puntaje == null) return 'sin_posiciones'
+  return puntaje <= PERFIL_CLIENTE[perfil].tope ? 'dentro' : 'excedido'
+}
+
 export type RiskFuente = 'monitor' | 'categoria' | 'nombre' | 'rating' | 'pais' | 'sector' | 'manual' | 'sin_clasificar'
 
 export interface RiskResult {

@@ -11,6 +11,7 @@ import OneDriveFolderButton from '@/components/OneDriveFolderButton'
 import ClientCloseButton from '@/components/ClientCloseButton'
 import DeleteClientButton from '@/components/DeleteClientButton'
 import PortfolioShareControl from '@/components/PortfolioShareControl'
+import ClientRiskCard from '@/components/ClientRiskCard'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 
@@ -209,6 +210,8 @@ export default async function ClientDetailPage({ params }: Props) {
               </div>
             </dl>
           </div>
+
+          <ClientRiskCard clientNumber={client.client_number ?? null} />
 
           {canManageSharing && (
             <PortfolioShareControl

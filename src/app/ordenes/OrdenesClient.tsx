@@ -8,6 +8,7 @@ import InstrumentSearch from '@/components/InstrumentSearch'
 import TradingEmailSearch from '@/components/TradingEmailSearch'
 import ClientEmailTogglePills from '@/components/ClientEmailTogglePills'
 import InstrumentsManager from './InstrumentsManager'
+import PosicionesManager from './PosicionesManager'
 import BlotterTable from './BlotterTable'
 import BlotterSolicitudes from '../solicitudes/BlotterSolicitudes'
 import MesaHoy from '../solicitudes/MesaHoy'
@@ -19,7 +20,7 @@ import { useRouter } from 'next/navigation'
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type OrderType = 'acciones' | 'fondos' | 'bonos'
-type Tab = 'nueva' | 'blotter' | 'mesa' | 'mis-ordenes' | 'instrumentos' | 'mis-solicitudes' | 'enviar' | 'blotter-asesor' | 'historial'
+type Tab = 'nueva' | 'blotter' | 'mesa' | 'mis-ordenes' | 'instrumentos' | 'posiciones' | 'mis-solicitudes' | 'enviar' | 'blotter-asesor' | 'historial'
 
 interface AccionesBlock {
   type: 'acciones'; id: string; nombre: string; ticker: string
@@ -387,6 +388,7 @@ export default function OrdenesClient({ gmailConnected, initialTab, isAdmin = fa
         { t: 'mesa',         label: 'Trading Desk hoy',  short: 'Trading' },
         { t: 'blotter',      label: 'Blotter',      short: 'Blotter' },
         { t: 'instrumentos', label: 'Instrumentos', short: 'Instr.' },
+        { t: 'posiciones',   label: 'Posiciones',   short: 'Posic.' },
       ]
     : [
         { t: 'enviar',          label: 'Solicitudes', short: 'Solicitudes' },
@@ -900,6 +902,10 @@ export default function OrdenesClient({ gmailConnected, initialTab, isAdmin = fa
 
       {tab === 'instrumentos' && (
         <InstrumentsManager />
+      )}
+
+      {tab === 'posiciones' && (
+        <PosicionesManager />
       )}
 
     </div>

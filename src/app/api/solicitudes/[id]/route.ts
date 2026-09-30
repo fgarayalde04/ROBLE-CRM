@@ -5,6 +5,7 @@ import {
   notifyOrdenTomada, notifyOrdenDevuelta, notifyMailEnviado, notifyEnEjecucion, notifyOrdenEjecutada,
   type OrderCtx,
 } from '@/lib/notifications/orderEvents'
+import { applySolicitudEjecutada } from '@/lib/db/clientPositions'
 
 const MESA_ROLES  = ['admin', 'ceo', 'direccion', 'mesa', 'asistente']
 const ADMIN_ROLES = ['admin', 'ceo', 'direccion']
@@ -154,6 +155,13 @@ export async function PATCH(
       { precio_ejecutado: precioEjecutado, valor_efectivo: valorEfectivo, comentario }
     )
     await notifyOrdenEjecutada(orderCtx)
+    // Ajusta las posiciones del cliente (riesgo de su cartera). Nunca frena la
+    // ejecución: si falla, queda en el log.
+    try {
+      await applySolicitudEjecutada({ ...sol, ...(data ?? {}), precio_ejecutado: precioEjecutado, valor_efectivo: valorEfectivo })
+    } catch (e: any) {
+      console.error('[posiciones] no se pudo aplicar la orden ejecutada', params.id, e?.message ?? e)
+    }
     return NextResponse.json({ ok: true, row: data })
   }
 
