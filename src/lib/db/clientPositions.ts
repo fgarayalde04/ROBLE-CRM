@@ -439,6 +439,7 @@ export async function applySolicitudEjecutada(sol: any): Promise<{ aplicados: nu
 // ── Riesgo del cliente ───────────────────────────────────────────────────────
 
 export interface PosicionConRiesgo {
+  account_number?: string | null
   nombre: string
   tipo_activo: string | null
   cantidad: number | null
@@ -454,12 +455,14 @@ export interface RiesgoCliente extends RiesgoCartera {
   tope: number | null
   estado: EstadoPerfil
   posiciones: PosicionConRiesgo[]
+  /** Riesgo por cuenta (las posiciones sin cuenta van con account_number null) */
+  cuentas: (RiesgoCartera & { account_number: string | null; estado: EstadoPerfil; posiciones: PosicionConRiesgo[] })[]
   ultimaCarga: string | null
   ultimoMovimiento: string | null
 }
 
 const POSICIONES_SQL = `
-  select p.client_number, p.nombre, p.tipo_activo, p.cantidad, p.monto, p.origen,
+  select p.client_number, upper(p.account_number) as account_number, p.nombre, p.tipo_activo, p.cantidad, p.monto, p.origen,
          case when p.tipo_activo = 'cash' then 'liquidez' else im.riesgo_grupo end as grupo,
          case when p.tipo_activo = 'cash' then 1 else im.riesgo_puntaje end as puntaje
     from client_positions p
@@ -504,12 +507,24 @@ export async function getRiesgoCliente(clientNumber: string): Promise<RiesgoClie
     ),
   ])
   const posiciones: PosicionConRiesgo[] = posRes.rows.map(r => ({
-    nombre: r.nombre, tipo_activo: r.tipo_activo, cantidad: r.cantidad, monto: r.monto,
+    account_number: r.account_number ?? null, nombre: r.nombre, tipo_activo: r.tipo_activo, cantidad: r.cantidad, monto: r.monto,
     grupo: r.grupo, puntaje: r.puntaje, origen: r.origen,
   }))
   const cartera = calcularRiesgoCartera(posiciones)
+  const porCuenta = new Map<string | null, PosicionConRiesgo[]>()
+  for (const p of posiciones) {
+    const k = p.account_number ?? null
+    porCuenta.set(k, [...(porCuenta.get(k) ?? []), p])
+  }
+  const cuentas = Array.from(porCuenta.entries())
+    .map(([account_number, pos]) => {
+      const c = calcularRiesgoCartera(pos)
+      return { ...c, account_number, estado: compararConPerfil(perfil, c.puntaje), posiciones: pos }
+    })
+    .sort((a, b) => b.montoTotal - a.montoTotal)
   return {
     ...cartera,
+    cuentas,
     perfilAsignado: perfil,
     perfilFuente: fuente,
     tope: perfil ? PERFIL_CLIENTE[perfil].tope : null,

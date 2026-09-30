@@ -1,4 +1,5 @@
-import { getRiesgoCliente } from '@/lib/db/clientPositions'
+import type { RiesgoCliente } from '@/lib/db/clientPositions'
+import RiskGauge, { RISK_BAR as BAR } from '@/components/RiskGauge'
 import { PERFIL_CLIENTE, RISK_GROUPS, perfilFromPuntaje, type EstadoPerfil } from '@/lib/riskGroups'
 
 // Perfil de riesgo del cliente: el perfil asignado y el riesgo real de su
@@ -12,21 +13,11 @@ const ESTADO: Record<EstadoPerfil, { label: string; cls: string; detalle: string
   sin_posiciones: { label: 'Sin posiciones',    cls: 'bg-gray-50 text-gray-500 border-gray-200', detalle: 'Todavía no hay posiciones cargadas para este cliente.' },
 }
 
-const BAR: Record<string, string> = {
-  liquidez: 'bg-emerald-300', rf_ig: 'bg-emerald-500', rf_ar: 'bg-amber-400', mixtos: 'bg-amber-300',
-  rv_desarrollada: 'bg-orange-400', rv_especifica: 'bg-red-400', especulativo: 'bg-red-700', sin_clasificar: 'bg-gray-300',
-}
-
 const usd = (n: number) => n.toLocaleString('es-UY', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
 
-export default async function ClientRiskCard({ clientNumber }: { clientNumber: string | null }) {
-  if (!clientNumber) return null
-  let r
-  try {
-    r = await getRiesgoCliente(clientNumber)
-  } catch {
-    return null   // tablas todavía sin migrar en esta base
-  }
+// r = null cuando el cliente no tiene número o las tablas no están migradas.
+export default function ClientRiskCard({ riesgo: r }: { riesgo: RiesgoCliente | null }) {
+  if (!r) return null
   const estado = ESTADO[r.estado]
   const fechaAct = [r.ultimaCarga, r.ultimoMovimiento].filter(Boolean).sort().pop()
 
@@ -37,26 +28,26 @@ export default async function ClientRiskCard({ clientNumber }: { clientNumber: s
         <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${estado.cls}`}>{estado.label}</span>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <div className="rounded-lg bg-gray-50 px-3 py-2.5">
-          <p className="text-[10px] text-gray-400 uppercase tracking-wider">Perfil asignado</p>
-          {r.perfilAsignado ? (
-            <>
-              <p className="text-sm font-semibold text-gray-900 mt-0.5">{PERFIL_CLIENTE[r.perfilAsignado].label}</p>
-              <p className="text-[11px] text-gray-500">Hasta {r.tope}{r.perfilFuente === 'banco_central' ? ' · del cuestionario BCU' : ''}</p>
-            </>
-          ) : <p className="text-sm text-gray-400 mt-0.5">—</p>}
-        </div>
-        <div className="rounded-lg bg-gray-50 px-3 py-2.5">
-          <p className="text-[10px] text-gray-400 uppercase tracking-wider">Riesgo de la cartera</p>
-          {r.puntaje != null ? (
-            <>
-              <p className="text-sm font-semibold text-gray-900 mt-0.5">{r.puntaje.toFixed(1)} <span className="font-normal text-gray-500">/ 10</span></p>
-              <p className="text-[11px] text-gray-500">{PERFIL_CLIENTE[perfilFromPuntaje(r.puntaje)].label}</p>
-            </>
-          ) : <p className="text-sm text-gray-400 mt-0.5">—</p>}
-        </div>
+      <div className="flex justify-center">
+        <RiskGauge
+          puntaje={r.puntaje}
+          tope={r.tope}
+          label={r.puntaje != null ? `Riesgo de la cartera · ${PERFIL_CLIENTE[perfilFromPuntaje(r.puntaje)].label}` : 'Sin riesgo calculado'}
+        />
       </div>
+
+      <div className="mt-3 rounded-lg bg-gray-50 px-3 py-2.5 flex items-center justify-between gap-2">
+        <p className="text-[10px] text-gray-400 uppercase tracking-wider">Perfil asignado</p>
+        {r.perfilAsignado ? (
+          <p className="text-sm text-right">
+            <span className="font-semibold text-gray-900">{PERFIL_CLIENTE[r.perfilAsignado].label}</span>
+            <span className="text-[11px] text-gray-500"> · hasta {r.tope}{r.perfilFuente === 'banco_central' ? ' (BCU)' : ''}</span>
+          </p>
+        ) : <p className="text-sm text-gray-400">—</p>}
+      </div>
+      {r.tope != null && r.puntaje != null && (
+        <p className="text-[10px] text-gray-400 mt-1.5 text-center">La marca negra del semicírculo es el tope del perfil.</p>
+      )}
 
       {estado.detalle && <p className="text-[11px] text-gray-500 mt-3">{estado.detalle}</p>}
       {(() => {

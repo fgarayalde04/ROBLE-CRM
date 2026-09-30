@@ -14,6 +14,8 @@ import PortfolioShareControl from '@/components/PortfolioShareControl'
 import ClientRiskCard from '@/components/ClientRiskCard'
 import ClientTimeline from '@/components/ClientTimeline'
 import { getClient360 } from '@/lib/db/client360'
+import { getRiesgoCliente } from '@/lib/db/clientPositions'
+import ClientAccountsCard from '@/components/ClientAccountsCard'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 
@@ -52,13 +54,15 @@ export default async function ClientDetailPage({ params }: Props) {
 
   const canManageSharing = !!session && (session.role === 'admin' || session.name === client.advisor)
 
-  let documents, tasks, deadlines, c360
+  let documents, tasks, deadlines, c360, riesgo
   try {
-    ;[documents, tasks, deadlines, c360] = await Promise.all([
+    ;[documents, tasks, deadlines, c360, riesgo] = await Promise.all([
       getDocuments({ clientId: params.id }),
       getTasks({ clientId: params.id }),
       getDeadlines({ clientId: params.id }),
       getClient360({ id: client.id, client_number: client.client_number ?? null }),
+      // null si no tiene número o las tablas de posiciones no están migradas en esta base
+      client.client_number ? getRiesgoCliente(client.client_number).catch(() => null) : Promise.resolve(null),
     ])
   } catch {
     notFound()
@@ -214,7 +218,7 @@ export default async function ClientDetailPage({ params }: Props) {
             </dl>
           </div>
 
-          <ClientRiskCard clientNumber={client.client_number ?? null} />
+          <ClientRiskCard riesgo={riesgo} />
 
           {canManageSharing && (
             <PortfolioShareControl
@@ -252,11 +256,15 @@ export default async function ClientDetailPage({ params }: Props) {
             <div className="bg-white rounded-lg border border-gray-200 p-4">
               <p className="text-xs text-gray-400">Patrimonio</p>
               <p className="text-xl md:text-2xl font-bold text-gray-900 mt-1 break-words">
-                {c360.totalMarketValue != null ? fmtMoney(c360.totalMarketValue) : '—'}
+                {c360.totalMarketValue != null
+                  ? fmtMoney(c360.totalMarketValue)
+                  : riesgo && riesgo.montoTotal > 0 ? fmtMoney(riesgo.montoTotal) : '—'}
               </p>
-              {c360.lastSnapshotDate && (
+              {c360.lastSnapshotDate ? (
                 <p className="text-xs text-gray-400 mt-0.5">al {fmtDay(c360.lastSnapshotDate)}</p>
-              )}
+              ) : riesgo && riesgo.montoTotal > 0 ? (
+                <p className="text-xs text-gray-400 mt-0.5">según posiciones</p>
+              ) : null}
             </div>
             <div className="bg-white rounded-lg border border-gray-200 p-4">
               <p className="text-xs text-gray-400">Órdenes en curso</p>
@@ -293,39 +301,7 @@ export default async function ClientDetailPage({ params }: Props) {
             </div>
           </div>
 
-          {/* Cuentas */}
-          {c360.accounts.length > 0 && (
-            <div className="bg-white rounded-lg border border-gray-200">
-              <div className="px-5 py-4 border-b border-gray-100">
-                <h2 className="text-sm font-semibold text-gray-800">Cuentas</h2>
-              </div>
-              <div className="mobile-scroll-x">
-                <table className="w-full text-sm">
-                  <tbody className="divide-y divide-gray-50">
-                    {c360.accounts.map((a) => (
-                      <tr key={a.account_number} className="hover:bg-gray-50">
-                        <td className="px-5 py-2.5">
-                          <p className="font-medium text-gray-900 font-mono">{a.account_number}</p>
-                          <p className="text-xs text-gray-400">{[a.custodian, a.account_name].filter(Boolean).join(' · ')}</p>
-                        </td>
-                        <td className="px-5 py-2.5 text-right">
-                          <p className="text-gray-900 whitespace-nowrap">
-                            {a.total_market_value != null ? fmtMoney(Number(a.total_market_value), a.base_currency) : '—'}
-                          </p>
-                          {a.snapshot_date && <p className="text-xs text-gray-400">al {fmtDay(a.snapshot_date)}</p>}
-                        </td>
-                        <td className="px-5 py-2.5 text-right">
-                          <Link href={`/factsheet/${encodeURIComponent(a.account_number)}`} className="text-xs text-blue-600 hover:underline whitespace-nowrap">
-                            Ver cartera
-                          </Link>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
+          <ClientAccountsCard accounts={c360.accounts} riesgo={riesgo} />
 
           <ClientTimeline items={c360.timeline} />
 
