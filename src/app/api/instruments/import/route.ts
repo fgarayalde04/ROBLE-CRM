@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
-import { createInstrument, updateInstrument, findInstrumentByIsin, findInstrumentByCusip } from '@/lib/db/instruments'
+import { createInstrument, updateInstrument, findInstrumentByIsin, findInstrumentByCusip, reclassifyInstrumentsSafe } from '@/lib/db/instruments'
 
 export const dynamic = 'force-dynamic'
 
@@ -87,5 +87,6 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  await reclassifyInstrumentsSafe()
   return NextResponse.json({ inserted, updated, skipped, errors })
 }

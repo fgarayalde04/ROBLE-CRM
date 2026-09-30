@@ -45,10 +45,11 @@ export interface ScoringResult {
 
 // ── Profile configuration ─────────────────────────────────────────────────────
 
+// Mismos rangos que el criterio de instrumentos (src/lib/riskGroups.ts).
 export const PROFILE_RANGES: Record<RiskProfile, { min: number; max: number }> = {
   conservador: { min: 1, max: 3  },
-  moderado:    { min: 3, max: 6  },
-  agresivo:    { min: 6, max: 10 },
+  moderado:    { min: 4, max: 6  },
+  agresivo:    { min: 7, max: 10 },
 }
 
 export function scoreToProfile(score: number): RiskProfile {

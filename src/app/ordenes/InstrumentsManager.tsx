@@ -5,6 +5,7 @@ import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import * as XLSX from 'xlsx'
 import type { Instrument } from '@/app/api/instruments/route'
+import { RISK_GROUPS, RISK_GROUP_ORDER, perfilFromPuntaje, type RiskGroup } from '@/lib/riskGroups'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -18,6 +19,17 @@ const TIPO_STYLE: Record<string, { bg: string; text: string }> = {
   fondo:  { bg: 'bg-emerald-50', text: 'text-emerald-700' },
   bono:   { bg: 'bg-amber-50',   text: 'text-amber-700' },
   accion: { bg: 'bg-blue-50',    text: 'text-blue-700' },
+}
+
+const PERFIL_STYLE: Record<string, string> = {
+  conservador: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  moderado:    'bg-amber-50 text-amber-700 border-amber-200',
+  agresivo:    'bg-red-50 text-red-700 border-red-200',
+}
+
+const FUENTE_LABEL: Record<string, string> = {
+  monitor: 'por categoría del Monitor', categoria: 'por la categoría cargada', nombre: 'por el nombre',
+  rating: 'por el rating', pais: 'por el país del ISIN', manual: 'ajuste manual', sin_clasificar: 'sin clasificar',
 }
 
 const inputCls  = 'w-full text-sm px-3 py-2 rounded-lg border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300 transition placeholder-gray-300'
@@ -38,6 +50,15 @@ export default function InstrumentsManager() {
   const [loading, setLoading]         = useState(true)
   const [search, setSearch]           = useState('')
   const [tipoFilter, setTipoFilter]   = useState('')
+  const [riesgoFilter, setRiesgoFilter] = useState('')
+
+  // Ajuste manual del riesgo
+  const [riskEditing, setRiskEditing] = useState<Instrument | null>(null)
+  const [riskGrupo, setRiskGrupo]     = useState<RiskGroup | ''>('')
+  const [riskMotivo, setRiskMotivo]   = useState('')
+  const [riskError, setRiskError]     = useState('')
+  const [riskSaving, setRiskSaving]   = useState(false)
+  const [recalculando, setRecalculando] = useState(false)
 
   // Modal state
   const [modal, setModal]   = useState<'add' | 'edit' | 'import' | null>(null)
@@ -134,6 +155,44 @@ export default function InstrumentsManager() {
       body: JSON.stringify({ activo: true }),
     })
     fetchAll()
+  }
+
+  // ── Riesgo ──────────────────────────────────────────────────────────────────
+
+  function openRisk(inst: Instrument) {
+    setRiskEditing(inst)
+    setRiskGrupo(inst.riesgo_grupo ?? '')
+    setRiskMotivo(inst.riesgo_fuente === 'manual' ? inst.riesgo_motivo ?? '' : '')
+    setRiskError('')
+  }
+
+  async function saveRisk(grupo: RiskGroup | null) {
+    if (!riskEditing) return
+    if (grupo && !riskMotivo.trim()) { setRiskError('Escribí el motivo del ajuste.'); return }
+    setRiskSaving(true); setRiskError('')
+    try {
+      const res = await fetch(`/api/instruments/${riskEditing.id}/riesgo`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ grupo, motivo: riskMotivo }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setRiskError(data.error ?? 'Error al guardar'); return }
+      setRiskEditing(null)
+      fetchAll()
+    } catch (e: any) {
+      setRiskError(e.message)
+    } finally { setRiskSaving(false) }
+  }
+
+  async function recalcularRiesgo() {
+    setRecalculando(true)
+    try {
+      const res = await fetch('/api/instruments/riesgo', { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) alert(data.error ?? 'Error al recalcular')
+      fetchAll()
+    } finally { setRecalculando(false) }
   }
 
   // ── Excel import ──────────────────────────────────────────────────────────────
@@ -324,6 +383,15 @@ export default function InstrumentsManager() {
 
   const allTipos = Array.from(new Set(instruments.map(i => i.tipo_activo)))
 
+  const aRevisar = instruments.filter(i => i.activo && i.riesgo_revisar).length
+  const visibles = instruments.filter(i => {
+    if (!riesgoFilter) return true
+    if (riesgoFilter === 'revisar') return !!i.riesgo_revisar
+    if (riesgoFilter === 'sin_clasificar') return !i.riesgo_grupo
+    if (riesgoFilter === 'manual') return i.riesgo_fuente === 'manual'
+    return i.riesgo_puntaje != null && perfilFromPuntaje(i.riesgo_puntaje) === riesgoFilter
+  })
+
   return (
     <div className="space-y-4">
 
@@ -339,6 +407,15 @@ export default function InstrumentsManager() {
             )}
           </div>
           <div className="flex gap-2">
+            <button
+              onClick={recalcularRiesgo}
+              disabled={recalculando}
+              title="Vuelve a calcular el puntaje de riesgo de todos los instrumentos (respeta los ajustes manuales)"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-40 transition"
+            >
+              <span className="hidden sm:inline">{recalculando ? 'Recalculando…' : 'Recalcular riesgo'}</span>
+              <span className="sm:hidden">↻</span>
+            </button>
             <button
               onClick={() => { setImportRows([]); setImportResult(null); setModal('import') }}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition"
@@ -381,6 +458,19 @@ export default function InstrumentsManager() {
             <option value="">Todos los tipos</option>
             {TIPO_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
+          <select
+            value={riesgoFilter}
+            onChange={(e) => setRiesgoFilter(e.target.value)}
+            className="text-sm border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-[#2D3F52] text-gray-600 bg-white"
+          >
+            <option value="">Todo el riesgo</option>
+            <option value="revisar">A revisar{aRevisar ? ` (${aRevisar})` : ''}</option>
+            <option value="sin_clasificar">Sin clasificar</option>
+            <option value="manual">Ajuste manual</option>
+            <option value="conservador">Conservador (1-3)</option>
+            <option value="moderado">Moderado (4-6)</option>
+            <option value="agresivo">Agresivo (7-10)</option>
+          </select>
         </div>
       </div>
 
@@ -391,6 +481,8 @@ export default function InstrumentsManager() {
             <div className="w-5 h-5 border-2 border-gray-200 border-t-gray-400 rounded-full animate-spin mx-auto mb-2" />
             <p className="text-sm text-gray-400">Cargando instrumentos…</p>
           </div>
+        ) : visibles.length === 0 && instruments.length > 0 ? (
+          <div className="py-14 text-center text-sm text-gray-400">Ningún instrumento con ese filtro.</div>
         ) : instruments.length === 0 ? (
           <div className="py-14 text-center">
             <svg className="w-10 h-10 text-gray-200 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
@@ -401,11 +493,12 @@ export default function InstrumentsManager() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[700px]">
+            <table className="w-full text-sm min-w-[820px]">
               <thead>
                 <tr className="border-b border-gray-100 bg-gray-50/60">
                   <th className="pl-4 pr-2 py-2.5 text-left w-[70px]"><ColH>Tipo</ColH></th>
                   <th className="px-2 py-2.5 text-left"><ColH>Nombre</ColH></th>
+                  <th className="px-2 py-2.5 text-left w-[150px]"><ColH>Riesgo</ColH></th>
                   <th className="px-2 py-2.5 text-left w-[130px]"><ColH>ISIN</ColH></th>
                   <th className="px-2 py-2.5 text-left w-[110px]"><ColH>CUSIP</ColH></th>
                   <th className="px-2 py-2.5 text-left w-[80px]"><ColH>Moneda</ColH></th>
@@ -414,7 +507,7 @@ export default function InstrumentsManager() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {instruments.map((inst) => {
+                {visibles.map((inst) => {
                   const s = TIPO_STYLE[inst.tipo_activo] ?? TIPO_STYLE.fondo
                   return (
                     <tr key={inst.id} className={`group hover:bg-gray-50/60 transition-colors ${!inst.activo ? 'opacity-40' : ''}`}>
@@ -426,6 +519,9 @@ export default function InstrumentsManager() {
                       <td className="px-2 py-3 max-w-[280px]">
                         <p className="text-sm font-semibold text-[#2D3F52] truncate">{inst.nombre}</p>
                         {inst.categoria && <p className="text-[10px] text-gray-400 truncate">{inst.categoria}</p>}
+                      </td>
+                      <td className="px-2 py-3">
+                        <RiskBadge inst={inst} onClick={() => openRisk(inst)} />
                       </td>
                       <td className="px-2 py-3">
                         <span className="text-[11px] font-mono text-gray-600 bg-gray-100 px-1.5 py-0.5 rounded">
@@ -559,6 +655,83 @@ export default function InstrumentsManager() {
               </button>
               <button
                 onClick={() => setModal(null)}
+                className="px-4 py-2 text-sm font-semibold text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 transition"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Riesgo Modal ── */}
+      {riskEditing && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <div className="min-w-0">
+                <p className="text-[14px] font-bold text-[#2D3F52]">Riesgo del instrumento</p>
+                <p className="text-[11px] text-gray-400 truncate">{riskEditing.nombre}</p>
+              </div>
+              <button onClick={() => setRiskEditing(null)} className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 transition">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="px-5 py-4 space-y-3 max-h-[70vh] overflow-y-auto">
+              <p className="text-[12px] text-gray-500">
+                Actual: <b className="text-[#2D3F52]">{riskEditing.riesgo_grupo ? `${RISK_GROUPS[riskEditing.riesgo_grupo].label} (${riskEditing.riesgo_puntaje})` : 'Sin clasificar'}</b>
+                {riskEditing.riesgo_fuente && <> — {FUENTE_LABEL[riskEditing.riesgo_fuente] ?? riskEditing.riesgo_fuente}</>}
+                {riskEditing.riesgo_fuente === 'manual' && riskEditing.riesgo_updated_by && <> por {riskEditing.riesgo_updated_by}</>}
+              </p>
+              {riskError && (
+                <div className="px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700">{riskError}</div>
+              )}
+              <div className="space-y-1.5">
+                {RISK_GROUP_ORDER.map(g => {
+                  const info = RISK_GROUPS[g]
+                  const perfil = perfilFromPuntaje(info.puntaje)
+                  return (
+                    <label key={g} className={`flex items-start gap-2.5 px-3 py-2 rounded-lg border cursor-pointer transition ${riskGrupo === g ? 'border-[#2D3F52] bg-gray-50' : 'border-gray-200 hover:bg-gray-50'}`}>
+                      <input type="radio" name="riesgo" className="mt-1" checked={riskGrupo === g} onChange={() => setRiskGrupo(g)} />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[13px] font-semibold text-[#2D3F52]">{info.label}</span>
+                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${PERFIL_STYLE[perfil]}`}>{info.puntaje} · {perfil}</span>
+                        </div>
+                        <p className="text-[11px] text-gray-400">{info.incluye}</p>
+                      </div>
+                    </label>
+                  )
+                })}
+              </div>
+              <div>
+                <label className={labelCls}>Motivo del ajuste *</label>
+                <textarea className={inputCls} rows={2} placeholder="Ej: fondo de bonos high yield aunque el nombre no lo dice" value={riskMotivo} onChange={e => setRiskMotivo(e.target.value)} />
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2 px-5 py-4 border-t border-gray-100">
+              <button
+                onClick={() => riskGrupo && saveRisk(riskGrupo)}
+                disabled={riskSaving || !riskGrupo}
+                className="flex-1 py-2 text-sm font-bold text-white bg-[#2D3F52] rounded-lg hover:bg-[#3a4f64] disabled:opacity-40 transition"
+              >
+                {riskSaving ? 'Guardando…' : 'Guardar ajuste'}
+              </button>
+              {riskEditing.riesgo_fuente === 'manual' && (
+                <button
+                  onClick={() => saveRisk(null)}
+                  disabled={riskSaving}
+                  className="px-4 py-2 text-sm font-semibold text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-40 transition"
+                >
+                  Volver al automático
+                </button>
+              )}
+              <button
+                onClick={() => setRiskEditing(null)}
                 className="px-4 py-2 text-sm font-semibold text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 transition"
               >
                 Cancelar
@@ -703,4 +876,29 @@ export default function InstrumentsManager() {
 
 function ColH({ children }: { children: React.ReactNode }) {
   return <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{children}</span>
+}
+
+function RiskBadge({ inst, onClick }: { inst: Instrument; onClick: () => void }) {
+  if (!inst.riesgo_grupo || inst.riesgo_puntaje == null) {
+    return (
+      <button onClick={onClick} className="text-[10px] font-bold px-2 py-0.5 rounded border border-dashed border-gray-300 text-gray-400 hover:border-gray-400 hover:text-gray-600 transition">
+        Sin clasificar
+      </button>
+    )
+  }
+  const perfil = perfilFromPuntaje(inst.riesgo_puntaje)
+  const titulo = [
+    `${RISK_GROUPS[inst.riesgo_grupo].label} — ${perfil}`,
+    FUENTE_LABEL[inst.riesgo_fuente ?? ''] ?? '',
+    inst.riesgo_fuente === 'manual' && inst.riesgo_motivo ? `Motivo: ${inst.riesgo_motivo}` : '',
+    inst.riesgo_revisar ? 'A revisar' : '',
+  ].filter(Boolean).join('\n')
+  return (
+    <button onClick={onClick} title={titulo} className="flex items-center gap-1 text-left max-w-full">
+      <span className={`shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded border ${PERFIL_STYLE[perfil]}`}>{inst.riesgo_puntaje}</span>
+      <span className="text-[11px] text-gray-600 truncate">{RISK_GROUPS[inst.riesgo_grupo].label}</span>
+      {inst.riesgo_revisar && <span className="shrink-0 text-[10px] text-amber-600" aria-label="A revisar">⚠</span>}
+      {inst.riesgo_fuente === 'manual' && <span className="shrink-0 text-[9px] font-bold text-gray-400">M</span>}
+    </button>
+  )
 }

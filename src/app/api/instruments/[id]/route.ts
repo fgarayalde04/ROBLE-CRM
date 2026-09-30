@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
-import { updateInstrument } from '@/lib/db/instruments'
+import { updateInstrument, reclassifyInstrumentsSafe } from '@/lib/db/instruments'
 
 // PATCH /api/instruments/[id]
 export async function PATCH(
@@ -29,6 +29,7 @@ export async function PATCH(
 
   try {
     const data = await updateInstrument(params.id, updates)
+    await reclassifyInstrumentsSafe([params.id])
     return NextResponse.json(data)
   } catch (err: any) {
     if (err.code === '23505') {
