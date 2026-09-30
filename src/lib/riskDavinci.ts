@@ -1,6 +1,6 @@
 import { pool } from '@/lib/db/pool'
 import { reclassifyInstruments } from '@/lib/db/instruments'
-import { getBrowser } from '@/lib/fondos/browser'
+import { getBrowser, closeBrowser } from '@/lib/fondos/browser'
 import { loginDavinci, openDavinciPage, searchFundReturns } from '@/lib/fundMonitor/davinciScraper'
 
 // Busca en Davinci la categoría Morningstar de los fondos que quedaron sin
@@ -18,13 +18,14 @@ export interface DavinciJobState {
   procesados: number
   encontrados: number
   clasificados: number
+  errores: number
   error: string | null
   startedAt: string | null
   finishedAt: string | null
 }
 
 const state: DavinciJobState = {
-  running: false, total: 0, procesados: 0, encontrados: 0, clasificados: 0,
+  running: false, total: 0, procesados: 0, encontrados: 0, clasificados: 0, errores: 0,
   error: null, startedAt: null, finishedAt: null,
 }
 
@@ -35,7 +36,7 @@ export function getDavinciJobState(): DavinciJobState {
 export function startDavinciCategorias(opts: { reintentar?: boolean } = {}): DavinciJobState {
   if (state.running) return getDavinciJobState()
   Object.assign(state, {
-    running: true, total: 0, procesados: 0, encontrados: 0, clasificados: 0,
+    running: true, total: 0, procesados: 0, encontrados: 0, clasificados: 0, errores: 0,
     error: null, startedAt: new Date().toISOString(), finishedAt: null,
   })
   run(opts.reintentar ?? false)
@@ -61,17 +62,44 @@ async function run(reintentar: boolean) {
   state.total = rows.length
   if (rows.length === 0) return
 
-  const browser = await getBrowser()
-  if (!browser) throw new Error('No se pudo abrir el navegador para Davinci')
+  // En Railway Chromium corre con --single-process: si una página se cae, se
+  // cae el browser entero y el singleton queda muerto. Por eso, ante un error,
+  // se cierra el browser y se lanza uno nuevo (no se reusa el caído).
+  const abrirSesion = async () => {
+    let ultimo: unknown = null
+    for (let intento = 0; intento < 3; intento++) {
+      try {
+        const browser = await getBrowser()
+        if (!browser) throw new Error('No se pudo abrir el navegador para Davinci')
+        const s = await openDavinciPage(browser)
+        await loginDavinci(s.page, email, password)
+        return s
+      } catch (e) {
+        ultimo = e
+        await closeBrowser()
+      }
+    }
+    throw ultimo instanceof Error ? ultimo : new Error(String(ultimo))
+  }
 
-  let session = await openDavinciPage(browser)
-  await loginDavinci(session.page, email, password)
-  let erroresSeguidos = 0
+  let session = await abrirSesion()
+  const buscar = async (isin: string, nombre: string) => {
+    try {
+      return await searchFundReturns(session.page, isin, nombre)
+    } catch (e) {
+      // Sesión o browser caídos: se levanta todo de nuevo y se reintenta una vez.
+      console.error('[riesgo-davinci] reabriendo sesión tras error en', isin, (e as Error)?.message ?? e)
+      await session.context.close().catch(() => {})
+      await closeBrowser()
+      session = await abrirSesion()
+      return await searchFundReturns(session.page, isin, nombre)
+    }
+  }
+
   try {
     for (const r of rows) {
       try {
-        const data = await searchFundReturns(session.page, r.isin, r.nombre)
-        erroresSeguidos = 0
+        const data = await buscar(r.isin, r.nombre)
         const categoria = data?.categoriaDavinci?.trim() || null
         await pool.query(
           `update instrument_master
@@ -89,13 +117,12 @@ async function run(reintentar: boolean) {
           if (after[0]?.riesgo_fuente === 'categoria') state.clasificados++
         }
       } catch (e: any) {
+        // Falló incluso con sesión nueva: se deja este fondo (sin marcarlo como
+        // buscado, así la próxima corrida lo reintenta) y se sigue.
+        state.errores++
         console.error('[riesgo-davinci]', r.isin, e?.message ?? e)
-        // Tres errores seguidos: la sesión de Davinci probablemente se cayó.
-        if (++erroresSeguidos >= 3) {
-          await session.context.close().catch(() => {})
-          session = await openDavinciPage(browser)
-          await loginDavinci(session.page, email, password)
-          erroresSeguidos = 0
+        if (/closed|crash|disconnected/i.test(e?.message ?? '')) {
+          session = await abrirSesion()
         }
       }
       state.procesados++

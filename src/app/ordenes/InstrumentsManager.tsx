@@ -481,7 +481,7 @@ export default function InstrumentsManager() {
                 ? <span className="text-red-600">Davinci: {davinci.error}</span>
                 : davinci.total === 0
                   ? <>Davinci: no hay fondos pendientes de buscar.</>
-                  : <>Davinci: {davinci.encontrados} de {davinci.total} fondos con categoría, {davinci.clasificados} quedaron clasificados. Los que no están en Davinci se asignan a mano.</>}
+                  : <>Davinci: {davinci.encontrados} de {davinci.total} fondos con categoría, {davinci.clasificados} quedaron clasificados{davinci.errores ? `, ${davinci.errores} con error (se reintentan en la próxima corrida)` : ''}. Los que no están en Davinci se asignan a mano.</>}
           </div>
         )}
 
