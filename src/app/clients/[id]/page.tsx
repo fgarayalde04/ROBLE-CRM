@@ -12,6 +12,8 @@ import ClientCloseButton from '@/components/ClientCloseButton'
 import DeleteClientButton from '@/components/DeleteClientButton'
 import PortfolioShareControl from '@/components/PortfolioShareControl'
 import ClientRiskCard from '@/components/ClientRiskCard'
+import ClientTimeline from '@/components/ClientTimeline'
+import { getClient360 } from '@/lib/db/client360'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 
@@ -50,12 +52,13 @@ export default async function ClientDetailPage({ params }: Props) {
 
   const canManageSharing = !!session && (session.role === 'admin' || session.name === client.advisor)
 
-  let documents, tasks, deadlines
+  let documents, tasks, deadlines, c360
   try {
-    ;[documents, tasks, deadlines] = await Promise.all([
+    ;[documents, tasks, deadlines, c360] = await Promise.all([
       getDocuments({ clientId: params.id }),
       getTasks({ clientId: params.id }),
       getDeadlines({ clientId: params.id }),
+      getClient360({ id: client.id, client_number: client.client_number ?? null }),
     ])
   } catch {
     notFound()
@@ -244,27 +247,87 @@ export default async function ClientDetailPage({ params }: Props) {
 
         {/* Panel derecho */}
         <div className="xl:col-span-2 space-y-4">
-          {/* Resumen */}
-          <div className="grid grid-cols-3 gap-3">
+          {/* Resumen 360 */}
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
             <div className="bg-white rounded-lg border border-gray-200 p-4">
-              <p className="text-xs text-gray-400">Documentos</p>
-              <p className="text-2xl font-bold text-gray-900 mt-1">{documents.length}</p>
-              {pendingDocs.length > 0 && (
-                <p className="text-xs text-amber-600 mt-0.5">{pendingDocs.length} pendientes</p>
+              <p className="text-xs text-gray-400">Patrimonio</p>
+              <p className="text-xl md:text-2xl font-bold text-gray-900 mt-1 break-words">
+                {c360.totalMarketValue != null ? fmtMoney(c360.totalMarketValue) : '—'}
+              </p>
+              {c360.lastSnapshotDate && (
+                <p className="text-xs text-gray-400 mt-0.5">al {fmtDay(c360.lastSnapshotDate)}</p>
+              )}
+            </div>
+            <div className="bg-white rounded-lg border border-gray-200 p-4">
+              <p className="text-xs text-gray-400">Órdenes en curso</p>
+              <p className="text-xl md:text-2xl font-bold text-gray-900 mt-1">{c360.ordersInProgress}</p>
+            </div>
+            <div className="bg-white rounded-lg border border-gray-200 p-4">
+              <p className="text-xs text-gray-400">Propuestas abiertas</p>
+              <p className="text-xl md:text-2xl font-bold text-gray-900 mt-1">{c360.openProposals}</p>
+            </div>
+            <div className="bg-white rounded-lg border border-gray-200 p-4">
+              <p className="text-xs text-gray-400">Próxima reunión</p>
+              {c360.nextMeeting ? (
+                <>
+                  <p className="text-sm font-semibold text-gray-900 mt-1 break-words line-clamp-2">{c360.nextMeeting.title}</p>
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    {fmtDay(c360.nextMeeting.date)}{c360.nextMeeting.start_time ? ` · ${c360.nextMeeting.start_time.slice(0, 5)}` : ''}
+                  </p>
+                </>
+              ) : (
+                <p className="text-xl md:text-2xl font-bold text-gray-300 mt-1">—</p>
               )}
             </div>
             <div className="bg-white rounded-lg border border-gray-200 p-4">
               <p className="text-xs text-gray-400">Tareas</p>
-              <p className="text-2xl font-bold text-gray-900 mt-1">{tasks.length}</p>
-              {openTasks.length > 0 && (
-                <p className="text-xs text-amber-600 mt-0.5">{openTasks.length} abiertas</p>
-              )}
+              <p className="text-xl md:text-2xl font-bold text-gray-900 mt-1">{openTasks.length}</p>
+              <p className="text-xs text-gray-400 mt-0.5">abiertas de {tasks.length}</p>
             </div>
             <div className="bg-white rounded-lg border border-gray-200 p-4">
-              <p className="text-xs text-gray-400">Vencimientos</p>
-              <p className="text-2xl font-bold text-gray-900 mt-1">{deadlines.length}</p>
+              <p className="text-xs text-gray-400">Documentos</p>
+              <p className="text-xl md:text-2xl font-bold text-gray-900 mt-1">{documents.length}</p>
+              {pendingDocs.length > 0 && (
+                <p className="text-xs text-amber-600 mt-0.5">{pendingDocs.length} pendientes</p>
+              )}
             </div>
           </div>
+
+          {/* Cuentas */}
+          {c360.accounts.length > 0 && (
+            <div className="bg-white rounded-lg border border-gray-200">
+              <div className="px-5 py-4 border-b border-gray-100">
+                <h2 className="text-sm font-semibold text-gray-800">Cuentas</h2>
+              </div>
+              <div className="mobile-scroll-x">
+                <table className="w-full text-sm">
+                  <tbody className="divide-y divide-gray-50">
+                    {c360.accounts.map((a) => (
+                      <tr key={a.account_number} className="hover:bg-gray-50">
+                        <td className="px-5 py-2.5">
+                          <p className="font-medium text-gray-900 font-mono">{a.account_number}</p>
+                          <p className="text-xs text-gray-400">{[a.custodian, a.account_name].filter(Boolean).join(' · ')}</p>
+                        </td>
+                        <td className="px-5 py-2.5 text-right">
+                          <p className="text-gray-900 whitespace-nowrap">
+                            {a.total_market_value != null ? fmtMoney(Number(a.total_market_value), a.base_currency) : '—'}
+                          </p>
+                          {a.snapshot_date && <p className="text-xs text-gray-400">al {fmtDay(a.snapshot_date)}</p>}
+                        </td>
+                        <td className="px-5 py-2.5 text-right">
+                          <Link href={`/factsheet/${encodeURIComponent(a.account_number)}`} className="text-xs text-blue-600 hover:underline whitespace-nowrap">
+                            Ver cartera
+                          </Link>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          <ClientTimeline items={c360.timeline} />
 
           {/* Documentos */}
           <div className="bg-white rounded-lg border border-gray-200">
@@ -368,6 +431,16 @@ export default async function ClientDetailPage({ params }: Props) {
       </div>
     </div>
   )
+}
+
+function fmtMoney(n: number, cur?: string | null) {
+  return `${cur || 'USD'} ${n.toLocaleString('es-UY', { maximumFractionDigits: 0 })}`
+}
+
+function fmtDay(v: unknown) {
+  const iso = v instanceof Date ? v.toISOString() : String(v)
+  const [y, m, d] = iso.slice(0, 10).split('-')
+  return `${d}/${m}/${y}`
 }
 
 function FolderIcon({ className }: { className?: string }) {
