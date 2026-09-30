@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest'
 import { classifyInstrument, classifyText, ratingTier, perfilFromPuntaje } from './riskGroups'
-import { categoriaDeCelda } from './fundMonitor/davinciScraper'
 
 const fondo = (nombre: string, extra: Record<string, string> = {}) =>
   classifyInstrument({ tipo_activo: 'fondo', nombre, ...extra })
@@ -108,12 +107,7 @@ describe('classifyText', () => {
   })
 })
 
-describe('categoría Morningstar de Davinci', () => {
-  it('se extrae de la celda', () => {
-    expect(categoriaDeCelda('Robeco High Yield Bonds DH USD★★★ EAA Fund Global High Yield Bond')).toBe('EAA Fund Global High Yield Bond')
-    expect(categoriaDeCelda('Fondo Nuevo X Acc EAA Fund USD Moderate Allocation📄')).toBe('EAA Fund USD Moderate Allocation')
-    expect(categoriaDeCelda('Oaktree Strategic Credit IDV📄')).toBeNull()
-  })
+describe('categorías tipo Morningstar cargadas en el instrumento', () => {
   it('clasifica las categorías típicas', () => {
     expect(classifyText('EAA Fund Global High Yield Bond')).toBe('rf_ar')
     expect(classifyText('EAA Fund USD Corporate Bond')).toBe('rf_ig')

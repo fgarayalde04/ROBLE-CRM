@@ -6,7 +6,6 @@ import { es } from 'date-fns/locale'
 import * as XLSX from 'xlsx'
 import type { Instrument } from '@/app/api/instruments/route'
 import { RISK_GROUPS, RISK_GROUP_ORDER, perfilFromPuntaje, type RiskGroup } from '@/lib/riskGroups'
-import type { DavinciJobState } from '@/lib/riskDavinci'
 import type { YahooJobState } from '@/lib/riskYahoo'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -61,7 +60,6 @@ export default function InstrumentsManager() {
   const [riskError, setRiskError]     = useState('')
   const [riskSaving, setRiskSaving]   = useState(false)
   const [recalculando, setRecalculando] = useState(false)
-  const [davinci, setDavinci] = useState<DavinciJobState | null>(null)
   const [yahoo, setYahoo] = useState<YahooJobState | null>(null)
 
   // Modal state
@@ -199,24 +197,6 @@ export default function InstrumentsManager() {
     } finally { setRecalculando(false) }
   }
 
-  // Búsqueda de categorías en Davinci (segundo plano): se consulta el progreso
-  // mientras corre y al terminar se recarga la tabla.
-  useEffect(() => {
-    fetch('/api/instruments/riesgo/davinci').then(r => r.ok ? r.json() : null).then(d => d && setDavinci(d)).catch(() => {})
-  }, [])
-
-  useEffect(() => {
-    if (!davinci?.running) return
-    const t = setInterval(async () => {
-      try {
-        const d: DavinciJobState = await (await fetch('/api/instruments/riesgo/davinci')).json()
-        setDavinci(d)
-        if (!d.running) fetchAll()
-      } catch { /* reintenta en el próximo tick */ }
-    }, 3000)
-    return () => clearInterval(t)
-  }, [davinci?.running, fetchAll])
-
   // Sector y país de las acciones (Yahoo): arranca solo al listar instrumentos.
   useEffect(() => {
     const t = setTimeout(() => {
@@ -236,13 +216,6 @@ export default function InstrumentsManager() {
     }, 3000)
     return () => clearInterval(t)
   }, [yahoo?.running, fetchAll])
-
-  async function buscarEnDavinci() {
-    const res = await fetch('/api/instruments/riesgo/davinci', { method: 'POST' })
-    const d = await res.json()
-    if (!res.ok) { alert(d.error ?? 'No se pudo iniciar la búsqueda'); return }
-    setDavinci(d)
-  }
 
   // ── Excel import ──────────────────────────────────────────────────────────────
 
@@ -457,15 +430,6 @@ export default function InstrumentsManager() {
           </div>
           <div className="flex gap-2">
             <button
-              onClick={buscarEnDavinci}
-              disabled={!!davinci?.running}
-              title="Busca en Davinci la categoría de los fondos sin clasificar o clasificados solo por el nombre, la guarda y recalcula el riesgo"
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-40 transition"
-            >
-              <span className="hidden sm:inline">{davinci?.running ? `Davinci ${davinci.procesados}/${davinci.total}…` : 'Categorías de Davinci'}</span>
-              <span className="sm:hidden">DV</span>
-            </button>
-            <button
               onClick={recalcularRiesgo}
               disabled={recalculando}
               title="Vuelve a calcular el puntaje de riesgo de todos los instrumentos (respeta los ajustes manuales)"
@@ -494,18 +458,6 @@ export default function InstrumentsManager() {
             </button>
           </div>
         </div>
-
-        {davinci && (davinci.running || davinci.finishedAt) && (
-          <div className="px-4 md:px-5 py-2 border-b border-gray-100 text-[12px] text-gray-500">
-            {davinci.running
-              ? <>Buscando categorías en Davinci: {davinci.procesados} de {davinci.total} fondos — {davinci.encontrados} encontradas…</>
-              : davinci.error
-                ? <span className="text-red-600">Davinci: {davinci.error}</span>
-                : davinci.total === 0
-                  ? <>Davinci: no hay fondos pendientes de buscar.</>
-                  : <>Davinci: {davinci.encontrados} de {davinci.total} fondos con categoría, {davinci.clasificados} quedaron clasificados{davinci.errores ? `, ${davinci.errores} con error (se reintentan en la próxima corrida)` : ''}. Los que no están en Davinci se asignan a mano.</>}
-          </div>
-        )}
 
         {yahoo?.running && (
           <div className="px-4 md:px-5 py-2 border-b border-gray-100 text-[12px] text-gray-500">

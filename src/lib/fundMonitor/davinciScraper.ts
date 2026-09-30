@@ -36,8 +36,6 @@ export interface DavinciFundReturns {
   y2021: number | null
   aum: string | null
   asOfDate: string | null   // ISO yyyy-mm-dd
-  /** Categoría Morningstar que Davinci muestra junto al nombre (ej. "EAA Fund Global High Yield Bond") */
-  categoriaDavinci?: string | null
 }
 
 function parseNum(s: string): number | null {
@@ -95,20 +93,6 @@ function nombreDeCelda(celda: string): string {
   return celda.split('★')[0].replace(/^☆/, '').trim()
 }
 
-// Categoría Morningstar de la celda nombre+categoría: si el fondo tiene rating
-// viene después de las estrellas; si no, se busca por el prefijo de Morningstar
-// ("EAA Fund …", "US Fund …", "Offshore …").
-export function categoriaDeCelda(celda: string): string | null {
-  const limpia = celda.replace(/📄/g, '').replace(/DV\s*$/, '').trim()
-  const stars = Math.max(limpia.lastIndexOf('★'), limpia.lastIndexOf('☆'))
-  if (stars >= 0) {
-    const cat = limpia.slice(stars + 1).trim()
-    if (cat) return cat
-  }
-  const m = limpia.match(/\b(EAA|US|Offshore)\s+(Fund|OE|Insurance)\b.*$/i)
-  return m ? m[0].trim() : null
-}
-
 function parseRow(cells: string[]): DavinciFundReturns | null {
   // Layout esperado (16 celdas): ver comentario del encabezado del archivo.
   if (cells.length < 15) return null
@@ -126,7 +110,6 @@ function parseRow(cells: string[]): DavinciFundReturns | null {
     y2021: parseNum(y2021),
     aum: aum?.trim() || null,
     asOfDate: parseDate(fecha ?? ''),
-    categoriaDavinci: categoriaDeCelda(nombreCategoria),
   }
 }
 
