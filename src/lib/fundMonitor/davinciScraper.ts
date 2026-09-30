@@ -237,6 +237,11 @@ export async function openDavinciPage(browser: Browser) {
   const context = await browser.newContext({
     userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36',
   })
+  // Imágenes, fuentes y video no hacen falta para leer las tablas: bloquearlos
+  // recorta buena parte de las descargas que Davinci registra por cada página.
+  await context.route('**/*', route =>
+    ['image', 'font', 'media'].includes(route.request().resourceType()) ? route.abort() : route.continue()
+  )
   const page = await context.newPage()
   page.setDefaultTimeout(20000)
   return { context, page }

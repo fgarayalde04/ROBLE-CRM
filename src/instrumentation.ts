@@ -132,6 +132,14 @@ async function registerFundMonitorSync() {
     console.log('[fund-monitor] Davinci no configurado — auto-sync del Monitor de Fondos deshabilitado')
     return
   }
+  // Solo producción actualiza el Monitor solo: dev y prod comparten la cuenta
+  // de Davinci y cada corrida suma miles de descargas. En otro ambiente se
+  // puede habilitar con FUND_MONITOR_AUTO_SYNC=true.
+  const env = process.env.RAILWAY_ENVIRONMENT_NAME
+  if (env !== 'production' && process.env.FUND_MONITOR_AUTO_SYNC !== 'true') {
+    console.log(`[fund-monitor] Auto-sync del Monitor de Fondos deshabilitado en este ambiente (${env ?? 'local'})`)
+    return
+  }
 
   const SYNC_HOUR_UTC = 8 // 05:00 en Montevideo (UTC-3) — antes de que abran los mercados
   const port = process.env.PORT ?? '3000'
@@ -145,21 +153,20 @@ async function registerFundMonitorSync() {
       const res = await fetch(url, { headers })
       const data = await res.json()
       if (!res.ok) {
-        console.error('[fund-monitor] Error en el sync diario:', data.error ?? res.status)
+        console.error('[fund-monitor] Error en el sync:', data.error ?? res.status)
       } else if (!data.skipped) {
-        console.log(`[fund-monitor] Sync diario: ${data.ok}/${data.total} ok, ${data.no_source} sin fuente, ${data.error} con error`)
+        console.log(`[fund-monitor] Sync: ${data.ok}/${data.total} ok, ${data.no_source} sin fuente, ${data.error} con error`)
       }
     } catch (e: any) {
-      console.error('[fund-monitor] Error en el sync diario:', e.message)
+      console.error('[fund-monitor] Error en el sync:', e.message)
     }
   }
 
-  // Chequea cada 15 minutos si ya pasó la hora de corrida y todavía no se
-  // hizo hoy — si un intento falla (ej. Davinci caído), el próximo chequeo
-  // reintenta solo, sin esperar al día siguiente.
+  // Chequea cada 15 minutos si ya pasó la hora de corrida; syncFundMonitor
+  // decide si toca (cada 15 días, y un intento fallido espera al día siguiente).
   setTimeout(() => maybeSync(), 15000)
   setInterval(() => maybeSync(), 15 * 60 * 1000)
-  console.log(`[fund-monitor] Auto-sync programado — corre una vez por día después de las ${SYNC_HOUR_UTC}:00 UTC`)
+  console.log(`[fund-monitor] Auto-sync programado — cada ${process.env.FUND_MONITOR_SYNC_DAYS || 15} días, después de las ${SYNC_HOUR_UTC}:00 UTC`)
 }
 
 /**

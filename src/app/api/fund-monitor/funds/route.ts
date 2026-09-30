@@ -52,8 +52,8 @@ export async function POST(req: Request) {
 
     await client.query('commit')
 
-    // Completa los rendimientos desde Davinci en el momento (no espera al sync
-    // diario). Si falla, el fondo igual queda creado.
+    // Completa los rendimientos desde Davinci en el momento (no espera al próximo
+    // sync). Si falla, el fondo igual queda creado.
     const sync = await syncSingleFund({ id: rows[0].id, isin: cleanIsin, nombre: rows[0].nombre })
     return NextResponse.json({ ...rows[0], sync })
   } catch (err: any) {

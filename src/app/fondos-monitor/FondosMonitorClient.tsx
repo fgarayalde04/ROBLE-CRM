@@ -478,7 +478,7 @@ const OTRA = '__otra__'
 // agregar/editar un fondo. 'ok' (o ausente) no necesita aviso.
 function syncNoticeFor(sync: string | undefined): string | null {
   if (sync === 'no_source') return 'El fondo se guardó, pero no aparece en Davinci ni por ISIN ni por nombre: quedó sin rendimientos. Revisá que el nombre sea igual al de Davinci.'
-  if (sync === 'error') return 'El fondo se guardó, pero no se pudieron traer los rendimientos de Davinci. Se reintenta en la próxima actualización diaria.'
+  if (sync === 'error') return 'El fondo se guardó, pero no se pudieron traer los rendimientos de Davinci. Se reintenta en la próxima actualización del Monitor.'
   if (sync === 'unavailable') return 'El fondo se guardó, pero Davinci no está configurado en este ambiente: quedó sin rendimientos.'
   return null
 }

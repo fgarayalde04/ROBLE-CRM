@@ -93,6 +93,9 @@ export async function markFundSyncIssue(fundId: string, status: 'no_source' | 'e
   )
 }
 
+// Sin filtrar por status: un error puntual del último sync deja los valores
+// buenos anteriores intactos (ver markFundSyncIssue), y filtrar mandaba esos
+// fondos a una búsqueda en vivo en Davinci innecesaria.
 // Usado por Propuestas para autocompletar los rendimientos de un fondo al
 // elegirlo (o tipear su ISIN) — mismo ISIN que ya identifica al fondo en el
 // maestro de instrumentos, así que sirve de clave de cruce directa.
@@ -102,7 +105,7 @@ export async function getFundReturnsByIsin(isin: string) {
             r.y_2025, r.y_2024, r.y_2023, r.y_2022, r.y_2021
      from fund_monitor_funds f
      join fund_monitor_returns r on r.fund_id = f.id
-     where f.isin = $1 and r.status = 'ok'`,
+     where f.isin = $1`,
     [isin]
   )
   return rows[0] ?? null
@@ -121,4 +124,43 @@ export async function getFundMonitorCoverage() {
     where f.active = true
   `)
   return rows[0]
+}
+
+// ── Límite de consultas a Davinci ────────────────────────────────────────────
+// Se guarda en la base (no en memoria) para que un deploy o reinicio no vuelva
+// a disparar el sync ni las búsquedas en vivo.
+
+export async function getSyncState(key: string): Promise<{ last_attempt_at: Date | null; last_success_at: Date | null }> {
+  const { rows } = await pool.query(
+    `select last_attempt_at, last_success_at from davinci_sync_state where key = $1`,
+    [key]
+  )
+  return rows[0] ?? { last_attempt_at: null, last_success_at: null }
+}
+
+export async function markSyncAttempt(key: string, success: boolean) {
+  await pool.query(
+    `insert into davinci_sync_state (key, last_attempt_at, last_success_at)
+     values ($1, now(), case when $2 then now() end)
+     on conflict (key) do update set
+       last_attempt_at = now(),
+       last_success_at = case when $2 then now() else davinci_sync_state.last_success_at end`,
+    [key, success]
+  )
+}
+
+export async function getLookupCache(isin: string): Promise<{ data: unknown; fetched_at: Date } | null> {
+  const { rows } = await pool.query(
+    `select data, fetched_at from davinci_lookup_cache where isin = $1`,
+    [isin]
+  )
+  return rows[0] ?? null
+}
+
+export async function setLookupCache(isin: string, data: unknown) {
+  await pool.query(
+    `insert into davinci_lookup_cache (isin, data, fetched_at) values ($1, $2, now())
+     on conflict (isin) do update set data = excluded.data, fetched_at = now()`,
+    [isin, data == null ? null : JSON.stringify(data)]
+  )
 }
