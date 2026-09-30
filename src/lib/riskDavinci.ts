@@ -62,39 +62,21 @@ async function run(reintentar: boolean) {
   state.total = rows.length
   if (rows.length === 0) return
 
-  // En Railway Chromium corre con --single-process: si una página se cae, se
-  // cae el browser entero y el singleton queda muerto. Por eso, ante un error,
-  // se cierra el browser y se lanza uno nuevo (no se reusa el caído).
-  const abrirSesion = async () => {
-    let ultimo: unknown = null
-    for (let intento = 0; intento < 3; intento++) {
-      try {
-        const browser = await getBrowser()
-        if (!browser) throw new Error('No se pudo abrir el navegador para Davinci')
-        const s = await openDavinciPage(browser)
-        await loginDavinci(s.page, email, password)
-        return s
-      } catch (e) {
-        ultimo = e
-        await closeBrowser()
-      }
-    }
-    throw ultimo instanceof Error ? ultimo : new Error(String(ultimo))
+  // Un solo login por corrida y sin reintentos: varios logins seguidos con la
+  // misma cuenta hicieron que Davinci bloqueara el usuario. Si el login falla
+  // o el browser se cae, la corrida se corta y los fondos que faltan quedan
+  // para la próxima (no se marcan como buscados).
+  const browser = await getBrowser()
+  if (!browser) throw new Error('No se pudo abrir el navegador para Davinci')
+  const session = await openDavinciPage(browser)
+  try {
+    await loginDavinci(session.page, email, password)
+  } catch (e) {
+    await session.context.close().catch(() => {})
+    await closeBrowser()
+    throw e
   }
-
-  let session = await abrirSesion()
-  const buscar = async (isin: string, nombre: string) => {
-    try {
-      return await searchFundReturns(session.page, isin, nombre)
-    } catch (e) {
-      // Sesión o browser caídos: se levanta todo de nuevo y se reintenta una vez.
-      console.error('[riesgo-davinci] reabriendo sesión tras error en', isin, (e as Error)?.message ?? e)
-      await session.context.close().catch(() => {})
-      await closeBrowser()
-      session = await abrirSesion()
-      return await searchFundReturns(session.page, isin, nombre)
-    }
-  }
+  const buscar = (isin: string, nombre: string) => searchFundReturns(session.page, isin, nombre)
 
   try {
     for (const r of rows) {
@@ -117,12 +99,13 @@ async function run(reintentar: boolean) {
           if (after[0]?.riesgo_fuente === 'categoria') state.clasificados++
         }
       } catch (e: any) {
-        // Falló incluso con sesión nueva: se deja este fondo (sin marcarlo como
-        // buscado, así la próxima corrida lo reintenta) y se sigue.
+        // Se deja este fondo sin marcar como buscado (la próxima corrida lo
+        // reintenta) y se sigue.
         state.errores++
         console.error('[riesgo-davinci]', r.isin, e?.message ?? e)
         if (/closed|crash|disconnected/i.test(e?.message ?? '')) {
-          session = await abrirSesion()
+          await closeBrowser()
+          throw new Error('Se cortó la conexión con Davinci; los fondos que faltan quedan para la próxima corrida')
         }
       }
       state.procesados++
