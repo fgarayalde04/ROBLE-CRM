@@ -84,7 +84,7 @@ const result = (grupo: RiskGroup | null, fuente: RiskFuente, revisar = false): R
 const RE = {
   especulativo: /\b(leveraged|apalancad\w*|inverse|inverso|ultrapro|[23]x)\b/,
   privateEquity: /private equity/,
-  mixto: /(balanced|balanceado|multi[- ]?asset|allocation|prudent|income (&|and) growth|alternativ|absolute return|retorno absoluto|private debt|private credit|\bbdc\b|debt solutions|multi[- ]?strateg)/,
+  mixto: /(balanced|balanceado|multi[- ]?asset|allocation|prudent|income (&|and) growth|alternativ|\balt\b|absolute return|retorno absoluto|private debt|private credit|\bbdc\b|debt solutions|multi[- ]?strateg)/,
   equity: /(equity|equities|acciones|renta variable|\brv\b|stock|shares|growth|value|small ?cap|mid ?cap|large ?cap|dividend|brands|franchise|thematic|tematic|technology|\btech\b|innovation|robotics|health|consumer|energy|infrastructure|real estate|property|propert|reit|gold|commodit)/,
   bond: /(bond|\bbd\b|debt|credit|fixed income|income|renta fija|\brf\b|treasur|govt|government|aggregate|duration|maturity|\bloans?\b|floating|tasa flotante|high yield|yield)/,
   hy: /(high yield|\bhy\b|convertib|hybrid|capital securities|\bcoco|subordinat|\bat1\b|distress|local currency|moneda local|\bmonedas\b|currencies|opportunit|\bopp\b|unconstrained|dynamic|alpha)/,

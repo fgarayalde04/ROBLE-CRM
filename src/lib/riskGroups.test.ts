@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { classifyInstrument, classifyText, ratingTier, perfilFromPuntaje } from './riskGroups'
+import { categoriaDeCelda } from './fundMonitor/davinciScraper'
 
 const fondo = (nombre: string, extra: Record<string, string> = {}) =>
   classifyInstrument({ tipo_activo: 'fondo', nombre, ...extra })
@@ -104,5 +105,26 @@ describe('acciones', () => {
 describe('classifyText', () => {
   it('no confunde un fondo de acciones "income" con renta fija', () => {
     expect(classifyText('Global Equity Income')).toBe('rv_desarrollada')
+  })
+})
+
+describe('categoría Morningstar de Davinci', () => {
+  it('se extrae de la celda', () => {
+    expect(categoriaDeCelda('Robeco High Yield Bonds DH USD★★★ EAA Fund Global High Yield Bond')).toBe('EAA Fund Global High Yield Bond')
+    expect(categoriaDeCelda('Fondo Nuevo X Acc EAA Fund USD Moderate Allocation📄')).toBe('EAA Fund USD Moderate Allocation')
+    expect(categoriaDeCelda('Oaktree Strategic Credit IDV📄')).toBeNull()
+  })
+  it('clasifica las categorías típicas', () => {
+    expect(classifyText('EAA Fund Global High Yield Bond')).toBe('rf_ar')
+    expect(classifyText('EAA Fund USD Corporate Bond')).toBe('rf_ig')
+    expect(classifyText('EAA Fund Money Market - USD')).toBe('liquidez')
+    expect(classifyText('EAA Fund USD Moderate Allocation')).toBe('mixtos')
+    expect(classifyText('EAA Fund Alt - Long/Short Equity')).toBe('mixtos')
+    expect(classifyText('EAA Fund US Large-Cap Growth Equity')).toBe('rv_especifica')
+    expect(classifyText('EAA Fund Global Large-Cap Blend Equity')).toBe('rv_desarrollada')
+    expect(classifyText('EAA Fund Global Emerging Markets Equity')).toBe('rv_especifica')
+    expect(classifyText('EAA Fund Sector Equity Technology')).toBe('rv_especifica')
+    expect(classifyText('EAA Fund Property - Indirect Global')).toBe('rv_desarrollada')
+    expect(classifyText('EAA Fund Convertible Bond - Global')).toBe('rf_ar')
   })
 })
