@@ -128,3 +128,25 @@ describe('categoría Morningstar de Davinci', () => {
     expect(classifyText('EAA Fund Convertible Bond - Global')).toBe('rf_ar')
   })
 })
+
+describe('acciones por sector y país (Yahoo)', () => {
+  const a = (sector: string, industria: string, pais: string) =>
+    classifyInstrument({ tipo_activo: 'accion', nombre: 'X', isin: 'US0000000000', sector, industria, pais })
+  it('desarrollado: defensivos, cíclicos y tecnología en RV desarrollada', () => {
+    expect(a('Consumer Defensive', 'Household & Personal Products', 'United States').grupo).toBe('rv_desarrollada')
+    expect(a('Energy', 'Oil & Gas Integrated', 'United Kingdom').grupo).toBe('rv_desarrollada')
+    expect(a('Technology', 'Semiconductors', 'United States').grupo).toBe('rv_desarrollada')
+    expect(a('Technology', 'Semiconductors', 'United States').fuente).toBe('sector')
+    expect(a('Technology', 'Semiconductors', 'United States').revisar).toBe(false)
+  })
+  it('biotecnología y emergentes en RV emergente / específica', () => {
+    expect(a('Healthcare', 'Biotechnology', 'United States').grupo).toBe('rv_especifica')
+    expect(a('Consumer Cyclical', 'Internet Retail', 'Uruguay').grupo).toBe('rv_especifica')
+    expect(a('Energy', 'Oil & Gas Integrated', 'Argentina').grupo).toBe('rv_especifica')
+  })
+  it('sin datos de Yahoo: país del ISIN, a revisar', () => {
+    const r = classifyInstrument({ tipo_activo: 'accion', nombre: 'X', isin: 'US0378331005' })
+    expect(r.grupo).toBe('rv_desarrollada')
+    expect(r.revisar).toBe(true)
+  })
+})

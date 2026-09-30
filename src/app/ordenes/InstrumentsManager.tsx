@@ -7,6 +7,7 @@ import * as XLSX from 'xlsx'
 import type { Instrument } from '@/app/api/instruments/route'
 import { RISK_GROUPS, RISK_GROUP_ORDER, perfilFromPuntaje, type RiskGroup } from '@/lib/riskGroups'
 import type { DavinciJobState } from '@/lib/riskDavinci'
+import type { YahooJobState } from '@/lib/riskYahoo'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -30,7 +31,7 @@ const PERFIL_STYLE: Record<string, string> = {
 
 const FUENTE_LABEL: Record<string, string> = {
   monitor: 'por categoría del Monitor', categoria: 'por la categoría cargada', nombre: 'por el nombre',
-  rating: 'por el rating', pais: 'por el país del ISIN', manual: 'ajuste manual', sin_clasificar: 'sin clasificar',
+  rating: 'por el rating', pais: 'por el país del ISIN', sector: 'por sector y país', manual: 'ajuste manual', sin_clasificar: 'sin clasificar',
 }
 
 const inputCls  = 'w-full text-sm px-3 py-2 rounded-lg border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300 transition placeholder-gray-300'
@@ -61,6 +62,7 @@ export default function InstrumentsManager() {
   const [riskSaving, setRiskSaving]   = useState(false)
   const [recalculando, setRecalculando] = useState(false)
   const [davinci, setDavinci] = useState<DavinciJobState | null>(null)
+  const [yahoo, setYahoo] = useState<YahooJobState | null>(null)
 
   // Modal state
   const [modal, setModal]   = useState<'add' | 'edit' | 'import' | null>(null)
@@ -214,6 +216,26 @@ export default function InstrumentsManager() {
     }, 3000)
     return () => clearInterval(t)
   }, [davinci?.running, fetchAll])
+
+  // Sector y país de las acciones (Yahoo): arranca solo al listar instrumentos.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      fetch('/api/instruments/riesgo/yahoo').then(r => r.ok ? r.json() : null).then(d => d && setYahoo(d)).catch(() => {})
+    }, 1500)
+    return () => clearTimeout(t)
+  }, [])
+
+  useEffect(() => {
+    if (!yahoo?.running) return
+    const t = setInterval(async () => {
+      try {
+        const d: YahooJobState = await (await fetch('/api/instruments/riesgo/yahoo')).json()
+        setYahoo(d)
+        if (!d.running) fetchAll()
+      } catch { /* reintenta en el próximo tick */ }
+    }, 3000)
+    return () => clearInterval(t)
+  }, [yahoo?.running, fetchAll])
 
   async function buscarEnDavinci() {
     const res = await fetch('/api/instruments/riesgo/davinci', { method: 'POST' })
@@ -482,6 +504,12 @@ export default function InstrumentsManager() {
                 : davinci.total === 0
                   ? <>Davinci: no hay fondos pendientes de buscar.</>
                   : <>Davinci: {davinci.encontrados} de {davinci.total} fondos con categoría, {davinci.clasificados} quedaron clasificados{davinci.errores ? `, ${davinci.errores} con error (se reintentan en la próxima corrida)` : ''}. Los que no están en Davinci se asignan a mano.</>}
+          </div>
+        )}
+
+        {yahoo?.running && (
+          <div className="px-4 md:px-5 py-2 border-b border-gray-100 text-[12px] text-gray-500">
+            Buscando sector y país de las acciones en Yahoo: {yahoo.procesados} de {yahoo.total}…
           </div>
         )}
 
@@ -937,6 +965,7 @@ function RiskBadge({ inst, onClick }: { inst: Instrument; onClick: () => void })
   const perfil = perfilFromPuntaje(inst.riesgo_puntaje)
   const titulo = [
     `${RISK_GROUPS[inst.riesgo_grupo].label} — ${perfil}`,
+    inst.tipo_activo === 'accion' && (inst.sector || inst.pais) ? [inst.sector, inst.industria, inst.pais].filter(Boolean).join(' · ') : '',
     FUENTE_LABEL[inst.riesgo_fuente ?? ''] ?? '',
     inst.riesgo_fuente === 'manual' && inst.riesgo_motivo ? `Motivo: ${inst.riesgo_motivo}` : '',
     inst.riesgo_revisar ? 'A revisar' : '',

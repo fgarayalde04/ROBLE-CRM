@@ -49,7 +49,7 @@ export function perfilFromPuntaje(p: number): Perfil {
   return 'agresivo'
 }
 
-export type RiskFuente = 'monitor' | 'categoria' | 'nombre' | 'rating' | 'pais' | 'manual' | 'sin_clasificar'
+export type RiskFuente = 'monitor' | 'categoria' | 'nombre' | 'rating' | 'pais' | 'sector' | 'manual' | 'sin_clasificar'
 
 export interface RiskResult {
   grupo: RiskGroup | null
@@ -69,6 +69,10 @@ export interface ClassifyInput {
   /** Categoría y subcategoría del Monitor de Fondos, si el ISIN está ahí */
   monitor_categoria?: string | null
   monitor_subcategoria?: string | null
+  /** Acciones: sector, industria y país de la empresa (de Yahoo, guardados en el maestro) */
+  sector?: string | null
+  industria?: string | null
+  pais?: string | null
 }
 
 const norm = (s: string | null | undefined) =>
@@ -202,6 +206,33 @@ const PAISES_DESARROLLADOS = new Set([
   'AT', 'LU', 'JP', 'AU', 'NZ', 'SG', 'HK', 'IL',
 ])
 
+// País de la empresa tal como lo devuelve Yahoo (assetProfile.country).
+const PAISES_DESARROLLADOS_NOMBRE = new Set([
+  'united states', 'canada', 'united kingdom', 'ireland', 'germany', 'france', 'netherlands',
+  'belgium', 'switzerland', 'sweden', 'norway', 'denmark', 'finland', 'italy', 'spain', 'portugal',
+  'austria', 'luxembourg', 'japan', 'australia', 'new zealand', 'singapore', 'hong kong', 'israel',
+])
+
+/**
+ * Acciones por país y sector (sectores de Yahoo/GICS):
+ *   Emergente (cualquier sector)                → RV emergente / específica (8)
+ *   Desarrollado, biotecnología                 → RV emergente / específica (8)
+ *   Desarrollado, tecnología                    → TECNOLOGIA_DESARROLLADA
+ *   Desarrollado, resto (defensivos y cíclicos) → RV desarrollada (6)
+ */
+export const TECNOLOGIA_DESARROLLADA: RiskGroup = 'rv_desarrollada'
+
+function classifyBySectorPais(i: ClassifyInput): RiskResult | null {
+  if (!i.pais) return null
+  const desarrollado = PAISES_DESARROLLADOS_NOMBRE.has(norm(i.pais).trim())
+  if (!desarrollado) return result('rv_especifica', 'sector')
+  const sector = norm(i.sector)
+  const industria = norm(i.industria)
+  if (/biotech/.test(industria)) return result('rv_especifica', 'sector')
+  if (/technology/.test(sector)) return result(TECNOLOGIA_DESARROLLADA, 'sector')
+  return result('rv_desarrollada', 'sector')
+}
+
 function classifyStock(i: ClassifyInput): RiskResult {
   const text = norm(`${i.nombre} ${i.categoria ?? ''}`)
   if (RE.especulativo.test(text)) return result('especulativo', 'nombre')
@@ -209,11 +240,14 @@ function classifyStock(i: ClassifyInput): RiskResult {
     const g = classifyText(text)
     if (g) return result(g, 'nombre')
   }
+  const porSector = classifyBySectorPais(i)
+  if (porSector) return porSector
+  // Sin sector/país de Yahoo: aproximación por el país del ISIN, a revisar
+  // (un ADR tiene ISIN de EE.UU. aunque la empresa sea emergente).
   const pais = i.isin?.slice(0, 2).toUpperCase()
-  if (!pais) return result('rv_desarrollada', 'pais', true)          // sin ISIN: asumimos desarrollada, a revisar
-  if (PAISES_DESARROLLADOS.has(pais)) return result('rv_desarrollada', 'pais')
-  if (['KY', 'BM', 'VG'].includes(pais)) return result('rv_especifica', 'pais', true) // domicilio off-shore: ver el emisor
-  return result('rv_especifica', 'pais')
+  if (!pais) return result('rv_desarrollada', 'pais', true)
+  if (PAISES_DESARROLLADOS.has(pais)) return result('rv_desarrollada', 'pais', true)
+  return result('rv_especifica', 'pais', true)
 }
 
 // ── Fondos: Monitor → categoría cargada → nombre ────────────────────────────
