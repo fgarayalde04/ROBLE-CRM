@@ -13,12 +13,15 @@ import { RESEARCH_CATEGORIAS, researchCategoriaLabel } from '@/lib/research/labe
 interface Doc {
   id: string; tipo: TipoPlantilla; titulo: string; datos: any
   research_type: string | null; research_post_id: string | null; research_publicado_at: string | null; updated_at: string
+  web_publicar: boolean; web_report_id: string | null; web_publicado_at: string | null
 }
 
 const input = 'w-full border border-gray-200 rounded px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#2D3F52]/20 bg-white'
 const labelCls = 'block text-xs font-medium text-gray-500 mb-1'
 
-export default function PlantillaEditor({ doc, fontsClass, puedePublicar }: { doc: Doc; fontsClass: string; puedePublicar: boolean }) {
+export default function PlantillaEditor({ doc, fontsClass, puedePublicar, webConfigurada }: {
+  doc: Doc; fontsClass: string; puedePublicar: boolean; webConfigurada: boolean
+}) {
   const router = useRouter()
   const [datos, setDatos] = useState<any>(doc.datos)
   const [estado, setEstado] = useState<'guardado' | 'pendiente' | 'guardando' | 'error'>('guardado')
@@ -84,11 +87,17 @@ export default function PlantillaEditor({ doc, fontsClass, puedePublicar }: { do
   // ── Research & Novedades: se publica sola cuando el documento está completo
   // y se actualiza (PDF nuevo) unos segundos después de cada cambio guardado.
   const [categoria, setCategoria] = useState<string>(doc.research_type ?? '')
+  const [web, setWeb] = useState<boolean>(webConfigurada && !!doc.web_publicar)
   const [pub, setPub] = useState<{ estado: 'nada' | 'pendiente' | 'publicando' | 'ok' | 'error'; at: string | null; error?: string; postId: string | null }>({
-    estado: doc.research_post_id ? 'ok' : 'nada', at: doc.research_publicado_at, postId: doc.research_post_id,
+    estado: doc.research_post_id || doc.web_report_id ? 'ok' : 'nada',
+    at: [doc.research_publicado_at, doc.web_publicado_at].filter(Boolean).sort().pop() ?? null,
+    postId: doc.research_post_id,
   })
+  const alDia = (id: string | null, at: string | null) => !!id && !!at && at >= doc.updated_at
   const publicadoJson = useRef<string | null>(
-    doc.research_post_id && doc.research_publicado_at && doc.research_publicado_at >= doc.updated_at ? JSON.stringify(doc.datos) : null
+    (!doc.research_type || alDia(doc.research_post_id, doc.research_publicado_at)) &&
+    (!doc.web_publicar || alDia(doc.web_report_id, doc.web_publicado_at)) &&
+    (doc.research_type || doc.web_publicar) ? JSON.stringify(doc.datos) : null
   )
 
   const publicar = useCallback(async () => {
@@ -96,25 +105,38 @@ export default function PlantillaEditor({ doc, fontsClass, puedePublicar }: { do
     const json = JSON.stringify(datos)
     try {
       const res = await fetch(`/api/plantillas/${doc.id}/publicar`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ categoria }),
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ categoria: categoria || null, web }),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error ?? 'No se pudo publicar')
+      const errores = [
+        data.research && !data.research.ok ? `Research: ${data.research.error}` : null,
+        data.web && !data.web.ok ? `Web: ${data.web.error}` : null,
+      ].filter(Boolean)
+      if (!res.ok && !errores.length) throw new Error(data.error ?? 'No se pudo publicar')
+      if (errores.length) throw new Error(errores.join(' · '))
       publicadoJson.current = json
-      setPub({ estado: 'ok', at: new Date().toISOString(), postId: data.post.id })
+      setPub({ estado: 'ok', at: new Date().toISOString(), postId: data.research?.postId ?? null })
     } catch (e: any) {
       setPub((p) => ({ ...p, estado: 'error', error: e.message }))
     }
-  }, [datos, categoria, doc.id])
+  }, [datos, categoria, web, doc.id])
 
   const completo = faltan.length === 0
   useEffect(() => {
-    if (!puedePublicar || !categoria || !completo || estado !== 'guardado') return
+    if (!puedePublicar || !(categoria || web) || !completo || estado !== 'guardado') return
     if (publicadoJson.current === JSON.stringify(datos)) return
     setPub((p) => (p.estado === 'publicando' ? p : { ...p, estado: 'pendiente' }))
     const t = setTimeout(() => { publicar() }, 6000)
     return () => clearTimeout(t)
-  }, [puedePublicar, categoria, completo, estado, datos, publicar])
+  }, [puedePublicar, categoria, web, completo, estado, datos, publicar])
+
+  async function cambiarWeb(v: boolean) {
+    setWeb(v)
+    publicadoJson.current = null
+    await fetch(`/api/plantillas/${doc.id}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ web: v }),
+    })
+  }
 
   async function cambiarCategoria(c: string) {
     setCategoria(c)
@@ -154,7 +176,8 @@ export default function PlantillaEditor({ doc, fontsClass, puedePublicar }: { do
 
       {puedePublicar && (
         <div className="mb-4 bg-white border border-gray-200 rounded-lg px-4 py-3 flex items-center gap-3 flex-wrap text-sm">
-          <span className="font-medium text-gray-700">Research &amp; Novedades</span>
+          <span className="font-medium text-gray-700">Publicar en</span>
+          <span className="text-xs text-gray-500">Research &amp; Novedades:</span>
           <select
             value={categoria}
             onChange={(e) => cambiarCategoria(e.target.value)}
@@ -163,17 +186,26 @@ export default function PlantillaEditor({ doc, fontsClass, puedePublicar }: { do
             <option value="">No publicar</option>
             {RESEARCH_CATEGORIAS.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
           </select>
+          {webConfigurada && (
+            <label className="flex items-center gap-1.5 text-xs text-gray-600">
+              <input type="checkbox" checked={web} onChange={(e) => cambiarWeb(e.target.checked)} />
+              Web de clientes
+            </label>
+          )}
           <span className="text-xs text-gray-500 flex-1 min-w-[200px]">
-            {!categoria ? 'No se publica en Research.'
-              : !completo ? `Se publica en ${researchCategoriaLabel(categoria)} cuando completes todos los campos.`
-              : pub.estado === 'publicando' ? 'Publicando en Research… (generando el PDF)'
-              : pub.estado === 'pendiente' ? 'Se actualiza en Research en unos segundos…'
-              : pub.estado === 'error' ? <span className="text-red-600">No se pudo publicar: {pub.error}</span>
-              : pub.estado === 'ok' ? <span className="text-emerald-700">✓ Publicado en {researchCategoriaLabel(categoria)}{pub.at ? ` · ${new Date(pub.at).toLocaleTimeString('es-UY', { hour: '2-digit', minute: '2-digit' })}` : ''}</span>
-              : ''}
+            {(() => {
+              const destinos = [categoria && `Research (${researchCategoriaLabel(categoria)})`, web && 'la web de clientes'].filter(Boolean).join(' y ')
+              if (!destinos) return 'No se publica.'
+              if (!completo) return `Se publica en ${destinos} cuando completes todos los campos.`
+              if (pub.estado === 'publicando') return 'Publicando… (generando el PDF)'
+              if (pub.estado === 'pendiente') return `Se actualiza en ${destinos} en unos segundos…`
+              if (pub.estado === 'error') return <span className="text-red-600">No se pudo publicar: {pub.error}</span>
+              if (pub.estado === 'ok') return <span className="text-emerald-700">✓ Publicado en {destinos}{pub.at ? ` · ${new Date(pub.at).toLocaleTimeString('es-UY', { hour: '2-digit', minute: '2-digit' })}` : ''}</span>
+              return ''
+            })()}
           </span>
           {pub.postId && <Link href="/research" className="text-xs text-blue-600 hover:underline">Ver en Research</Link>}
-          {categoria && completo && (
+          {(categoria || web) && completo && (
             <button type="button" onClick={publicar} disabled={pub.estado === 'publicando'} className="text-xs text-blue-600 hover:underline disabled:opacity-50">
               Actualizar ahora
             </button>

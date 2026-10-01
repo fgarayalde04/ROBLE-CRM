@@ -12,6 +12,10 @@ export interface PlantillaDoc {
   research_type: string | null
   research_post_id: string | null
   research_publicado_at: string | null
+  web_publicar: boolean
+  web_report_id: string | null
+  web_file_path: string | null
+  web_publicado_at: string | null
   created_at: string
   updated_at: string
 }
@@ -19,7 +23,7 @@ export interface PlantillaDoc {
 export async function listPlantillas(): Promise<Omit<PlantillaDoc, 'datos'>[]> {
   const { rows } = await pool.query(
     `select id, tipo, titulo, created_by, created_by_id, updated_by, research_type, research_post_id, research_publicado_at,
-            created_at, updated_at
+            web_publicar, web_report_id, web_publicado_at, created_at, updated_at
        from plantillas_documentos order by updated_at desc limit 300`
   )
   return rows
@@ -31,12 +35,13 @@ export async function getPlantilla(id: string): Promise<PlantillaDoc | null> {
 }
 
 export async function createPlantilla(input: {
-  tipo: TipoPlantilla; titulo: string; datos: unknown; userName: string; userId: string; researchType?: string | null
+  tipo: TipoPlantilla; titulo: string; datos: unknown; userName: string; userId: string
+  researchType?: string | null; webPublicar?: boolean
 }) {
   const { rows } = await pool.query(
-    `insert into plantillas_documentos (tipo, titulo, datos, created_by, created_by_id, updated_by, research_type)
-     values ($1, $2, $3::jsonb, $4, $5, $4, $6) returning *`,
-    [input.tipo, input.titulo, JSON.stringify(input.datos ?? {}), input.userName, input.userId, input.researchType ?? null]
+    `insert into plantillas_documentos (tipo, titulo, datos, created_by, created_by_id, updated_by, research_type, web_publicar)
+     values ($1, $2, $3::jsonb, $4, $5, $4, $6, $7) returning *`,
+    [input.tipo, input.titulo, JSON.stringify(input.datos ?? {}), input.userName, input.userId, input.researchType ?? null, !!input.webPublicar]
   )
   return rows[0] as PlantillaDoc
 }
@@ -58,6 +63,17 @@ export async function setResearchPublicado(id: string, postId: string) {
   await pool.query(
     `update plantillas_documentos set research_post_id = $2, research_publicado_at = now() where id = $1`,
     [id, postId]
+  )
+}
+
+export async function setWebPublicar(id: string, publicar: boolean) {
+  await pool.query(`update plantillas_documentos set web_publicar = $2 where id = $1`, [id, publicar])
+}
+
+export async function setWebPublicado(id: string, reportId: string, filePath: string) {
+  await pool.query(
+    `update plantillas_documentos set web_report_id = $2, web_file_path = $3, web_publicado_at = now() where id = $1`,
+    [id, reportId, filePath]
   )
 }
 

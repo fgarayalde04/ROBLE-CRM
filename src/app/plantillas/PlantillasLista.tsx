@@ -15,14 +15,18 @@ interface Doc {
   updated_at: string
   research_type: string | null
   research_post_id: string | null
+  web_publicar: boolean
+  web_report_id: string | null
 }
 
 const fmt = (iso: string) =>
   new Date(iso).toLocaleDateString('es-UY', { day: '2-digit', month: '2-digit', year: 'numeric' })
 
-export default function PlantillasLista({ tipo, documentos, puedePublicar }: { tipo: TipoPlantilla | null; documentos: Doc[]; puedePublicar: boolean }) {
+export default function PlantillasLista({ tipo, documentos, puedePublicar, webConfigurada }: {
+  tipo: TipoPlantilla | null; documentos: Doc[]; puedePublicar: boolean; webConfigurada: boolean
+}) {
   if (!tipo) return <Tarjetas documentos={documentos} />
-  return <DocumentosDeTipo tipo={tipo} documentos={documentos.filter((d) => d.tipo === tipo)} puedePublicar={puedePublicar} />
+  return <DocumentosDeTipo tipo={tipo} documentos={documentos.filter((d) => d.tipo === tipo)} puedePublicar={puedePublicar} webConfigurada={webConfigurada} />
 }
 
 // ── Inicio: una tarjeta por plantilla ───────────────────────────────────────
@@ -57,9 +61,12 @@ function Tarjetas({ documentos }: { documentos: Doc[] }) {
 
 // ── Una plantilla: crear nuevo + todos los ya hechos ────────────────────────
 
-function DocumentosDeTipo({ tipo, documentos, puedePublicar }: { tipo: TipoPlantilla; documentos: Doc[]; puedePublicar: boolean }) {
+function DocumentosDeTipo({ tipo, documentos, puedePublicar, webConfigurada }: {
+  tipo: TipoPlantilla; documentos: Doc[]; puedePublicar: boolean; webConfigurada: boolean
+}) {
   const router = useRouter()
   const [categoria, setCategoria] = useState(TIPOS_PLANTILLA[tipo].categoriaResearch)
+  const [web, setWeb] = useState(webConfigurada)
   const [busy, setBusy] = useState<string | null>(null)
   const [q, setQ] = useState('')
 
@@ -94,7 +101,7 @@ function DocumentosDeTipo({ tipo, documentos, puedePublicar }: { tipo: TipoPlant
         <button
           type="button"
           disabled={!!busy}
-          onClick={() => crear({ tipo, categoria: puedePublicar ? categoria : null }, 'nuevo')}
+          onClick={() => crear({ tipo, categoria: puedePublicar ? categoria : null, web: puedePublicar && webConfigurada && web }, 'nuevo')}
           className="w-full sm:w-auto px-5 py-2.5 text-sm font-semibold bg-[#2D3F52] text-white rounded-lg hover:bg-[#354A5E] disabled:opacity-60"
         >
           {busy === 'nuevo' ? 'Creando…' : '+ Crear nuevo'}
@@ -105,6 +112,12 @@ function DocumentosDeTipo({ tipo, documentos, puedePublicar }: { tipo: TipoPlant
             <select value={categoria} onChange={(e) => setCategoria(e.target.value)} className="border border-gray-200 rounded px-2 py-1.5 text-xs bg-white">
               {RESEARCH_CATEGORIAS.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
             </select>
+          </label>
+        )}
+        {puedePublicar && webConfigurada && (
+          <label className="flex items-center gap-1.5 text-xs text-gray-600">
+            <input type="checkbox" checked={web} onChange={(e) => setWeb(e.target.checked)} />
+            y en la web de clientes
           </label>
         )}
       </div>
@@ -140,6 +153,9 @@ function DocumentosDeTipo({ tipo, documentos, puedePublicar }: { tipo: TipoPlant
                         {d.research_post_id
                           ? <span className="ml-2 text-emerald-700">● En Research · {researchCategoriaLabel(d.research_type)}</span>
                           : d.research_type ? <span className="ml-2 text-amber-600">○ Se publica en {researchCategoriaLabel(d.research_type)} al completarlo</span> : null}
+                        {d.web_report_id
+                          ? <span className="ml-2 text-emerald-700">● En la web</span>
+                          : d.web_publicar ? <span className="ml-2 text-amber-600">○ Web al completarlo</span> : null}
                       </p>
                     </td>
                     <td className="px-5 py-3 text-right whitespace-nowrap">
