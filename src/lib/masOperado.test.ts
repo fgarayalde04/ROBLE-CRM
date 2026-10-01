@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { armarRanking, familiaFondo, nombreSinClase, operacionesDeSolicitud } from './db/masOperado'
+import { armarRanking, familiaFondo, nombreFondoMostrado, nombreSinClase, operacionesDeSolicitud } from './db/masOperado'
 import { labelRango, mesParaInforme, moverPeriodo, periodoMes, periodoSemana } from './masOperado/periodos'
 
 const fondo = (fondo: string, cusipIsin: string, operacion: 'compra' | 'venta', extra: Record<string, string> = {}) =>
@@ -37,9 +37,9 @@ describe('armarRanking', () => {
     ]
     const r = armarRanking(ops, 10)
     expect(r.fondos.totales).toEqual({ compras: 4, ventas: 1 })
-    expect(r.fondos.compras[0]).toMatchObject({ nombre: 'PIMCO Income', isin: 'IE00B87KCF77', operaciones: 3, clientes: 2 })
+    expect(r.fondos.compras[0]).toMatchObject({ nombre: 'PIMCO INCOME', isin: 'IE00B87KCF77', operaciones: 3, clientes: 2 })
     expect(r.fondos.compras[0].variantes).toHaveLength(1)
-    expect(r.fondos.compras[1]).toMatchObject({ nombre: 'Otro', operaciones: 1 })
+    expect(r.fondos.compras[1]).toMatchObject({ nombre: 'OTRO', operaciones: 1 })
     expect(r.fondos.ventas).toHaveLength(1)
     expect(r.bonos.compras).toEqual([])
   })
@@ -91,9 +91,9 @@ describe('unir clases del mismo fondo', () => {
       fondo('Otro Fondo Global', 'LU0000000001', 'compra'),
     ] })
     const unidos = armarRanking(ops, 10).fondos.compras
-    expect(unidos[0]).toMatchObject({ nombre: 'PIMCO GIS Income Fund', operaciones: 3, isin: 'IE00B7KFL990' })
+    expect(unidos[0]).toMatchObject({ nombre: 'PIMCO GIS INCOME', operaciones: 3, isin: 'IE00B7KFL990' })
     expect(unidos[0].variantes).toHaveLength(2)
-    expect(unidos[1]).toMatchObject({ nombre: 'Otro Fondo Global', isin: 'LU0000000001' })
+    expect(unidos[1]).toMatchObject({ nombre: 'OTRO FONDO GLOBAL', isin: 'LU0000000001' })
     expect(unidos[1].variantes).toHaveLength(1)
     expect(armarRanking(ops, 10, false).fondos.compras).toHaveLength(3)
   })
@@ -113,7 +113,26 @@ describe('nombres reales de las órdenes', () => {
     mismo('VONTOBEL EMERGING MARKETS CORP BOND FUND CLASS B1 (USD)', 'VONTOBEL EMERGING MARKETS CORPORATE BOND FUND CL U1 (USD)')
     mismo('PIMCO - INCOME', 'PIMCO INCOME FUND CLASS E (ACC)(USD)')
   })
+  it('une variantes de escritura y de gestora', () => {
+    mismo('NEUBERGER BERMAN GLOBAL PRIVATE EQUITY ACCESS FUND', 'NEUBERGER GLOBAL PRIVATE EQUITY ACCESS FUND CLASS LM (USD)')
+    mismo('MFS MERIDIAN PRUDENT WEALTH FUND CLASS A1 (USD)', 'MFS PRUDENT WEALTH')
+    mismo('JANUS HENDERSON BALANCED FUND CLASS A (ACC)(USD)', 'JANUS BALANCED')
+    mismo('ROBECO GLOBAL CONSUMER TRENDS EQUITIES FUND', 'ROBECO GLOBAL CONSUMER TRENDS')
+    mismo('AEGON HIGH YIELD GLOBAL BOND FUND CLASS D (ACC)(USD)', 'AEGON GLOBAL HIGH YIELD')
+    mismo('PIMCO BALANCED INCOME AND GROWTH FUND CLASS E (ACC)(USD)', 'PIMCO BALANCED INCOME & GROWTH')
+    mismo('PIMCO US SHORT TERM', 'PIMCO U.S. SHORT-TERM FUND')
+    mismo('FRANKLIN USD SHORT-TERM MONEY MARKET', 'FRANKLIN U.S. DOLLAR SHORT-TERM MONEY MARKET FUND CLASS A (ACC)(USD)')
+    mismo('NEUBERGER STRATEGIC INCOME MANDATO PPAL', 'NEUBERGER STRATEGIC INCOME FUND CLASS A (ACC)(USD)')
+  })
+  it('nombre en un solo formato', () => {
+    expect(nombreFondoMostrado('Jupiter - Dynamic Bond Fund Class A (USD)')).toBe('JUPITER DYNAMIC BOND')
+    expect(nombreFondoMostrado('PIMCO INCOME FUND CLASS E (ACC)(USD)')).toBe('PIMCO INCOME')
+  })
   it('no une fondos distintos', () => {
+    expect(familiaFondo('PIMCO INCOME FUND')).not.toBe(familiaFondo('PIMCO STRATEGIC INCOME FUND'))
+    expect(familiaFondo('BGF EMERGING MARKETS BOND FUND')).not.toBe(familiaFondo('BGF EMERGING MARKETS CORPORATE BOND FUND'))
+    expect(familiaFondo('MORGAN STANLEY GLOBAL BRANDS')).not.toBe(familiaFondo('MORGAN STANLEY GLOBAL OPPORTUNITY'))
+    expect(familiaFondo('MAN GLG GLOBAL INVESTMENT GRADE OPPORTUNITIES FUND')).not.toBe(familiaFondo('MAN GLG HIGH YIELD OPPORTUNITIES FUND'))
     expect(familiaFondo('PIMCO INCOME FUND CLASS E (ACC)(USD)')).not.toBe(familiaFondo('PIMCO LOW DURATION INCOME FUND CLASS E (ACC)(USD)'))
     expect(familiaFondo('AB GLOBAL HIGH YIELD FUND CLASS A2 (USD)')).not.toBe(familiaFondo('AB SICAV I SHORT DURATION HIGH YIELD FUND CLASS A2'))
     expect(familiaFondo('JPMORGAN U.S. VALUE FUND CLASS A (ACC)(USD)')).not.toBe(familiaFondo('MFS MERIDIAN U.S. VALUE FUND CLASS A1 (USD)'))

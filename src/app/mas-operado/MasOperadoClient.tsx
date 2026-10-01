@@ -11,8 +11,6 @@ const CLASES: { key: ClaseActivo; label: string; plantilla?: string }[] = [
   { key: 'acciones', label: 'Acciones' },
 ]
 
-const pct = (n: number | null) => (n == null ? '—' : `${n.toFixed(2).replace('.', ',')}%`)
-
 const segmento = (activo: boolean) =>
   `px-3 py-1 rounded ${activo ? 'bg-[#2D3F52] text-white' : 'text-gray-600 hover:bg-gray-50'}`
 
@@ -144,6 +142,20 @@ export default function MasOperadoClient({ puedeCrearPlantilla }: { puedeCrearPl
   )
 }
 
+// Mismo estilo que la tabla del Monitor de fondos
+const COLS_REND: { key: 'r_1y' | 'r_3y' | 'r_5y' | 'r_ytd' | 'y_2025' | 'y_2024' | 'y_2023'; label: string }[] = [
+  { key: 'r_1y', label: '1A' },
+  { key: 'r_3y', label: '3A' },
+  { key: 'r_5y', label: '5A' },
+  { key: 'r_ytd', label: 'YTD' },
+  { key: 'y_2025', label: '2025' },
+  { key: 'y_2024', label: '2024' },
+  { key: 'y_2023', label: '2023' },
+]
+
+const fmtRend = (n: number | null | undefined) => (n == null ? '—' : `${n >= 0 ? '+' : ''}${n.toFixed(2)}%`)
+const colorRend = (n: number | null | undefined) => (n == null ? 'text-gray-300' : n >= 0 ? 'text-emerald-600' : 'text-red-500')
+
 function Tabla({ filas, clase }: { filas: InstrumentoOperado[]; clase: ClaseActivo }) {
   const [abiertos, setAbiertos] = useState<Set<string>>(new Set())
   const alternar = (k: string) => setAbiertos((a) => {
@@ -151,74 +163,85 @@ function Tabla({ filas, clase }: { filas: InstrumentoOperado[]; clase: ClaseActi
     if (n.has(k)) n.delete(k); else n.add(k)
     return n
   })
-  const th = 'px-4 py-2.5 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-wide whitespace-nowrap'
-  const td = 'px-4 py-2.5 text-gray-600 whitespace-nowrap'
+  const th = 'px-2 py-2 text-[10px] font-bold text-white uppercase tracking-wide whitespace-nowrap'
+  const td = 'px-2 py-2 text-xs border-b border-gray-100 whitespace-nowrap'
   const max = Math.max(1, ...filas.map((f) => f.operaciones))
+  const fondos = clase === 'fondos'
+  const columnas = 4 + (fondos ? COLS_REND.length : clase === 'bonos' ? 3 : 1)
 
   if (filas.length === 0) {
-    return <p className="bg-white rounded-lg border border-gray-200 px-4 py-6 text-sm text-gray-400">Sin operaciones en el período.</p>
+    return <p className="bg-white rounded-xl border border-gray-200 px-4 py-6 text-sm text-gray-400">Sin operaciones en el período.</p>
   }
   return (
-    <div className="bg-white rounded-lg border border-gray-200 mobile-scroll-x">
-      <table className="w-full text-sm">
-        <thead className="border-b border-gray-100 bg-gray-50/60">
-          <tr>
-            <th className={`${th} w-10`}>#</th>
-            <th className={th}>{clase === 'fondos' ? 'Fondo' : clase === 'bonos' ? 'Bono' : 'Acción'}</th>
-            <th className={th}>{clase === 'acciones' ? 'Ticker' : 'ISIN'}</th>
-            {clase === 'fondos' && <><th className={th}>Moneda</th><th className={`${th} text-right`}>YTD</th><th className={`${th} text-right`}>1 año</th></>}
-            {clase === 'bonos' && <><th className={th}>Cupón</th><th className={th}>Vencimiento</th><th className={th}>Moneda</th></>}
-            {clase === 'acciones' && <th className={th}>Moneda</th>}
-            <th className={`${th} w-[22%]`}>Órdenes</th>
-            <th className={`${th} text-right`}>Clientes</th>
+    <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
+      <table className="w-full text-sm min-w-[900px]">
+        <thead>
+          <tr style={{ backgroundColor: '#1B2E3C' }}>
+            <th className={`${th} text-center w-10`}>#</th>
+            <th className={`${th} text-left px-3`}>{fondos ? 'Fondo' : clase === 'bonos' ? 'Bono' : 'Ticker'}</th>
+            {fondos && COLS_REND.map((c) => (
+              <th key={c.key} className={`${th} text-center w-[6.5%]`} style={c.key === 'r_ytd' ? { backgroundColor: '#2E7D52' } : undefined}>{c.label}</th>
+            ))}
+            {clase === 'bonos' && <><th className={`${th} text-center`}>Cupón</th><th className={`${th} text-center`}>Vencimiento</th><th className={`${th} text-center`}>Moneda</th></>}
+            {clase === 'acciones' && <th className={`${th} text-center`}>Moneda</th>}
+            <th className={`${th} text-left w-[18%]`}>Órdenes</th>
+            <th className={`${th} text-center w-20`}>Clientes</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-gray-50">
+        <tbody>
           {filas.map((f, i) => {
             const variantes = f.variantes ?? []
             const abierto = abiertos.has(f.key)
+            const nombre = clase === 'acciones' ? (f.ticker || f.nombre).toUpperCase() : f.nombre
+            const fondo = i % 2 === 1 ? 'bg-gray-50/50' : 'bg-white'
             return (
               <Fragment key={f.key}>
-                <tr className="hover:bg-gray-50">
-                  <td className={`${td} text-gray-400`}>{i + 1}</td>
-                  <td className="px-4 py-2.5">
-                    {variantes.length > 0 ? (
-                      <button type="button" onClick={() => alternar(f.key)} className="text-left font-medium text-gray-900 hover:text-[#2D3F52] hover:underline" title="Ver el detalle">
-                        <span className="inline-block w-3 text-gray-400">{abierto ? '▾' : '▸'}</span>{f.nombre}
-                      </button>
-                    ) : (
-                      <span className="font-medium text-gray-900">{f.nombre}</span>
-                    )}
+                <tr className={`${fondo} hover:bg-[#1B3A2B]/[0.03] cursor-pointer`} onClick={() => alternar(f.key)} title="Ver el detalle">
+                  <td className={`${td} text-center text-gray-400`}>{i + 1}</td>
+                  <td className={`${td} px-3 whitespace-normal`}>
+                    <span className="inline-block w-3 text-[10px] text-gray-400">{abierto ? '▾' : '▸'}</span>
+                    <span className="font-medium text-gray-800">{nombre}</span>
                   </td>
-                  <td className={`${td} text-xs text-gray-500`}>
-                    {variantes.length > 1
-                      ? <span className="text-gray-400">—</span>
-                      : (clase === 'acciones' ? f.ticker || f.isin : f.isin) || '—'}
-                  </td>
-                  {clase === 'fondos' && <><td className={td}>{f.moneda || '—'}</td><td className={`${td} text-right tabular-nums`}>{pct(f.r_ytd)}</td><td className={`${td} text-right tabular-nums`}>{pct(f.r_1y)}</td></>}
-                  {clase === 'bonos' && <><td className={td}>{f.cupon || '—'}</td><td className={td}>{f.vencimiento || '—'}</td><td className={td}>{f.moneda || '—'}</td></>}
-                  {clase === 'acciones' && <td className={td}>{f.moneda || '—'}</td>}
-                  <td className="px-4 py-2.5">
+                  {fondos && COLS_REND.map((c) => {
+                    const v = f.rendimientos?.[c.key]
+                    return (
+                      <td key={c.key} className={`${td} text-center tabular-nums ${colorRend(v)} ${c.key === 'r_ytd' ? 'bg-emerald-50/60 font-semibold' : ''}`}>{fmtRend(v)}</td>
+                    )
+                  })}
+                  {clase === 'bonos' && <><td className={`${td} text-center text-gray-600`}>{f.cupon || '—'}</td><td className={`${td} text-center text-gray-600`}>{f.vencimiento || '—'}</td><td className={`${td} text-center text-gray-600`}>{f.moneda || '—'}</td></>}
+                  {clase === 'acciones' && <td className={`${td} text-center text-gray-600`}>{f.moneda || '—'}</td>}
+                  <td className={td}>
                     <div className="flex items-center gap-2">
                       <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                        <div className="h-full bg-[#2D3F52] rounded-full" style={{ width: `${(f.operaciones / max) * 100}%` }} />
+                        <div className="h-full rounded-full" style={{ width: `${(f.operaciones / max) * 100}%`, backgroundColor: '#1B3A2B' }} />
                       </div>
-                      <span className="w-8 text-right font-semibold text-gray-900 tabular-nums">{f.operaciones}</span>
+                      <span className="w-7 text-right font-semibold text-gray-900 tabular-nums">{f.operaciones}</span>
                     </div>
                   </td>
-                  <td className={`${td} text-right tabular-nums`}>{f.clientes}</td>
+                  <td className={`${td} text-center tabular-nums text-gray-600`}>{f.clientes}</td>
                 </tr>
-                {abierto && variantes.map((v) => (
-                  <tr key={`${f.key}-${v.isin || v.nombre}`} className="bg-gray-50/70 text-xs">
+                {abierto && (
+                  <tr className="bg-gray-50">
                     <td />
-                    <td className="px-4 py-1.5 pl-7 text-gray-600">{v.nombre}</td>
-                    <td className="px-4 py-1.5 text-gray-500">{v.isin || '—'}</td>
-                    <td className="px-4 py-1.5 text-gray-500">{v.moneda || '—'}</td>
-                    <td colSpan={2} />
-                    <td className="px-4 py-1.5 text-gray-600"><span className="inline-block w-full text-right pr-0.5 tabular-nums">{v.operaciones}</span></td>
-                    <td />
+                    <td colSpan={columnas - 1} className="px-3 py-2 border-b border-gray-100">
+                      <div className="space-y-1">
+                        {variantes.map((v) => (
+                          <div key={`${v.isin}-${v.nombre}`} className="flex items-center gap-4 text-[11px] text-gray-600">
+                            <span className="flex-1 min-w-0">{v.nombre}</span>
+                            <span className="font-mono text-gray-500 w-32">{v.isin || 'sin ISIN'}</span>
+                            <span className="text-gray-400 w-10">{v.moneda || '—'}</span>
+                            <span className="tabular-nums w-20 text-right">{v.operaciones} {v.operaciones === 1 ? 'orden' : 'órdenes'}</span>
+                          </div>
+                        ))}
+                        {fondos && (
+                          <p className="text-[10px] text-gray-400 pt-1">
+                            {f.rendimientos ? `Rendimientos: ${f.rendimientos.fuente}` : 'Sin rendimientos: el fondo no está en el Monitor ni se buscó en Davinci.'}
+                          </p>
+                        )}
+                      </div>
+                    </td>
                   </tr>
-                ))}
+                )}
               </Fragment>
             )
           })}

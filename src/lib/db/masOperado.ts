@@ -10,6 +10,17 @@ import { pool } from './pool'
 export type ClaseActivo = 'fondos' | 'bonos' | 'acciones'
 export type Lado = 'compra' | 'venta'
 
+export interface Rendimientos {
+  fuente: string          // nombre del fondo en el Monitor
+  r_1y: number | null
+  r_3y: number | null
+  r_5y: number | null
+  r_ytd: number | null
+  y_2025: number | null
+  y_2024: number | null
+  y_2023: number | null
+}
+
 export interface InstrumentoOperado {
   key: string
   nombre: string
@@ -24,6 +35,7 @@ export interface InstrumentoOperado {
   // Datos del Monitor de fondos (por ISIN), si el fondo está ahí
   r_ytd: number | null
   r_1y: number | null
+  rendimientos: Rendimientos | null
   // Fondos: cada clase operada que se unió en esta fila (con una sola clase, esa)
   variantes?: { nombre: string; isin: string; clase: string; moneda: string; operaciones: number }[]
 }
@@ -174,7 +186,35 @@ const TOKENS_CLASE = new Set([
   'distributiva', 'cap', 'inc', 'hedged', 'hdg', 'h', 'unhedged', 'usd', 'eur', 'gbp', 'chf', 'jpy',
   'inst', 'institutional', 'retail', 'adm', 'admin', 'share', 'shares',
 ])
-const PALABRAS_PARAGUAS = new Set(['fcp', 'sicav', 'plc', 'sa', 'ucits', 'gsf', 'isf', 'gis', 'ftgf', 'icav', 'lux', 'fund', 'funds', 'fd', 'tranche', 'the', 'de', 'of'])
+const PALABRAS_PARAGUAS = new Set([
+  // estructura / paraguas
+  'fcp', 'sicav', 'sicv', 'plc', 'sa', 'ucits', 'gsf', 'isf', 'gis', 'gf', 'ftgf', 'icav', 'lux', 'as', 'fund', 'funds', 'fd',
+  'tranche', 'institutional', 'service',
+  // segunda palabra de la gestora que a veces se omite
+  'berman', 'meridian', 'henderson', 'horizon', 'glg', 'standard', 'twentyfour', 'invst', 'invest',
+  // relleno
+  'the', 'de', 'of', 'and', 'port', 'portfolio', 'equities',
+])
+// Variantes de escritura de una misma palabra
+const SINONIMOS: Record<string, string> = {
+  invt: 'investment', intl: 'international', corp: 'corporate', mkts: 'markets', em: 'emerging', emerg: 'emerging',
+  opp: 'opportunities', opps: 'opportunities', bonds: 'bond', financials: 'financial', schroders: 'schroder',
+  prinebridge: 'pinebridge', creditcorp: 'credicorp', thorburg: 'thornburg', latam: 'latin america', america: 'american',
+  usd: 'us dollar',
+}
+// Mismo fondo escrito de formas que ninguna regla general resuelve sin riesgo
+// (claves ya normalizadas: palabras sin repetir, en orden alfabético)
+const ALIAS_FAMILIA: Record<string, string> = {
+  'equity global infrastructure lazard': 'equity global infrastructure lazard listed',
+  'global infrastructure lazard listed': 'equity global infrastructure lazard listed',
+  'enhanced muzinich short term': 'enhanced muzinich short term yield',
+  'aegon global high yield': 'aegon bond global high yield',
+  'american capital corporate credicorp debt latin': 'american corporate credicorp debt latin',
+  // Morgan Stanley Investment Funds = paraguas ("investment grade" no se toca)
+  'brands global investment morgan stanley': 'brands global morgan stanley',
+  'high man opportunities yield': 'global high man opportunities yield',
+  'global high janus yield': 'bond global high janus yield',
+}
 
 const sinAcentos = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
 
@@ -198,14 +238,31 @@ export function nombreSinClase(nombre: string) {
   return limpio.length >= 3 ? limpio : nombre.trim()
 }
 
+/** Nombre del fondo como se muestra: sin la clase, en mayúsculas, sin "-" ni el "FUND" del final. */
+export function nombreFondoMostrado(nombre: string) {
+  return nombreSinClase(nombre).toUpperCase()
+    .replace(/\s+[-–]\s+/g, ' ')
+    .replace(/\s+(?:FUND|FD)$/, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
 /** Clave para reconocer el mismo fondo aunque cambie la clase o se escriba con/sin el paraguas. */
 export function familiaFondo(nombre: string) {
-  return sinAcentos(nombreSinClase(nombre))
+  const texto = sinAcentos(nombreSinClase(nombre))
     .replace(/[^a-z0-9]+/g, ' ')
-    .split(' ')
+    .replace(/\bu s\b/g, 'us')
+    .replace(/\btwenty four\b/g, 'twentyfour')
+    .replace(/\bglobal (?:invt|investment) plc\b/g, ' ')
+    .replace(/\bmandato(?: (?:ppal|principal|global))?\b/g, ' ')   // nombres internos de mandatos
+  const tokens = texto.split(' ')
+    .map((t) => SINONIMOS[t] ?? t)
+    .flatMap((t) => t.split(' '))
+    .map((t) => SINONIMOS[t] ?? t)
     .filter((t) => t && !PALABRAS_PARAGUAS.has(t) && !/^(i|ii|iii|iv)$/.test(t))
-    .map((t) => ({ invt: 'investment', intl: 'international', corp: 'corporate', mkts: 'markets', em: 'emerging' } as Record<string, string>)[t] ?? t)
-    .join(' ')
+  // Sin orden: "Aegon Global High Yield" = "Aegon High Yield Global"
+  const clave = Array.from(new Set(tokens)).sort().join(' ')
+  return ALIAS_FAMILIA[clave] ?? clave
 }
 
 function agrupar(ops: Operacion[], clave: (o: Operacion) => string) {
@@ -232,30 +289,31 @@ function resumen(key: string, g: Operacion[], nombre?: string): InstrumentoOpera
     clientes: new Set(g.map((o) => o.cliente).filter(Boolean)).size,
     r_ytd: null,
     r_1y: null,
+    rendimientos: null,
   }
 }
 
 const porOperaciones = (a: InstrumentoOperado, b: InstrumentoOperado) =>
   b.operaciones - a.operaciones || b.clientes - a.clientes || a.nombre.localeCompare(b.nombre)
 
-// unirClases: los fondos que se llaman igual salvo la clase cuentan como uno;
-// cada clase operada queda en `variantes`.
+// Cada fila trae en `variantes` el detalle de lo que agrupa (nombre tal cual
+// se cargó, ISIN, moneda, órdenes), que se ve al desplegarla.
+// unirClases (fondos): las distintas clases o formas de escribir un mismo fondo
+// cuentan como uno, con el nombre limpio.
 function rankear(ops: Operacion[], unirClases: boolean): InstrumentoOperado[] {
   const porInstrumento = Array.from(agrupar(ops, claveDe), ([key, g]) => ({ key, g, item: resumen(key, g) }))
-  if (!unirClases) return porInstrumento.map((x) => x.item).sort(porOperaciones)
-
   const familias = new Map<string, typeof porInstrumento>()
   for (const x of porInstrumento) {
-    const k = `fam:${familiaFondo(x.item.nombre) || normalizar(x.item.nombre)}`
+    const k = unirClases ? `fam:${familiaFondo(x.item.nombre) || normalizar(x.item.nombre)}` : x.key
     const f = familias.get(k)
     if (f) f.push(x); else familias.set(k, [x])
   }
-  // Cada fila lleva el nombre limpio (sin la clase) y el detalle de las clases operadas
   const lista: InstrumentoOperado[] = []
   familias.forEach((f, key) => {
     const variantes = f.map((x) => x.item).sort(porOperaciones)
-    const item = resumen(f.length === 1 ? f[0].key : key, f.flatMap((x) => x.g), nombreSinClase(variantes[0].nombre))
-    item.isin = variantes[0].isin   // la clase más operada (para buscar sus rendimientos)
+    const nombre = unirClases ? nombreFondoMostrado(variantes[0].nombre) : variantes[0].nombre.toUpperCase().replace(/\s+/g, ' ').trim()
+    const item = resumen(f.length === 1 ? f[0].key : key, f.flatMap((x) => x.g), nombre)
+    item.isin = variantes[0].isin   // el más operado (para buscar rendimientos)
     item.variantes = variantes.map((v) => ({ nombre: v.nombre, isin: v.isin, clase: v.clase, moneda: v.moneda, operaciones: v.operaciones }))
     lista.push(item)
   })
@@ -277,22 +335,66 @@ const fmtCupon = (v: unknown) => {
 // Completa con datos de otras fuentes: rendimientos del Monitor (fondos) y
 // cupón/vencimiento del maestro de instrumentos (bonos) cuando la orden no los trae.
 async function completar(ranking: RankingMasOperado) {
-  const fondos = [...ranking.fondos.compras, ...ranking.fondos.ventas].filter((f) => f.isin)
+  const fondos = [...ranking.fondos.compras, ...ranking.fondos.ventas]
   if (fondos.length) {
     try {
       const { rows } = await pool.query(
-        `select upper(f.isin) as isin, r.r_ytd, r.r_1y
-           from fund_monitor_funds f left join fund_monitor_returns r on r.fund_id = f.id
-          where upper(f.isin) = any($1)`,
-        [Array.from(new Set(fondos.map((f) => f.isin)))]
+        `select upper(f.isin) as isin, f.nombre, r.r_1y, r.r_3y, r.r_5y, r.r_ytd, r.y_2025, r.y_2024, r.y_2023
+           from fund_monitor_funds f join fund_monitor_returns r on r.fund_id = f.id
+          where f.active and r.status in ('ok', 'stale')`
       )
+      const num = (v: unknown) => (v == null ? null : Number(v))
+      const aRend = (m: any): Rendimientos => ({
+        fuente: `${m.nombre} (Monitor de fondos)`, r_1y: num(m.r_1y), r_3y: num(m.r_3y), r_5y: num(m.r_5y), r_ytd: num(m.r_ytd),
+        y_2025: num(m.y_2025), y_2024: num(m.y_2024), y_2023: num(m.y_2023),
+      })
       const porIsin = new Map(rows.map((r) => [r.isin as string, r]))
+      const porFamilia = new Map<string, any>()
+      for (const r of rows) {
+        const k = familiaFondo(r.nombre)
+        if (k && !porFamilia.has(k)) porFamilia.set(k, r)
+      }
       for (const f of fondos) {
-        const m = porIsin.get(f.isin)
-        if (m) { f.r_ytd = m.r_ytd == null ? null : Number(m.r_ytd); f.r_1y = m.r_1y == null ? null : Number(m.r_1y) }
+        // Primero el ISIN de la clase más operada, después el de cualquier otra
+        // clase del mismo fondo y, si no, el mismo fondo por nombre
+        const isins = [f.isin, ...(f.variantes ?? []).map((v) => v.isin)].filter(Boolean)
+        const m = isins.map((i) => porIsin.get(i)).find(Boolean)
+          ?? [f.nombre, ...(f.variantes ?? []).map((v) => v.nombre)].map((n) => porFamilia.get(familiaFondo(n))).find(Boolean)
+        if (!m) continue
+        f.rendimientos = aRend(m)
+        f.r_ytd = f.rendimientos.r_ytd
+        f.r_1y = f.rendimientos.r_1y
       }
     } catch (e: any) {
       console.error('[mas-operado] monitor', e.message)
+    }
+
+    // Los que no están en el Monitor: búsquedas por ISIN que ya se hicieron en
+    // Davinci (propuestas) y quedaron guardadas. Solo se lee lo guardado; nunca
+    // se dispara una búsqueda nueva (Davinci bloquea la cuenta por logins).
+    const faltan = fondos.filter((f) => !f.rendimientos)
+    const isins = Array.from(new Set(faltan.flatMap((f) => [f.isin, ...(f.variantes ?? []).map((v) => v.isin)]).filter(Boolean)))
+    if (isins.length) {
+      try {
+        const { rows } = await pool.query(
+          `select upper(isin) as isin, data from davinci_lookup_cache where upper(isin) = any($1) and data is not null`,
+          [isins]
+        )
+        const porIsin = new Map(rows.map((r) => [r.isin as string, typeof r.data === 'string' ? JSON.parse(r.data) : r.data]))
+        for (const f of faltan) {
+          const d = [f.isin, ...(f.variantes ?? []).map((v) => v.isin)].map((i) => porIsin.get(i)).find(Boolean)
+          if (!d) continue
+          const n = (v: unknown) => (v == null || Number.isNaN(Number(v)) ? null : Number(v))
+          f.rendimientos = {
+            fuente: d.nombreDavinci ? `${d.nombreDavinci} (búsqueda en Davinci)` : 'búsqueda en Davinci',
+            r_1y: n(d.r1a), r_3y: n(d.r3a), r_5y: n(d.r5a), r_ytd: n(d.ytd), y_2025: n(d.y2025), y_2024: n(d.y2024), y_2023: n(d.y2023),
+          }
+          f.r_ytd = f.rendimientos.r_ytd
+          f.r_1y = f.rendimientos.r_1y
+        }
+      } catch (e: any) {
+        if (e.code !== '42P01') console.error('[mas-operado] davinci cache', e.message)
+      }
     }
   }
 
