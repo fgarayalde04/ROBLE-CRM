@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { armarRanking, operacionesDeSolicitud } from './db/masOperado'
+import { armarRanking, nombreSinClase, operacionesDeSolicitud } from './db/masOperado'
 import { labelRango, mesParaInforme, moverPeriodo, periodoMes, periodoSemana } from './masOperado/periodos'
 
 const fondo = (fondo: string, cusipIsin: string, operacion: 'compra' | 'venta', extra: Record<string, string> = {}) =>
@@ -61,5 +61,38 @@ describe('periodos', () => {
   it('etiqueta de un rango', () => {
     expect(labelRango('2026-09-01', '2026-09-30')).toBe('Septiembre 2026')
     expect(labelRango('2026-09-03', '2026-09-10')).toBe('Del 03/09/2026 al 10/09/2026')
+  })
+})
+
+describe('todo hasta hoy', () => {
+  it('arranca antes de cualquier orden y no se mueve', async () => {
+    const { periodoTodo, INICIO_HISTORICO } = await import('./masOperado/periodos')
+    const p = periodoTodo('2026-10-01')
+    expect(p).toMatchObject({ desde: INICIO_HISTORICO, hasta: '2026-10-01', label: 'Todo hasta hoy' })
+    expect(moverPeriodo(p, -1)).toBe(p)
+    expect(labelRango(INICIO_HISTORICO, '2026-10-01')).toBe('Hasta el 01/10/2026')
+  })
+})
+
+describe('unir clases del mismo fondo', () => {
+  it('saca la clase, la moneda y Acc/Dist del nombre', () => {
+    expect(nombreSinClase('PIMCO GIS Income Fund E Acc USD')).toBe('PIMCO GIS Income Fund')
+    expect(nombreSinClase('PIMCO GIS Income Fund Inst Acc')).toBe('PIMCO GIS Income Fund')
+    expect(nombreSinClase('Jupiter Dynamic Bond I2 (USD Hedged) Dist')).toBe('Jupiter Dynamic Bond')
+    expect(nombreSinClase('Fondo A')).toBe('Fondo A')
+  })
+  it('cuenta las clases como un solo fondo y guarda el detalle', () => {
+    const ops = operacionesDeSolicitud({ client_number: '1', assets_json: [
+      fondo('PIMCO GIS Income Fund E Acc USD', 'IE00B7KFL990', 'compra'),
+      fondo('PIMCO GIS Income Fund E Acc USD', 'IE00B7KFL990', 'compra'),
+      fondo('PIMCO GIS Income Fund Inst Acc', 'IE00B87KCF77', 'compra'),
+      fondo('Otro Fondo Global', 'LU0000000001', 'compra'),
+      fondo('Otro Fondo Global', 'LU0000000001', 'compra'),
+    ] })
+    const unidos = armarRanking(ops, 10).fondos.compras
+    expect(unidos[0]).toMatchObject({ nombre: 'PIMCO GIS Income Fund', operaciones: 3, isin: 'IE00B7KFL990' })
+    expect(unidos[0].variantes).toHaveLength(2)
+    expect(unidos[1].variantes).toBeUndefined()
+    expect(armarRanking(ops, 10, false).fondos.compras).toHaveLength(3)
   })
 })

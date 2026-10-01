@@ -6,7 +6,7 @@ import {
   filaBonoVacia, filaFondoVacia,
   type ComparativoFondosDatos, type FilaComparativo, type MasOperadoDatos,
 } from '@/lib/plantillas/tipos'
-import { hoyMontevideo, labelRango, moverPeriodo, periodoMes } from '@/lib/masOperado/periodos'
+import { INICIO_HISTORICO, hoyMontevideo, labelRango, moverPeriodo, periodoMes } from '@/lib/masOperado/periodos'
 import type { CategoriaMonitor } from '@/lib/plantillas/datosAuto'
 
 // Formularios del editor para las plantillas de tabla: comparativo de fondos
@@ -174,7 +174,7 @@ export function FormMasOperado({ tipo, datos, set }: {
   const [cargando, setCargando] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const fondos = tipo === 'mas_operado_fondos'
-  const mes = datos.desde ? datos.desde.slice(0, 7) : ''
+  const mes = datos.desde && datos.desde !== INICIO_HISTORICO ? datos.desde.slice(0, 7) : ''
 
   async function cargar(desde: string, hasta: string, cantidad = datos.cantidad || 5) {
     const hayFilas = (datos.compras?.length ?? 0) + (datos.ventas?.length ?? 0) > 0
@@ -223,6 +223,9 @@ export function FormMasOperado({ tipo, datos, set }: {
           {datos.desde && <span className="text-gray-500">{labelRango(datos.desde, datos.hasta)}</span>}
           <button type="button" onClick={() => cargar(mesAnterior.desde, mesAnterior.hasta)} disabled={cargando} className="text-blue-600 hover:underline disabled:opacity-50">
             Mes anterior
+          </button>
+          <button type="button" onClick={() => cargar(INICIO_HISTORICO, hoyMontevideo())} disabled={cargando} className="text-blue-600 hover:underline disabled:opacity-50">
+            Todo hasta hoy
           </button>
           {datos.desde && (
             <button type="button" onClick={() => cargar(datos.desde, datos.hasta)} disabled={cargando} className="text-blue-600 hover:underline disabled:opacity-50">

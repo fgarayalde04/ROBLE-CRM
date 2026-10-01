@@ -1,3 +1,5 @@
+import { INICIO_HISTORICO } from '@/lib/masOperado/periodos'
+
 // Plantillas de documentos con formato fijo (Research → Plantillas). El diseño
 // (logo, colores, tipografías, pie, disclaimer) vive en los componentes de
 // src/components/plantillas; acá solo están los datos que se completan.
@@ -317,7 +319,8 @@ export function masOperadoVacio(tipo: 'mas_operado_fondos' | 'mas_operado_bonos'
 
 export function masOperadoDisclaimer(desde: string, hasta: string) {
   const f = (s: string) => (s ? s.split('-').reverse().join('/') : '—')
-  return `Ranking elaborado por Roble Capital a partir de la cantidad de órdenes de compra y de venta de sus clientes entre el ${f(desde)} y el ${f(hasta)}. No refleja montos operados ni constituye una recomendación de compra o venta. Este material tiene fines exclusivamente informativos y no constituye una oferta ni invitación a invertir. Rendimientos pasados no garantizan resultados futuros. Antes de invertir, consulte con su asesor para evaluar si el instrumento se ajusta a su perfil de riesgo. Roble Capital Wealth Management.`
+  const rango = desde === INICIO_HISTORICO ? `hasta el ${f(hasta)}` : `entre el ${f(desde)} y el ${f(hasta)}`
+  return `Ranking elaborado por Roble Capital a partir de la cantidad de órdenes de compra y de venta de sus clientes ${rango}. No refleja montos operados ni constituye una recomendación de compra o venta. Este material tiene fines exclusivamente informativos y no constituye una oferta ni invitación a invertir. Rendimientos pasados no garantizan resultados futuros. Antes de invertir, consulte con su asesor para evaluar si el instrumento se ajusta a su perfil de riesgo. Roble Capital Wealth Management.`
 }
 
 export function comparativoDisclaimer(fecha: string) {

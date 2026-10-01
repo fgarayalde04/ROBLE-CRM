@@ -1,7 +1,10 @@
 // Períodos (mes o semana) para "Lo más operado". Fechas como 'YYYY-MM-DD' en
 // hora de Montevideo; sin imports de servidor para usarlo también en el cliente.
 
-export type TipoPeriodo = 'mes' | 'semana'
+export type TipoPeriodo = 'mes' | 'semana' | 'todo'
+
+/** Inicio de "todo hasta hoy": anterior a cualquier orden cargada en la plataforma. */
+export const INICIO_HISTORICO = '2000-01-01'
 
 export interface Periodo {
   tipo: TipoPeriodo
@@ -50,12 +53,18 @@ export function periodoSemana(fecha: string): Periodo {
   return { tipo: 'semana', desde: iso(ini), hasta: iso(fin), label: `Semana del ${ddmm(iso(ini))} al ${ddmm(iso(fin))}` }
 }
 
+/** Todo lo operado hasta la fecha (inclusive). */
+export function periodoTodo(hasta: string): Periodo {
+  return { tipo: 'todo', desde: INICIO_HISTORICO, hasta, label: 'Todo hasta hoy' }
+}
+
 export function periodoDe(tipo: TipoPeriodo, fecha: string): Periodo {
-  return tipo === 'mes' ? periodoMes(fecha) : periodoSemana(fecha)
+  return tipo === 'mes' ? periodoMes(fecha) : tipo === 'semana' ? periodoSemana(fecha) : periodoTodo(hoyMontevideo())
 }
 
 /** Período anterior (-1) o siguiente (+1). */
 export function moverPeriodo(p: Periodo, dir: -1 | 1): Periodo {
+  if (p.tipo === 'todo') return p
   const d = parse(p.desde)
   if (p.tipo === 'mes') return periodoMes(iso(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + dir, 1))))
   d.setUTCDate(d.getUTCDate() + 7 * dir)
@@ -70,6 +79,7 @@ export function mesParaInforme(hoy = hoyMontevideo()): Periodo {
 
 /** Etiqueta para un rango cualquiera: el nombre del mes si es un mes completo. */
 export function labelRango(desde: string, hasta: string): string {
+  if (desde === INICIO_HISTORICO) return `Hasta el ${ddmm(hasta)}`
   const mes = periodoMes(desde)
   if (mes.desde === desde && mes.hasta === hasta) return mes.label
   const sem = periodoSemana(desde)

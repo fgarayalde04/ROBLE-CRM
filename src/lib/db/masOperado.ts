@@ -24,6 +24,8 @@ export interface InstrumentoOperado {
   // Datos del Monitor de fondos (por ISIN), si el fondo está ahí
   r_ytd: number | null
   r_1y: number | null
+  // Clases distintas del mismo fondo que se unieron en esta fila
+  variantes?: { nombre: string; isin: string; clase: string; moneda: string; operaciones: number }[]
 }
 
 export interface RankingClase {
@@ -158,31 +160,83 @@ function masFrecuente(valores: string[]) {
   return mejor
 }
 
-function rankear(ops: Operacion[]): InstrumentoOperado[] {
+// Partes del nombre de un fondo que solo indican la clase (letra o código de
+// clase, acumulación/distribución, moneda, cobertura): sacándolas, las distintas
+// clases de un mismo fondo quedan con el mismo nombre — la tesis es la misma.
+const TOKENS_CLASE = new Set([
+  'acc', 'accumulating', 'accumulation', 'acumulativa', 'acum', 'dis', 'dist', 'distr', 'distributing', 'distribution',
+  'distributiva', 'cap', 'hedged', 'hdg', 'unhedged', 'usd', 'eur', 'gbp', 'chf', 'jpy', 'class', 'clase', 'share', 'shares',
+  'inst', 'institutional', 'retail', 'adm', 'admin', 'm', 'q', 'monthly', 'mensual',
+])
+
+function esTokenClase(t: string) {
+  const n = t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '')
+  if (!n) return true
+  if (TOKENS_CLASE.has(n)) return true
+  return /^[a-z]$/.test(n) || /^[a-z]\d$/.test(n) || /^\d[a-z]$/.test(n)   // A, E, I2, 2A…
+}
+
+/** Nombre del fondo sin lo que identifica la clase (conserva mayúsculas para mostrarlo). */
+export function nombreSinClase(nombre: string) {
+  const sinParentesis = nombre.replace(/\([^)]*\)/g, ' ')
+  const tokens = sinParentesis.split(/[\s\-–—/]+/).filter(Boolean)
+  // Se sacan del final hacia atrás (la clase va al final) y también sueltos en el medio
+  const quedan = tokens.filter((t) => !esTokenClase(t))
+  return quedan.length >= 2 ? quedan.join(' ') : nombre.trim()
+}
+
+function agrupar(ops: Operacion[], clave: (o: Operacion) => string) {
   const grupos = new Map<string, Operacion[]>()
   for (const op of ops) {
-    const k = claveDe(op)
+    const k = clave(op)
     const g = grupos.get(k)
     if (g) g.push(op); else grupos.set(k, [op])
   }
+  return grupos
+}
+
+function resumen(key: string, g: Operacion[], nombre?: string): InstrumentoOperado {
+  return {
+    key,
+    nombre: nombre ?? masFrecuente(g.map((o) => o.nombre)),
+    isin: masFrecuente(g.map((o) => o.isin.toUpperCase())),
+    ticker: masFrecuente(g.map((o) => o.ticker.toUpperCase())),
+    clase: masFrecuente(g.map((o) => o.claseFondo)),
+    moneda: masFrecuente(g.map((o) => o.moneda.toUpperCase())),
+    cupon: masFrecuente(g.map((o) => o.cupon)),
+    vencimiento: masFrecuente(g.map((o) => o.vencimiento)),
+    operaciones: g.length,
+    clientes: new Set(g.map((o) => o.cliente).filter(Boolean)).size,
+    r_ytd: null,
+    r_1y: null,
+  }
+}
+
+const porOperaciones = (a: InstrumentoOperado, b: InstrumentoOperado) =>
+  b.operaciones - a.operaciones || b.clientes - a.clientes || a.nombre.localeCompare(b.nombre)
+
+// unirClases: los fondos que se llaman igual salvo la clase cuentan como uno;
+// cada clase operada queda en `variantes`.
+function rankear(ops: Operacion[], unirClases: boolean): InstrumentoOperado[] {
+  const porInstrumento = Array.from(agrupar(ops, claveDe), ([key, g]) => ({ key, g, item: resumen(key, g) }))
+  if (!unirClases) return porInstrumento.map((x) => x.item).sort(porOperaciones)
+
+  const familias = new Map<string, typeof porInstrumento>()
+  for (const x of porInstrumento) {
+    const k = `fam:${normalizar(nombreSinClase(x.item.nombre))}`
+    const f = familias.get(k)
+    if (f) f.push(x); else familias.set(k, [x])
+  }
   const lista: InstrumentoOperado[] = []
-  grupos.forEach((g, key) => {
-    lista.push({
-      key,
-      nombre: masFrecuente(g.map((o) => o.nombre)),
-      isin: masFrecuente(g.map((o) => o.isin.toUpperCase())),
-      ticker: masFrecuente(g.map((o) => o.ticker.toUpperCase())),
-      clase: masFrecuente(g.map((o) => o.claseFondo)),
-      moneda: masFrecuente(g.map((o) => o.moneda.toUpperCase())),
-      cupon: masFrecuente(g.map((o) => o.cupon)),
-      vencimiento: masFrecuente(g.map((o) => o.vencimiento)),
-      operaciones: g.length,
-      clientes: new Set(g.map((o) => o.cliente).filter(Boolean)).size,
-      r_ytd: null,
-      r_1y: null,
-    })
+  familias.forEach((f, key) => {
+    if (f.length === 1) { lista.push(f[0].item); return }
+    const variantes = f.map((x) => x.item).sort(porOperaciones)
+    const item = resumen(key, f.flatMap((x) => x.g), nombreSinClase(variantes[0].nombre))
+    item.isin = variantes[0].isin
+    item.variantes = variantes.map((v) => ({ nombre: v.nombre, isin: v.isin, clase: v.clase, moneda: v.moneda, operaciones: v.operaciones }))
+    lista.push(item)
   })
-  return lista.sort((a, b) => b.operaciones - a.operaciones || b.clientes - a.clientes || a.nombre.localeCompare(b.nombre))
+  return lista.sort(porOperaciones)
 }
 
 const fmtFecha = (v: unknown) => {
@@ -240,7 +294,7 @@ async function completar(ranking: RankingMasOperado) {
   }
 }
 
-export async function getRankingMasOperado(desde: string, hasta: string, limite = 25): Promise<RankingMasOperado> {
+export async function getRankingMasOperado(desde: string, hasta: string, limite = 25, unirClases = true): Promise<RankingMasOperado> {
   const [nuevas, anteriores] = await Promise.all([
     operacionesSolicitudes(desde, hasta),
     operacionesBlotterAnterior(desde, hasta).catch((e) => {
@@ -248,20 +302,20 @@ export async function getRankingMasOperado(desde: string, hasta: string, limite 
       return [] as Operacion[]
     }),
   ])
-  const ranking = armarRanking([...nuevas, ...anteriores], limite)
+  const ranking = armarRanking([...nuevas, ...anteriores], limite, unirClases)
   await completar(ranking)
   return ranking
 }
 
-export function armarRanking(ops: Operacion[], limite: number): RankingMasOperado {
+export function armarRanking(ops: Operacion[], limite: number, unirClases = true): RankingMasOperado {
   const ranking = {} as RankingMasOperado
   for (const clase of ['fondos', 'bonos', 'acciones'] as ClaseActivo[]) {
     const deClase = ops.filter((o) => o.clase === clase)
     const compras = deClase.filter((o) => o.lado === 'compra')
     const ventas = deClase.filter((o) => o.lado === 'venta')
     ranking[clase] = {
-      compras: rankear(compras).slice(0, limite),
-      ventas: rankear(ventas).slice(0, limite),
+      compras: rankear(compras, unirClases && clase === 'fondos').slice(0, limite),
+      ventas: rankear(ventas, unirClases && clase === 'fondos').slice(0, limite),
       totales: { compras: compras.length, ventas: ventas.length },
     }
   }

@@ -7,6 +7,7 @@ export const dynamic = 'force-dynamic'
 
 // GET /api/mas-operado?desde=YYYY-MM-DD&hasta=YYYY-MM-DD — lo más comprado y
 // vendido en la empresa en el período (fondos, bonos y acciones), según las órdenes.
+// unir=0: no unir las distintas clases de un mismo fondo.
 export async function GET(req: NextRequest) {
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
@@ -19,7 +20,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Período inválido' }, { status: 400 })
   }
   try {
-    return NextResponse.json({ desde, hasta, ranking: await getRankingMasOperado(desde, hasta) })
+    return NextResponse.json({ desde, hasta, ranking: await getRankingMasOperado(desde, hasta, 50, req.nextUrl.searchParams.get('unir') !== '0') })
   } catch (err: any) {
     console.error('[mas-operado]', err.message)
     return NextResponse.json({ error: 'No se pudo calcular el ranking' }, { status: 500 })
