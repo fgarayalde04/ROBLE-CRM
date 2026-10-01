@@ -1,5 +1,5 @@
 import { notFound, redirect } from 'next/navigation'
-import { getSession } from '@/lib/auth'
+import { getSession, RESEARCH_AUTHOR_ROLES } from '@/lib/auth'
 import { getPlantilla } from '@/lib/db/plantillas'
 import { plantillaFontsClass } from '@/lib/plantillas/fonts'
 import PlantillaEditor from './PlantillaEditor'
@@ -16,5 +16,5 @@ export default async function PlantillaEditorPage({ params }: { params: { id: st
   if (!session) redirect('/login')
   const doc = await getPlantilla(params.id)
   if (!doc) notFound()
-  return <PlantillaEditor doc={doc} fontsClass={plantillaFontsClass} />
+  return <PlantillaEditor doc={doc} fontsClass={plantillaFontsClass} puedePublicar={RESEARCH_AUTHOR_ROLES.includes(session.role)} />
 }

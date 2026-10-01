@@ -8,13 +8,17 @@ import {
   FICHA_BONO_GRUPOS, TIPOS_PLANTILLA, camposFaltantes, nuevoBloque,
   type AnalisisBonosDatos, type FichaBonoDatos, type BloqueAnalisis, type TipoPlantilla,
 } from '@/lib/plantillas/tipos'
+import { RESEARCH_CATEGORIAS, researchCategoriaLabel } from '@/lib/research/labels'
 
-interface Doc { id: string; tipo: TipoPlantilla; titulo: string; datos: any }
+interface Doc {
+  id: string; tipo: TipoPlantilla; titulo: string; datos: any
+  research_type: string | null; research_post_id: string | null; research_publicado_at: string | null; updated_at: string
+}
 
 const input = 'w-full border border-gray-200 rounded px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#2D3F52]/20 bg-white'
 const labelCls = 'block text-xs font-medium text-gray-500 mb-1'
 
-export default function PlantillaEditor({ doc, fontsClass }: { doc: Doc; fontsClass: string }) {
+export default function PlantillaEditor({ doc, fontsClass, puedePublicar }: { doc: Doc; fontsClass: string; puedePublicar: boolean }) {
   const router = useRouter()
   const [datos, setDatos] = useState<any>(doc.datos)
   const [estado, setEstado] = useState<'guardado' | 'pendiente' | 'guardando' | 'error'>('guardado')
@@ -77,6 +81,49 @@ export default function PlantillaEditor({ doc, fontsClass }: { doc: Doc; fontsCl
 
   const faltan = camposFaltantes(doc.tipo, datos)
 
+  // ── Research & Novedades: se publica sola cuando el documento está completo
+  // y se actualiza (PDF nuevo) unos segundos después de cada cambio guardado.
+  const [categoria, setCategoria] = useState<string>(doc.research_type ?? '')
+  const [pub, setPub] = useState<{ estado: 'nada' | 'pendiente' | 'publicando' | 'ok' | 'error'; at: string | null; error?: string; postId: string | null }>({
+    estado: doc.research_post_id ? 'ok' : 'nada', at: doc.research_publicado_at, postId: doc.research_post_id,
+  })
+  const publicadoJson = useRef<string | null>(
+    doc.research_post_id && doc.research_publicado_at && doc.research_publicado_at >= doc.updated_at ? JSON.stringify(doc.datos) : null
+  )
+
+  const publicar = useCallback(async () => {
+    setPub((p) => ({ ...p, estado: 'publicando', error: undefined }))
+    const json = JSON.stringify(datos)
+    try {
+      const res = await fetch(`/api/plantillas/${doc.id}/publicar`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ categoria }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'No se pudo publicar')
+      publicadoJson.current = json
+      setPub({ estado: 'ok', at: new Date().toISOString(), postId: data.post.id })
+    } catch (e: any) {
+      setPub((p) => ({ ...p, estado: 'error', error: e.message }))
+    }
+  }, [datos, categoria, doc.id])
+
+  const completo = faltan.length === 0
+  useEffect(() => {
+    if (!puedePublicar || !categoria || !completo || estado !== 'guardado') return
+    if (publicadoJson.current === JSON.stringify(datos)) return
+    setPub((p) => (p.estado === 'publicando' ? p : { ...p, estado: 'pendiente' }))
+    const t = setTimeout(() => { publicar() }, 6000)
+    return () => clearTimeout(t)
+  }, [puedePublicar, categoria, completo, estado, datos, publicar])
+
+  async function cambiarCategoria(c: string) {
+    setCategoria(c)
+    publicadoJson.current = null // republicar en la categoría nueva
+    await fetch(`/api/plantillas/${doc.id}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ categoria: c || null }),
+    })
+  }
+
   return (
     <div className="p-4 md:p-6">
       <div className="flex items-center gap-2 text-xs text-gray-400 mb-3">
@@ -104,6 +151,35 @@ export default function PlantillaEditor({ doc, fontsClass }: { doc: Doc; fontsCl
           </button>
         </div>
       </div>
+
+      {puedePublicar && (
+        <div className="mb-4 bg-white border border-gray-200 rounded-lg px-4 py-3 flex items-center gap-3 flex-wrap text-sm">
+          <span className="font-medium text-gray-700">Research &amp; Novedades</span>
+          <select
+            value={categoria}
+            onChange={(e) => cambiarCategoria(e.target.value)}
+            className="border border-gray-200 rounded px-2 py-1 text-xs bg-white"
+          >
+            <option value="">No publicar</option>
+            {RESEARCH_CATEGORIAS.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+          </select>
+          <span className="text-xs text-gray-500 flex-1 min-w-[200px]">
+            {!categoria ? 'No se publica en Research.'
+              : !completo ? `Se publica en ${researchCategoriaLabel(categoria)} cuando completes todos los campos.`
+              : pub.estado === 'publicando' ? 'Publicando en Research… (generando el PDF)'
+              : pub.estado === 'pendiente' ? 'Se actualiza en Research en unos segundos…'
+              : pub.estado === 'error' ? <span className="text-red-600">No se pudo publicar: {pub.error}</span>
+              : pub.estado === 'ok' ? <span className="text-emerald-700">✓ Publicado en {researchCategoriaLabel(categoria)}{pub.at ? ` · ${new Date(pub.at).toLocaleTimeString('es-UY', { hour: '2-digit', minute: '2-digit' })}` : ''}</span>
+              : ''}
+          </span>
+          {pub.postId && <Link href="/research" className="text-xs text-blue-600 hover:underline">Ver en Research</Link>}
+          {categoria && completo && (
+            <button type="button" onClick={publicar} disabled={pub.estado === 'publicando'} className="text-xs text-blue-600 hover:underline disabled:opacity-50">
+              Actualizar ahora
+            </button>
+          )}
+        </div>
+      )}
 
       {(faltan.length > 0 || desbordes.length > 0) && (
         <div className="mb-4 space-y-2">

@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { TIPOS_PLANTILLA, type TipoPlantilla } from '@/lib/plantillas/tipos'
+import { RESEARCH_CATEGORIAS, researchCategoriaLabel } from '@/lib/research/labels'
 
 interface Doc {
   id: string
@@ -12,14 +13,16 @@ interface Doc {
   created_by: string | null
   updated_by: string | null
   updated_at: string
+  research_type: string | null
+  research_post_id: string | null
 }
 
 const fmt = (iso: string) =>
   new Date(iso).toLocaleDateString('es-UY', { day: '2-digit', month: '2-digit', year: 'numeric' })
 
-export default function PlantillasLista({ tipo, documentos }: { tipo: TipoPlantilla | null; documentos: Doc[] }) {
+export default function PlantillasLista({ tipo, documentos, puedePublicar }: { tipo: TipoPlantilla | null; documentos: Doc[]; puedePublicar: boolean }) {
   if (!tipo) return <Tarjetas documentos={documentos} />
-  return <DocumentosDeTipo tipo={tipo} documentos={documentos.filter((d) => d.tipo === tipo)} />
+  return <DocumentosDeTipo tipo={tipo} documentos={documentos.filter((d) => d.tipo === tipo)} puedePublicar={puedePublicar} />
 }
 
 // ── Inicio: una tarjeta por plantilla ───────────────────────────────────────
@@ -54,8 +57,9 @@ function Tarjetas({ documentos }: { documentos: Doc[] }) {
 
 // ── Una plantilla: crear nuevo + todos los ya hechos ────────────────────────
 
-function DocumentosDeTipo({ tipo, documentos }: { tipo: TipoPlantilla; documentos: Doc[] }) {
+function DocumentosDeTipo({ tipo, documentos, puedePublicar }: { tipo: TipoPlantilla; documentos: Doc[]; puedePublicar: boolean }) {
   const router = useRouter()
+  const [categoria, setCategoria] = useState(TIPOS_PLANTILLA[tipo].categoriaResearch)
   const [busy, setBusy] = useState<string | null>(null)
   const [q, setQ] = useState('')
 
@@ -86,14 +90,24 @@ function DocumentosDeTipo({ tipo, documentos }: { tipo: TipoPlantilla; documento
 
   return (
     <div className="space-y-4 max-w-4xl">
-      <button
-        type="button"
-        disabled={!!busy}
-        onClick={() => crear({ tipo }, 'nuevo')}
-        className="w-full sm:w-auto px-5 py-2.5 text-sm font-semibold bg-[#2D3F52] text-white rounded-lg hover:bg-[#354A5E] disabled:opacity-60"
-      >
-        {busy === 'nuevo' ? 'Creando…' : '+ Crear nuevo'}
-      </button>
+      <div className="flex items-center gap-3 flex-wrap">
+        <button
+          type="button"
+          disabled={!!busy}
+          onClick={() => crear({ tipo, categoria: puedePublicar ? categoria : null }, 'nuevo')}
+          className="w-full sm:w-auto px-5 py-2.5 text-sm font-semibold bg-[#2D3F52] text-white rounded-lg hover:bg-[#354A5E] disabled:opacity-60"
+        >
+          {busy === 'nuevo' ? 'Creando…' : '+ Crear nuevo'}
+        </button>
+        {puedePublicar && (
+          <label className="flex items-center gap-2 text-xs text-gray-600">
+            Se guarda en Research &amp; Novedades como
+            <select value={categoria} onChange={(e) => setCategoria(e.target.value)} className="border border-gray-200 rounded px-2 py-1.5 text-xs bg-white">
+              {RESEARCH_CATEGORIAS.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+            </select>
+          </label>
+        )}
+      </div>
 
       <div className="bg-white rounded-lg border border-gray-200">
         <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between gap-3 flex-wrap">
@@ -123,6 +137,9 @@ function DocumentosDeTipo({ tipo, documentos }: { tipo: TipoPlantilla; documento
                       <Link href={`/plantillas/${d.id}`} className="font-medium text-gray-900 hover:underline">{d.titulo}</Link>
                       <p className="text-xs text-gray-400">
                         {fmt(d.updated_at)} · {d.updated_by ?? d.created_by ?? '—'}
+                        {d.research_post_id
+                          ? <span className="ml-2 text-emerald-700">● En Research · {researchCategoriaLabel(d.research_type)}</span>
+                          : d.research_type ? <span className="ml-2 text-amber-600">○ Se publica en {researchCategoriaLabel(d.research_type)} al completarlo</span> : null}
                       </p>
                     </td>
                     <td className="px-5 py-3 text-right whitespace-nowrap">

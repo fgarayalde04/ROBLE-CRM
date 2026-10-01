@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
-import { getSession } from '@/lib/auth'
+import { getSession, RESEARCH_AUTHOR_ROLES } from '@/lib/auth'
 import { listPlantillas } from '@/lib/db/plantillas'
 import { TIPOS_PLANTILLA, isTipoPlantilla } from '@/lib/plantillas/tipos'
 import PlantillasLista from './PlantillasLista'
@@ -39,7 +39,7 @@ export default async function PlantillasPage({ searchParams }: { searchParams: {
           {tipo ? TIPOS_PLANTILLA[tipo].descripcion : 'Documentos con el formato de Roble: completás los datos y el PDF sale siempre igual.'}
         </p>
       </div>
-      <PlantillasLista tipo={tipo} documentos={documentos} />
+      <PlantillasLista tipo={tipo} documentos={documentos} puedePublicar={RESEARCH_AUTHOR_ROLES.includes(session.role)} />
     </div>
   )
 }
