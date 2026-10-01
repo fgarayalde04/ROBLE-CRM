@@ -1,4 +1,5 @@
 import { Suspense } from 'react'
+import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getSession } from '@/lib/auth'
 import { listPosts, getLatestMorningBrief, MANUAL_RESEARCH_TYPES } from '@/lib/db/research'
@@ -20,9 +21,17 @@ export default async function ResearchPage() {
 
   return (
     <div className="p-4 md:p-6 lg:p-8">
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-gray-900">Research & Novedades</h1>
-        <p className="mt-1 text-sm text-gray-500">Morning Brief, mercados, bonos, fondos y novedades de Roble</p>
+      <div className="mb-6 flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-semibold text-gray-900">Research & Novedades</h1>
+          <p className="mt-1 text-sm text-gray-500">Morning Brief, mercados, bonos, fondos y novedades de Roble</p>
+        </div>
+        <Link
+          href="/research/plantillas"
+          className="px-3 py-1.5 text-sm border border-gray-200 bg-white text-[#2D3F52] rounded-md hover:bg-gray-50"
+        >
+          📄 Plantillas
+        </Link>
       </div>
       <Suspense fallback={<div className="p-4 md:p-8 text-gray-400 text-sm">Cargando…</div>}>
         <ResearchClient
