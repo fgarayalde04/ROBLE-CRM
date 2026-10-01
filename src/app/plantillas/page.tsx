@@ -8,8 +8,8 @@ import PlantillasLista from './PlantillasLista'
 export const dynamic = 'force-dynamic'
 export const metadata = { title: 'Plantillas' }
 
-// /research/plantillas            → una tarjeta por plantilla
-// /research/plantillas?tipo=xxx   → crear uno nuevo + todos los ya hechos de esa plantilla
+// /plantillas            → una tarjeta por plantilla
+// /plantillas?tipo=xxx   → crear uno nuevo + todos los ya hechos de esa plantilla
 export default async function PlantillasPage({ searchParams }: { searchParams: { tipo?: string } }) {
   const session = await getSession()
   if (!session) redirect('/login')
@@ -25,11 +25,9 @@ export default async function PlantillasPage({ searchParams }: { searchParams: {
   return (
     <div className="p-4 md:p-6 lg:p-8">
       <div className="flex items-center gap-2 text-xs text-gray-400 mb-4">
-        <Link href="/research" className="hover:text-gray-600">Research</Link>
-        <span>/</span>
         {tipo ? (
           <>
-            <Link href="/research/plantillas" className="hover:text-gray-600">Plantillas</Link>
+            <Link href="/plantillas" className="hover:text-gray-600">Plantillas</Link>
             <span>/</span>
             <span className="text-gray-600">{TIPOS_PLANTILLA[tipo].plural}</span>
           </>

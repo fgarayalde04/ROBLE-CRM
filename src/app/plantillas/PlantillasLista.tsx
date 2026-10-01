@@ -32,7 +32,7 @@ function Tarjetas({ documentos }: { documentos: Doc[] }) {
         return (
           <Link
             key={t}
-            href={`/research/plantillas?tipo=${t}`}
+            href={`/plantillas?tipo=${t}`}
             className="group bg-white border border-gray-200 rounded-lg p-5 hover:border-[#2D3F52] hover:shadow-sm transition"
           >
             <div className="flex items-start justify-between gap-3">
@@ -67,7 +67,7 @@ function DocumentosDeTipo({ tipo, documentos }: { tipo: TipoPlantilla; documento
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Error')
-      router.push(`/research/plantillas/${data.documento.id}`)
+      router.push(`/plantillas/${data.documento.id}`)
     } catch (e: any) {
       alert(e.message)
       setBusy(null)
@@ -120,13 +120,13 @@ function DocumentosDeTipo({ tipo, documentos }: { tipo: TipoPlantilla; documento
                 {visibles.map((d) => (
                   <tr key={d.id} className="hover:bg-gray-50">
                     <td className="px-5 py-3">
-                      <Link href={`/research/plantillas/${d.id}`} className="font-medium text-gray-900 hover:underline">{d.titulo}</Link>
+                      <Link href={`/plantillas/${d.id}`} className="font-medium text-gray-900 hover:underline">{d.titulo}</Link>
                       <p className="text-xs text-gray-400">
                         {fmt(d.updated_at)} · {d.updated_by ?? d.created_by ?? '—'}
                       </p>
                     </td>
                     <td className="px-5 py-3 text-right whitespace-nowrap">
-                      <Link href={`/research/plantillas/${d.id}`} className="text-xs text-blue-600 hover:underline mr-3">Abrir</Link>
+                      <Link href={`/plantillas/${d.id}`} className="text-xs text-blue-600 hover:underline mr-3">Abrir</Link>
                       <a href={`/api/plantillas/${d.id}/pdf`} className="text-xs text-blue-600 hover:underline mr-3">PDF</a>
                       <button type="button" disabled={!!busy} onClick={() => crear({ duplicar: d.id }, `dup-${d.id}`)} className="text-xs text-blue-600 hover:underline mr-3 disabled:opacity-50">
                         {busy === `dup-${d.id}` ? 'Duplicando…' : 'Duplicar'}

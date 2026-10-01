@@ -7,7 +7,7 @@ import { PAGINA_PLANTILLA } from '@/components/plantillas/PlantillaRender'
 export const maxDuration = 60
 
 // GET /api/plantillas/[id]/pdf — PDF con un browser headless navegando a la
-// hoja para imprimir (/research/plantillas/[id]/print), igual que las propuestas.
+// hoja para imprimir (/plantillas/[id]/print), igual que las propuestas.
 
 async function renderPdf(printUrl: string, token: string, size: { width: number; height: number }): Promise<Buffer | null> {
   const browser = await getBrowser()
@@ -31,7 +31,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   if (!doc) return NextResponse.json({ error: 'Documento no encontrado' }, { status: 404 })
 
   const port = process.env.PORT ?? '3000'
-  const printUrl = `http://127.0.0.1:${port}/research/plantillas/${params.id}/print`
+  const printUrl = `http://127.0.0.1:${port}/plantillas/${params.id}/print`
   const token = await createSession(session)
 
   // El Chromium headless a veces se cae en el primer uso tras un deploy; se reintenta una vez.

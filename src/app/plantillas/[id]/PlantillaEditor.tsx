@@ -71,7 +71,7 @@ export default function PlantillaEditor({ doc, fontsClass }: { doc: Doc; fontsCl
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ duplicar: doc.id }),
     })
     const data = await res.json()
-    if (res.ok) router.push(`/research/plantillas/${data.documento.id}`)
+    if (res.ok) router.push(`/plantillas/${data.documento.id}`)
     else alert(data.error ?? 'No se pudo duplicar')
   }
 
@@ -80,11 +80,9 @@ export default function PlantillaEditor({ doc, fontsClass }: { doc: Doc; fontsCl
   return (
     <div className="p-4 md:p-6">
       <div className="flex items-center gap-2 text-xs text-gray-400 mb-3">
-        <Link href="/research" className="hover:text-gray-600">Research</Link>
+        <Link href="/plantillas" className="hover:text-gray-600">Plantillas</Link>
         <span>/</span>
-        <Link href="/research/plantillas" className="hover:text-gray-600">Plantillas</Link>
-        <span>/</span>
-        <Link href={`/research/plantillas?tipo=${doc.tipo}`} className="hover:text-gray-600">{TIPOS_PLANTILLA[doc.tipo].plural}</Link>
+        <Link href={`/plantillas?tipo=${doc.tipo}`} className="hover:text-gray-600">{TIPOS_PLANTILLA[doc.tipo].plural}</Link>
       </div>
 
       <div className="flex items-center justify-between gap-3 flex-wrap mb-4">

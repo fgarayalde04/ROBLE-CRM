@@ -24,6 +24,7 @@ const ASESOR_ALLOWED = [
   '/settings',
   '/change-password',
   '/research',
+  '/plantillas',
   '/api/',
 ]
 

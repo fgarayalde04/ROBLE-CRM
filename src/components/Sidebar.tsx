@@ -59,6 +59,7 @@ const nav: NavSection[] = [
     label: 'Research',
     items: [
       { href: '/research', label: 'Research & Novedades', subtitle: 'Morning Brief y publicaciones', icon: ResearchIcon, permission: 'research' },
+      { href: '/plantillas', label: 'Plantillas', subtitle: 'Fichas y análisis de bonos', icon: TemplateIcon, permission: 'research' },
     ],
   },
   // HIDDEN: Sección Finanzas temporalmente oculta

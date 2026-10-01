@@ -18,6 +18,7 @@ const PAGE_TITLES: [string, string][] = [
   ['/propuestas', 'Propuestas'],
   ['/events', 'Agenda'],
   ['/research', 'Research & Novedades'],
+  ['/plantillas', 'Plantillas'],
   ['/mail', 'Mail'],
   ['/calendar', 'Vencimientos'],
   ['/ceo', 'Dashboard'],
