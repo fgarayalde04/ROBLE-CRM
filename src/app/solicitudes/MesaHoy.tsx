@@ -5,6 +5,7 @@ import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import ClientEmailTogglePills from '@/components/ClientEmailTogglePills'
 import AssetDetailCard from './AssetDetailCard'
+import ReenviarMailModal from './ReenviarMailModal'
 
 interface Solicitud {
   id: string
@@ -189,6 +190,7 @@ function DetailPanel({
   const [emailCc, setEmailCc]         = useState((sol.cc_emails ?? []).join(', '))
   const knownClientEmails = Array.from(new Set([sol.client_email, ...(sol.additional_emails ?? [])].filter(Boolean))) as string[]
   const [showEmail, setShowEmail]     = useState(false)
+  const [showReenviar, setShowReenviar] = useState(false)
   const [showEjecutar, setShowEjecutar] = useState(false)
   const [showCancelar, setShowCancelar] = useState(false)
   const [precio, setPrecio]           = useState('')
@@ -354,6 +356,12 @@ function DetailPanel({
               Marcar en ejecución
             </button>
           )}
+          {(sol.estado === 'mail_enviado' || sol.estado === 'rechazada_cliente') && (
+            <button onClick={() => setShowReenviar(true)} disabled={busy}
+              className="w-full py-2 text-xs font-semibold border border-blue-300 text-blue-700 rounded-lg hover:bg-blue-50 disabled:opacity-50">
+              ✉️ Corregir mail y reenviar
+            </button>
+          )}
           {(sol.estado === 'mail_enviado' || sol.estado === 'aprobada_cliente' || sol.estado === 'en_ejecucion') && (
             <button onClick={() => setShowEjecutar(true)}
               className="w-full py-2 text-xs font-semibold bg-emerald-600 text-white rounded-lg hover:bg-emerald-700">
@@ -469,6 +477,10 @@ function DetailPanel({
       </div>
 
       {/* Modal email */}
+      {showReenviar && (
+        <ReenviarMailModal sol={sol} onAction={onAction} onClose={() => setShowReenviar(false)} />
+      )}
+
       {showEmail && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">

@@ -6,6 +6,16 @@ import {
   type OrderCtx,
 } from '@/lib/notifications/orderEvents'
 import { applySolicitudEjecutada } from '@/lib/db/clientPositions'
+import { pool } from '@/lib/db/pool'
+
+// Mail principal del cliente de la orden (por id o, si la orden no lo tiene, por número).
+async function updateClientPrimaryEmail(sol: { client_id?: string | null; client_number?: string | null }, email: string) {
+  if (sol.client_id) {
+    await pool.query(`update clients set email = $2, updated_at = now() where id = $1`, [sol.client_id, email])
+  } else if (sol.client_number) {
+    await pool.query(`update clients set email = $2, updated_at = now() where client_number = $1`, [String(sol.client_number).trim(), email])
+  }
+}
 
 const MESA_ROLES  = ['admin', 'ceo', 'direccion', 'mesa', 'asistente']
 const ADMIN_ROLES = ['admin', 'ceo', 'direccion']
@@ -102,8 +112,22 @@ export async function PATCH(
 
   // ── mail_enviado ───────────────────────────────────────────────────────────
   if (accion === 'mail_enviado') {
-    if (!isMesa) return NextResponse.json({ error: 'Sin permiso' }, { status: 403 })
+    // Reenvío (mail del cliente mal cargado): también lo puede hacer el asesor
+    // dueño de una orden de envío directo, que fue quien mandó el primero.
+    const isOwnerDirecto = sol.canal === 'directo_asesor' && sol.asesor === session.name
+    if (!isMesa && !(body.reenvio && isOwnerDirecto)) return NextResponse.json({ error: 'Sin permiso' }, { status: 403 })
+
+    const reenvio = body.reenvio === true && Array.isArray(body.to) && body.to.length > 0
+    const to: string[] = reenvio ? body.to.map((e: unknown) => String(e).trim()).filter(Boolean) : []
+    const cc: string[] = reenvio && Array.isArray(body.cc) ? body.cc.map((e: unknown) => String(e).trim()).filter(Boolean) : []
+    const anteriores = [sol.client_email, ...(sol.additional_emails ?? [])].filter(Boolean)
+
     const data = await updateSolicitud(params.id, {
+      ...(reenvio ? {
+        client_email: to[0],
+        additional_emails: to.length > 1 ? to.slice(1) : null,
+        cc_emails: cc.length ? cc : null,
+      } : {}),
       estado: 'mail_enviado',
       mail_enviado_at: new Date().toISOString(),
       mail_enviado_by: session.name,
@@ -114,7 +138,22 @@ export async function PATCH(
       ...(body.mail_thread_id ? { mail_thread_id: body.mail_thread_id } : {}),
       ...(body.mail_message_id ? { mail_message_id: body.mail_message_id } : {}),
     })
-    await logEvento('mail_enviado', `Mail enviado al cliente por ${session.name}`)
+    if (reenvio) {
+      await logEvento(
+        'mail_reenviado',
+        `Mail reenviado por ${session.name} a ${to.join(', ')}${anteriores.length ? ` (antes: ${anteriores.join(', ')})` : ''}`,
+        { to, cc, anteriores },
+      )
+      if (body.guardar_en_ficha) {
+        try {
+          await updateClientPrimaryEmail(sol, to[0])
+        } catch (err) {
+          console.error('[solicitudes] no se pudo actualizar el mail del cliente', err)
+        }
+      }
+    } else {
+      await logEvento('mail_enviado', `Mail enviado al cliente por ${session.name}`)
+    }
     await notifyMailEnviado(orderCtx)
     return NextResponse.json({ ok: true, row: data })
   }
