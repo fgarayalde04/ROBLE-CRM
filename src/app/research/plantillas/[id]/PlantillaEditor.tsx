@@ -84,7 +84,7 @@ export default function PlantillaEditor({ doc, fontsClass }: { doc: Doc; fontsCl
         <span>/</span>
         <Link href="/research/plantillas" className="hover:text-gray-600">Plantillas</Link>
         <span>/</span>
-        <span className="text-gray-600">{TIPOS_PLANTILLA[doc.tipo].label}</span>
+        <Link href={`/research/plantillas?tipo=${doc.tipo}`} className="hover:text-gray-600">{TIPOS_PLANTILLA[doc.tipo].plural}</Link>
       </div>
 
       <div className="flex items-center justify-between gap-3 flex-wrap mb-4">

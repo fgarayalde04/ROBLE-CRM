@@ -4,13 +4,15 @@
 
 export type TipoPlantilla = 'ficha_bono' | 'analisis_bonos'
 
-export const TIPOS_PLANTILLA: Record<TipoPlantilla, { label: string; descripcion: string }> = {
+export const TIPOS_PLANTILLA: Record<TipoPlantilla, { label: string; plural: string; descripcion: string }> = {
   ficha_bono: {
     label: 'Ficha de bono',
+    plural: 'Fichas de bono',
     descripcion: 'Una hoja con precio, TIR y características del instrumento. Para nuevas emisiones.',
   },
   analisis_bonos: {
     label: 'Análisis de bonos',
+    plural: 'Análisis de bonos',
     descripcion: 'Mismo formato que la ficha, con texto sobre el emisor y la imagen del detalle del bono. Segunda hoja opcional para gráficos.',
   },
 }
