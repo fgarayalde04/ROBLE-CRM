@@ -156,7 +156,6 @@ const COLS_EDIT: Record<'mas_operado_fondos' | 'mas_operado_bonos', ColEdit[]> =
   mas_operado_fondos: [
     { key: 'nombre', label: 'Fondo', ancho: 'min-w-[160px]' },
     { key: 'isin', label: 'ISIN', ancho: 'w-28' },
-    { key: 'clase', label: 'Clase', ancho: 'w-24' },
     { key: 'moneda', label: 'Moneda', ancho: 'w-16' },
   ],
   mas_operado_bonos: [

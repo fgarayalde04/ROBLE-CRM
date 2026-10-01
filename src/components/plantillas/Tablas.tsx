@@ -136,7 +136,6 @@ type Columna<F> = { label: string; valor: (f: F) => ReactNode; derecha?: boolean
 
 const COLS_FONDOS: Columna<FilaFondoOperado>[] = [
   { label: 'ISIN', valor: (f) => f.isin || '—', ancho: 118 },
-  { label: 'Clase', valor: (f) => f.clase || '—', ancho: 96 },
   { label: 'Moneda', valor: (f) => f.moneda || '—', ancho: 62 },
   { label: 'YTD', valor: (f) => pct(f.r_ytd), derecha: true, ancho: 64 },
 ]

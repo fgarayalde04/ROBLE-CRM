@@ -84,7 +84,7 @@ export default function MasOperadoClient({ puedeCrearPlantilla }: { puedeCrearPl
         )}
       </div>
 
-      {/* Filtros en una sola línea: período · tipo de activo · compras/ventas · unir clases */}
+      {/* Filtros en una sola línea: período · tipo de activo · compras/ventas · unir fondos */}
       <div className="bg-white border border-gray-200 rounded-lg px-4 py-3 mb-4 flex items-center gap-x-6 gap-y-3 flex-wrap text-sm">
         <div className="flex items-center gap-2">
           <div className="inline-flex rounded-md border border-gray-200 p-0.5">
@@ -124,9 +124,9 @@ export default function MasOperadoClient({ puedeCrearPlantilla }: { puedeCrearPl
         </div>
 
         {clase === 'fondos' && (
-          <label className="flex items-center gap-2 text-gray-600" title="Las distintas clases de un mismo fondo (A, E, Inst, Acc, Dist, moneda…) cuentan como un solo fondo">
+          <label className="flex items-center gap-2 text-gray-600" title="Las distintas versiones de un mismo fondo (A, E, Inst, Acc, Dist, moneda…) cuentan como un solo fondo">
             <input type="checkbox" checked={unir} onChange={(e) => setUnir(e.target.checked)} />
-            Unir clases del mismo fondo
+            Unir el mismo fondo
           </label>
         )}
       </div>
@@ -166,7 +166,7 @@ function Tabla({ filas, clase }: { filas: InstrumentoOperado[]; clase: ClaseActi
             <th className={`${th} w-10`}>#</th>
             <th className={th}>{clase === 'fondos' ? 'Fondo' : clase === 'bonos' ? 'Bono' : 'Acción'}</th>
             <th className={th}>{clase === 'acciones' ? 'Ticker' : 'ISIN'}</th>
-            {clase === 'fondos' && <><th className={th}>Clase</th><th className={th}>Moneda</th><th className={`${th} text-right`}>YTD</th><th className={`${th} text-right`}>1 año</th></>}
+            {clase === 'fondos' && <><th className={th}>Moneda</th><th className={`${th} text-right`}>YTD</th><th className={`${th} text-right`}>1 año</th></>}
             {clase === 'bonos' && <><th className={th}>Cupón</th><th className={th}>Vencimiento</th><th className={th}>Moneda</th></>}
             {clase === 'acciones' && <th className={th}>Moneda</th>}
             <th className={`${th} w-[22%]`}>Órdenes</th>
@@ -183,7 +183,7 @@ function Tabla({ filas, clase }: { filas: InstrumentoOperado[]; clase: ClaseActi
                   <td className={`${td} text-gray-400`}>{i + 1}</td>
                   <td className="px-4 py-2.5">
                     {variantes.length > 0 ? (
-                      <button type="button" onClick={() => alternar(f.key)} className="text-left font-medium text-gray-900 hover:text-[#2D3F52] hover:underline" title="Ver el detalle por clase">
+                      <button type="button" onClick={() => alternar(f.key)} className="text-left font-medium text-gray-900 hover:text-[#2D3F52] hover:underline" title="Ver el detalle">
                         <span className="inline-block w-3 text-gray-400">{abierto ? '▾' : '▸'}</span>{f.nombre}
                       </button>
                     ) : (
@@ -192,10 +192,10 @@ function Tabla({ filas, clase }: { filas: InstrumentoOperado[]; clase: ClaseActi
                   </td>
                   <td className={`${td} text-xs text-gray-500`}>
                     {variantes.length > 1
-                      ? <span className="text-gray-400">{variantes.length} clases</span>
+                      ? <span className="text-gray-400">—</span>
                       : (clase === 'acciones' ? f.ticker || f.isin : f.isin) || '—'}
                   </td>
-                  {clase === 'fondos' && <><td className={td}>{variantes.length > 1 && new Set(variantes.map((v) => v.clase)).size > 1 ? 'Varias' : f.clase || '—'}</td><td className={td}>{f.moneda || '—'}</td><td className={`${td} text-right tabular-nums`}>{pct(f.r_ytd)}</td><td className={`${td} text-right tabular-nums`}>{pct(f.r_1y)}</td></>}
+                  {clase === 'fondos' && <><td className={td}>{f.moneda || '—'}</td><td className={`${td} text-right tabular-nums`}>{pct(f.r_ytd)}</td><td className={`${td} text-right tabular-nums`}>{pct(f.r_1y)}</td></>}
                   {clase === 'bonos' && <><td className={td}>{f.cupon || '—'}</td><td className={td}>{f.vencimiento || '—'}</td><td className={td}>{f.moneda || '—'}</td></>}
                   {clase === 'acciones' && <td className={td}>{f.moneda || '—'}</td>}
                   <td className="px-4 py-2.5">
@@ -213,7 +213,6 @@ function Tabla({ filas, clase }: { filas: InstrumentoOperado[]; clase: ClaseActi
                     <td />
                     <td className="px-4 py-1.5 pl-7 text-gray-600">{v.nombre}</td>
                     <td className="px-4 py-1.5 text-gray-500">{v.isin || '—'}</td>
-                    <td className="px-4 py-1.5 text-gray-500">{v.clase || '—'}</td>
                     <td className="px-4 py-1.5 text-gray-500">{v.moneda || '—'}</td>
                     <td colSpan={2} />
                     <td className="px-4 py-1.5 text-gray-600"><span className="inline-block w-full text-right pr-0.5 tabular-nums">{v.operaciones}</span></td>
