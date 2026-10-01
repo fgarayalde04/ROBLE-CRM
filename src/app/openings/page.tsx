@@ -10,8 +10,6 @@ import AutoSyncOpenings from '@/components/AutoSyncOpenings'
 import DeleteOpeningButton from '@/components/DeleteOpeningButton'
 import StartOpeningButton from '@/components/StartOpeningButton'
 
-const ALL_OPENINGS_ROLES = ['admin', 'asistente', 'ceo']
-
 export const metadata: Metadata = { title: 'Apertura de cuentas' }
 export const dynamic = 'force-dynamic'
 

@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { generateOrdenId, listOrderHistory, createOrderHistory, insertOrderHistoryItems } from '@/lib/db/ordenes'
+import { MESA_ROLES } from '@/lib/auth/roles'
 
-const ADMIN_ROLES = ['admin', 'ceo', 'direccion']
 
 // Build one-line summary from blocks  e.g. "Compra AAPL, Venta Bono YPF, Compra Fondo BLK"
 function buildSummary(blocks: any[]): string {
@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
-  const isAdmin = ADMIN_ROLES.includes(session.role)
+  const isAdmin = MESA_ROLES.includes(session.role)
   const { searchParams } = req.nextUrl
   const q          = searchParams.get('q')?.trim()
   const dateFrom   = searchParams.get('dateFrom')

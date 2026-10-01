@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { getOrderHistoryEntry, getOrderHistoryItems, deleteOrderHistoryEntry, updateOrderHistoryEntry } from '@/lib/db/ordenes'
+import { MESA_ROLES } from '@/lib/auth/roles'
 
-const ADMIN_ROLES = ['admin', 'ceo', 'direccion']
 
 // GET /api/ordenes/[id] — full detail with items
 export async function GET(
@@ -12,7 +12,7 @@ export async function GET(
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
-  const isAdmin = ADMIN_ROLES.includes(session.role)
+  const isAdmin = MESA_ROLES.includes(session.role)
 
   const entry = await getOrderHistoryEntry(params.id)
   if (!entry) return NextResponse.json({ error: 'No encontrado' }, { status: 404 })
@@ -34,7 +34,7 @@ export async function DELETE(
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
-  const isAdmin = ADMIN_ROLES.includes(session.role)
+  const isAdmin = MESA_ROLES.includes(session.role)
 
   const entry = await getOrderHistoryEntry(params.id)
   if (!entry) return NextResponse.json({ error: 'No encontrado' }, { status: 404 })
@@ -54,7 +54,7 @@ export async function PATCH(
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
-  const isAdmin = ADMIN_ROLES.includes(session.role)
+  const isAdmin = MESA_ROLES.includes(session.role)
 
   const entry = await getOrderHistoryEntry(params.id)
   if (!entry) return NextResponse.json({ error: 'No encontrado' }, { status: 404 })

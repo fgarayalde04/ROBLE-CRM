@@ -378,12 +378,12 @@ interface Props { gmailConnected: boolean; initialTab?: Tab; isAdmin?: boolean; 
 export default function OrdenesClient({ gmailConnected, initialTab, isAdmin = false, isMesa = false, userName = '', userEmail = '' }: Props) {
   // Misma pantalla para todos los usuarios: lo que cambia según el rol son los
   // datos (los filtra la API) y las acciones (isMesa), no las tabs. Las únicas
-  // tabs extra son Instrumentos y Posiciones, que son de administración.
+  // tabs extra son Instrumentos y Posiciones, que son del Trading Desk.
   const tabItems: { t: Tab; label: string; short: string }[] = [
     { t: 'enviar',  label: 'Solicitudes',      short: 'Solicitudes' },
     { t: 'mesa',    label: 'Trading Desk hoy', short: 'Trading' },
     { t: 'blotter', label: 'Blotter',          short: 'Blotter' },
-    ...(isAdmin ? [
+    ...(isMesa ? [
       { t: 'instrumentos' as Tab, label: 'Instrumentos', short: 'Instr.' },
       { t: 'posiciones' as Tab,   label: 'Posiciones',   short: 'Posic.' },
     ] : []),

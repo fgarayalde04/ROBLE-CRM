@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { listRiesgoClientes } from '@/lib/db/clientPositions'
+import { MESA_ROLES } from '@/lib/auth/roles'
 
 export const dynamic = 'force-dynamic'
 
-const MESA_ROLES = ['admin', 'ceo', 'direccion', 'mesa', 'asistente']
 
 // GET /api/posiciones — riesgo de la cartera de cada cliente vs. su perfil
 export async function GET() {

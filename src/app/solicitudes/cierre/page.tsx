@@ -2,11 +2,11 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getSession } from '@/lib/auth'
 import { getCierreDia, hoyMontevideo, ESPERANDO_CLIENTE, type OrdenCierre } from '@/lib/db/cierreOrdenes'
+import { MESA_ROLES } from '@/lib/auth/roles'
 
 export const dynamic = 'force-dynamic'
 export const metadata = { title: 'Cierre del día · Órdenes' }
 
-const MESA_ROLES = ['admin', 'ceo', 'direccion', 'mesa', 'asistente']
 
 const ESTADO_LABEL: Record<string, string> = {
   pendiente_revision: 'Pendiente revisión', en_revision: 'En revisión', devuelta: 'Devuelta',

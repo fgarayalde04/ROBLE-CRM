@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { listEmailRepliesInbox } from '@/lib/db/emailReplies'
+import { MESA_ROLES } from '@/lib/auth/roles'
 
 export const dynamic = 'force-dynamic'
 
-const MESA_ROLES = ['admin', 'ceo', 'direccion', 'mesa', 'asistente']
 
 // GET /api/email-replies— bandeja de respuestas de clientes a
 // los mails de orden. Mesa ve todas; un asesor solo las de sus órdenes.

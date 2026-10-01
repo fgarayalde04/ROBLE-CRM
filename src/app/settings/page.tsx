@@ -6,11 +6,11 @@ import { getSyncHealthReport } from '@/lib/db/sync'
 import SettingsClient from './SettingsClient'
 import PushNotificationsCard from '@/components/push/PushNotificationsCard'
 import SyncHealthCard from '@/components/SyncHealthCard'
+import { ADMIN_ROLES } from '@/lib/auth/roles'
 
 export const metadata: Metadata = { title: 'Configuración' }
 export const dynamic = 'force-dynamic'
 
-const ADMIN_ROLES = ['admin', 'ceo', 'direccion']
 
 export default async function SettingsPage({
   searchParams,

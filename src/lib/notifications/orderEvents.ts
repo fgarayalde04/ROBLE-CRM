@@ -7,8 +7,8 @@ import { createNotification } from '@/lib/db/notifications'
 import { getUsersByRoles, getUserIdsByEmails } from '@/lib/db/users'
 import { sendPushNotification } from '@/lib/push/server'
 import { extractReplyText } from '@/lib/mailWatch/replyMatching'
+import { MESA_ROLES } from '@/lib/auth/roles'
 
-const MESA_ROLES = ['admin', 'ceo', 'direccion', 'mesa', 'asistente']
 
 export interface OrderCtx {
   id: string                 // solicitud uuid — entity_id

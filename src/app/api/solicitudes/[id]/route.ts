@@ -7,6 +7,7 @@ import {
 } from '@/lib/notifications/orderEvents'
 import { applySolicitudEjecutada } from '@/lib/db/clientPositions'
 import { pool } from '@/lib/db/pool'
+import { ADMIN_ROLES, MESA_ROLES } from '@/lib/auth/roles'
 
 // Mail principal del cliente de la orden (por id o, si la orden no lo tiene, por número).
 async function updateClientPrimaryEmail(sol: { client_id?: string | null; client_number?: string | null }, email: string) {
@@ -17,8 +18,6 @@ async function updateClientPrimaryEmail(sol: { client_id?: string | null; client
   }
 }
 
-const MESA_ROLES  = ['admin', 'ceo', 'direccion', 'mesa', 'asistente']
-const ADMIN_ROLES = ['admin', 'ceo', 'direccion']
 
 // GET /api/solicitudes/[id]
 export async function GET(

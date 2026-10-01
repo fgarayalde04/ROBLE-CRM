@@ -7,9 +7,6 @@ import ClientsTable from '@/components/ClientsTable'
 import { listClients, countClientsByStatus } from '@/lib/db/clients'
 import { getPendingTaskClientIds } from '@/lib/db/tasks'
 
-// Roles que pueden ver TODOS los clientes (no solo los propios)
-const ALL_CLIENTS_ROLES = ['admin', 'asistente', 'ceo']
-
 export const metadata: Metadata = { title: 'Clientes' }
 export const dynamic = 'force-dynamic'
 

@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { cargarPosiciones, type FilaPosicion } from '@/lib/db/clientPositions'
+import { MESA_ROLES } from '@/lib/auth/roles'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
 
-const MESA_ROLES = ['admin', 'ceo', 'direccion', 'mesa', 'asistente']
 
 // POST /api/posiciones/carga — carga (o recarga) de posiciones desde el export
 // de las cuentas. Reemplaza las posiciones de las cuentas que vienen en el archivo.

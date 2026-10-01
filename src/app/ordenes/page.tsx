@@ -4,13 +4,12 @@ import { unstable_noStore as noStore } from 'next/cache'
 import { getSession } from '@/lib/auth'
 import { hasGoogleConnection } from '@/lib/google/tokens'
 import OrdenesClient from './OrdenesClient'
+import { ADMIN_ROLES, MESA_ROLES } from '@/lib/auth/roles'
 
 export const metadata: Metadata = { title: 'Enviar órdenes' }
 export const dynamic = 'force-dynamic'
 
-const ADMIN_ROLES = ['admin', 'ceo', 'direccion']
 // Igual que /solicitudes y /api/solicitudes — define qué datos y acciones ve el usuario
-const MESA_ROLES  = ['admin', 'ceo', 'direccion', 'mesa', 'asistente']
 
 interface Props {
   searchParams: { tab?: string }

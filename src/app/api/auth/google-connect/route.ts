@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
+import { ADMIN_ROLES } from '@/lib/auth/roles'
 
 export const dynamic = 'force-dynamic'
 
-const ADMIN_ROLES = ['admin', 'ceo', 'direccion']
 
 /**
  * GET /api/auth/google-connect

@@ -2,16 +2,13 @@ import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import bcrypt from 'bcryptjs'
 import { listUsers, createUser, updateUser, getUserPermissions, approveUser, deleteUser, setFolderPermissions } from '@/lib/db/users'
+import { ALL_PERMISSIONS } from '@/lib/auth/roles'
 
 // Mismas claves que el tipo Permission del cliente (UsersManager.tsx) — se
 // valida acá también porque en algún momento la columna terminó con
 // duplicados y una clave inválida ("fondos") acumulados; esto evita que
 // vuelva a pasar sin importar qué mande el cliente.
-const VALID_PERMISSIONS = new Set([
-  'panel','tasks','clients','openings','banco_central','calendar','deadlines',
-  'ceo_dashboard','kpis','pagos','impuestos','liquidacion','recursos','claves',
-  'admin','sincronizacion','factsheet','proposals','orders','fondos_monitor','research',
-])
+const VALID_PERMISSIONS = new Set<string>(ALL_PERMISSIONS)
 
 function sanitizePermissions(permissions: unknown): string[] | null {
   if (!Array.isArray(permissions)) return null
