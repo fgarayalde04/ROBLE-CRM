@@ -13,11 +13,15 @@ const num = (v: unknown) => (v == null || v === '' || Number.isNaN(Number(v)) ? 
 export async function filasMasOperado(tipo: 'mas_operado_fondos' | 'mas_operado_bonos', desde: string, hasta: string, cantidad: number) {
   const ranking = await getRankingMasOperado(desde, hasta, Math.max(1, Math.min(cantidad, 15)))
   if (tipo === 'mas_operado_fondos') {
-    // Si se unieron varias clases, la fila muestra la más operada (ISIN y rendimiento de esa)
-    const fila = (i: InstrumentoOperado): FilaFondoOperado => ({
-      nombre: i.nombre, isin: i.isin, moneda: i.moneda, r_ytd: i.r_ytd,
-      clase: i.variantes && new Set(i.variantes.map((v) => v.clase)).size > 1 ? 'Varias' : i.clase,
-    })
+    // Si se unieron varias clases no se muestra un ISIN (cada clase tiene el suyo);
+    // el YTD es el de la clase más operada
+    const fila = (i: InstrumentoOperado): FilaFondoOperado => {
+      const varias = (i.variantes?.length ?? 0) > 1
+      return {
+        nombre: i.nombre, isin: varias ? '' : i.isin, moneda: i.moneda, r_ytd: i.r_ytd,
+        clase: varias && new Set(i.variantes!.map((v) => v.clase)).size > 1 ? 'Varias' : i.clase,
+      }
+    }
     return { compras: ranking.fondos.compras.map(fila), ventas: ranking.fondos.ventas.map(fila) }
   }
   const fila = (i: InstrumentoOperado): FilaBonoOperado => ({ nombre: i.nombre, isin: i.isin, cupon: i.cupon, vencimiento: i.vencimiento, moneda: i.moneda })

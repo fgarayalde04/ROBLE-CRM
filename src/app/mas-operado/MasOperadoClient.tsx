@@ -182,15 +182,20 @@ function Tabla({ filas, clase }: { filas: InstrumentoOperado[]; clase: ClaseActi
                 <tr className="hover:bg-gray-50">
                   <td className={`${td} text-gray-400`}>{i + 1}</td>
                   <td className="px-4 py-2.5">
-                    <span className="font-medium text-gray-900">{f.nombre}</span>
-                    {variantes.length > 1 && (
-                      <button type="button" onClick={() => alternar(f.key)} className="ml-2 text-xs text-blue-600 hover:underline">
-                        {abierto ? 'ocultar' : `${variantes.length} clases`}
+                    {variantes.length > 0 ? (
+                      <button type="button" onClick={() => alternar(f.key)} className="text-left font-medium text-gray-900 hover:text-[#2D3F52] hover:underline" title="Ver el detalle por clase">
+                        <span className="inline-block w-3 text-gray-400">{abierto ? '▾' : '▸'}</span>{f.nombre}
                       </button>
+                    ) : (
+                      <span className="font-medium text-gray-900">{f.nombre}</span>
                     )}
                   </td>
-                  <td className={`${td} text-xs text-gray-500`}>{(clase === 'acciones' ? f.ticker || f.isin : f.isin) || '—'}</td>
-                  {clase === 'fondos' && <><td className={td}>{f.clase || '—'}</td><td className={td}>{f.moneda || '—'}</td><td className={`${td} text-right tabular-nums`}>{pct(f.r_ytd)}</td><td className={`${td} text-right tabular-nums`}>{pct(f.r_1y)}</td></>}
+                  <td className={`${td} text-xs text-gray-500`}>
+                    {variantes.length > 1
+                      ? <span className="text-gray-400">{variantes.length} clases</span>
+                      : (clase === 'acciones' ? f.ticker || f.isin : f.isin) || '—'}
+                  </td>
+                  {clase === 'fondos' && <><td className={td}>{variantes.length > 1 && new Set(variantes.map((v) => v.clase)).size > 1 ? 'Varias' : f.clase || '—'}</td><td className={td}>{f.moneda || '—'}</td><td className={`${td} text-right tabular-nums`}>{pct(f.r_ytd)}</td><td className={`${td} text-right tabular-nums`}>{pct(f.r_1y)}</td></>}
                   {clase === 'bonos' && <><td className={td}>{f.cupon || '—'}</td><td className={td}>{f.vencimiento || '—'}</td><td className={td}>{f.moneda || '—'}</td></>}
                   {clase === 'acciones' && <td className={td}>{f.moneda || '—'}</td>}
                   <td className="px-4 py-2.5">
@@ -206,7 +211,7 @@ function Tabla({ filas, clase }: { filas: InstrumentoOperado[]; clase: ClaseActi
                 {abierto && variantes.map((v) => (
                   <tr key={`${f.key}-${v.isin || v.nombre}`} className="bg-gray-50/70 text-xs">
                     <td />
-                    <td className="px-4 py-1.5 pl-8 text-gray-600">{v.nombre}</td>
+                    <td className="px-4 py-1.5 pl-7 text-gray-600">{v.nombre}</td>
                     <td className="px-4 py-1.5 text-gray-500">{v.isin || '—'}</td>
                     <td className="px-4 py-1.5 text-gray-500">{v.clase || '—'}</td>
                     <td className="px-4 py-1.5 text-gray-500">{v.moneda || '—'}</td>

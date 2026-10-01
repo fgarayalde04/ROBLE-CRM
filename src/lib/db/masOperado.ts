@@ -24,7 +24,7 @@ export interface InstrumentoOperado {
   // Datos del Monitor de fondos (por ISIN), si el fondo está ahí
   r_ytd: number | null
   r_1y: number | null
-  // Clases distintas del mismo fondo que se unieron en esta fila
+  // Fondos: cada clase operada que se unió en esta fila (con una sola clase, esa)
   variantes?: { nombre: string; isin: string; clase: string; moneda: string; operaciones: number }[]
 }
 
@@ -160,29 +160,52 @@ function masFrecuente(valores: string[]) {
   return mejor
 }
 
-// Partes del nombre de un fondo que solo indican la clase (letra o código de
-// clase, acumulación/distribución, moneda, cobertura): sacándolas, las distintas
-// clases de un mismo fondo quedan con el mismo nombre — la tesis es la misma.
+// Unir las clases de un mismo fondo: la tesis es la misma, solo cambia la clase.
+// Los nombres vienen como "AB FCP I AMERICAN INCOME FUND CLASS A2 (USD)(CAP)",
+// "SOLITAIRE GLOBAL BOND FUND CLASS UO (USD) ISIN LI1228564368",
+// "THORNBURG … FD CL A USD" o "PIMCO GIS Income Fund E Acc USD":
+//   1. se corta desde "CLASS" / "CLASE" / "CL" (lo que sigue es la clase),
+//   2. se sacan paréntesis, "ISIN …" y, al final, letras o códigos de clase,
+//      Acc/Dist, moneda y cobertura.
+// Para comparar (familiaFondo) además se ignoran palabras del paraguas o
+// estructura (FCP, SICAV, PLC, GIS…) y FD = FUND.
 const TOKENS_CLASE = new Set([
   'acc', 'accumulating', 'accumulation', 'acumulativa', 'acum', 'dis', 'dist', 'distr', 'distributing', 'distribution',
-  'distributiva', 'cap', 'hedged', 'hdg', 'unhedged', 'usd', 'eur', 'gbp', 'chf', 'jpy', 'class', 'clase', 'share', 'shares',
-  'inst', 'institutional', 'retail', 'adm', 'admin', 'm', 'q', 'monthly', 'mensual',
+  'distributiva', 'cap', 'inc', 'hedged', 'hdg', 'h', 'unhedged', 'usd', 'eur', 'gbp', 'chf', 'jpy',
+  'inst', 'institutional', 'retail', 'adm', 'admin', 'share', 'shares',
 ])
+const PALABRAS_PARAGUAS = new Set(['fcp', 'sicav', 'plc', 'sa', 'ucits', 'gsf', 'isf', 'gis', 'ftgf', 'icav', 'lux', 'fund', 'funds', 'fd', 'tranche', 'the', 'de', 'of'])
+
+const sinAcentos = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
 
 function esTokenClase(t: string) {
-  const n = t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '')
+  const n = sinAcentos(t).replace(/[^a-z0-9]/g, '')
   if (!n) return true
-  if (TOKENS_CLASE.has(n)) return true
-  return /^[a-z]$/.test(n) || /^[a-z]\d$/.test(n) || /^\d[a-z]$/.test(n)   // A, E, I2, 2A…
+  return TOKENS_CLASE.has(n) || /^[a-z]{1,2}\d?h?$/.test(n) && n.length <= 2 || /^[a-z]\d[a-z]?$/.test(n)
 }
 
 /** Nombre del fondo sin lo que identifica la clase (conserva mayúsculas para mostrarlo). */
 export function nombreSinClase(nombre: string) {
-  const sinParentesis = nombre.replace(/\([^)]*\)/g, ' ')
-  const tokens = sinParentesis.split(/[\s\-–—/]+/).filter(Boolean)
-  // Se sacan del final hacia atrás (la clase va al final) y también sueltos en el medio
-  const quedan = tokens.filter((t) => !esTokenClase(t))
-  return quedan.length >= 2 ? quedan.join(' ') : nombre.trim()
+  let n = nombre
+    .replace(/\bISIN\s*[:#]?\s*[A-Z0-9]{9,12}\b/gi, ' ')
+    .replace(/\([^)]*\)/g, ' ')
+  // "CLASS A2", "SHARE CLASS I", "CLASE B", "CL A": todo lo que sigue es la clase
+  n = n.replace(/\s(?:share\s+)?(?:class|clase|cl)\b[\s\S]*$/i, ' ')
+  const tokens = n.split(/[\s/]+/).filter((t) => t && t !== '-' && t !== '–')
+  // Al final suelen quedar letra de clase, Acc/Dist, moneda: se sacan de atrás para adelante
+  while (tokens.length > 2 && esTokenClase(tokens[tokens.length - 1])) tokens.pop()
+  const limpio = tokens.join(' ').replace(/[\s\-–,]+$/, '').trim()
+  return limpio.length >= 3 ? limpio : nombre.trim()
+}
+
+/** Clave para reconocer el mismo fondo aunque cambie la clase o se escriba con/sin el paraguas. */
+export function familiaFondo(nombre: string) {
+  return sinAcentos(nombreSinClase(nombre))
+    .replace(/[^a-z0-9]+/g, ' ')
+    .split(' ')
+    .filter((t) => t && !PALABRAS_PARAGUAS.has(t) && !/^(i|ii|iii|iv)$/.test(t))
+    .map((t) => ({ invt: 'investment', intl: 'international', corp: 'corporate', mkts: 'markets', em: 'emerging' } as Record<string, string>)[t] ?? t)
+    .join(' ')
 }
 
 function agrupar(ops: Operacion[], clave: (o: Operacion) => string) {
@@ -223,16 +246,16 @@ function rankear(ops: Operacion[], unirClases: boolean): InstrumentoOperado[] {
 
   const familias = new Map<string, typeof porInstrumento>()
   for (const x of porInstrumento) {
-    const k = `fam:${normalizar(nombreSinClase(x.item.nombre))}`
+    const k = `fam:${familiaFondo(x.item.nombre) || normalizar(x.item.nombre)}`
     const f = familias.get(k)
     if (f) f.push(x); else familias.set(k, [x])
   }
+  // Cada fila lleva el nombre limpio (sin la clase) y el detalle de las clases operadas
   const lista: InstrumentoOperado[] = []
   familias.forEach((f, key) => {
-    if (f.length === 1) { lista.push(f[0].item); return }
     const variantes = f.map((x) => x.item).sort(porOperaciones)
-    const item = resumen(key, f.flatMap((x) => x.g), nombreSinClase(variantes[0].nombre))
-    item.isin = variantes[0].isin
+    const item = resumen(f.length === 1 ? f[0].key : key, f.flatMap((x) => x.g), nombreSinClase(variantes[0].nombre))
+    item.isin = variantes[0].isin   // la clase más operada (para buscar sus rendimientos)
     item.variantes = variantes.map((v) => ({ nombre: v.nombre, isin: v.isin, clase: v.clase, moneda: v.moneda, operaciones: v.operaciones }))
     lista.push(item)
   })

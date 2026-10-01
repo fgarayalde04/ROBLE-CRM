@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { armarRanking, nombreSinClase, operacionesDeSolicitud } from './db/masOperado'
+import { armarRanking, familiaFondo, nombreSinClase, operacionesDeSolicitud } from './db/masOperado'
 import { labelRango, mesParaInforme, moverPeriodo, periodoMes, periodoSemana } from './masOperado/periodos'
 
 const fondo = (fondo: string, cusipIsin: string, operacion: 'compra' | 'venta', extra: Record<string, string> = {}) =>
@@ -38,6 +38,7 @@ describe('armarRanking', () => {
     const r = armarRanking(ops, 10)
     expect(r.fondos.totales).toEqual({ compras: 4, ventas: 1 })
     expect(r.fondos.compras[0]).toMatchObject({ nombre: 'PIMCO Income', isin: 'IE00B87KCF77', operaciones: 3, clientes: 2 })
+    expect(r.fondos.compras[0].variantes).toHaveLength(1)
     expect(r.fondos.compras[1]).toMatchObject({ nombre: 'Otro', operaciones: 1 })
     expect(r.fondos.ventas).toHaveLength(1)
     expect(r.bonos.compras).toEqual([])
@@ -92,7 +93,29 @@ describe('unir clases del mismo fondo', () => {
     const unidos = armarRanking(ops, 10).fondos.compras
     expect(unidos[0]).toMatchObject({ nombre: 'PIMCO GIS Income Fund', operaciones: 3, isin: 'IE00B7KFL990' })
     expect(unidos[0].variantes).toHaveLength(2)
-    expect(unidos[1].variantes).toBeUndefined()
+    expect(unidos[1]).toMatchObject({ nombre: 'Otro Fondo Global', isin: 'LU0000000001' })
+    expect(unidos[1].variantes).toHaveLength(1)
     expect(armarRanking(ops, 10, false).fondos.compras).toHaveLength(3)
+  })
+})
+
+describe('nombres reales de las órdenes', () => {
+  const mismo = (a: string, b: string) => expect(familiaFondo(a)).toBe(familiaFondo(b))
+  it('corta desde CLASS / CL y saca paréntesis e ISIN', () => {
+    expect(nombreSinClase('SOLITAIRE GLOBAL BOND FUND CLASS UO (USD) ISIN LI1228564368')).toBe('SOLITAIRE GLOBAL BOND FUND')
+    expect(nombreSinClase('THORNBURG GLOBAL INVT PLC EQUITY INCOME BUILDER FD CL A USD')).toBe('THORNBURG GLOBAL INVT PLC EQUITY INCOME BUILDER')
+    expect(nombreSinClase('NUVEEN WINSLOW SOCIALLY AWARE U.S. LARGE-CAP GROWTH FUND A (USD)')).toBe('NUVEEN WINSLOW SOCIALLY AWARE U.S. LARGE-CAP GROWTH FUND')
+  })
+  it('une clases, paraguas y abreviaturas del mismo fondo', () => {
+    mismo('SOLITAIRE GLOBAL BOND FUND CLASS N (USD) ISIN LI1228564350', 'SOLITAIRE GLOBAL BOND FUND CLASS UO (USD) ISIN LI1228564368')
+    mismo('ROBECO HIGH YIELD BONDS FUND CLASS D3H (USD)', 'ROBECO HIGH YIELD BONDS FUND CLASS MH (USD)')
+    mismo('AB FCP I AMERICAN INCOME FUND CLASS I2 (USD)', 'AB AMERICAN INCOME FUND CLASS A (USD)')
+    mismo('VONTOBEL EMERGING MARKETS CORP BOND FUND CLASS B1 (USD)', 'VONTOBEL EMERGING MARKETS CORPORATE BOND FUND CL U1 (USD)')
+    mismo('PIMCO - INCOME', 'PIMCO INCOME FUND CLASS E (ACC)(USD)')
+  })
+  it('no une fondos distintos', () => {
+    expect(familiaFondo('PIMCO INCOME FUND CLASS E (ACC)(USD)')).not.toBe(familiaFondo('PIMCO LOW DURATION INCOME FUND CLASS E (ACC)(USD)'))
+    expect(familiaFondo('AB GLOBAL HIGH YIELD FUND CLASS A2 (USD)')).not.toBe(familiaFondo('AB SICAV I SHORT DURATION HIGH YIELD FUND CLASS A2'))
+    expect(familiaFondo('JPMORGAN U.S. VALUE FUND CLASS A (ACC)(USD)')).not.toBe(familiaFondo('MFS MERIDIAN U.S. VALUE FUND CLASS A1 (USD)'))
   })
 })
