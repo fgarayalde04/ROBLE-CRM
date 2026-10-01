@@ -34,16 +34,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ documento: doc })
   }
 
-  if (!isTipoPlantilla(body.tipo)) return NextResponse.json({ error: 'Tipo de plantilla inválido' }, { status: 400 })
-  const datos = await datosIniciales(body.tipo, {
+  const tipo: unknown = body.tipo
+  if (!isTipoPlantilla(tipo)) return NextResponse.json({ error: 'Tipo de plantilla inválido' }, { status: 400 })
+  const datos = await datosIniciales(tipo, {
     desde: esFechaIso(body.desde) ? body.desde : undefined,
     hasta: esFechaIso(body.hasta) ? body.hasta : undefined,
     asset_class: typeof body.asset_class === 'string' ? body.asset_class : undefined,
   })
   const doc = await createPlantilla({
-    tipo: body.tipo, titulo: tituloDocumento(body.tipo, datos), datos, userName: session.name, userId: session.id,
+    tipo, titulo: tituloDocumento(tipo, datos), datos, userName: session.name, userId: session.id,
     researchType: isResearchCategoria(body.categoria) ? body.categoria : null,
-    webPublicar: body.web === true && TIPOS_PLANTILLA[body.tipo].web,
+    webPublicar: body.web === true && TIPOS_PLANTILLA[tipo].web,
   })
   return NextResponse.json({ documento: doc })
 }
