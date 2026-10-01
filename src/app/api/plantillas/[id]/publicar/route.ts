@@ -5,7 +5,7 @@ import { publicarReporteWeb, webClientesConfigurada, type DatosBonoWeb } from '@
 import { createPost, getPost, updatePost } from '@/lib/db/research'
 import { uploadObject } from '@/lib/storage/s3'
 import { generarPdfPlantilla, nombreArchivo } from '@/lib/plantillas/pdf'
-import { camposFaltantes, type AnalisisBonosDatos, type FichaBonoDatos } from '@/lib/plantillas/tipos'
+import { TIPOS_PLANTILLA, camposFaltantes, type AnalisisBonosDatos, type FichaBonoDatos } from '@/lib/plantillas/tipos'
 import { isResearchCategoria } from '@/lib/research/labels'
 
 export const maxDuration = 60
@@ -22,6 +22,12 @@ function camposPost(tipo: string, datos: any) {
       coupon: d.cupon || null,
       maturity: d.vencimiento || null,
       yield_value: d.tir || null,
+    }
+  }
+  if (tipo === 'comparativo_fondos' || tipo === 'mas_operado_fondos' || tipo === 'mas_operado_bonos') {
+    const primero = String(datos?.comentario ?? '').split(/\n\s*\n/)[0]?.trim() ?? ''
+    return {
+      summary: [datos?.subtitulo?.trim(), primero.length > 320 ? `${primero.slice(0, 317)}…` : primero].filter(Boolean).join('. ') || null,
     }
   }
   const d = datos as AnalisisBonosDatos
@@ -61,7 +67,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   const body = await req.json().catch(() => ({}))
   const categoria = 'categoria' in body ? body.categoria : doc.research_type
-  const web = 'web' in body ? body.web === true : doc.web_publicar
+  const web = TIPOS_PLANTILLA[doc.tipo].web && ('web' in body ? body.web === true : doc.web_publicar)
   if (categoria && !isResearchCategoria(categoria)) return NextResponse.json({ error: 'Categoría de Research inválida' }, { status: 400 })
   if (!categoria && !web) return NextResponse.json({ error: 'Elegí dónde publicarlo' }, { status: 400 })
   if (web && !webClientesConfigurada()) return NextResponse.json({ error: 'La web de clientes no está conectada (faltan WEB_CLIENTES_* en el servidor)' }, { status: 400 })

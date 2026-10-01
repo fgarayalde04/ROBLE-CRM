@@ -10,6 +10,7 @@ import {
 } from '@/lib/plantillas/tipos'
 import { RESEARCH_CATEGORIAS, researchCategoriaLabel } from '@/lib/research/labels'
 import EnviarClientesModal from './EnviarClientesModal'
+import { FormComparativo, FormMasOperado } from './FormsTablas'
 
 interface Doc {
   id: string; tipo: TipoPlantilla; titulo: string; datos: any
@@ -235,7 +236,9 @@ export default function PlantillaEditor({ doc, fontsClass, puedePublicar, webCon
           )}
           {desbordes.length > 0 && (
             <p className="text-xs text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2">
-              En la hoja {desbordes.join(' y ')} no queda lugar suficiente: la imagen sale muy chica o el contenido se corta. Acortá el texto o pasá parte a la segunda hoja.
+              {doc.tipo === 'analisis_bonos'
+                ? `En la hoja ${desbordes.join(' y ')} no queda lugar suficiente: la imagen sale muy chica o el contenido se corta. Acortá el texto o pasá parte a la segunda hoja.`
+                : 'La tabla no entra en la hoja: sacá filas o acortá el comentario.'}
             </p>
           )}
         </div>
@@ -252,9 +255,10 @@ export default function PlantillaEditor({ doc, fontsClass, puedePublicar, webCon
 
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(320px,440px)_1fr] gap-6 items-start">
         <div className="bg-white rounded-lg border border-gray-200 p-4 space-y-5">
-          {doc.tipo === 'ficha_bono'
-            ? <FormFichaBono datos={datos} set={set} />
-            : <FormAnalisis datos={datos} set={set} />}
+          {doc.tipo === 'ficha_bono' ? <FormFichaBono datos={datos} set={set} />
+            : doc.tipo === 'analisis_bonos' ? <FormAnalisis datos={datos} set={set} />
+            : doc.tipo === 'comparativo_fondos' ? <FormComparativo datos={datos} set={set} />
+            : <FormMasOperado tipo={doc.tipo} datos={datos} set={set} />}
         </div>
         <div className="lg:sticky lg:top-4">
           <Preview tipo={doc.tipo} datos={datos} fontsClass={fontsClass} onDesbordes={setDesbordes} />
@@ -267,7 +271,9 @@ export default function PlantillaEditor({ doc, fontsClass, puedePublicar, webCon
 function textoMailInicial(tipo: TipoPlantilla, d: any) {
   const que = tipo === 'ficha_bono'
     ? `la ficha de ${d.titulo || 'la nueva emisión'}${d.precio || d.tir ? ` (precio indicativo ${d.precio || '—'}, TIR ${d.tir || '—'})` : ''}`
-    : `nuestro análisis de ${d.titulo || 'renta fija'}`
+    : tipo === 'analisis_bonos' ? `nuestro análisis de ${d.titulo || 'renta fija'}`
+    : tipo === 'comparativo_fondos' ? `un comparativo de rendimientos de fondos${d.titulo ? ` de ${d.titulo}` : ''}`
+    : `los ${tipo === 'mas_operado_fondos' ? 'fondos' : 'bonos'} más operados por nuestros clientes${d.periodo ? ` en ${d.periodo}` : ''}`
   return `Estimado/a cliente:\n\nLe compartimos ${que}. Encontrará el detalle en el PDF adjunto.\n\nQuedamos a disposición por cualquier consulta; puede responder este mail o contactar a su asesor.\n\nSaludos cordiales,\nRoble Capital Wealth Management`
 }
 

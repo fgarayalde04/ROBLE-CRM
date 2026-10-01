@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { listPlantillas, createPlantilla, getPlantilla } from '@/lib/db/plantillas'
-import { datosVacios, isTipoPlantilla, tituloDocumento } from '@/lib/plantillas/tipos'
+import { TIPOS_PLANTILLA, isTipoPlantilla, tituloDocumento } from '@/lib/plantillas/tipos'
+import { datosIniciales } from '@/lib/plantillas/datosAuto'
+import { esFechaIso } from '@/lib/masOperado/periodos'
 import { isResearchCategoria } from '@/lib/research/labels'
 
 export const dynamic = 'force-dynamic'
@@ -13,7 +15,9 @@ export async function GET() {
   return NextResponse.json({ documentos: await listPlantillas() })
 }
 
-// POST /api/plantillas { tipo, categoria?, web? } → documento nuevo vacío (categoria: dónde se publica en Research)
+// POST /api/plantillas { tipo, categoria?, web? } → documento nuevo (categoria: dónde se publica en Research)
+//   Más operados: { desde?, hasta? } período de las órdenes (por defecto el mes del informe), ya cargado.
+//   Comparativo de fondos: { asset_class? } categoría del Monitor, ya cargada.
 // POST /api/plantillas { duplicar: id } → copia de un documento existente
 export async function POST(req: NextRequest) {
   const session = await getSession()
@@ -31,11 +35,15 @@ export async function POST(req: NextRequest) {
   }
 
   if (!isTipoPlantilla(body.tipo)) return NextResponse.json({ error: 'Tipo de plantilla inválido' }, { status: 400 })
-  const datos = datosVacios(body.tipo)
+  const datos = await datosIniciales(body.tipo, {
+    desde: esFechaIso(body.desde) ? body.desde : undefined,
+    hasta: esFechaIso(body.hasta) ? body.hasta : undefined,
+    asset_class: typeof body.asset_class === 'string' ? body.asset_class : undefined,
+  })
   const doc = await createPlantilla({
     tipo: body.tipo, titulo: tituloDocumento(body.tipo, datos), datos, userName: session.name, userId: session.id,
     researchType: isResearchCategoria(body.categoria) ? body.categoria : null,
-    webPublicar: body.web === true,
+    webPublicar: body.web === true && TIPOS_PLANTILLA[body.tipo].web,
   })
   return NextResponse.json({ documento: doc })
 }

@@ -45,6 +45,7 @@ const nav: NavSection[] = [
       { href: '/fondos-monitor', label: 'Monitor de Fondos', subtitle: 'Rendimientos por ISIN', icon: FondosIcon, permission: 'fondos_monitor' },
       { href: '/factsheet',  label: 'Portafolio',  subtitle: 'Posiciones y valor de cartera',   icon: FactsheetIcon, permission: 'factsheet' },
       { href: '/propuestas', label: 'Propuestas', subtitle: 'Propuestas de inversión', icon: ProposalIcon,  permission: 'proposals' },
+      { href: '/mas-operado', label: 'Lo más operado', subtitle: 'Más comprado y vendido', icon: KpiIcon, permission: 'orders' },
       { href: '/admin/planillas', label: 'Planillas', subtitle: 'Herramientas especiales', icon: TemplateIcon, permission: 'admin' },
     ],
   },
@@ -59,7 +60,7 @@ const nav: NavSection[] = [
     label: 'Research',
     items: [
       { href: '/research', label: 'Research & Novedades', subtitle: 'Morning Brief y publicaciones', icon: ResearchIcon, permission: 'research' },
-      { href: '/plantillas', label: 'Plantillas', subtitle: 'Fichas y análisis de bonos', icon: TemplateIcon, permission: 'research' },
+      { href: '/plantillas', label: 'Plantillas', subtitle: 'Fichas, análisis y comparativos', icon: TemplateIcon, permission: 'research' },
     ],
   },
   // HIDDEN: Sección Finanzas temporalmente oculta

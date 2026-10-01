@@ -2,25 +2,49 @@
 // (logo, colores, tipografías, pie, disclaimer) vive en los componentes de
 // src/components/plantillas; acá solo están los datos que se completan.
 
-export type TipoPlantilla = 'ficha_bono' | 'analisis_bonos'
+export type TipoPlantilla = 'ficha_bono' | 'analisis_bonos' | 'comparativo_fondos' | 'mas_operado_fondos' | 'mas_operado_bonos'
 
-export const TIPOS_PLANTILLA: Record<TipoPlantilla, { label: string; plural: string; descripcion: string; categoriaResearch: string }> = {
+// web: se puede publicar en la web de clientes (hoy solo tiene sección de Renta fija para bonos).
+export const TIPOS_PLANTILLA: Record<TipoPlantilla, { label: string; plural: string; descripcion: string; categoriaResearch: string; web: boolean }> = {
   ficha_bono: {
     label: 'Ficha de bono',
     plural: 'Fichas de bono',
     categoriaResearch: 'nueva_emision',
+    web: true,
     descripcion: 'Una hoja con precio, TIR y características del instrumento. Para nuevas emisiones.',
   },
   analisis_bonos: {
     label: 'Análisis de bonos',
     plural: 'Análisis de bonos',
     categoriaResearch: 'bono',
+    web: true,
     descripcion: 'Mismo formato que la ficha, con texto sobre el emisor y la imagen del detalle del bono. Segunda hoja opcional para gráficos.',
+  },
+  comparativo_fondos: {
+    label: 'Comparativo de fondos',
+    plural: 'Comparativos de fondos',
+    categoriaResearch: 'fondo',
+    web: false,
+    descripcion: 'Tabla de rendimientos de los fondos de una categoría o asset class, tomada del Monitor de fondos.',
+  },
+  mas_operado_fondos: {
+    label: 'Fondos más operados',
+    plural: 'Fondos más operados',
+    categoriaResearch: 'fondo',
+    web: false,
+    descripcion: 'Los fondos más comprados y vendidos del mes, armado solo a partir de las órdenes enviadas en la plataforma.',
+  },
+  mas_operado_bonos: {
+    label: 'Bonos más operados',
+    plural: 'Bonos más operados',
+    categoriaResearch: 'bono',
+    web: false,
+    descripcion: 'Los bonos más comprados y vendidos del mes, armado solo a partir de las órdenes enviadas en la plataforma.',
   },
 }
 
 export function isTipoPlantilla(v: unknown): v is TipoPlantilla {
-  return v === 'ficha_bono' || v === 'analisis_bonos'
+  return typeof v === 'string' && Object.prototype.hasOwnProperty.call(TIPOS_PLANTILLA, v)
 }
 
 // ── Ficha de bono ────────────────────────────────────────────────────────────
@@ -179,8 +203,134 @@ export function analisisBonosVacio(): AnalisisBonosDatos {
   }
 }
 
-export function datosVacios(tipo: TipoPlantilla): FichaBonoDatos | AnalisisBonosDatos {
-  return tipo === 'ficha_bono' ? fichaBonoVacia() : analisisBonosVacio()
+// ── Comparativo de fondos ────────────────────────────────────────────────────
+// Rendimientos (en %) de los fondos de una categoría del Monitor de fondos. Se
+// guarda una foto de los números: el PDF no cambia hasta que se actualiza.
+
+export interface FilaComparativo {
+  isin: string
+  nombre: string
+  gestora: string
+  moneda: string
+  subcategoria: string
+  r_ytd: number | null
+  r_1y: number | null
+  r_3y: number | null
+  r_5y: number | null
+  y_2025: number | null
+  y_2024: number | null
+  y_2023: number | null
+}
+
+export const COLUMNAS_COMPARATIVO: { key: keyof FilaComparativo; label: string; destacada?: boolean }[] = [
+  { key: 'r_ytd', label: 'YTD', destacada: true },
+  { key: 'r_1y', label: '1 año' },
+  { key: 'r_3y', label: '3 años' },
+  { key: 'r_5y', label: '5 años' },
+  { key: 'y_2025', label: '2025' },
+  { key: 'y_2024', label: '2024' },
+  { key: 'y_2023', label: '2023' },
+]
+
+export interface ComparativoFondosDatos {
+  categoria: string
+  periodo: string
+  titulo: string
+  subtitulo: string
+  comentario: string
+  asset_class: string          // categoría del Monitor de la que salen los fondos
+  fecha_datos: string
+  filas: FilaComparativo[]
+}
+
+export function comparativoFondosVacio(): ComparativoFondosDatos {
+  return {
+    categoria: 'Fondos de inversión',
+    periodo: periodoActual(),
+    titulo: '',
+    subtitulo: '',
+    comentario: '',
+    asset_class: '',
+    fecha_datos: hoyDDMMYYYY(),
+    filas: [],
+  }
+}
+
+// ── Lo más operado (fondos / bonos) ─────────────────────────────────────────
+// Mismas columnas que la carga de órdenes de cada tipo, sin montos ni nominales.
+
+export interface FilaFondoOperado {
+  nombre: string
+  isin: string
+  clase: string
+  moneda: string
+  r_ytd: number | null
+}
+
+export interface FilaBonoOperado {
+  nombre: string
+  isin: string
+  cupon: string
+  vencimiento: string
+  moneda: string
+}
+
+export interface MasOperadoDatos<F> {
+  categoria: string
+  periodo: string
+  titulo: string
+  subtitulo: string
+  comentario: string
+  desde: string                // período de las órdenes (YYYY-MM-DD)
+  hasta: string
+  cantidad: number             // filas por tabla al cargar desde las órdenes
+  compras: F[]
+  ventas: F[]
+}
+
+export type MasOperadoFondosDatos = MasOperadoDatos<FilaFondoOperado>
+export type MasOperadoBonosDatos = MasOperadoDatos<FilaBonoOperado>
+
+export function filaFondoVacia(): FilaFondoOperado {
+  return { nombre: '', isin: '', clase: '', moneda: 'USD', r_ytd: null }
+}
+
+export function filaBonoVacia(): FilaBonoOperado {
+  return { nombre: '', isin: '', cupon: '', vencimiento: '', moneda: 'USD' }
+}
+
+export function masOperadoVacio(tipo: 'mas_operado_fondos' | 'mas_operado_bonos'): MasOperadoDatos<any> {
+  const fondos = tipo === 'mas_operado_fondos'
+  return {
+    categoria: fondos ? 'Fondos de inversión' : 'Renta fija',
+    periodo: periodoActual(),
+    titulo: fondos ? 'Los fondos más operados' : 'Los bonos más operados',
+    subtitulo: fondos ? 'Lo que más compraron y vendieron nuestros clientes' : 'Los bonos que más compraron y vendieron nuestros clientes',
+    comentario: '',
+    desde: '',
+    hasta: '',
+    cantidad: 5,
+    compras: [],
+    ventas: [],
+  }
+}
+
+export function masOperadoDisclaimer(desde: string, hasta: string) {
+  const f = (s: string) => (s ? s.split('-').reverse().join('/') : '—')
+  return `Ranking elaborado por Roble Capital a partir de la cantidad de órdenes de compra y de venta de sus clientes entre el ${f(desde)} y el ${f(hasta)}. No refleja montos operados ni constituye una recomendación de compra o venta. Este material tiene fines exclusivamente informativos y no constituye una oferta ni invitación a invertir. Rendimientos pasados no garantizan resultados futuros. Antes de invertir, consulte con su asesor para evaluar si el instrumento se ajusta a su perfil de riesgo. Roble Capital Wealth Management.`
+}
+
+export function comparativoDisclaimer(fecha: string) {
+  return `Rendimientos en porcentaje y en la moneda de cada fondo, con datos al ${fecha || '—'}. YTD: en lo que va del año. Fuente: gestoras y proveedores de datos, sujetos a revisión. Este material tiene fines exclusivamente informativos y no constituye una oferta, invitación ni recomendación de compra o venta. Rendimientos pasados no garantizan resultados futuros. Antes de invertir, consulte con su asesor y lea el prospecto del fondo. Roble Capital Wealth Management.`
+}
+
+export function datosVacios(tipo: TipoPlantilla): any {
+  switch (tipo) {
+    case 'ficha_bono': return fichaBonoVacia()
+    case 'analisis_bonos': return analisisBonosVacio()
+    case 'comparativo_fondos': return comparativoFondosVacio()
+    default: return masOperadoVacio(tipo)
+  }
 }
 
 /** Campos obligatorios sin completar (para avisar antes de bajar el PDF). */
@@ -189,6 +339,19 @@ export function camposFaltantes(tipo: TipoPlantilla, datos: any): string[] {
     return FICHA_BONO_GRUPOS.flatMap((g) => g.campos)
       .filter((c) => !String(datos?.[c.key] ?? '').trim())
       .map((c) => c.label)
+  }
+  if (tipo === 'comparativo_fondos' || tipo === 'mas_operado_fondos' || tipo === 'mas_operado_bonos') {
+    const faltan: string[] = []
+    if (!datos?.titulo?.trim()) faltan.push('Título')
+    if (!datos?.periodo?.trim()) faltan.push('Mes')
+    if (tipo === 'comparativo_fondos') {
+      if (!datos?.filas?.length) faltan.push('Fondos del comparativo')
+    } else {
+      const filas = [...(datos?.compras ?? []), ...(datos?.ventas ?? [])]
+      if (!filas.length) faltan.push('Instrumentos (cargalos desde las órdenes)')
+      if (filas.some((f: any) => !f.nombre?.trim())) faltan.push('Nombre de todos los instrumentos')
+    }
+    return faltan
   }
   const d = datos as AnalisisBonosDatos
   const faltan: string[] = []
@@ -208,6 +371,13 @@ export function camposFaltantes(tipo: TipoPlantilla, datos: any): string[] {
 /** Nombre del documento para la lista y el archivo PDF. */
 export function tituloDocumento(tipo: TipoPlantilla, datos: any): string {
   if (tipo === 'ficha_bono') return datos?.titulo?.trim() || 'Ficha de bono sin título'
+  if (tipo === 'comparativo_fondos') {
+    return datos?.titulo?.trim() ? `Comparativo · ${datos.titulo.trim()}` : 'Comparativo de fondos sin título'
+  }
+  if (tipo === 'mas_operado_fondos' || tipo === 'mas_operado_bonos') {
+    const base = datos?.titulo?.trim() || TIPOS_PLANTILLA[tipo].label
+    return datos?.periodo?.trim() ? `${base} · ${datos.periodo.trim()}` : base
+  }
   const t = datos?.titulo?.trim() ? `Análisis · ${datos.titulo.trim()}` : ''
   return t || 'Análisis sin título'
 }
