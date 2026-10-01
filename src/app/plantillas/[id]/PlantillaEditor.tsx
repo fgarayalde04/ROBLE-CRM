@@ -5,10 +5,11 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import PlantillaRender, { PAGINA_PLANTILLA, imagenPlantillaUrl } from '@/components/plantillas/PlantillaRender'
 import {
-  FICHA_BONO_GRUPOS, TIPOS_PLANTILLA, camposFaltantes, nuevoBloque,
+  FICHA_BONO_GRUPOS, TIPOS_PLANTILLA, camposFaltantes, nuevoBloque, tituloDocumento,
   type AnalisisBonosDatos, type FichaBonoDatos, type BloqueAnalisis, type TipoPlantilla,
 } from '@/lib/plantillas/tipos'
 import { RESEARCH_CATEGORIAS, researchCategoriaLabel } from '@/lib/research/labels'
+import EnviarClientesModal from './EnviarClientesModal'
 
 interface Doc {
   id: string; tipo: TipoPlantilla; titulo: string; datos: any
@@ -27,6 +28,7 @@ export default function PlantillaEditor({ doc, fontsClass, puedePublicar, webCon
   const [estado, setEstado] = useState<'guardado' | 'pendiente' | 'guardando' | 'error'>('guardado')
   const [desbordes, setDesbordes] = useState<number[]>([])
   const [bajando, setBajando] = useState(false)
+  const [enviando, setEnviando] = useState(false)
   const ultimo = useRef(JSON.stringify(doc.datos))
 
   // Guardado automático (1,2 s después del último cambio)
@@ -165,6 +167,17 @@ export default function PlantillaEditor({ doc, fontsClass, puedePublicar, webCon
           <button type="button" onClick={duplicar} className="px-3 py-1.5 text-sm border border-gray-200 bg-white rounded-md hover:bg-gray-50">
             Duplicar
           </button>
+          {puedePublicar && (
+            <button
+              type="button"
+              disabled={faltan.length > 0}
+              title={faltan.length ? 'Completá todos los campos para poder enviarlo' : undefined}
+              onClick={async () => { if (await guardar(datos)) setEnviando(true) }}
+              className="px-3 py-1.5 text-sm border border-blue-300 text-blue-700 bg-white rounded-md hover:bg-blue-50 disabled:opacity-40"
+            >
+              ✉️ Enviar a clientes
+            </button>
+          )}
           <button
             type="button" onClick={descargar} disabled={bajando}
             className="px-4 py-1.5 text-sm bg-[#2D3F52] text-white rounded-md hover:bg-[#354A5E] disabled:opacity-60"
@@ -228,6 +241,15 @@ export default function PlantillaEditor({ doc, fontsClass, puedePublicar, webCon
         </div>
       )}
 
+      {enviando && (
+        <EnviarClientesModal
+          docId={doc.id}
+          titulo={tituloDocumento(doc.tipo, datos)}
+          cuerpoInicial={textoMailInicial(doc.tipo, datos)}
+          onClose={() => setEnviando(false)}
+        />
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(320px,440px)_1fr] gap-6 items-start">
         <div className="bg-white rounded-lg border border-gray-200 p-4 space-y-5">
           {doc.tipo === 'ficha_bono'
@@ -240,6 +262,13 @@ export default function PlantillaEditor({ doc, fontsClass, puedePublicar, webCon
       </div>
     </div>
   )
+}
+
+function textoMailInicial(tipo: TipoPlantilla, d: any) {
+  const que = tipo === 'ficha_bono'
+    ? `la ficha de ${d.titulo || 'la nueva emisión'}${d.precio || d.tir ? ` (precio indicativo ${d.precio || '—'}, TIR ${d.tir || '—'})` : ''}`
+    : `nuestro análisis de ${d.titulo || 'renta fija'}`
+  return `Estimado/a cliente:\n\nLe compartimos ${que}. Encontrará el detalle en el PDF adjunto.\n\nQuedamos a disposición por cualquier consulta; puede responder este mail o contactar a su asesor.\n\nSaludos cordiales,\nRoble Capital Wealth Management`
 }
 
 // ── Vista previa escalada al ancho disponible ───────────────────────────────
