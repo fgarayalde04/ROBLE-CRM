@@ -501,7 +501,8 @@ export default function BlotterSolicitudes({ isMesa, userName }: { isMesa: boole
 
     const [res, legacyRes] = await Promise.all([
       fetch('/api/solicitudes?' + p),
-      isMesa && pageNum === 0 ? fetch('/api/ordenes/blotter') : Promise.resolve(null),
+      // Órdenes del sistema anterior — la API ya las limita a las del usuario si no es Mesa
+      pageNum === 0 ? fetch('/api/ordenes/blotter') : Promise.resolve(null),
     ])
     const json = await res.json()
     let data: Solicitud[] = json.solicitudes ?? []

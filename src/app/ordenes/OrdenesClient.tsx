@@ -14,7 +14,6 @@ import BlotterSolicitudes from '../solicitudes/BlotterSolicitudes'
 import MesaHoy from '../solicitudes/MesaHoy'
 import NuevaSolicitudForm from '../solicitudes/NuevaSolicitudForm'
 import type { Instrument } from '@/app/api/instruments/route'
-import { useAdvisorModeCtx } from '@/contexts/AdvisorModeContext'
 import { useRouter } from 'next/navigation'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -377,38 +376,32 @@ const INSTRUMENT_STYLE: Record<string, string> = {
 interface Props { gmailConnected: boolean; initialTab?: Tab; isAdmin?: boolean; isMesa?: boolean; userName?: string; userEmail?: string }
 
 export default function OrdenesClient({ gmailConnected, initialTab, isAdmin = false, isMesa = false, userName = '', userEmail = '' }: Props) {
-  const { advisorMode } = useAdvisorModeCtx()
-  // En modo asesor, un admin ve tabs de asesor
-  const effectiveAdmin = isAdmin && !advisorMode
-  // Admin: Mesa / Blotter / Instrumentos. Asesor: una tab para enviar órdenes
-  // y otra con el historial de sus propias órdenes (?tab=historial, que es a
-  // donde apuntan BottomNav y el menú de modo asesor).
-  const tabItems: { t: Tab; label: string; short: string }[] = effectiveAdmin
-    ? [
-        { t: 'mesa',         label: 'Trading Desk hoy',  short: 'Trading' },
-        { t: 'blotter',      label: 'Blotter',      short: 'Blotter' },
-        { t: 'instrumentos', label: 'Instrumentos', short: 'Instr.' },
-        { t: 'posiciones',   label: 'Posiciones',   short: 'Posic.' },
-      ]
-    : [
-        { t: 'enviar',          label: 'Solicitudes', short: 'Solicitudes' },
-        { t: 'mis-solicitudes', label: 'Blotter',     short: 'Blotter' },
-      ]
+  // Misma pantalla para todos los usuarios: lo que cambia según el rol son los
+  // datos (los filtra la API) y las acciones (isMesa), no las tabs. Las únicas
+  // tabs extra son Instrumentos y Posiciones, que son de administración.
+  const tabItems: { t: Tab; label: string; short: string }[] = [
+    { t: 'enviar',  label: 'Solicitudes',      short: 'Solicitudes' },
+    { t: 'mesa',    label: 'Trading Desk hoy', short: 'Trading' },
+    { t: 'blotter', label: 'Blotter',          short: 'Blotter' },
+    ...(isAdmin ? [
+      { t: 'instrumentos' as Tab, label: 'Instrumentos', short: 'Instr.' },
+      { t: 'posiciones' as Tab,   label: 'Posiciones',   short: 'Posic.' },
+    ] : []),
+  ]
   const normalizeTab = (t?: Tab): Tab | undefined =>
-    t === 'historial' || t === 'blotter-asesor' || t === 'mis-ordenes' ? 'mis-solicitudes'
+    t === 'historial' || t === 'blotter-asesor' || t === 'mis-ordenes' || t === 'mis-solicitudes' ? 'blotter'
     : t === 'nueva' ? 'enviar'
     : t
   const [requestedTab, setTab] = useState<Tab | undefined>(normalizeTab(initialTab))
   // Navegar entre /ordenes y /ordenes?tab=historial no remonta el componente
   useEffect(() => { setTab(normalizeTab(initialTab)) }, [initialTab])
-  // Si la tab pedida no corresponde al modo actual (ej. el modo asesor se
-  // inicializa después del primer render), caer en la primera disponible.
   const tab: Tab = tabItems.some(i => i.t === requestedTab) ? requestedTab! : tabItems[0].t
   const router = useRouter()
-  // Asesor: reflejar la tab en la URL para que BottomNav / menú marquen la correcta
+  // Reflejar la tab en la URL para que Sidebar / BottomNav / menú marquen la correcta
   const selectTab = (t: Tab) => {
     setTab(t)
-    if (!effectiveAdmin) router.replace(t === 'mis-solicitudes' ? '/ordenes?tab=historial' : '/ordenes', { scroll: false })
+    const url = t === 'enviar' ? '/ordenes' : t === 'blotter' ? '/ordenes?tab=historial' : `/ordenes?tab=${t}`
+    router.replace(url, { scroll: false })
   }
   const [blocks, setBlocks]             = useState<OrderBlock[]>([])
   const [clientId, setClientId]         = useState('')
@@ -565,9 +558,9 @@ export default function OrdenesClient({ gmailConnected, initialTab, isAdmin = fa
       {/* Header */}
       <div className="hidden md:flex items-center justify-between mb-5">
         <div>
-          <h1 className="text-xl font-semibold text-[#2D3F52]">{effectiveAdmin ? 'Trading Desk' : 'Órdenes'}</h1>
+          <h1 className="text-xl font-semibold text-[#2D3F52]">Órdenes</h1>
           <p className="text-sm text-gray-400 mt-0.5">
-            {effectiveAdmin ? 'Blotter · trazabilidad completa de órdenes' : 'Enviá órdenes a Trading Desk y consultá tu historial'}
+            Enviá órdenes a Trading Desk, seguí el día y consultá el historial
           </p>
         </div>
         <div className="flex gap-1 bg-white border border-gray-200 rounded-lg p-0.5 shadow-sm">
@@ -879,8 +872,8 @@ export default function OrdenesClient({ gmailConnected, initialTab, isAdmin = fa
       )}
 
       {/* ── BLOTTER GENERAL ── */}
-      {tab === 'blotter' && effectiveAdmin && (
-        <BlotterSolicitudes isMesa={true} userName={userName} />
+      {tab === 'blotter' && (
+        <BlotterSolicitudes isMesa={isMesa} userName={userName} />
       )}
 
       {/* ── MESA DE HOY / MIS ÓRDENES ── */}
@@ -893,11 +886,6 @@ export default function OrdenesClient({ gmailConnected, initialTab, isAdmin = fa
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 md:p-5">
           <NuevaSolicitudForm gmailConnected={gmailConnected} userEmail={userEmail} />
         </div>
-      )}
-
-      {/* ── HISTORIAL (asesor - solo las propias) ── */}
-      {tab === 'mis-solicitudes' && (
-        <BlotterSolicitudes isMesa={false} userName={userName} />
       )}
 
       {tab === 'instrumentos' && (

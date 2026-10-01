@@ -19,7 +19,7 @@ const nav: NavSection[] = [
     label: 'Acceso rápido',
     items: [
       { href: '/solicitudes', label: 'Solicitudes', subtitle: 'Enviar a Trading Desk', icon: OrdersIcon, permission: 'orders' },
-      { href: '/ordenes', label: 'Blotter', subtitle: 'Historial de órdenes', icon: OrdersIcon, permission: 'orders' },
+      { href: '/ordenes?tab=historial', label: 'Blotter', subtitle: 'Historial de órdenes', icon: OrdersIcon, permission: 'orders' },
     ],
   },
   {
@@ -279,7 +279,7 @@ export default function Sidebar({ user, isOpen = false, onToggle }: Props) {
             </p>
             <ul className="space-y-0.5">
               {section.items.map(({ href, label, subtitle, icon: Icon }) => {
-                const isActive = href === '/' ? pathname === '/' : pathname.startsWith(href)
+                const isActive = href === '/' ? pathname === '/' : pathname.startsWith(href.split('?')[0])
                 return (
                   <li key={href}>
                     <Link

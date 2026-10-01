@@ -9,7 +9,8 @@ export const metadata: Metadata = { title: 'Enviar órdenes' }
 export const dynamic = 'force-dynamic'
 
 const ADMIN_ROLES = ['admin', 'ceo', 'direccion']
-const MESA_ROLES  = ['admin', 'ceo', 'direccion', 'mesa']
+// Igual que /solicitudes y /api/solicitudes — define qué datos y acciones ve el usuario
+const MESA_ROLES  = ['admin', 'ceo', 'direccion', 'mesa', 'asistente']
 
 interface Props {
   searchParams: { tab?: string }
