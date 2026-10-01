@@ -57,9 +57,17 @@ export default function SolicitudesClient({ isMesa, userName, userEmail, gmailCo
 
   return (
     <div className="p-4 md:p-6 bg-[#F4F6F8] min-h-screen">
-      <div className="mb-6">
-        <h1 className="text-xl font-semibold text-[#2D3F52]">Órdenes</h1>
-        <p className="text-sm text-gray-400 mt-0.5">Enviá órdenes a Trading Desk y seguí el estado del día</p>
+      <div className="mb-6 flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h1 className="text-xl font-semibold text-[#2D3F52]">Órdenes</h1>
+          <p className="text-sm text-gray-400 mt-0.5">Enviá órdenes a Trading Desk y seguí el estado del día</p>
+        </div>
+        <a
+          href="/solicitudes/cierre"
+          className="px-3 py-1.5 text-sm border border-gray-200 bg-white text-[#2D3F52] rounded-md hover:bg-gray-50"
+        >
+          📊 Cierre del día
+        </a>
       </div>
 
       <div className="space-y-4">
