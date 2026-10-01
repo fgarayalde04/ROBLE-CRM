@@ -3,15 +3,16 @@ import { getSession, RESEARCH_AUTHOR_ROLES } from '@/lib/auth'
 import { pool } from '@/lib/db/pool'
 import { getPlantilla } from '@/lib/db/plantillas'
 import { logActivity } from '@/lib/db/activityLog'
-import { getValidMesaGoogleToken, MESA_GOOGLE_CONNECTION_KEY } from '@/lib/google/tokens'
+import { getValidSharedGoogleToken, INVERSIONES_GOOGLE_CONNECTION_KEY } from '@/lib/google/tokens'
 import { sendEmail } from '@/lib/google/gmail'
 import { generarPdfPlantilla, nombreArchivo } from '@/lib/plantillas/pdf'
 import { camposFaltantes } from '@/lib/plantillas/tipos'
 
 export const maxDuration = 120
 
-// Gmail limita destinatarios por mensaje: se manda en tandas, cada una con los
-// clientes en copia oculta y trading@ como único destinatario visible.
+// Sale desde inversiones@ (casilla conectada en Configuración). Gmail limita
+// destinatarios por mensaje: se manda en tandas, cada una con los clientes en
+// copia oculta e inversiones@ como único destinatario visible.
 const POR_TANDA = 50
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -42,8 +43,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const destinatarios = rows.filter((r) => EMAIL_RE.test(r.email ?? '') && !vistos.has(r.email) && vistos.add(r.email))
   if (!destinatarios.length) return NextResponse.json({ error: 'Ninguno de los clientes elegidos tiene un mail válido' }, { status: 400 })
 
-  const token = await getValidMesaGoogleToken()
-  if (!token) return NextResponse.json({ error: 'La casilla trading@roblecapital.net no está conectada (Configuración)' }, { status: 400 })
+  const token = await getValidSharedGoogleToken(INVERSIONES_GOOGLE_CONNECTION_KEY)
+  if (!token) return NextResponse.json({ error: 'La casilla inversiones@roblecapital.net no está conectada (Configuración → Casilla de Inversiones)' }, { status: 400 })
 
   let pdf: Buffer
   try {
@@ -52,7 +53,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     return NextResponse.json({ error: err.message }, { status: 500 })
   }
 
-  const from = `"${process.env.PLANTILLAS_FROM_NAME ?? 'Roble Capital'}" <${MESA_GOOGLE_CONNECTION_KEY}>`
+  const from = `"${process.env.PLANTILLAS_FROM_NAME ?? 'Roble Capital'}" <${INVERSIONES_GOOGLE_CONNECTION_KEY}>`
   const enviados: typeof destinatarios = []
   let error: string | null = null
   for (let i = 0; i < destinatarios.length; i += POR_TANDA) {
@@ -60,7 +61,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     try {
       await sendEmail(token, {
         from,
-        to: MESA_GOOGLE_CONNECTION_KEY,
+        to: INVERSIONES_GOOGLE_CONNECTION_KEY,
         bcc: tanda.map((d) => d.email),
         subject: asunto,
         body: cuerpo,

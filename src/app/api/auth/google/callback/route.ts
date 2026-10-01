@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
-import { storeGoogleTokens, GOOGLE_TOKENS_COOKIE, MESA_GOOGLE_CONNECTION_KEY } from '@/lib/google/tokens'
+import { storeGoogleTokens, GOOGLE_TOKENS_COOKIE, MESA_GOOGLE_CONNECTION_KEY, INVERSIONES_GOOGLE_CONNECTION_KEY } from '@/lib/google/tokens'
 import { ADMIN_ROLES } from '@/lib/auth/roles'
 
 export const dynamic = 'force-dynamic'
@@ -22,7 +22,9 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const code = searchParams.get('code')
   const errorParam = searchParams.get('error')
-  const isMesa = searchParams.get('state') === 'mesa'
+  const isInversiones = searchParams.get('state') === 'inversiones'
+  // Casilla compartida (Mesa o inversiones@): se guarda bajo una clave fija.
+  const isMesa = searchParams.get('state') === 'mesa' || isInversiones
 
   if (errorParam || !code) {
     return NextResponse.redirect(`${base}/settings?google_error=cancelled`)
@@ -84,8 +86,14 @@ export async function GET(req: NextRequest) {
       googleName  = profile.name  as string | undefined
     }
 
+    // inversiones@ tiene que conectarse con esa misma cuenta: los mails salen
+    // con ese remitente y Gmail rechaza un From que no es de la cuenta.
+    if (isInversiones && googleEmail?.toLowerCase() !== INVERSIONES_GOOGLE_CONNECTION_KEY) {
+      return NextResponse.redirect(`${base}/settings?google_error=inversiones_cuenta`)
+    }
+
     // ── 3. Store tokens ────────────────────────────────────────────────────
-    const res = NextResponse.redirect(`${base}/settings?${isMesa ? 'mesa_connected=1' : 'google_connected=1'}`)
+    const res = NextResponse.redirect(`${base}/settings?${isInversiones ? 'inversiones_connected=1' : isMesa ? 'mesa_connected=1' : 'google_connected=1'}`)
     await storeGoogleTokens(
       {
         access_token,
@@ -95,7 +103,7 @@ export async function GET(req: NextRequest) {
         name:  googleName,
       },
       res,
-      isMesa ? MESA_GOOGLE_CONNECTION_KEY : undefined
+      isInversiones ? INVERSIONES_GOOGLE_CONNECTION_KEY : isMesa ? MESA_GOOGLE_CONNECTION_KEY : undefined
     )
     // La casilla de Mesa se guarda solo en la DB — nunca en la cookie de
     // sesión rápida, para no pisar la conexión personal de quien hizo el

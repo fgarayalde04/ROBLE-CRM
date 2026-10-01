@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 
 // Enviar el PDF de un documento de Plantillas a clientes elegidos, en copia
-// oculta desde trading@ (ver /api/plantillas/[id]/enviar).
+// oculta desde inversiones@ (ver /api/plantillas/[id]/enviar).
 
 interface Cliente {
   id: string
@@ -91,7 +91,7 @@ export default function EnviarClientesModal({
         <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
           <div>
             <h2 className="font-semibold text-gray-800">Enviar a clientes</h2>
-            <p className="text-xs text-gray-400 mt-0.5">Desde trading@roblecapital.net, con el PDF adjunto. Cada cliente recibe el mail en copia oculta: nadie ve a los demás.</p>
+            <p className="text-xs text-gray-400 mt-0.5">Desde inversiones@roblecapital.net, con el PDF adjunto. Cada cliente recibe el mail en copia oculta: nadie ve a los demás.</p>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl">×</button>
         </div>
