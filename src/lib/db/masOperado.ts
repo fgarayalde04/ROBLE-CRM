@@ -4,8 +4,9 @@ import { pool } from './pool'
 // a partir de las órdenes que se envían desde la plataforma (Solicitudes, con
 // todos los activos de cada orden, y las del Blotter anterior). Cuenta
 // operaciones y clientes distintos; los montos y nominales no se suman (vienen
-// en monedas y unidades distintas). No cuentan las canceladas, devueltas ni
-// las que el cliente rechazó.
+// en monedas y unidades distintas). Cuenta lo mismo que el Blotter: una línea
+// por cada activo de la orden, sin las canceladas (la orden entera o un activo
+// suelto, y en el sistema anterior las que tienen fecha de cancelación).
 
 export type ClaseActivo = 'fondos' | 'bonos' | 'acciones'
 export type Lado = 'compra' | 'venta'
@@ -61,9 +62,14 @@ export interface Operacion {
   cliente: string
 }
 
-const ESTADOS_EXCLUIDOS = ['cancelada', 'devuelta', 'rechazada_cliente']
+const ESTADOS_EXCLUIDOS = ['cancelada']
 
 const txt = (v: unknown) => (v == null ? '' : String(v).trim())
+
+// Igual que el Blotter: sin nombre se usa el ticker; sin nada, la línea igual cuenta
+function nombreODefecto(nombre: unknown, ticker: unknown) {
+  return txt(nombre) || txt(ticker).toUpperCase() || 'SIN NOMBRE'
+}
 
 function claseDe(v: unknown): ClaseActivo | null {
   const s = txt(v).toLowerCase()
@@ -97,7 +103,7 @@ function desdeBloque(b: any, lado: Lado | null, cliente: string): Operacion | nu
   if (!clase || !l) return null
   return {
     clase, lado: l, cliente,
-    nombre: txt(clase === 'fondos' ? b.fondo : clase === 'bonos' ? b.descripcion : b.nombre),
+    nombre: nombreODefecto(clase === 'fondos' ? b.fondo : clase === 'bonos' ? b.descripcion : b.nombre, b.ticker),
     isin: txt(b.cusipIsin),
     ticker: txt(b.ticker),
     claseFondo: clase === 'fondos' ? txt(b.clase) : '',
@@ -114,15 +120,16 @@ export function operacionesDeSolicitud(r: any): Operacion[] {
   if (typeof bloques === 'string') { try { bloques = JSON.parse(bloques) } catch { bloques = null } }
   if (Array.isArray(bloques) && bloques.length > 0) {
     return bloques
+      .filter((b) => !b?.cancelada)   // activo cancelado suelto (el Blotter lo muestra tachado)
       .map((b) => desdeBloque(b, ladoDe(r.tipo_operacion), cliente))
-      .filter((op): op is Operacion => !!op && !!op.nombre)
+      .filter((op): op is Operacion => !!op)
   }
   const clase = claseDe(r.instrumento_tipo)
   const lado = ladoDe(r.tipo_operacion)
-  if (!clase || !lado || !txt(r.instrumento_nombre)) return []
+  if (!clase || !lado) return []
   return [{
     clase, lado, cliente,
-    nombre: txt(r.instrumento_nombre), isin: txt(r.cusip_isin), ticker: txt(r.symbol),
+    nombre: nombreODefecto(r.instrumento_nombre, r.symbol), isin: txt(r.cusip_isin), ticker: txt(r.symbol),
     claseFondo: clase === 'fondos' ? txt(r.clase) : '', moneda: txt(r.moneda),
     cupon: clase === 'bonos' ? txt(r.cupon) : '', vencimiento: clase === 'bonos' ? txt(r.maturity) : '',
   }]
@@ -145,17 +152,17 @@ async function operacionesBlotterAnterior(desde: string, hasta: string): Promise
             o.client_number, o.client_name
        from order_history_items i
        join order_history o on o.id = i.order_id
-      where o.created_at >= $1 and o.created_at <= $2 and coalesce(i.estado, '') <> 'cancelada'`,
+      where o.created_at >= $1 and o.created_at <= $2 and i.cancelado_at is null and coalesce(i.estado, '') <> 'cancelada'`,
     [`${desde}T00:00:00.000-03:00`, `${hasta}T23:59:59.999-03:00`]
   )
   const ops: Operacion[] = []
   for (const r of rows) {
     const clase = claseDe(r.order_type)
     const lado = ladoDe(r.operation_type)
-    if (!clase || !lado || !txt(r.instrument_name)) continue
+    if (!clase || !lado) continue
     ops.push({
       clase, lado, cliente: txt(r.client_number) || txt(r.client_name),
-      nombre: txt(r.instrument_name), isin: txt(r.cusip), ticker: txt(r.symbol), claseFondo: '',
+      nombre: nombreODefecto(r.instrument_name, r.symbol), isin: txt(r.cusip), ticker: txt(r.symbol), claseFondo: '',
       moneda: txt(r.moneda), cupon: clase === 'bonos' ? txt(r.cupon) : '', vencimiento: clase === 'bonos' ? txt(r.maturity) : '',
     })
   }
@@ -214,6 +221,9 @@ const ALIAS_FAMILIA: Record<string, string> = {
   'brands global investment morgan stanley': 'brands global morgan stanley',
   'high man opportunities yield': 'global high man opportunities yield',
   'global high janus yield': 'bond global high janus yield',
+  // Thornburg Investment Income Builder y Equity Income Builder (UCITS): mismo fondo, clases distintas
+  'builder equity income thornburg': 'builder income investment thornburg',
+  'builder global income investment thornburg': 'builder income investment thornburg',
 }
 
 const sinAcentos = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()

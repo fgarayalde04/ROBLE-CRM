@@ -69,7 +69,7 @@ export default function MasOperadoClient({ puedeCrearPlantilla }: { puedeCrearPl
         <div>
           <h1 className="text-2xl font-semibold text-gray-900">Lo más operado</h1>
           <p className="mt-1 text-sm text-gray-500">
-            Lo que más se compró y vendió en la empresa, según las órdenes enviadas desde la plataforma (sin canceladas, devueltas ni rechazadas por el cliente).
+            Lo que más se compró y vendió en la empresa: cuenta las mismas líneas que el Blotter (cada activo de cada orden), sin las canceladas.
           </p>
         </div>
         {puedeCrearPlantilla && plantilla && (

@@ -138,3 +138,24 @@ describe('nombres reales de las órdenes', () => {
     expect(familiaFondo('JPMORGAN U.S. VALUE FUND CLASS A (ACC)(USD)')).not.toBe(familiaFondo('MFS MERIDIAN U.S. VALUE FUND CLASS A1 (USD)'))
   })
 })
+
+describe('igual que el Blotter', () => {
+  it('no cuenta un activo cancelado suelto; sin nombre usa el ticker', () => {
+    const ops = operacionesDeSolicitud({
+      tipo_operacion: 'compra',
+      assets_json: [
+        { type: 'acciones', nombre: '', ticker: 'qubt', operacion: 'compra' },
+        { type: 'acciones', nombre: 'Apple', ticker: 'AAPL', operacion: 'compra', cancelada: true },
+      ],
+    })
+    expect(ops).toHaveLength(1)
+    expect(ops[0]).toMatchObject({ nombre: 'QUBT', ticker: 'qubt' })
+  })
+  it('una orden sin nombre igual cuenta', () => {
+    expect(operacionesDeSolicitud({ tipo_operacion: 'venta', instrumento_tipo: 'acciones' })[0].nombre).toBe('SIN NOMBRE')
+  })
+  it('Thornburg: Investment y Equity Income Builder son el mismo fondo', () => {
+    expect(familiaFondo('THORNBURG INVESTMENT INCOME BUILDER FUND CLASS I (USD)'))
+      .toBe(familiaFondo('THORNBURG GLOBAL INVT PLC EQUITY INCOME BUILDER FD CL A USD'))
+  })
+})
