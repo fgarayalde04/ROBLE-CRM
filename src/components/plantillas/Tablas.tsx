@@ -98,7 +98,7 @@ export function ComparativoFondos({ datos, logoSrc = '/download.png' }: { datos:
                     </tr>
                   )}
                   {g.filas.map((f) => (
-                    <tr key={f.isin || f.nombre}>
+                    <tr key={f.manual_id || f.isin || f.nombre}>
                       <td style={{ ...td, whiteSpace: 'normal', lineHeight: '15px', padding: '6px 6px' }}>
                         <div style={{ fontWeight: 700 }}>{f.nombre}</div>
                         {f.gestora && <div style={{ fontSize: 10.5, color: GRIS }}>{f.gestora}</div>}

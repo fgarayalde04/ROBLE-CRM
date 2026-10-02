@@ -213,6 +213,7 @@ export function analisisBonosVacio(): AnalisisBonosDatos {
 // guarda una foto de los números: el PDF no cambia hasta que se actualiza.
 
 export interface FilaComparativo {
+  manual_id?: string           // fondo agregado a mano (no está en el Monitor)
   isin: string
   nombre: string
   gestora: string
@@ -244,6 +245,7 @@ export interface ComparativoFondosDatos {
   subtitulo: string
   comentario: string
   asset_class: string          // categoría del Monitor de la que salen los fondos
+  subcategoria_filtro?: string // '' = todas las subcategorías
   fecha_datos: string
   filas: FilaComparativo[]
 }
@@ -372,6 +374,7 @@ export function camposFaltantes(tipo: TipoPlantilla, datos: any): string[] {
     if (!datos?.periodo?.trim()) faltan.push('Mes')
     if (tipo === 'comparativo_fondos') {
       if (!datos?.filas?.length) faltan.push('Fondos del comparativo')
+      if (datos?.filas?.some((f: any) => !String(f.nombre ?? '').trim())) faltan.push('Nombre de los fondos agregados a mano')
     } else {
       if (!datos?.vision?.trim()) faltan.push('Nuestra visión (texto de abajo)')
       const filas = datos?.compras ?? []

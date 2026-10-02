@@ -3,7 +3,7 @@
 import { Fragment, useEffect, useState } from 'react'
 import Link from 'next/link'
 import {
-  COLUMNAS_REND_FONDO, filaBonoVacia, filaFondoVacia,
+  COLUMNAS_COMPARATIVO, COLUMNAS_REND_FONDO, filaBonoVacia, filaFondoVacia,
   type ComparativoFondosDatos, type FilaComparativo, type MasOperadoDatos,
 } from '@/lib/plantillas/tipos'
 import { INICIO_HISTORICO, hoyMontevideo, labelRango, moverPeriodo, periodoMes } from '@/lib/masOperado/periodos'
@@ -68,22 +68,37 @@ export function FormComparativo({ datos, set }: { datos: ComparativoFondosDatos;
   useEffect(() => { traer().catch((e) => setError(e.message)) }, [])
 
   const filas = datos.filas ?? []
+  const manuales = filas.filter((f) => f.manual_id)
+  const delMonitor = filas.filter((f) => !f.manual_id)
   const cat = categorias?.find((c) => c.categoria === datos.asset_class)
-  const elegidos = new Set(filas.map((f) => f.isin))
+  const sub = datos.subcategoria_filtro ?? ''
+  const subcategorias = cat ? Array.from(new Set(cat.fondos.map((f) => f.subcategoria).filter(Boolean))) : []
+  const visibles = cat ? cat.fondos.filter((f) => !sub || f.subcategoria === sub) : []
+  const elegidos = new Set(delMonitor.map((f) => f.isin))
+
+  // El título sigue a la categoría / subcategoría mientras no se lo haya cambiado a mano
+  const tituloAuto = (nuevo: string) =>
+    !datos.titulo?.trim() || datos.titulo === datos.asset_class || (!!sub && datos.titulo === sub) ? nuevo : datos.titulo
 
   function elegirCategoria(nombre: string) {
     const c = categorias?.find((x) => x.categoria === nombre)
     if (!c) return
-    if (filas.length && !confirm('Se reemplazan los fondos de la tabla por los de la nueva categoría. ¿Seguir?')) return
-    // El título sigue a la categoría mientras no se lo haya cambiado a mano
-    const titulo = !datos.titulo?.trim() || datos.titulo === datos.asset_class ? c.categoria : datos.titulo
-    set({ asset_class: c.categoria, titulo, filas: c.fondos, fecha_datos: c.fecha_datos || datos.fecha_datos })
+    if (filas.length && !confirm('Se reemplazan los fondos de la tabla (también los agregados a mano) por los de la nueva categoría. ¿Seguir?')) return
+    set({ asset_class: c.categoria, subcategoria_filtro: '', titulo: tituloAuto(c.categoria), filas: c.fondos, fecha_datos: c.fecha_datos || datos.fecha_datos })
+  }
+
+  function elegirSubcategoria(s: string) {
+    if (!cat) return
+    const delSub = cat.fondos.filter((f) => !s || f.subcategoria === s)
+    set({ subcategoria_filtro: s, titulo: tituloAuto(s || cat.categoria), filas: [...delSub, ...manuales] })
   }
 
   function alternar(f: FilaComparativo) {
     if (!cat) return
-    const nuevos = elegidos.has(f.isin) ? filas.filter((x) => x.isin !== f.isin) : cat.fondos.filter((x) => elegidos.has(x.isin) || x.isin === f.isin)
-    set({ filas: nuevos })
+    const nuevos = elegidos.has(f.isin)
+      ? delMonitor.filter((x) => x.isin !== f.isin)
+      : cat.fondos.filter((x) => elegidos.has(x.isin) || x.isin === f.isin)
+    set({ filas: [...nuevos, ...manuales] })
   }
 
   async function actualizar() {
@@ -92,13 +107,22 @@ export function FormComparativo({ datos, set }: { datos: ComparativoFondosDatos;
       const cats = await traer()
       const c = cats.find((x) => x.categoria === datos.asset_class)
       const porIsin = new Map(cats.flatMap((x) => x.fondos).map((f) => [f.isin, f]))
-      set({ filas: filas.map((f) => porIsin.get(f.isin) ?? f), ...(c?.fecha_datos ? { fecha_datos: c.fecha_datos } : {}) })
+      set({ filas: filas.map((f) => (f.manual_id ? f : porIsin.get(f.isin) ?? f)), ...(c?.fecha_datos ? { fecha_datos: c.fecha_datos } : {}) })
     } catch (e: any) {
       setError(e.message)
     } finally {
       setActualizando(false)
     }
   }
+
+  const setManual = (id: string, patch: Partial<FilaComparativo>) =>
+    set({ filas: filas.map((f) => (f.manual_id === id ? { ...f, ...patch } : f)) })
+  const agregarManual = () => set({
+    filas: [...filas, {
+      manual_id: Math.random().toString(36).slice(2, 10), isin: '', nombre: '', gestora: '', moneda: 'USD', subcategoria: sub,
+      r_ytd: null, r_1y: null, r_3y: null, r_5y: null, y_2025: null, y_2024: null, y_2023: null,
+    }],
+  })
 
   return (
     <>
@@ -115,17 +139,24 @@ export function FormComparativo({ datos, set }: { datos: ComparativoFondosDatos;
               {categorias?.map((c) => <option key={c.categoria} value={c.categoria}>{c.categoria} ({c.fondos.length})</option>)}
             </select>
           </div>
+          <div className="col-span-2 sm:col-span-1">
+            <label className={labelCls}>Subcategoría</label>
+            <select className={input} value={sub} onChange={(e) => elegirSubcategoria(e.target.value)} disabled={!cat || subcategorias.length === 0}>
+              <option value="">Todas</option>
+              {subcategorias.map((s) => <option key={s} value={s}>{s} ({cat!.fondos.filter((f) => f.subcategoria === s).length})</option>)}
+            </select>
+          </div>
           <Campo medio label="Datos al" value={datos.fecha_datos} placeholder="30/09/2026" onChange={(v) => set({ fecha_datos: v })} />
         </div>
 
         {cat && (
           <div className="mt-3 border border-gray-200 rounded-lg divide-y divide-gray-100 max-h-80 overflow-y-auto">
-            {cat.fondos.map((f) => (
+            {visibles.map((f) => (
               <label key={f.isin} className="flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-gray-50 cursor-pointer">
                 <input type="checkbox" checked={elegidos.has(f.isin)} onChange={() => alternar(f)} />
                 <span className="flex-1 min-w-0">
                   <span className="text-gray-800">{f.nombre}</span>
-                  {f.subcategoria && <span className="text-gray-400"> · {f.subcategoria}</span>}
+                  {f.subcategoria && !sub && <span className="text-gray-400"> · {f.subcategoria}</span>}
                 </span>
                 <span className="text-gray-500 tabular-nums">YTD {pct(f.r_ytd)}</span>
               </label>
@@ -137,14 +168,92 @@ export function FormComparativo({ datos, set }: { datos: ComparativoFondosDatos;
         )}
         {filas.length > 0 && (
           <div className="mt-2 flex items-center justify-between gap-2 text-xs text-gray-500">
-            <span>{filas.length} {filas.length === 1 ? 'fondo' : 'fondos'} en la tabla</span>
+            <span>{filas.length} {filas.length === 1 ? 'fondo' : 'fondos'} en la tabla{manuales.length ? ` (${manuales.length} a mano)` : ''}</span>
             <button type="button" onClick={actualizar} disabled={actualizando} className="text-blue-600 hover:underline disabled:opacity-50">
               {actualizando ? 'Actualizando…' : 'Actualizar rendimientos'}
             </button>
           </div>
         )}
       </div>
+
+      <div>
+        <p className={tituloCls}>Fondos que no están en el Monitor</p>
+        <div className="space-y-3">
+          {manuales.map((f) => (
+            <FondoManual key={f.manual_id} f={f} subcategorias={subcategorias}
+              onChange={(patch) => setManual(f.manual_id!, patch)}
+              onQuitar={() => set({ filas: filas.filter((x) => x.manual_id !== f.manual_id) })} />
+          ))}
+        </div>
+        <button
+          type="button" onClick={agregarManual}
+          className="mt-2 w-full py-2 text-xs font-semibold border border-dashed border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50"
+        >
+          + Agregar fondo a mano
+        </button>
+      </div>
     </>
+  )
+}
+
+function FondoManual({ f, subcategorias, onChange, onQuitar }: {
+  f: FilaComparativo; subcategorias: string[]; onChange: (p: Partial<FilaComparativo>) => void; onQuitar: () => void
+}) {
+  const [buscando, setBuscando] = useState(false)
+  const [aviso, setAviso] = useState<string | null>(null)
+  const listId = `subcats-${f.manual_id}`
+
+  async function buscar() {
+    const isin = f.isin.trim().toUpperCase()
+    if (!isin) { setAviso('Escribí el ISIN para buscar'); return }
+    setBuscando(true); setAviso(null)
+    try {
+      const res = await fetch(`/api/fund-monitor/lookup?isin=${encodeURIComponent(isin)}&nombre=${encodeURIComponent(f.nombre)}`)
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'No se pudo buscar')
+      if (!data.found) { setAviso('No se encontró en el Monitor ni en Davinci: completalo a mano.'); return }
+      const r = data.returns
+      onChange({
+        isin, nombre: f.nombre.trim() || data.nombre || '',
+        r_ytd: r.return_ytd, r_1y: r.return_1y, r_3y: r.return_3y, r_5y: r.return_5y,
+        y_2025: r.return_2025, y_2024: r.return_2024, y_2023: r.return_2023,
+      })
+      setAviso(data.source === 'monitor' ? 'Rendimientos del Monitor de fondos.' : 'Rendimientos de Davinci.')
+    } catch (e: any) {
+      setAviso(e.message)
+    } finally {
+      setBuscando(false)
+    }
+  }
+
+  return (
+    <div className="border border-gray-200 rounded-lg p-3 space-y-2">
+      <div className="flex items-center gap-2">
+        <input className={`${celda} flex-1 ${!f.nombre.trim() ? 'border-amber-300' : ''}`} placeholder="Nombre del fondo" value={f.nombre} onChange={(e) => onChange({ nombre: e.target.value })} />
+        <button type="button" onClick={onQuitar} className="px-1 text-red-500 text-xs" aria-label="Quitar">✕</button>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 2fr', gap: 4 }}>
+        <input className={celda} placeholder="Gestora" value={f.gestora} onChange={(e) => onChange({ gestora: e.target.value })} />
+        <input className={celda} placeholder="Moneda" value={f.moneda} onChange={(e) => onChange({ moneda: e.target.value })} />
+        <input className={celda} placeholder="Subcategoría" list={listId} value={f.subcategoria} onChange={(e) => onChange({ subcategoria: e.target.value })} />
+        <datalist id={listId}>{subcategorias.map((s) => <option key={s} value={s} />)}</datalist>
+      </div>
+      <div className="flex items-center gap-2">
+        <input className={`${celda} font-mono flex-1`} placeholder="ISIN (opcional, para buscar los rendimientos)" value={f.isin} onChange={(e) => onChange({ isin: e.target.value.toUpperCase() })} />
+        <button type="button" onClick={buscar} disabled={buscando} className="text-xs text-blue-600 hover:underline whitespace-nowrap disabled:opacity-50">
+          {buscando ? 'Buscando…' : 'Buscar rendimientos'}
+        </button>
+      </div>
+      {aviso && <p className="text-[11px] text-gray-500">{aviso}</p>}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 4 }}>
+        {COLUMNAS_COMPARATIVO.map((c) => (
+          <label key={c.key} className="flex flex-col">
+            <span className="text-[9px] text-gray-400 uppercase">{c.label}</span>
+            <RendInput valor={(f[c.key] as number | null) ?? null} onChange={(v) => onChange({ [c.key]: v } as Partial<FilaComparativo>)} />
+          </label>
+        ))}
+      </div>
+    </div>
   )
 }
 
