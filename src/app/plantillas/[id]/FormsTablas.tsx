@@ -1,9 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import Link from 'next/link'
 import {
-  filaBonoVacia, filaFondoVacia,
+  COLUMNAS_REND_FONDO, filaBonoVacia, filaFondoVacia,
   type ComparativoFondosDatos, type FilaComparativo, type MasOperadoDatos,
 } from '@/lib/plantillas/tipos'
 import { INICIO_HISTORICO, hoyMontevideo, labelRango, moverPeriodo, periodoMes } from '@/lib/masOperado/periodos'
@@ -233,7 +233,7 @@ export function FormMasOperado({ tipo, datos, set }: {
       </div>
 
       <TablaEditable titulo="Más comprados" tipo={tipo} filas={datos.compras ?? []} onChange={(f) => set({ compras: f })} />
-      {fondos && <p className="text-[11px] text-gray-400 -mt-3">Los rendimientos salen del Monitor de fondos; los fondos que no están se buscan en Davinci por ISIN al cargar (puede tardar unos segundos por fondo). Se actualizan con “Volver a cargar”.</p>}
+      {fondos && <p className="text-[11px] text-gray-400 -mt-3">Los rendimientos (en %) salen del Monitor de fondos o de Davinci; los que no se completen se pueden escribir a mano debajo de cada fondo. “Volver a cargar” los reemplaza por los automáticos.</p>}
 
       <div>
         <p className={tituloCls}>Texto de abajo</p>
@@ -276,30 +276,41 @@ function TablaEditable({ titulo, tipo, filas, onChange }: {
             <tr className="text-gray-400">
               <th className="w-5" />
               {cols.map((c) => <th key={c.key} className={`text-left font-medium pb-1 px-0.5 ${c.ancho}`}>{c.label}</th>)}
-              {tipo === 'mas_operado_fondos' && <th className="text-left font-medium pb-1 px-1">Rend.</th>}
               <th />
             </tr>
           </thead>
           <tbody>
             {filas.map((f, i) => (
-              <tr key={i}>
+              <Fragment key={i}>
+              <tr>
                 <td className="text-gray-400 pr-1">{i + 1}</td>
                 {cols.map((c) => (
                   <td key={c.key} className="px-0.5 py-0.5">
                     <input className={`${celda} ${c.key === 'nombre' && !String(f.nombre ?? '').trim() ? 'border-amber-300' : ''}`} value={f[c.key] ?? ''} onChange={(e) => upd(i, c.key, e.target.value)} />
                   </td>
                 ))}
-                {tipo === 'mas_operado_fondos' && (
-                  <td className="px-1 text-[10px] text-gray-400 whitespace-nowrap tabular-nums" title="YTD · 1 año">
-                    {f.r_ytd == null ? 'sin datos' : `YTD ${pct(f.r_ytd)}`}
-                  </td>
-                )}
                 <td className="whitespace-nowrap pl-1">
                   <button type="button" onClick={() => mover(i, -1)} disabled={i === 0} className="px-1 text-gray-500 disabled:opacity-30">↑</button>
                   <button type="button" onClick={() => mover(i, 1)} disabled={i === filas.length - 1} className="px-1 text-gray-500 disabled:opacity-30">↓</button>
                   <button type="button" onClick={() => onChange(filas.filter((_, j) => j !== i))} className="px-1 text-red-500" aria-label="Quitar">✕</button>
                 </td>
               </tr>
+              {tipo === 'mas_operado_fondos' && (
+                <tr>
+                  <td />
+                  <td colSpan={cols.length + 1} className="pb-2 pt-0.5">
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: 4 }}>
+                      {COLUMNAS_REND_FONDO.map((c) => (
+                        <label key={c.key} className="flex flex-col">
+                          <span className="text-[9px] text-gray-400 uppercase">{c.label}</span>
+                          <RendInput valor={f[c.key] ?? null} onChange={(v) => onChange(filas.map((x, j) => (j === i ? { ...x, [c.key]: v } : x)))} />
+                        </label>
+                      ))}
+                    </div>
+                  </td>
+                </tr>
+              )}
+              </Fragment>
             ))}
           </tbody>
         </table>
@@ -313,5 +324,36 @@ function TablaEditable({ titulo, tipo, filas, onChange }: {
         + Agregar a mano
       </button>
     </div>
+  )
+}
+
+// Rendimiento en %: acepta "5,23", "5.23", "-3,1%" o vacío. Guarda el número
+// (o null) mientras se escribe, sin perder la coma a medio tipear.
+function parseRend(t: string): number | null | undefined {
+  const s = t.trim().replace('%', '').replace(/\s/g, '').replace(',', '.')
+  if (!s) return null
+  return /^[-+]?\d*\.?\d+$/.test(s) ? Number(s) : undefined   // undefined = todavía no es un número
+}
+
+function RendInput({ valor, onChange }: { valor: number | null; onChange: (v: number | null) => void }) {
+  const fmt = (v: number | null) => (v == null ? '' : String(v).replace('.', ','))
+  const [txt, setTxt] = useState(fmt(valor))
+  useEffect(() => {
+    if (parseRend(txt) !== valor) setTxt(fmt(valor))   // cambió desde afuera (p. ej. volver a cargar)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [valor])
+  const invalido = parseRend(txt) === undefined
+  return (
+    <input
+      inputMode="decimal"
+      className={`${celda} text-right tabular-nums ${invalido ? 'border-red-300' : ''}`}
+      value={txt}
+      placeholder="—"
+      onChange={(e) => {
+        setTxt(e.target.value)
+        const v = parseRend(e.target.value)
+        if (v !== undefined) onChange(v)
+      }}
+    />
   )
 }
