@@ -25,7 +25,7 @@ function camposPost(tipo: string, datos: any) {
     }
   }
   if (tipo === 'comparativo_fondos' || tipo === 'mas_operado_fondos' || tipo === 'mas_operado_bonos') {
-    const primero = String(datos?.comentario ?? '').split(/\n\s*\n/)[0]?.trim() ?? ''
+    const primero = String(datos?.comentario || datos?.vision || '').split(/\n\s*\n/)[0]?.trim() ?? ''
     return {
       summary: [datos?.subtitulo?.trim(), primero.length > 320 ? `${primero.slice(0, 317)}…` : primero].filter(Boolean).join('. ') || null,
     }

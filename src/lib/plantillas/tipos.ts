@@ -30,18 +30,18 @@ export const TIPOS_PLANTILLA: Record<TipoPlantilla, { label: string; plural: str
     descripcion: 'Tabla de rendimientos de los fondos de una categoría o asset class, tomada del Monitor de fondos.',
   },
   mas_operado_fondos: {
-    label: 'Fondos más operados',
-    plural: 'Fondos más operados',
+    label: 'Fondos más comprados',
+    plural: 'Fondos más comprados',
     categoriaResearch: 'fondo',
     web: false,
-    descripcion: 'Los fondos más comprados y vendidos del mes, armado solo a partir de las órdenes enviadas en la plataforma.',
+    descripcion: 'Los fondos que más compraron los clientes (sale solo de las órdenes), con sus rendimientos y nuestra visión de mercado.',
   },
   mas_operado_bonos: {
-    label: 'Bonos más operados',
-    plural: 'Bonos más operados',
+    label: 'Bonos más comprados',
+    plural: 'Bonos más comprados',
     categoriaResearch: 'bono',
     web: false,
-    descripcion: 'Los bonos más comprados y vendidos del mes, armado solo a partir de las órdenes enviadas en la plataforma.',
+    descripcion: 'Los bonos que más compraron los clientes (sale solo de las órdenes), con cupón, vencimiento y nuestra visión de renta fija.',
   },
 }
 
@@ -259,23 +259,36 @@ export function comparativoFondosVacio(): ComparativoFondosDatos {
 }
 
 // ── Lo más operado (fondos / bonos) ─────────────────────────────────────────
-// Mismas columnas que la carga de órdenes de cada tipo, sin montos ni nominales.
+// Solo lo más COMPRADO por los clientes, por nombre (sin ISIN ni clases), con
+// los rendimientos de cada fondo y, abajo, nuestra visión de mercado.
 
 export interface FilaFondoOperado {
   nombre: string
-  isin: string
-  clase: string
-  moneda: string
+  r_1y: number | null
+  r_3y: number | null
+  r_5y: number | null
   r_ytd: number | null
+  y_2025: number | null
+  y_2024: number | null
+  y_2023: number | null
 }
 
 export interface FilaBonoOperado {
   nombre: string
-  isin: string
   cupon: string
   vencimiento: string
   moneda: string
 }
+
+export const COLUMNAS_REND_FONDO: { key: Exclude<keyof FilaFondoOperado, 'nombre'>; label: string; destacada?: boolean }[] = [
+  { key: 'r_ytd', label: 'YTD', destacada: true },
+  { key: 'r_1y', label: '1 año' },
+  { key: 'r_3y', label: '3 años' },
+  { key: 'r_5y', label: '5 años' },
+  { key: 'y_2025', label: '2025' },
+  { key: 'y_2024', label: '2024' },
+  { key: 'y_2023', label: '2023' },
+]
 
 export interface MasOperadoDatos<F> {
   categoria: string
@@ -285,20 +298,21 @@ export interface MasOperadoDatos<F> {
   comentario: string
   desde: string                // período de las órdenes (YYYY-MM-DD)
   hasta: string
-  cantidad: number             // filas por tabla al cargar desde las órdenes
+  cantidad: number             // filas al cargar desde las órdenes
   compras: F[]
-  ventas: F[]
+  vision_titulo: string        // texto de abajo: visión de mercado / por qué los cambios
+  vision: string
 }
 
 export type MasOperadoFondosDatos = MasOperadoDatos<FilaFondoOperado>
 export type MasOperadoBonosDatos = MasOperadoDatos<FilaBonoOperado>
 
 export function filaFondoVacia(): FilaFondoOperado {
-  return { nombre: '', isin: '', clase: '', moneda: 'USD', r_ytd: null }
+  return { nombre: '', r_1y: null, r_3y: null, r_5y: null, r_ytd: null, y_2025: null, y_2024: null, y_2023: null }
 }
 
 export function filaBonoVacia(): FilaBonoOperado {
-  return { nombre: '', isin: '', cupon: '', vencimiento: '', moneda: 'USD' }
+  return { nombre: '', cupon: '', vencimiento: '', moneda: 'USD' }
 }
 
 export function masOperadoVacio(tipo: 'mas_operado_fondos' | 'mas_operado_bonos'): MasOperadoDatos<any> {
@@ -306,21 +320,23 @@ export function masOperadoVacio(tipo: 'mas_operado_fondos' | 'mas_operado_bonos'
   return {
     categoria: fondos ? 'Fondos de inversión' : 'Renta fija',
     periodo: periodoActual(),
-    titulo: fondos ? 'Los fondos más operados' : 'Los bonos más operados',
-    subtitulo: fondos ? 'Lo que más compraron y vendieron nuestros clientes' : 'Los bonos que más compraron y vendieron nuestros clientes',
+    titulo: fondos ? 'Los fondos más comprados' : 'Los bonos más comprados',
+    subtitulo: fondos ? 'Los fondos que más compraron nuestros clientes' : 'Los bonos que más compraron nuestros clientes',
     comentario: '',
     desde: '',
     hasta: '',
-    cantidad: 5,
+    cantidad: 8,
     compras: [],
-    ventas: [],
+    vision_titulo: fondos ? 'Nuestra visión' : 'Nuestra visión de renta fija',
+    vision: '',
   }
 }
 
-export function masOperadoDisclaimer(desde: string, hasta: string) {
+export function masOperadoDisclaimer(desde: string, hasta: string, conRendimientos = false) {
   const f = (s: string) => (s ? s.split('-').reverse().join('/') : '—')
   const rango = desde === INICIO_HISTORICO ? `hasta el ${f(hasta)}` : `entre el ${f(desde)} y el ${f(hasta)}`
-  return `Ranking elaborado por Roble Capital a partir de la cantidad de órdenes de compra y de venta de sus clientes ${rango}. No refleja montos operados ni constituye una recomendación de compra o venta. Este material tiene fines exclusivamente informativos y no constituye una oferta ni invitación a invertir. Rendimientos pasados no garantizan resultados futuros. Antes de invertir, consulte con su asesor para evaluar si el instrumento se ajusta a su perfil de riesgo. Roble Capital Wealth Management.`
+  const rend = conRendimientos ? ' Rendimientos en porcentaje, en la moneda de cada fondo y de una clase representativa; fuente: gestoras y proveedores de datos, sujetos a revisión.' : ''
+  return `Ranking elaborado por Roble Capital a partir de la cantidad de órdenes de compra de sus clientes ${rango}. No refleja montos operados ni constituye una recomendación de compra o venta.${rend} Este material tiene fines exclusivamente informativos y no constituye una oferta ni invitación a invertir. Rendimientos pasados no garantizan resultados futuros. Antes de invertir, consulte con su asesor. Roble Capital Wealth Management.`
 }
 
 export function comparativoDisclaimer(fecha: string) {
@@ -350,7 +366,8 @@ export function camposFaltantes(tipo: TipoPlantilla, datos: any): string[] {
     if (tipo === 'comparativo_fondos') {
       if (!datos?.filas?.length) faltan.push('Fondos del comparativo')
     } else {
-      const filas = [...(datos?.compras ?? []), ...(datos?.ventas ?? [])]
+      if (!datos?.vision?.trim()) faltan.push('Nuestra visión (texto de abajo)')
+      const filas = datos?.compras ?? []
       if (!filas.length) faltan.push('Instrumentos (cargalos desde las órdenes)')
       if (filas.some((f: any) => !f.nombre?.trim())) faltan.push('Nombre de todos los instrumentos')
     }

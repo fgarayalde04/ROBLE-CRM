@@ -77,7 +77,7 @@ export default function MasOperadoClient({ puedeCrearPlantilla }: { puedeCrearPl
             type="button" onClick={armarPlantilla} disabled={creando || cargando || !datos || datos.compras.length + datos.ventas.length === 0}
             className="px-3 py-1.5 text-sm bg-[#2D3F52] text-white rounded-md hover:bg-[#354A5E] disabled:opacity-40"
           >
-            {creando ? 'Creando…' : `Armar plantilla de ${clase} más operados`}
+            {creando ? 'Creando…' : `Armar plantilla de ${clase} más comprados`}
           </button>
         )}
       </div>

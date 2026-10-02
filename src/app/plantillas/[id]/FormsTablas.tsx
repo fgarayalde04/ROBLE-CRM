@@ -154,13 +154,10 @@ type ColEdit = { key: string; label: string; ancho: string }
 
 const COLS_EDIT: Record<'mas_operado_fondos' | 'mas_operado_bonos', ColEdit[]> = {
   mas_operado_fondos: [
-    { key: 'nombre', label: 'Fondo', ancho: 'min-w-[160px]' },
-    { key: 'isin', label: 'ISIN', ancho: 'w-28' },
-    { key: 'moneda', label: 'Moneda', ancho: 'w-16' },
+    { key: 'nombre', label: 'Fondo', ancho: 'min-w-[200px]' },
   ],
   mas_operado_bonos: [
     { key: 'nombre', label: 'Bono', ancho: 'min-w-[160px]' },
-    { key: 'isin', label: 'ISIN', ancho: 'w-28' },
     { key: 'cupon', label: 'Cupón', ancho: 'w-20' },
     { key: 'vencimiento', label: 'Vencimiento', ancho: 'w-24' },
     { key: 'moneda', label: 'Moneda', ancho: 'w-16' },
@@ -176,15 +173,15 @@ export function FormMasOperado({ tipo, datos, set }: {
   const mes = datos.desde && datos.desde !== INICIO_HISTORICO ? datos.desde.slice(0, 7) : ''
 
   async function cargar(desde: string, hasta: string, cantidad = datos.cantidad || 5) {
-    const hayFilas = (datos.compras?.length ?? 0) + (datos.ventas?.length ?? 0) > 0
-    if (hayFilas && !confirm('Se reemplazan las tablas por lo que dicen las órdenes (se pierden los cambios hechos a mano). ¿Seguir?')) return
+    const hayFilas = (datos.compras?.length ?? 0) > 0
+    if (hayFilas && !confirm('Se reemplaza la tabla por lo que dicen las órdenes (se pierden los cambios hechos a mano en la tabla). ¿Seguir?')) return
     setCargando(true); setError(null)
     try {
       const res = await fetch(`/api/plantillas/fuentes?fuente=ordenes&tipo=${tipo}&desde=${desde}&hasta=${hasta}&cantidad=${cantidad}`)
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'No se pudieron leer las órdenes')
       const periodo = datos.desde === desde && datos.hasta === hasta ? datos.periodo : labelRango(desde, hasta)
-      set({ desde, hasta, cantidad, periodo, compras: data.compras, ventas: data.ventas })
+      set({ desde, hasta, cantidad, periodo, compras: data.compras })
     } catch (e: any) {
       setError(e.message)
     } finally {
@@ -201,7 +198,7 @@ export function FormMasOperado({ tipo, datos, set }: {
 
   return (
     <>
-      <Encabezado datos={datos} set={set} phTitulo={fondos ? 'Los fondos más operados' : 'Los bonos más operados'} />
+      <Encabezado datos={datos} set={set} phTitulo={fondos ? 'Los fondos más comprados' : 'Los bonos más comprados'} />
 
       <div>
         <p className={tituloCls}>Órdenes del período <span className="normal-case tracking-normal font-normal">— el ranking sale solo de las órdenes enviadas (<Link href="/mas-operado" className="text-blue-600 hover:underline">ver detalle</Link>)</span></p>
@@ -211,10 +208,10 @@ export function FormMasOperado({ tipo, datos, set }: {
             <input type="month" className={input} value={mes} max={hoyMontevideo().slice(0, 7)} onChange={(e) => elegirMes(e.target.value)} disabled={cargando} />
           </div>
           <div className="col-span-2 sm:col-span-1">
-            <label className={labelCls}>Instrumentos por tabla</label>
+            <label className={labelCls}>Cantidad de {fondos ? 'fondos' : 'bonos'}</label>
             <select className={input} value={datos.cantidad || 5} disabled={cargando || !datos.desde}
               onChange={(e) => cargar(datos.desde, datos.hasta, Number(e.target.value))}>
-              {[3, 4, 5, 6, 7, 8, 10].map((n) => <option key={n} value={n}>{n}</option>)}
+              {[3, 4, 5, 6, 7, 8, 9, 10, 12].map((n) => <option key={n} value={n}>{n}</option>)}
             </select>
           </div>
         </div>
@@ -236,8 +233,24 @@ export function FormMasOperado({ tipo, datos, set }: {
       </div>
 
       <TablaEditable titulo="Más comprados" tipo={tipo} filas={datos.compras ?? []} onChange={(f) => set({ compras: f })} />
-      <TablaEditable titulo="Más vendidos" tipo={tipo} filas={datos.ventas ?? []} onChange={(f) => set({ ventas: f })} />
-      {fondos && <p className="text-[11px] text-gray-400">El YTD sale del Monitor de fondos (por ISIN); si el fondo no está en el Monitor queda “—”.</p>}
+      {fondos && <p className="text-[11px] text-gray-400 -mt-3">Los rendimientos salen del Monitor de fondos (o de búsquedas ya hechas en Davinci); si el fondo no está, quedan en “—”. Se actualizan con “Volver a cargar”.</p>}
+
+      <div>
+        <p className={tituloCls}>Texto de abajo</p>
+        <div className="grid grid-cols-2 gap-3">
+          <Campo label="Título" value={datos.vision_titulo} placeholder="Nuestra visión" onChange={(v) => set({ vision_titulo: v })} />
+          <div className="col-span-2">
+            <label className={labelCls}>Visión de mercado y por qué los cambios <span className="text-gray-400 font-normal">— dejá una línea en blanco entre párrafos</span></label>
+            <textarea
+              rows={7}
+              className={`${input} resize-y ${!datos.vision?.trim() ? 'border-amber-300' : ''}`}
+              value={datos.vision ?? ''}
+              placeholder={fondos ? 'Cómo vemos el mercado, por qué rotamos fondos este mes…' : 'Cómo vemos las tasas y el crédito, por qué compramos estos bonos…'}
+              onChange={(e) => set({ vision: e.target.value })}
+            />
+          </div>
+        </div>
+      </div>
     </>
   )
 }
@@ -263,6 +276,7 @@ function TablaEditable({ titulo, tipo, filas, onChange }: {
             <tr className="text-gray-400">
               <th className="w-5" />
               {cols.map((c) => <th key={c.key} className={`text-left font-medium pb-1 px-0.5 ${c.ancho}`}>{c.label}</th>)}
+              {tipo === 'mas_operado_fondos' && <th className="text-left font-medium pb-1 px-1">Rend.</th>}
               <th />
             </tr>
           </thead>
@@ -275,6 +289,11 @@ function TablaEditable({ titulo, tipo, filas, onChange }: {
                     <input className={`${celda} ${c.key === 'nombre' && !String(f.nombre ?? '').trim() ? 'border-amber-300' : ''}`} value={f[c.key] ?? ''} onChange={(e) => upd(i, c.key, e.target.value)} />
                   </td>
                 ))}
+                {tipo === 'mas_operado_fondos' && (
+                  <td className="px-1 text-[10px] text-gray-400 whitespace-nowrap tabular-nums" title="YTD · 1 año">
+                    {f.r_ytd == null ? 'sin datos' : `YTD ${pct(f.r_ytd)}`}
+                  </td>
+                )}
                 <td className="whitespace-nowrap pl-1">
                   <button type="button" onClick={() => mover(i, -1)} disabled={i === 0} className="px-1 text-gray-500 disabled:opacity-30">↑</button>
                   <button type="button" onClick={() => mover(i, 1)} disabled={i === filas.length - 1} className="px-1 text-gray-500 disabled:opacity-30">↓</button>

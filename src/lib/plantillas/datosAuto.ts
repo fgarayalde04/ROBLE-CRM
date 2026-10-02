@@ -10,22 +10,22 @@ import {
 
 const num = (v: unknown) => (v == null || v === '' || Number.isNaN(Number(v)) ? null : Number(v))
 
+// Solo las compras; fondos por nombre (las clases ya vienen unidas) con todos sus rendimientos.
 export async function filasMasOperado(tipo: 'mas_operado_fondos' | 'mas_operado_bonos', desde: string, hasta: string, cantidad: number) {
   const ranking = await getRankingMasOperado(desde, hasta, Math.max(1, Math.min(cantidad, 15)))
   if (tipo === 'mas_operado_fondos') {
-    // Si se unieron varias clases no se muestra un ISIN (cada clase tiene el suyo);
-    // el YTD es el de la clase más operada
     const fila = (i: InstrumentoOperado): FilaFondoOperado => {
-      const varias = (i.variantes?.length ?? 0) > 1
+      const r = i.rendimientos
       return {
-        nombre: i.nombre, isin: varias ? '' : i.isin, moneda: i.moneda, r_ytd: i.r_ytd,
-        clase: varias && new Set(i.variantes!.map((v) => v.clase)).size > 1 ? 'Varias' : i.clase,
+        nombre: i.nombre,
+        r_1y: r?.r_1y ?? null, r_3y: r?.r_3y ?? null, r_5y: r?.r_5y ?? null, r_ytd: r?.r_ytd ?? null,
+        y_2025: r?.y_2025 ?? null, y_2024: r?.y_2024 ?? null, y_2023: r?.y_2023 ?? null,
       }
     }
-    return { compras: ranking.fondos.compras.map(fila), ventas: ranking.fondos.ventas.map(fila) }
+    return { compras: ranking.fondos.compras.map(fila) }
   }
-  const fila = (i: InstrumentoOperado): FilaBonoOperado => ({ nombre: i.nombre, isin: i.isin, cupon: i.cupon, vencimiento: i.vencimiento, moneda: i.moneda })
-  return { compras: ranking.bonos.compras.map(fila), ventas: ranking.bonos.ventas.map(fila) }
+  const fila = (i: InstrumentoOperado): FilaBonoOperado => ({ nombre: i.nombre, cupon: i.cupon, vencimiento: i.vencimiento, moneda: i.moneda })
+  return { compras: ranking.bonos.compras.map(fila) }
 }
 
 // pg devuelve las columnas date como Date a medianoche local

@@ -1,6 +1,6 @@
 import { Fragment, type CSSProperties, type ReactNode } from 'react'
 import {
-  COLUMNAS_COMPARATIVO, comparativoDisclaimer, masOperadoDisclaimer,
+  COLUMNAS_COMPARATIVO, COLUMNAS_REND_FONDO, comparativoDisclaimer, masOperadoDisclaimer,
   type ComparativoFondosDatos, type FilaBonoOperado, type FilaFondoOperado, type MasOperadoDatos,
 } from '@/lib/plantillas/tipos'
 import {
@@ -130,60 +130,82 @@ export function ComparativoFondos({ datos, logoSrc = '/download.png' }: { datos:
   )
 }
 
-// ── Lo más operado ───────────────────────────────────────────────────────────
+// ── Lo más operado (solo compras) ────────────────────────────────────────────
 
-type Columna<F> = { label: string; valor: (f: F) => ReactNode; derecha?: boolean; ancho?: number }
+function Rank({ n }: { n: number }) {
+  return <span style={{ fontFamily: SERIF, fontWeight: 600, fontSize: 17, color: VERDE }}>{n}</span>
+}
 
-const COLS_FONDOS: Columna<FilaFondoOperado>[] = [
-  { label: 'ISIN', valor: (f) => f.isin || '—', ancho: 118 },
-  { label: 'Moneda', valor: (f) => f.moneda || '—', ancho: 62 },
-  { label: 'YTD', valor: (f) => pct(f.r_ytd), derecha: true, ancho: 64 },
-]
-
-const COLS_BONOS: Columna<FilaBonoOperado>[] = [
-  { label: 'ISIN', valor: (f) => f.isin || '—', ancho: 118 },
-  { label: 'Cupón', valor: (f) => f.cupon || '—', ancho: 74 },
-  { label: 'Vencimiento', valor: (f) => f.vencimiento || '—', ancho: 92 },
-  { label: 'Moneda', valor: (f) => f.moneda || '—', ancho: 62 },
-]
-
-function TablaRanking<F extends { nombre: string }>({ titulo, nombreCol, filas, cols }: {
-  titulo: string; nombreCol: string; filas: F[]; cols: Columna<F>[]
-}) {
+function TablaFondos({ filas }: { filas: FilaFondoOperado[] }) {
+  const cols = COLUMNAS_REND_FONDO
   return (
-    <div style={{ marginTop: 26, flexShrink: 0 }}>
-      <div style={etiquetaVerde}>{titulo}</div>
-      <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 10, fontFamily: SANS, tableLayout: 'fixed' }}>
-        <colgroup>
-          <col style={{ width: 34 }} />
-          <col />
-          {cols.map((c) => <col key={c.label} style={{ width: c.ancho }} />)}
-        </colgroup>
-        <thead>
-          <tr style={{ borderBottom: `2px solid ${VERDE}` }}>
-            <th style={th}>#</th>
-            <th style={th}>{nombreCol}</th>
-            {cols.map((c) => <th key={c.label} style={{ ...th, textAlign: c.derecha ? 'right' : 'left' }}>{c.label}</th>)}
+    <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 10, fontFamily: SANS, tableLayout: 'fixed' }}>
+      <colgroup>
+        <col style={{ width: 30 }} />
+        <col />
+        {cols.map((c) => <col key={c.key} style={{ width: 58 }} />)}
+      </colgroup>
+      <thead>
+        <tr style={{ borderBottom: `2px solid ${VERDE}` }}>
+          <th style={th}>#</th>
+          <th style={th}>Fondo</th>
+          {cols.map((c) => <th key={c.key} style={{ ...th, textAlign: 'right', color: c.destacada ? VERDE : th.color }}>{c.label}</th>)}
+        </tr>
+      </thead>
+      <tbody>
+        {filas.length === 0 && <tr><td colSpan={cols.length + 2} style={{ ...td, color: '#A0A3A7' }}>Sin compras en el período</td></tr>}
+        {filas.map((f, i) => (
+          <tr key={i}>
+            <td style={td}><Rank n={i + 1} /></td>
+            <td style={{ ...td, fontWeight: 700, whiteSpace: 'normal', lineHeight: '15px', padding: '6px 6px' }}>{vacio(f.nombre, '—')}</td>
+            {cols.map((c) => {
+              const v = f[c.key]
+              return (
+                <td key={c.key} style={{
+                  ...td, textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontSize: 12.5,
+                  fontWeight: c.destacada ? 700 : 400, background: c.destacada ? '#F1F3EE' : undefined,
+                  color: v != null && v < 0 ? NEGATIVO : GRIS_OSCURO,
+                }}>{pct(v)}</td>
+              )
+            })}
           </tr>
-        </thead>
-        <tbody>
-          {filas.length === 0 && (
-            <tr><td colSpan={cols.length + 2} style={{ ...td, color: '#A0A3A7' }}>Sin operaciones en el período</td></tr>
-          )}
-          {filas.map((f, i) => (
-            <tr key={i}>
-              <td style={{ ...td, fontFamily: SERIF, fontWeight: 600, fontSize: 17, color: VERDE }}>{i + 1}</td>
-              <td style={{ ...td, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis' }}>{vacio(f.nombre, '—')}</td>
-              {cols.map((c) => (
-                <td key={c.label} style={{ ...td, color: GRIS, textAlign: c.derecha ? 'right' : 'left', fontVariantNumeric: 'tabular-nums', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {c.valor(f)}
-                </td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+        ))}
+      </tbody>
+    </table>
+  )
+}
+
+function TablaBonos({ filas }: { filas: FilaBonoOperado[] }) {
+  const cols: { label: string; valor: (f: FilaBonoOperado) => string; ancho: number }[] = [
+    { label: 'Cupón', valor: (f) => f.cupon || '—', ancho: 90 },
+    { label: 'Vencimiento', valor: (f) => f.vencimiento || '—', ancho: 110 },
+    { label: 'Moneda', valor: (f) => f.moneda || '—', ancho: 70 },
+  ]
+  return (
+    <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 10, fontFamily: SANS, tableLayout: 'fixed' }}>
+      <colgroup>
+        <col style={{ width: 30 }} />
+        <col />
+        {cols.map((c) => <col key={c.label} style={{ width: c.ancho }} />)}
+      </colgroup>
+      <thead>
+        <tr style={{ borderBottom: `2px solid ${VERDE}` }}>
+          <th style={th}>#</th>
+          <th style={th}>Bono</th>
+          {cols.map((c) => <th key={c.label} style={th}>{c.label}</th>)}
+        </tr>
+      </thead>
+      <tbody>
+        {filas.length === 0 && <tr><td colSpan={cols.length + 2} style={{ ...td, color: '#A0A3A7' }}>Sin compras en el período</td></tr>}
+        {filas.map((f, i) => (
+          <tr key={i}>
+            <td style={td}><Rank n={i + 1} /></td>
+            <td style={{ ...td, fontWeight: 700, whiteSpace: 'normal', lineHeight: '15px', padding: '6px 6px' }}>{vacio(f.nombre, '—')}</td>
+            {cols.map((c) => <td key={c.label} style={{ ...td, color: GRIS }}>{c.valor(f)}</td>)}
+          </tr>
+        ))}
+      </tbody>
+    </table>
   )
 }
 
@@ -192,17 +214,27 @@ export function MasOperado({ tipo, datos, logoSrc = '/download.png' }: {
 }) {
   const d = datos
   const fondos = tipo === 'mas_operado_fondos'
-  const cols = (fondos ? COLS_FONDOS : COLS_BONOS) as Columna<any>[]
-  const nombreCol = fondos ? 'Fondo' : 'Bono'
+  const vision = (d.vision ?? '').split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean)
   return (
     <Hoja>
       <Encabezado categoria={d.categoria} periodo={d.periodo} logoSrc={logoSrc} />
       <Contenido>
-        <Cabecera volanta="Ranking de operaciones de clientes" titulo={vacio(d.titulo, 'Título')} subtitulo={d.subtitulo ?? ''} comentario={d.comentario ?? ''} />
-        <TablaRanking titulo="Más comprados" nombreCol={nombreCol} filas={d.compras ?? []} cols={cols} />
-        <TablaRanking titulo="Más vendidos" nombreCol={nombreCol} filas={d.ventas ?? []} cols={cols} />
+        <Cabecera volanta="Lo más comprado por nuestros clientes" titulo={vacio(d.titulo, 'Título')} subtitulo={d.subtitulo ?? ''} comentario={d.comentario ?? ''} />
+        <div style={{ marginTop: 24, flexShrink: 0 }}>
+          <div style={etiquetaVerde}>Más comprados</div>
+          {fondos ? <TablaFondos filas={d.compras ?? []} /> : <TablaBonos filas={d.compras ?? []} />}
+        </div>
+        <div style={{ marginTop: 26, flexShrink: 0 }}>
+          <div style={etiquetaVerde}>{vacio(d.vision_titulo, 'Nuestra visión')}</div>
+          <div style={{ borderTop: `1px solid ${LINEA}`, marginTop: 7 }} />
+          {vision.length
+            ? vision.map((p, i) => (
+              <p key={i} style={{ margin: i ? '8px 0 0' : '12px 0 0', fontFamily: SANS, fontSize: 14, lineHeight: '21px', color: '#33363A', whiteSpace: 'pre-line' }}>{p}</p>
+            ))
+            : <p style={{ margin: '12px 0 0', fontSize: 14, color: '#A0A3A7' }}>Nuestra visión de mercado y por qué cambiamos los fondos o compramos bonos…</p>}
+        </div>
       </Contenido>
-      <Pie texto={masOperadoDisclaimer(d.desde, d.hasta)} />
+      <Pie texto={masOperadoDisclaimer(d.desde, d.hasta, fondos)} />
     </Hoja>
   )
 }

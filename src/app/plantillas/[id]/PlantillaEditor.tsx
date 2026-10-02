@@ -273,7 +273,7 @@ function textoMailInicial(tipo: TipoPlantilla, d: any) {
     ? `la ficha de ${d.titulo || 'la nueva emisión'}${d.precio || d.tir ? ` (precio indicativo ${d.precio || '—'}, TIR ${d.tir || '—'})` : ''}`
     : tipo === 'analisis_bonos' ? `nuestro análisis de ${d.titulo || 'renta fija'}`
     : tipo === 'comparativo_fondos' ? `un comparativo de rendimientos de fondos${d.titulo ? ` de ${d.titulo}` : ''}`
-    : `los ${tipo === 'mas_operado_fondos' ? 'fondos' : 'bonos'} más operados por nuestros clientes${d.periodo ? ` en ${d.periodo}` : ''}`
+    : `los ${tipo === 'mas_operado_fondos' ? 'fondos' : 'bonos'} más comprados por nuestros clientes${d.periodo ? ` en ${d.periodo}` : ''}, junto con nuestra visión de mercado`
   return `Estimado/a cliente:\n\nLe compartimos ${que}. Encontrará el detalle en el PDF adjunto.\n\nQuedamos a disposición por cualquier consulta; puede responder este mail o contactar a su asesor.\n\nSaludos cordiales,\nRoble Capital Wealth Management`
 }
 
