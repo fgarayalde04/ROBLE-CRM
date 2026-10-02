@@ -35,7 +35,7 @@ export async function getPlantilla(id: string): Promise<PlantillaDoc | null> {
 }
 
 export async function createPlantilla(input: {
-  tipo: TipoPlantilla; titulo: string; datos: unknown; userName: string; userId: string
+  tipo: TipoPlantilla; titulo: string; datos: unknown; userName: string; userId: string | null
   researchType?: string | null; webPublicar?: boolean
 }) {
   const { rows } = await pool.query(
@@ -44,6 +44,29 @@ export async function createPlantilla(input: {
     [input.tipo, input.titulo, JSON.stringify(input.datos ?? {}), input.userName, input.userId, input.researchType ?? null, !!input.webPublicar]
   )
   return rows[0] as PlantillaDoc
+}
+
+/** Borrador automático del mes (YYYY-MM) para un tipo, si ya se creó. */
+export async function getPlantillaAuto(tipo: TipoPlantilla, periodo: string): Promise<PlantillaDoc | null> {
+  const { rows } = await pool.query(
+    `select * from plantillas_documentos where tipo = $1 and auto_periodo = $2`,
+    [tipo, periodo]
+  )
+  return rows[0] ?? null
+}
+
+/** Crea el borrador automático del mes; si otro proceso lo creó justo antes, devuelve null. */
+export async function createPlantillaAuto(input: {
+  tipo: TipoPlantilla; periodo: string; titulo: string; datos: unknown; researchType: string | null
+}): Promise<PlantillaDoc | null> {
+  const { rows } = await pool.query(
+    `insert into plantillas_documentos (tipo, titulo, datos, created_by, updated_by, research_type, web_publicar, auto_periodo)
+     values ($1, $2, $3::jsonb, 'Automático', 'Automático', $4, false, $5)
+     on conflict (tipo, auto_periodo) where auto_periodo is not null do nothing
+     returning *`,
+    [input.tipo, input.titulo, JSON.stringify(input.datos ?? {}), input.researchType, input.periodo]
+  )
+  return rows[0] ?? null
 }
 
 export async function updatePlantilla(id: string, input: { titulo: string; datos: unknown; userName: string }) {

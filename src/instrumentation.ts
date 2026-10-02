@@ -41,6 +41,7 @@ export async function register() {
 
   // Cierre del día de Órdenes (push a asesores y admin/asistentes).
   registerCierreOrdenes()
+  registerPlantillasMensuales()
 
   const tenantId = process.env.MICROSOFT_TENANT_ID
   const clientId = process.env.MICROSOFT_CLIENT_ID
@@ -135,6 +136,50 @@ export async function register() {
 // destinatario, así que reintentar o reiniciar no lo repite.
 //   ORDER_DAILY_CLOSE_ENABLED=false  → deshabilitado
 //   ORDER_DAILY_CLOSE_HOUR=18        → hora de Montevideo (default 18)
+// Plantillas de fin de mes: el día 1, desde las 9:00 (Montevideo), arma los
+// borradores de fondos y bonos más comprados del mes anterior y avisa por push.
+// La ruta es idempotente (un borrador por tipo y mes, un aviso por persona).
+// Solo en producción, para no mandar push desde desarrollo; en otro ambiente se
+// habilita con PLANTILLAS_AUTO_ENABLED=true.
+function registerPlantillasMensuales() {
+  const env = process.env.RAILWAY_ENVIRONMENT_NAME
+  if (env !== 'production' && process.env.PLANTILLAS_AUTO_ENABLED !== 'true') {
+    console.log(`[plantillas-mensuales] Deshabilitado en este ambiente (${env ?? 'local'})`)
+    return
+  }
+  if (process.env.PLANTILLAS_AUTO_ENABLED === 'false') return
+  const port = process.env.PORT ?? '3000'
+  let hechoMes = ''
+
+  async function maybeRun() {
+    const parts = Object.fromEntries(
+      new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Montevideo', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hourCycle: 'h23',
+      }).formatToParts(new Date()).map((p) => [p.type, p.value])
+    )
+    const mes = `${parts.year}-${parts.month}`
+    if (hechoMes === mes || parts.day !== '01' || parseInt(parts.hour, 10) < 9) return
+    try {
+      const headers: Record<string, string> = {}
+      if (process.env.CRON_SECRET) headers.Authorization = `Bearer ${process.env.CRON_SECRET}`
+      const res = await fetch(`http://127.0.0.1:${port}/api/cron/plantillas-mensuales?hoy=${mes}-01`, { headers })
+      const data = await res.json()
+      if (!res.ok) {
+        console.error('[plantillas-mensuales] Error:', data.error ?? res.status)
+        return
+      }
+      hechoMes = mes
+      console.log('[plantillas-mensuales]', JSON.stringify(data.resultados))
+    } catch (e: any) {
+      console.error('[plantillas-mensuales] Error:', e.message)
+    }
+  }
+
+  setTimeout(() => maybeRun(), 45000)
+  setInterval(() => maybeRun(), 15 * 60 * 1000)
+  console.log('[plantillas-mensuales] Programado — día 1 de cada mes desde las 9:00 (Montevideo)')
+}
+
 function registerCierreOrdenes() {
   if (process.env.ORDER_DAILY_CLOSE_ENABLED === 'false') {
     console.log('[cierre-ordenes] Deshabilitado (ORDER_DAILY_CLOSE_ENABLED=false)')

@@ -159,3 +159,11 @@ describe('igual que el Blotter', () => {
       .toBe(familiaFondo('THORNBURG GLOBAL INVT PLC EQUITY INCOME BUILDER FD CL A USD'))
   })
 })
+
+describe('armado automático de fin de mes', () => {
+  it('el día 1 arma el informe del mes anterior', async () => {
+    const { mesDelInforme } = await import('./plantillas/autoMensual')
+    expect(mesDelInforme('2026-10-01')).toMatchObject({ desde: '2026-09-01', hasta: '2026-09-30', label: 'Septiembre 2026' })
+    expect(mesDelInforme('2027-01-01')).toMatchObject({ desde: '2026-12-01', hasta: '2026-12-31' })
+  })
+})
