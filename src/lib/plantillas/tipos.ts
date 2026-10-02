@@ -6,41 +6,44 @@ import { INICIO_HISTORICO } from '@/lib/masOperado/periodos'
 
 export type TipoPlantilla = 'ficha_bono' | 'analisis_bonos' | 'comparativo_fondos' | 'mas_operado_fondos' | 'mas_operado_bonos'
 
-// web: se puede publicar en la web de clientes (hoy solo tiene sección de Renta fija para bonos).
-export const TIPOS_PLANTILLA: Record<TipoPlantilla, { label: string; plural: string; descripcion: string; categoriaResearch: string; web: boolean }> = {
+// web: sección y subcarpeta de la web de clientes donde se publica.
+export const TIPOS_PLANTILLA: Record<TipoPlantilla, {
+  label: string; plural: string; descripcion: string; categoriaResearch: string
+  web: { section: string; subsection: string } | null
+}> = {
   ficha_bono: {
     label: 'Ficha de bono',
     plural: 'Fichas de bono',
     categoriaResearch: 'nueva_emision',
-    web: true,
+    web: { section: 'renta-fija', subsection: 'nuevas-emisiones' },
     descripcion: 'Una hoja con precio, TIR y características del instrumento. Para nuevas emisiones.',
   },
   analisis_bonos: {
     label: 'Análisis de bonos',
     plural: 'Análisis de bonos',
     categoriaResearch: 'bono',
-    web: true,
+    web: { section: 'renta-fija', subsection: 'analisis-bonos' },
     descripcion: 'Mismo formato que la ficha, con texto sobre el emisor y la imagen del detalle del bono. Segunda hoja opcional para gráficos.',
   },
   comparativo_fondos: {
     label: 'Comparativo de fondos',
     plural: 'Comparativos de fondos',
     categoriaResearch: 'fondo',
-    web: false,
+    web: { section: 'comparativos', subsection: 'fondos' },
     descripcion: 'Tabla de rendimientos de los fondos de una categoría o asset class, tomada del Monitor de fondos.',
   },
   mas_operado_fondos: {
     label: 'Fondos más comprados',
     plural: 'Fondos más comprados',
     categoriaResearch: 'fondo',
-    web: false,
+    web: { section: 'mas-operado', subsection: 'fondos' },
     descripcion: 'Los fondos que más compraron los clientes (sale solo de las órdenes), con sus rendimientos y nuestra visión de mercado.',
   },
   mas_operado_bonos: {
     label: 'Bonos más comprados',
     plural: 'Bonos más comprados',
     categoriaResearch: 'bono',
-    web: false,
+    web: { section: 'mas-operado', subsection: 'bonos' },
     descripcion: 'Los bonos que más compraron los clientes (sale solo de las órdenes), con cupón, vencimiento y nuestra visión de renta fija.',
   },
 }

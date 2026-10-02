@@ -26,7 +26,7 @@ export default function PlantillasLista({ tipo, documentos, puedePublicar, webCo
   tipo: TipoPlantilla | null; documentos: Doc[]; puedePublicar: boolean; webConfigurada: boolean
 }) {
   if (!tipo) return <Tarjetas documentos={documentos} />
-  return <DocumentosDeTipo tipo={tipo} documentos={documentos.filter((d) => d.tipo === tipo)} puedePublicar={puedePublicar} webConfigurada={webConfigurada && TIPOS_PLANTILLA[tipo].web} />
+  return <DocumentosDeTipo tipo={tipo} documentos={documentos.filter((d) => d.tipo === tipo)} puedePublicar={puedePublicar} webConfigurada={webConfigurada && !!TIPOS_PLANTILLA[tipo].web} />
 }
 
 // ── Inicio: una tarjeta por plantilla ───────────────────────────────────────

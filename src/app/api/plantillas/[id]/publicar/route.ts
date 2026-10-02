@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession, RESEARCH_AUTHOR_ROLES } from '@/lib/auth'
 import { getPlantilla, setResearchPublicado, setWebPublicado } from '@/lib/db/plantillas'
-import { publicarReporteWeb, webClientesConfigurada, type DatosBonoWeb } from '@/lib/webClientes/client'
+import { publicarReporteWeb, webClientesConfigurada } from '@/lib/webClientes/client'
 import { createPost, getPost, updatePost } from '@/lib/db/research'
 import { uploadObject } from '@/lib/storage/s3'
 import { generarPdfPlantilla, nombreArchivo } from '@/lib/plantillas/pdf'
@@ -39,19 +39,6 @@ function camposPost(tipo: string, datos: any) {
   }
 }
 
-// Datos del bono que la web de clientes muestra junto al PDF en Renta fija.
-function datosBonoWeb(tipo: string, datos: any): DatosBonoWeb {
-  if (tipo === 'ficha_bono') {
-    const d = datos as FichaBonoDatos
-    return {
-      issuer: d.emisor || d.emisor_largo || null, isin: d.isin || null, coupon: d.cupon || null,
-      maturity: d.vencimiento || null, price: d.precio || null, yield_value: d.tir || null, rating: d.calificacion || null,
-    }
-  }
-  const d = datos as AnalisisBonosDatos
-  return { issuer: d.emisor_largo || null, price: d.precio || null, yield_value: d.tir || null }
-}
-
 // POST /api/plantillas/[id]/publicar { categoria?, web? }
 // Genera el PDF una vez y lo publica (o actualiza) en Research & Novedades
 // (si tiene categoría) y en la web de clientes (si está marcada). Un destino
@@ -67,10 +54,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   const body = await req.json().catch(() => ({}))
   const categoria = 'categoria' in body ? body.categoria : doc.research_type
-  const web = TIPOS_PLANTILLA[doc.tipo].web && ('web' in body ? body.web === true : doc.web_publicar)
+  const web = !!TIPOS_PLANTILLA[doc.tipo].web && ('web' in body ? body.web === true : doc.web_publicar)
   if (categoria && !isResearchCategoria(categoria)) return NextResponse.json({ error: 'Categoría de Research inválida' }, { status: 400 })
   if (!categoria && !web) return NextResponse.json({ error: 'Elegí dónde publicarlo' }, { status: 400 })
-  if (web && !webClientesConfigurada()) return NextResponse.json({ error: 'La web de clientes no está conectada (faltan WEB_CLIENTES_* en el servidor)' }, { status: 400 })
+  if (web && !webClientesConfigurada()) return NextResponse.json({ error: 'La web de clientes no está conectada (faltan WEB_CLIENTES_API_URL / WEB_CLIENTES_API_KEY en el servidor)' }, { status: 400 })
 
   const faltan = camposFaltantes(doc.tipo, doc.datos)
   if (faltan.length) return NextResponse.json({ error: `Faltan completar: ${faltan.join(', ')}`, faltan }, { status: 400 })
@@ -109,10 +96,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     try {
       const r = await publicarReporteWeb({
         existente: doc.web_report_id ? { reportId: doc.web_report_id, filePath: doc.web_file_path ?? '' } : null,
-        categoria: doc.tipo === 'ficha_bono' ? 'nuevas_emisiones' : 'analisis_bonos',
+        seccion: TIPOS_PLANTILLA[doc.tipo].web!,
         titulo: doc.titulo,
         descripcion: campos.summary,
-        bono: datosBonoWeb(doc.tipo, doc.datos),
         pdf,
         nombreArchivo: nombre,
       })

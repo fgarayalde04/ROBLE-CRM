@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
   const doc = await createPlantilla({
     tipo, titulo: tituloDocumento(tipo, datos), datos, userName: session.name, userId: session.id,
     researchType: isResearchCategoria(body.categoria) ? body.categoria : null,
-    webPublicar: body.web === true && TIPOS_PLANTILLA[tipo].web,
+    webPublicar: body.web === true && !!TIPOS_PLANTILLA[tipo].web,
   })
   return NextResponse.json({ documento: doc })
 }
