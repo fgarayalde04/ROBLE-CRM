@@ -62,3 +62,25 @@ export async function registrarDescarteDeCliente(clientId: string) {
     if ((e as { code?: string })?.code !== '42P01') throw e
   }
 }
+
+export interface DescarteRow {
+  id: string
+  client_number: string | null
+  item_id: string | null
+  nombre: string | null
+  motivo: string | null
+  created_at: string
+}
+
+export async function listDescartes(): Promise<DescarteRow[]> {
+  const { rows } = await pool.query(
+    `select id, client_number, item_id, nombre, motivo, created_at from client_descartes order by created_at desc`
+  )
+  return rows
+}
+
+// Restaurar = sacar el registro: en la próxima corrida el sync vuelve a crear el
+// cliente desde su carpeta de OneDrive o su legajo de Banco Central.
+export async function restaurarDescarte(id: string) {
+  await pool.query(`delete from client_descartes where id = $1`, [id])
+}

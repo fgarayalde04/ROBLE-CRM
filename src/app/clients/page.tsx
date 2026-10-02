@@ -129,9 +129,14 @@ export default async function ClientsPage({ searchParams }: Props) {
           <p className="mt-1 text-sm text-gray-500">{clients.length} registros</p>
         </div>
         {['admin', 'ceo', 'direccion', 'asistente'].includes(session?.role ?? '') && (
-          <Link href="/clients/duplicados" className="px-3 py-1.5 text-xs border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50">
-            Ver duplicados
-          </Link>
+          <div className="flex gap-2">
+            <Link href="/clients/eliminados" className="px-3 py-1.5 text-xs border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50">
+              Ver eliminados
+            </Link>
+            <Link href="/clients/duplicados" className="px-3 py-1.5 text-xs border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50">
+              Ver duplicados
+            </Link>
+          </div>
         )}
       </div>
 
