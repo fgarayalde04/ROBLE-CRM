@@ -141,15 +141,15 @@ function TablaFondos({ filas }: { filas: FilaFondoOperado[] }) {
   return (
     <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 10, fontFamily: SANS, tableLayout: 'fixed' }}>
       <colgroup>
-        <col style={{ width: 30 }} />
+        <col style={{ width: 28 }} />
         <col />
-        {cols.map((c) => <col key={c.key} style={{ width: 58 }} />)}
+        {cols.map((c) => <col key={c.key} style={{ width: 52 }} />)}
       </colgroup>
       <thead>
         <tr style={{ borderBottom: `2px solid ${VERDE}` }}>
           <th style={th}>#</th>
           <th style={th}>Fondo</th>
-          {cols.map((c) => <th key={c.key} style={{ ...th, textAlign: 'right', color: c.destacada ? VERDE : th.color }}>{c.label}</th>)}
+          {cols.map((c) => <th key={c.key} style={{ ...th, textAlign: 'right', padding: '0 4px 7px', letterSpacing: '0.06em', color: c.destacada ? VERDE : th.color }}>{c.label}</th>)}
         </tr>
       </thead>
       <tbody>
@@ -162,7 +162,7 @@ function TablaFondos({ filas }: { filas: FilaFondoOperado[] }) {
               const v = f[c.key]
               return (
                 <td key={c.key} style={{
-                  ...td, textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontSize: 12.5,
+                  ...td, textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontSize: 12, padding: '0 4px',
                   fontWeight: c.destacada ? 700 : 400, background: c.destacada ? '#F1F3EE' : undefined,
                   color: v != null && v < 0 ? NEGATIVO : GRIS_OSCURO,
                 }}>{pct(v)}</td>

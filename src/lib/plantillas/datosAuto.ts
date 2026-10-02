@@ -1,5 +1,6 @@
 import { listFundsWithReturns } from '@/lib/db/fundMonitor'
-import { getRankingMasOperado, type InstrumentoOperado } from '@/lib/db/masOperado'
+import { getRankingMasOperado, type InstrumentoOperado, type Rendimientos } from '@/lib/db/masOperado'
+import { lookupDavinciLive } from '@/lib/fundMonitor/liveLookup'
 import { labelRango, mesParaInforme } from '@/lib/masOperado/periodos'
 import {
   datosVacios, type FilaBonoOperado, type FilaComparativo, type FilaFondoOperado, type TipoPlantilla,
@@ -14,18 +15,48 @@ const num = (v: unknown) => (v == null || v === '' || Number.isNaN(Number(v)) ? 
 export async function filasMasOperado(tipo: 'mas_operado_fondos' | 'mas_operado_bonos', desde: string, hasta: string, cantidad: number) {
   const ranking = await getRankingMasOperado(desde, hasta, Math.max(1, Math.min(cantidad, 15)))
   if (tipo === 'mas_operado_fondos') {
+    const compras = ranking.fondos.compras
+    for (const i of compras) if (!i.rendimientos) i.rendimientos = await buscarEnDavinci(i)
     const fila = (i: InstrumentoOperado): FilaFondoOperado => {
       const r = i.rendimientos
       return {
         nombre: i.nombre,
         r_1y: r?.r_1y ?? null, r_3y: r?.r_3y ?? null, r_5y: r?.r_5y ?? null, r_ytd: r?.r_ytd ?? null,
         y_2025: r?.y_2025 ?? null, y_2024: r?.y_2024 ?? null, y_2023: r?.y_2023 ?? null,
+        y_2022: r?.y_2022 ?? null, y_2021: r?.y_2021 ?? null,
       }
     }
-    return { compras: ranking.fondos.compras.map(fila) }
+    return { compras: compras.map(fila) }
   }
   const fila = (i: InstrumentoOperado): FilaBonoOperado => ({ nombre: i.nombre, cupon: i.cupon, vencimiento: i.vencimiento, moneda: i.moneda })
   return { compras: ranking.bonos.compras.map(fila) }
+}
+
+const ISIN_RE = /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/
+
+// Fondo que no está en el Monitor ni en búsquedas guardadas: se busca en Davinci
+// por el ISIN de cada clase operada hasta encontrar uno. Usa la misma búsqueda
+// que las propuestas (una sola sesión, en cola, con cache de 15 días y pausa si
+// el login falla), así que no multiplica logins.
+async function buscarEnDavinci(i: InstrumentoOperado): Promise<Rendimientos | null> {
+  const isins = Array.from(new Set([i.isin, ...(i.variantes ?? []).map((v) => v.isin)].filter((x) => ISIN_RE.test(x))))
+  for (const isin of isins) {
+    try {
+      const r = await lookupDavinciLive(isin, i.nombre)
+      if (r.status === 'unavailable') return null      // sin credenciales o Davinci en pausa: no seguir probando
+      if (r.status !== 'ok') continue
+      const d = r.data
+      return {
+        fuente: `${d.nombreDavinci || i.nombre} (Davinci)`,
+        r_1y: d.r1a, r_3y: d.r3a, r_5y: d.r5a, r_ytd: d.ytd,
+        y_2025: d.y2025, y_2024: d.y2024, y_2023: d.y2023, y_2022: d.y2022, y_2021: d.y2021,
+      }
+    } catch (e: any) {
+      console.error('[plantillas] davinci', isin, e.message)
+      return null
+    }
+  }
+  return null
 }
 
 // pg devuelve las columnas date como Date a medianoche local

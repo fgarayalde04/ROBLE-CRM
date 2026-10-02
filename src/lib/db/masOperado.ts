@@ -20,6 +20,8 @@ export interface Rendimientos {
   y_2025: number | null
   y_2024: number | null
   y_2023: number | null
+  y_2022: number | null
+  y_2021: number | null
 }
 
 export interface InstrumentoOperado {
@@ -349,14 +351,14 @@ async function completar(ranking: RankingMasOperado) {
   if (fondos.length) {
     try {
       const { rows } = await pool.query(
-        `select upper(f.isin) as isin, f.nombre, r.r_1y, r.r_3y, r.r_5y, r.r_ytd, r.y_2025, r.y_2024, r.y_2023
+        `select upper(f.isin) as isin, f.nombre, r.r_1y, r.r_3y, r.r_5y, r.r_ytd, r.y_2025, r.y_2024, r.y_2023, r.y_2022, r.y_2021
            from fund_monitor_funds f join fund_monitor_returns r on r.fund_id = f.id
           where f.active and r.status in ('ok', 'stale')`
       )
       const num = (v: unknown) => (v == null ? null : Number(v))
       const aRend = (m: any): Rendimientos => ({
         fuente: `${m.nombre} (Monitor de fondos)`, r_1y: num(m.r_1y), r_3y: num(m.r_3y), r_5y: num(m.r_5y), r_ytd: num(m.r_ytd),
-        y_2025: num(m.y_2025), y_2024: num(m.y_2024), y_2023: num(m.y_2023),
+        y_2025: num(m.y_2025), y_2024: num(m.y_2024), y_2023: num(m.y_2023), y_2022: num(m.y_2022), y_2021: num(m.y_2021),
       })
       const porIsin = new Map(rows.map((r) => [r.isin as string, r]))
       const porFamilia = new Map<string, any>()
@@ -398,6 +400,7 @@ async function completar(ranking: RankingMasOperado) {
           f.rendimientos = {
             fuente: d.nombreDavinci ? `${d.nombreDavinci} (búsqueda en Davinci)` : 'búsqueda en Davinci',
             r_1y: n(d.r1a), r_3y: n(d.r3a), r_5y: n(d.r5a), r_ytd: n(d.ytd), y_2025: n(d.y2025), y_2024: n(d.y2024), y_2023: n(d.y2023),
+            y_2022: n(d.y2022), y_2021: n(d.y2021),
           }
           f.r_ytd = f.rendimientos.r_ytd
           f.r_1y = f.rendimientos.r_1y

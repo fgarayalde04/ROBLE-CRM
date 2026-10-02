@@ -143,7 +143,7 @@ export default function MasOperadoClient({ puedeCrearPlantilla }: { puedeCrearPl
 }
 
 // Mismo estilo que la tabla del Monitor de fondos
-const COLS_REND: { key: 'r_1y' | 'r_3y' | 'r_5y' | 'r_ytd' | 'y_2025' | 'y_2024' | 'y_2023'; label: string }[] = [
+const COLS_REND: { key: 'r_1y' | 'r_3y' | 'r_5y' | 'r_ytd' | 'y_2025' | 'y_2024' | 'y_2023' | 'y_2022' | 'y_2021'; label: string }[] = [
   { key: 'r_1y', label: '1A' },
   { key: 'r_3y', label: '3A' },
   { key: 'r_5y', label: '5A' },
@@ -151,6 +151,8 @@ const COLS_REND: { key: 'r_1y' | 'r_3y' | 'r_5y' | 'r_ytd' | 'y_2025' | 'y_2024'
   { key: 'y_2025', label: '2025' },
   { key: 'y_2024', label: '2024' },
   { key: 'y_2023', label: '2023' },
+  { key: 'y_2022', label: '2022' },
+  { key: 'y_2021', label: '2021' },
 ]
 
 const fmtRend = (n: number | null | undefined) => (n == null ? '—' : `${n >= 0 ? '+' : ''}${n.toFixed(2)}%`)
@@ -180,7 +182,7 @@ function Tabla({ filas, clase }: { filas: InstrumentoOperado[]; clase: ClaseActi
             <th className={`${th} text-center w-10`}>#</th>
             <th className={`${th} text-left px-3`}>{fondos ? 'Fondo' : clase === 'bonos' ? 'Bono' : 'Ticker'}</th>
             {fondos && COLS_REND.map((c) => (
-              <th key={c.key} className={`${th} text-center w-[6.5%]`} style={c.key === 'r_ytd' ? { backgroundColor: '#2E7D52' } : undefined}>{c.label}</th>
+              <th key={c.key} className={`${th} text-center w-[5.6%]`} style={c.key === 'r_ytd' ? { backgroundColor: '#2E7D52' } : undefined}>{c.label}</th>
             ))}
             {clase === 'bonos' && <><th className={`${th} text-center`}>Cupón</th><th className={`${th} text-center`}>Vencimiento</th><th className={`${th} text-center`}>Moneda</th></>}
             {clase === 'acciones' && <th className={`${th} text-center`}>Moneda</th>}

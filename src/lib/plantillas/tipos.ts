@@ -271,6 +271,8 @@ export interface FilaFondoOperado {
   y_2025: number | null
   y_2024: number | null
   y_2023: number | null
+  y_2022: number | null
+  y_2021: number | null
 }
 
 export interface FilaBonoOperado {
@@ -288,6 +290,8 @@ export const COLUMNAS_REND_FONDO: { key: Exclude<keyof FilaFondoOperado, 'nombre
   { key: 'y_2025', label: '2025' },
   { key: 'y_2024', label: '2024' },
   { key: 'y_2023', label: '2023' },
+  { key: 'y_2022', label: '2022' },
+  { key: 'y_2021', label: '2021' },
 ]
 
 export interface MasOperadoDatos<F> {
@@ -308,7 +312,7 @@ export type MasOperadoFondosDatos = MasOperadoDatos<FilaFondoOperado>
 export type MasOperadoBonosDatos = MasOperadoDatos<FilaBonoOperado>
 
 export function filaFondoVacia(): FilaFondoOperado {
-  return { nombre: '', r_1y: null, r_3y: null, r_5y: null, r_ytd: null, y_2025: null, y_2024: null, y_2023: null }
+  return { nombre: '', r_1y: null, r_3y: null, r_5y: null, r_ytd: null, y_2025: null, y_2024: null, y_2023: null, y_2022: null, y_2021: null }
 }
 
 export function filaBonoVacia(): FilaBonoOperado {

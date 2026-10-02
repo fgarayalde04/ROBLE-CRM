@@ -233,7 +233,7 @@ export function FormMasOperado({ tipo, datos, set }: {
       </div>
 
       <TablaEditable titulo="Más comprados" tipo={tipo} filas={datos.compras ?? []} onChange={(f) => set({ compras: f })} />
-      {fondos && <p className="text-[11px] text-gray-400 -mt-3">Los rendimientos salen del Monitor de fondos (o de búsquedas ya hechas en Davinci); si el fondo no está, quedan en “—”. Se actualizan con “Volver a cargar”.</p>}
+      {fondos && <p className="text-[11px] text-gray-400 -mt-3">Los rendimientos salen del Monitor de fondos; los fondos que no están se buscan en Davinci por ISIN al cargar (puede tardar unos segundos por fondo). Se actualizan con “Volver a cargar”.</p>}
 
       <div>
         <p className={tituloCls}>Texto de abajo</p>
