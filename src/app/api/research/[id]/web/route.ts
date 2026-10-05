@@ -29,10 +29,11 @@ async function autorizar() {
   return { session }
 }
 
-// POST /api/research/[id]/web { section?, subsection? }
+// POST /api/research/[id]/web { section?, subsection?, notify_user_ids? }
 // Publica el PDF adjunto en la web de clientes. Si viene de Plantillas, la
 // sección la define el tipo de plantilla; si se cargó a mano, se elige.
-// Si ya estaba publicado, lo reemplaza con el PDF actual.
+// Si ya estaba publicado, lo reemplaza con el PDF actual. notify_user_ids =
+// clientes de la web (GET /api/research/web-clientes) a avisar por mail.
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   const auth = await autorizar()
   if (auth.error) return auth.error
@@ -41,6 +42,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   if (!post) return NextResponse.json({ error: 'Publicación no encontrada' }, { status: 404 })
 
   const body = await req.json().catch(() => ({}))
+  const notificar: string[] = Array.isArray(body.notify_user_ids)
+    ? body.notify_user_ids.filter((x: unknown) => typeof x === 'string' && x)
+    : []
   const fija = seccionWebDePlantilla(post.plantilla_tipo)
   const { section, subsection } = fija ?? body
   if (!esSeccionWeb(section, subsection)) {
@@ -62,6 +66,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       descripcion: post.summary,
       pdf: body,
       nombreArchivo: post.file_name || 'documento.pdf',
+      notificar,
     })
     const actualizado = await updatePost(post.id, {
       web_document_id: r.reportId,
@@ -69,7 +74,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       web_subsection: subsection,
       web_publicado_at: new Date().toISOString(),
     })
-    return NextResponse.json({ post: actualizado })
+    return NextResponse.json({ post: actualizado, avisados: r.avisados ?? 0 })
   } catch (err: any) {
     console.error('[research/web] publicar', err.message)
     return NextResponse.json({ error: err.message }, { status: 502 })

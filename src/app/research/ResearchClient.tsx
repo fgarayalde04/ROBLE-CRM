@@ -76,15 +76,101 @@ function esPdf(post: Pick<Post, 'file_url' | 'file_name'>) {
   return !!post.file_url && (post.file_name ?? '').toLowerCase().endsWith('.pdf')
 }
 
-async function publicarEnWeb(postId: string, key: string): Promise<{ post?: Post; error?: string }> {
+async function publicarEnWeb(postId: string, key: string, notificar: string[] = []): Promise<{ post?: Post; avisados?: number; error?: string }> {
   const [section, subsection] = key ? key.split('/') : []
   const res = await fetch(`/api/research/${postId}/web`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ section, subsection }),
+    body: JSON.stringify({ section, subsection, notify_user_ids: notificar }),
   })
   const data = await res.json().catch(() => ({}))
-  return res.ok ? { post: data.post } : { error: data.error || 'No se pudo publicar en la web' }
+  return res.ok ? { post: data.post, avisados: data.avisados ?? 0 } : { error: data.error || 'No se pudo publicar en la web' }
+}
+
+interface ClienteWeb { id: string; nombre: string; email: string; cuentas: string[] }
+
+// Clientes de la web (se piden una sola vez por página). null = la web todavía no permite avisar.
+let clientesWebPedido: Promise<ClienteWeb[] | null> | null = null
+function cargarClientesWeb() {
+  clientesWebPedido ??= fetch('/api/research/web-clientes')
+    .then((r) => r.json())
+    .then((d) => (Array.isArray(d.clientes) ? d.clientes : null))
+    .catch(() => { clientesWebPedido = null; return null })
+  return clientesWebPedido
+}
+
+// Elegir a qué clientes de la web avisar por mail al publicar (notify_user_ids).
+function AvisarClientes({ value, onChange, disabled }: { value: string[]; onChange: (ids: string[]) => void; disabled?: boolean }) {
+  const [abierto, setAbierto] = useState(false)
+  const [clientes, setClientes] = useState<ClienteWeb[] | null | undefined>(undefined)
+  const [q, setQ] = useState('')
+
+  useEffect(() => {
+    if (abierto && clientes === undefined) cargarClientesWeb().then(setClientes)
+  }, [abierto, clientes])
+
+  const elegidos = new Set(value)
+  const filtro = q.trim().toLowerCase()
+  const visibles = (clientes ?? []).filter((c) =>
+    !filtro || c.nombre.toLowerCase().includes(filtro) || c.email.toLowerCase().includes(filtro) || c.cuentas.some((x) => x.toLowerCase().includes(filtro))
+  )
+  const toggle = (id: string) => onChange(elegidos.has(id) ? value.filter((x) => x !== id) : [...value, id])
+
+  return (
+    <div className="mt-2">
+      <button
+        type="button"
+        onClick={() => setAbierto(!abierto)}
+        disabled={disabled}
+        className="text-xs text-blue-600 hover:underline disabled:opacity-50"
+      >
+        {abierto ? '▾' : '▸'} Avisar por mail a clientes{value.length ? ` (${value.length} elegido${value.length === 1 ? '' : 's'})` : ''}
+      </button>
+      {abierto && (
+        <div className="mt-2 rounded-lg border border-gray-200 p-2">
+          {clientes === undefined ? (
+            <p className="text-xs text-gray-400 py-2 text-center">Cargando clientes…</p>
+          ) : clientes === null ? (
+            <p className="text-xs text-gray-400 py-2 text-center">La web de clientes todavía no permite avisar por mail.</p>
+          ) : (
+            <>
+              <div className="flex items-center gap-2">
+                <input
+                  value={q}
+                  onChange={(e) => setQ(e.target.value)}
+                  placeholder="Buscar por nombre, mail o cuenta…"
+                  className="flex-1 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-[#16A34A]"
+                />
+                <button
+                  type="button"
+                  onClick={() => onChange(Array.from(new Set([...value, ...visibles.map((c) => c.id)])))}
+                  className="text-[11px] text-blue-600 hover:underline shrink-0"
+                >
+                  {filtro ? 'Elegir estos' : 'Todos'}
+                </button>
+                {value.length > 0 && (
+                  <button type="button" onClick={() => onChange([])} className="text-[11px] text-gray-500 hover:underline shrink-0">
+                    Ninguno
+                  </button>
+                )}
+              </div>
+              <div className="mt-2 max-h-48 overflow-y-auto space-y-0.5">
+                {visibles.length === 0 ? (
+                  <p className="text-xs text-gray-400 py-2 text-center">Sin clientes para mostrar.</p>
+                ) : visibles.map((c) => (
+                  <label key={c.id} className="flex items-center gap-2 px-1 py-0.5 rounded hover:bg-gray-50 cursor-pointer">
+                    <input type="checkbox" checked={elegidos.has(c.id)} onChange={() => toggle(c.id)} />
+                    <span className="text-xs text-gray-800">{c.nombre}</span>
+                    <span className="text-[11px] text-gray-400 truncate">{c.email}{c.cuentas.length ? ` · ${c.cuentas.join(', ')}` : ''}</span>
+                  </label>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  )
 }
 
 function fmtDate(iso: string) {
@@ -642,14 +728,20 @@ function WebClientesPanel({ post, onUpdated, compacto = false }: { post: Post; o
   )
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [notificar, setNotificar] = useState<string[]>([])
+  const [aviso, setAviso] = useState('')
 
   async function publicar() {
     if (!fija && !seccion) { setError('Elegí la sección de la web'); return }
-    setBusy(true); setError('')
-    const r = await publicarEnWeb(post.id, fija ? '' : seccion)
+    setBusy(true); setError(''); setAviso('')
+    const r = await publicarEnWeb(post.id, fija ? '' : seccion, notificar)
     setBusy(false)
     if (r.error) setError(r.error)
-    else if (r.post) onUpdated({ ...post, ...r.post })
+    else if (r.post) {
+      if (notificar.length) setAviso(`Se avisó por mail a ${r.avisados ?? 0} cliente${r.avisados === 1 ? '' : 's'}.`)
+      setNotificar([])
+      onUpdated({ ...post, ...r.post })
+    }
   }
 
   async function quitar() {
@@ -717,6 +809,8 @@ function WebClientesPanel({ post, onUpdated, compacto = false }: { post: Post; o
           </button>
         )}
       </div>
+      {(!publicado || fija || seccion !== actual) && <AvisarClientes value={notificar} onChange={setNotificar} disabled={busy} />}
+      {aviso && <p className="mt-2 text-xs text-[#16A34A]">{aviso}</p>}
       {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
     </div>
   )
@@ -845,6 +939,7 @@ function CreatePostModal({ currentUserName, onClose, onCreated }: { currentUserN
   // Web de clientes: apagado por defecto, se activa a mano
   const [publicarWeb, setPublicarWeb] = useState(false)
   const [seccionWeb, setSeccionWeb] = useState('')
+  const [notificarWeb, setNotificarWeb] = useState<string[]>([])
 
   // bono/fondo fields
   const [issuer, setIssuer] = useState('')
@@ -911,7 +1006,7 @@ function CreatePostModal({ currentUserName, onClose, onCreated }: { currentUserN
         return
       }
       if (publicarWeb && data.post?.id) {
-        const r = await publicarEnWeb(data.post.id, seccionWeb)
+        const r = await publicarEnWeb(data.post.id, seccionWeb, notificarWeb)
         if (r.error) {
           setError(`Se publicó en el CRM, pero no en la web de clientes: ${r.error}. Podés reintentarlo desde la publicación.`)
           setCreado(true)
@@ -999,6 +1094,7 @@ function CreatePostModal({ currentUserName, onClose, onCreated }: { currentUserN
               ))}
             </select>
           )}
+          {publicarWeb && <AvisarClientes value={notificarWeb} onChange={setNotificarWeb} disabled={saving} />}
         </div>
 
         {error && <p className="text-xs text-red-600">{error}</p>}
