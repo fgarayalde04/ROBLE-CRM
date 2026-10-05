@@ -1,7 +1,7 @@
 import { fichaBonoDisclaimer, type FichaBonoDatos } from '@/lib/plantillas/tipos'
 import {
   PAGINA_ROBLE, SERIF, VERDE, GRIS, GRIS_OSCURO, etiqueta, etiquetaVerde, vacio,
-  Hoja, Encabezado, BandaPrecio, Pie,
+  Hoja, Encabezado, ENCABEZADO_COMPACTO_FIN, BandaPrecio, Pie,
 } from './roble'
 
 // Ficha de bono (formato "Petrobras 5,125% 2030"): una hoja de 816 × 1020 px.
@@ -20,10 +20,10 @@ export default function FichaBono({ datos, logoSrc = '/download.png' }: { datos:
 
   return (
     <Hoja>
-      <Encabezado categoria={d.categoria} periodo={d.periodo} logoSrc={logoSrc} />
+      <Encabezado categoria={d.categoria} periodo={d.periodo} logoSrc={logoSrc} compacto />
 
       {/* Título */}
-      <div style={{ position: 'absolute', left: 60, right: 60, top: 170 }}>
+      <div style={{ position: 'absolute', left: 60, right: 60, top: ENCABEZADO_COMPACTO_FIN + 36 }}>
         <div style={{ ...etiqueta, fontSize: 11.8 }}>{vacio(d.emisor_largo, 'Emisor')}</div>
         <div style={{ fontFamily: SERIF, fontWeight: 600, fontSize: 58, lineHeight: 1.1, color: VERDE, marginTop: 10, letterSpacing: '-0.005em' }}>
           {vacio(d.titulo, 'Título del bono')}
@@ -31,12 +31,12 @@ export default function FichaBono({ datos, logoSrc = '/download.png' }: { datos:
         <div style={{ fontFamily: SERIF, fontStyle: 'italic', fontSize: 18.5, color: GRIS, marginTop: 4 }}>{d.subtitulo}</div>
       </div>
 
-      <BandaPrecio precio={d.precio} tir={d.tir} style={{ position: 'absolute', left: 0, right: 0, top: 319 }} />
+      <BandaPrecio precio={d.precio} tir={d.tir} style={{ position: 'absolute', left: 0, right: 0, top: 296 }} />
 
       {/* Características */}
-      <div style={{ position: 'absolute', left: 60, right: 60, top: 484 }}>
+      <div style={{ position: 'absolute', left: 60, right: 60, top: 470 }}>
         <div style={etiquetaVerde}>Características del instrumento</div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', columnGap: 42, marginTop: 7 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', columnGap: 42, marginTop: 10 }}>
           {[0, 1].map((col) => (
             <div key={col} style={{ borderTop: '1px solid #D9DADC' }}>
               {filas.map((f) => (
@@ -44,7 +44,7 @@ export default function FichaBono({ datos, logoSrc = '/download.png' }: { datos:
                   key={f[col * 2]}
                   style={{
                     display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12,
-                    height: 41, borderBottom: '1px solid #D9DADC', fontSize: 14.5,
+                    height: 50, borderBottom: '1px solid #D9DADC', fontSize: 15,
                   }}
                 >
                   <span style={{ color: GRIS }}>{f[col * 2]}</span>

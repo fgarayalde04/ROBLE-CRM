@@ -133,36 +133,87 @@ function CssBarChart({ data, color }: { data: { label: string; value: number }[]
   )
 }
 
-// Gráfico de línea/área de la evolución del valor de la cuenta — SVG plano
-// (se captura bien en html2canvas), igual que la pestaña Rendimiento.
-function PdfAreaChart({ points, height = 46 }: { points: { date: string; value: number }[]; height?: number }) {
-  const W = 1000, H = 260, padL = 8, padR = 8, padT = 12, padB = 24
+// Escala "linda" para el eje Y: 4–5 marcas en múltiplos de 1/2/2,5/5 × 10^n.
+function niceTicks(min: number, max: number, count = 4): number[] {
+  const span = max - min || Math.abs(max) || 1
+  const raw = span / count
+  const mag = Math.pow(10, Math.floor(Math.log10(raw)))
+  const step = ([1, 2, 2.5, 5, 10].find(m => m * mag >= raw) ?? 10) * mag
+  const lo = Math.floor(min / step) * step
+  const hi = Math.ceil(max / step) * step
+  const ticks: number[] = []
+  for (let v = lo; v <= hi + step / 2; v += step) ticks.push(v)
+  return ticks
+}
+
+function fmtAxisUSD(v: number): string {
+  const a = Math.abs(v)
+  if (a >= 1e6) return `$${(v / 1e6).toFixed(a >= 1e7 ? 0 : 1).replace(/\.0$/, '')}M`
+  if (a >= 1e3) return `$${Math.round(v / 1e3)}K`
+  return `$${Math.round(v)}`
+}
+
+// Gráfico de la evolución del valor de la cuenta — SVG plano (se captura bien
+// en html2canvas). El viewBox respeta la proporción real de la caja (en mm)
+// para que textos y puntos no salgan deformados, y el eje X es proporcional
+// al tiempo: los puntos del reporte de performance (inicio, hace 5/3/1 años,
+// inicio de año, actual) no están equiespaciados.
+function PdfAreaChart({ points, widthMm, heightMm }: { points: { date: string; value: number; label?: string }[]; widthMm: number; heightMm: number }) {
+  const S = 4 // unidades del viewBox por mm
+  const W = widthMm * S, H = heightMm * S
+  const padL = 16 * S, padR = 4 * S, padT = 7 * S, padB = (points.some(p => p.label) ? 11 : 6) * S
   const values = points.map(p => p.value)
-  const min = Math.min(...values)
-  const max = Math.max(...values)
-  const span = max - min || 1
+  const ticks = niceTicks(Math.min(...values), Math.max(...values))
+  const yMin = ticks[0], yMax = ticks[ticks.length - 1]
+  const times = points.map(p => new Date(p.date + 'T00:00:00').getTime())
+  const t0 = times[0], tSpan = (times[times.length - 1] - t0) || 1
+  const x = (i: number) => padL + ((times[i] - t0) / tSpan) * (W - padL - padR)
+  const y = (v: number) => padT + (1 - (v - yMin) / (yMax - yMin || 1)) * (H - padT - padB)
   const n = points.length
-  const x = (i: number) => padL + (i / Math.max(n - 1, 1)) * (W - padL - padR)
-  const y = (v: number) => padT + (1 - (v - min) / span) * (H - padT - padB)
   const line = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${x(i).toFixed(1)} ${y(p.value).toFixed(1)}`).join(' ')
-  const area = `${line} L ${x(n - 1).toFixed(1)} ${(H - padB).toFixed(1)} L ${x(0).toFixed(1)} ${(H - padB).toFixed(1)} Z`
-  const first = points[0], last = points[n - 1]
-  // Etiqueta de valor arriba del punto salvo que esté muy cerca del techo
-  // del gráfico, en cuyo caso va abajo — evita que se corte o se superponga
-  // con el borde. Con solo 2 etiquetas (primer y último punto), en extremos
-  // opuestos del eje x, no llegan a pisarse entre sí.
-  const labelY = (v: number) => (y(v) < padT + 24 ? y(v) + 20 : y(v) - 10)
+  const base = H - padB
+  const area = `${line} L ${x(n - 1).toFixed(1)} ${base} L ${x(0).toFixed(1)} ${base} Z`
+
+  // Etiquetas de valor y de fecha: siempre la primera y la última; las
+  // intermedias solo si no quedan pegadas a la anterior ni a la última
+  // (los puntos YTD / 1 año / inicio del período suelen caer muy juntos).
+  const minGap = 30 * S
+  const shown: number[] = [0]
+  for (let i = 1; i < n - 1; i++) {
+    if (x(i) - x(shown[shown.length - 1]) >= minGap && x(n - 1) - x(i) >= minGap) shown.push(i)
+  }
+  if (n > 1) shown.push(n - 1)
+  // Etiquetas de valor intermedias: corridas hacia el lado opuesto a donde
+  // sigue la línea, así no quedan montadas sobre el tramo siguiente.
+  const anchor = (i: number) => (i === 0 ? 'start' : i === n - 1 ? 'end' : points[i + 1].value >= points[i].value ? 'end' : 'start')
+  const labelDx = (i: number) => (i === 0 || i === n - 1 ? 0 : anchor(i) === 'end' ? -1.5 * S : 1.5 * S)
+  const axisAnchor = (i: number) => (i === 0 ? 'start' : i === n - 1 ? 'end' : 'middle')
+  const fs = 2.6 * S
+
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: `${height}mm`, display: 'block' }} preserveAspectRatio="none">
-      <line x1={padL} y1={H - padB} x2={W - padR} y2={H - padB} stroke={COLORS.border} strokeWidth={1} />
-      <path d={area} fill={COLORS.mintGreen} opacity={0.55} />
-      <path d={line} fill="none" stroke={COLORS.midGreen} strokeWidth={2.5} />
-      <circle cx={x(0)} cy={y(first.value)} r={4} fill={COLORS.slate} />
-      <circle cx={x(n - 1)} cy={y(last.value)} r={4} fill={COLORS.darkGreen} />
-      <text x={x(0)} y={labelY(first.value)} fontSize={14} fontWeight={700} fill={COLORS.slate} textAnchor="start">{fmtUSD(first.value)}</text>
-      <text x={x(n - 1)} y={labelY(last.value)} fontSize={14} fontWeight={700} fill={COLORS.ink} textAnchor="end">{fmtUSD(last.value)}</text>
-      <text x={padL} y={H - 6} fontSize={13} fill={COLORS.mutedSlate}>{fmtDate(first.date)}</text>
-      <text x={W - padR} y={H - 6} fontSize={13} fill={COLORS.mutedSlate} textAnchor="end">{fmtDate(last.date)}</text>
+    <svg viewBox={`0 0 ${W} ${H}`} width={`${widthMm}mm`} height={`${heightMm}mm`} style={{ display: 'block' }} fontFamily="Arial, sans-serif">
+      {ticks.map(t => (
+        <g key={t}>
+          <line x1={padL} y1={y(t)} x2={W - padR} y2={y(t)} stroke={t === yMin ? COLORS.border : '#EEF1F3'} strokeWidth={t === yMin ? 1.5 : 1} />
+          <text x={padL - 2 * S} y={y(t) + fs * 0.35} fontSize={fs} fill={COLORS.mutedSlate} textAnchor="end">{fmtAxisUSD(t)}</text>
+        </g>
+      ))}
+      <path d={area} fill={COLORS.mintGreen} opacity={0.45} />
+      <path d={line} fill="none" stroke={COLORS.midGreen} strokeWidth={0.6 * S} strokeLinejoin="round" strokeLinecap="round" />
+      {points.map((p, i) => (
+        <circle key={p.date} cx={x(i)} cy={y(p.value)} r={(i === n - 1 ? 1.2 : 0.9) * S} fill={i === n - 1 ? COLORS.darkGreen : '#fff'} stroke={COLORS.darkGreen} strokeWidth={0.4 * S} />
+      ))}
+      {shown.map(i => (
+        <g key={i}>
+          <text x={x(i) + labelDx(i)} y={y(points[i].value) - 2.4 * S} fontSize={fs * 1.05} fontWeight={700} fill={i === n - 1 ? COLORS.ink : COLORS.slate} textAnchor={anchor(i)}>
+            {fmtUSD(points[i].value)}
+          </text>
+          {points[i].label && (
+            <text x={x(i)} y={base + 4.4 * S} fontSize={fs} fontWeight={700} fill={COLORS.slate} textAnchor={axisAnchor(i)}>{points[i].label}</text>
+          )}
+          <text x={x(i)} y={base + (points[i].label ? 8.2 : 4.4) * S} fontSize={fs * 0.92} fill={COLORS.mutedSlate} textAnchor={axisAnchor(i)}>{fmtDate(points[i].date)}</text>
+        </g>
+      ))}
     </svg>
   )
 }
@@ -278,7 +329,7 @@ export default function AccountPdfReport({
   // snapshots. Si no hay performance, caemos al historial de importaciones.
   const perfSeries = computePerfValueSeries(performance)
   const growthPoints = perfSeries.length >= 2
-    ? perfSeries.map(p => ({ date: p.date, value: p.value }))
+    ? perfSeries.map(p => ({ date: p.date, value: p.value, label: p.label }))
     : [...history]
         .sort((a, b) => a.snapshot_date.localeCompare(b.snapshot_date))
         .map(h => ({ date: h.snapshot_date, value: Number(h.total_market_value) }))
@@ -345,7 +396,7 @@ export default function AccountPdfReport({
                 {([
                   ['YTD', performance.return_ytd, periodsOn.ytd], ['1 Año', performance.return_1y, periodsOn.oneYear], ['3 Años', performance.return_3y, periodsOn.threeYear],
                   ['5 Años', performance.return_5y, periodsOn.fiveYear], ['Desde inicio', performance.return_since_inception, periodsOn.sinceInception],
-                ] as [string, string | number | null, boolean][]).filter(([, , on]) => on).map(([label, val]) => (
+                ] as [string, string | number | null, boolean][]).filter(([, val, on]) => on && val != null).map(([label, val]) => (
                   <div key={label as string} style={{ flex: 1, textAlign: 'center', background: COLORS.bgSofter, borderRadius: 8, padding: '4mm 1mm' }}>
                     <div style={{ fontSize: 7.5, color: COLORS.mutedSlate, textTransform: 'uppercase', letterSpacing: 0.4 }}>{label}</div>
                     <div style={{ fontSize: 17, fontWeight: 800, marginTop: '2mm', color: val == null ? COLORS.mutedSlate : Number(val) >= 0 ? COLORS.gain : COLORS.loss }}>
@@ -362,8 +413,8 @@ export default function AccountPdfReport({
               const cells: [string, number | null][] = ([
                 ['YTD', civ.ytd, periodsOn.ytd], ['1 Año', civ.oneYear, periodsOn.oneYear], ['3 Años', civ.threeYear, periodsOn.threeYear],
                 ['5 Años', civ.fiveYear, periodsOn.fiveYear], ['Desde inicio', civ.sinceInception, periodsOn.sinceInception],
-              ] as [string, number | null, boolean][]).filter(([, , on]) => on).map(([label, v]) => [label, v])
-              if (cells.every(([, v]) => v == null)) return null
+              ] as [string, number | null, boolean][]).filter(([, v, on]) => on && v != null).map(([label, v]) => [label, v])
+              if (cells.length === 0) return null
               return (
                 <>
                   <div style={{ fontSize: 7.5, fontWeight: 700, color: COLORS.mutedSlate, textTransform: 'uppercase', letterSpacing: 0.4, marginTop: '4.5mm', marginBottom: '1.5mm' }}>Cuánto creció en dinero</div>
@@ -383,10 +434,13 @@ export default function AccountPdfReport({
 
         {growthPoints.length >= 2 && (
           <div data-pdf-keep-together style={{ border: `1px solid ${COLORS.border}`, borderRadius: 10, padding: '5mm 6mm', marginBottom: '5mm' }}>
-            <div style={{ fontSize: 9.5, fontWeight: 700, color: COLORS.ink, marginBottom: '2mm' }}>Evolución del valor de la cuenta</div>
-            <PdfAreaChart points={growthPoints} height={50} />
-            <div style={{ fontSize: 6.4, color: COLORS.mutedSlate, marginTop: '2mm' }}>
-              Valor de mercado en cada importación. Puede incluir aportes, retiros u operaciones — no representa rentabilidad por sí solo.
+            <div style={{ fontSize: 9.5, fontWeight: 700, color: COLORS.ink, marginBottom: '3mm' }}>Evolución del valor de la cuenta</div>
+            {/* 297mm − 2×14mm de margen − 2×6mm de padding de la caja */}
+            <PdfAreaChart points={growthPoints} widthMm={256} heightMm={64} />
+            <div style={{ fontSize: 6.4, color: COLORS.mutedSlate, marginTop: '2.5mm' }}>
+              {perfSeries.length >= 2
+                ? 'Valor de la cuenta al inicio de cada período según el reporte de performance del custodio. Incluye aportes y retiros — la rentabilidad real es la TWRR de arriba.'
+                : 'Valor de mercado en cada importación. Puede incluir aportes, retiros u operaciones — no representa rentabilidad por sí solo.'}
             </div>
           </div>
         )}

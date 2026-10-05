@@ -40,7 +40,29 @@ export function Hoja({ children }: { children: ReactNode }) {
   )
 }
 
-export function Encabezado({ categoria, periodo, logoSrc }: { categoria: string; periodo: string; logoSrc: string }) {
+// compacto: el PNG del logo trae ~20% de borde transparente arriba y abajo;
+// esta versión lo recorta y sube las líneas verdes (ver ENCABEZADO_COMPACTO_FIN),
+// para la ficha de bono, que con el encabezado normal quedaba con mucho blanco arriba.
+export const ENCABEZADO_COMPACTO_FIN = 110
+
+export function Encabezado({ categoria, periodo, logoSrc, compacto = false }: { categoria: string; periodo: string; logoSrc: string; compacto?: boolean }) {
+  if (compacto) {
+    const linea = ENCABEZADO_COMPACTO_FIN - 6
+    return (
+      <>
+        <div style={{ position: 'absolute', left: 58, top: 30, width: 330, height: 64, overflow: 'hidden' }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={logoSrc} alt="Roble Capital" style={{ position: 'absolute', left: -15, top: -18, width: 352 }} />
+        </div>
+        <div style={{ position: 'absolute', right: 60, top: 43, textAlign: 'right', ...etiqueta, lineHeight: '19px' }}>
+          <div>{categoria}</div>
+          <div>{periodo}</div>
+        </div>
+        <div style={{ position: 'absolute', left: 60, right: 60, top: linea, borderTop: `3px solid ${VERDE_LINEA}` }} />
+        <div style={{ position: 'absolute', left: 60, right: 60, top: linea + 6, borderTop: `1px solid ${VERDE_LINEA}` }} />
+      </>
+    )
+  }
   return (
     <>
       {/* eslint-disable-next-line @next/next/no-img-element */}
