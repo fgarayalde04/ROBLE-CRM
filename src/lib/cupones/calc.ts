@@ -8,7 +8,7 @@ import type { CouponBond, CouponCalendar } from './types'
 export const MESES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
 const MESES_LARGOS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
 
-/** Hasta esta cantidad de bonos el documento entra en una hoja A4 apaisada. */
+/** Hasta esta cantidad de bonos el documento entra en una hoja A4 apaisada; con más usa varias. */
 export const MAX_BONDS_ONE_PAGE = 25
 
 // ─── Montos ─────────────────────────────────────────────────────────────────
@@ -279,7 +279,7 @@ export function calendarWarnings(cal: CouponCalendar): CalendarWarning[] {
   }
 
   if (cal.bonds.length > MAX_BONDS_ONE_PAGE) {
-    out.push({ level: 'warn', text: `Hay ${cal.bonds.length} bonos: más de ${MAX_BONDS_ONE_PAGE} puede no entrar en una sola hoja A4.` })
+    out.push({ level: 'warn', text: `Hay ${cal.bonds.length} bonos: el documento va a ocupar más de una hoja A4 (la tabla continúa con el encabezado repetido).` })
   }
   return out
 }
