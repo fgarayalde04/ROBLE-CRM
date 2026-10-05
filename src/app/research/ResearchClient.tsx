@@ -119,6 +119,7 @@ export default function ResearchClient({
   const [detail, setDetail] = useState<Post | null>(null)
   const [showCreate, setShowCreate] = useState(false)
   const [showBriefCreate, setShowBriefCreate] = useState(false)
+  const [showWeb, setShowWeb] = useState(false)
 
   const didOpenDeepLink = useRef(false)
 
@@ -206,6 +207,7 @@ export default function ResearchClient({
           canAuthor={canAuthor}
           onOpen={openDetail}
           onCreate={() => setShowCreate(true)}
+          onWeb={() => setShowWeb(true)}
         />
       ) : (
         <BriefTab
@@ -238,6 +240,12 @@ export default function ResearchClient({
         />
       )}
 
+      {showWeb && (
+        <WebClientesModal
+          onClose={() => { setShowWeb(false); fetchPosts() }}
+        />
+      )}
+
       {showBriefCreate && (
         <CreateBriefModal
           onClose={() => setShowBriefCreate(false)}
@@ -251,7 +259,7 @@ export default function ResearchClient({
 // ─── Feed tab ───────────────────────────────────────────────────────────────
 
 function FeedTab({
-  posts, loading, category, setCategory, q, setQ, canAuthor, onOpen, onCreate,
+  posts, loading, category, setCategory, q, setQ, canAuthor, onOpen, onCreate, onWeb,
 }: {
   posts: Post[]
   loading: boolean
@@ -262,6 +270,7 @@ function FeedTab({
   canAuthor: boolean
   onOpen: (id: string) => void
   onCreate: () => void
+  onWeb: () => void
 }) {
   return (
     <div>
@@ -292,6 +301,14 @@ function FeedTab({
           placeholder="Buscar…"
           className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg w-48 focus:outline-none focus:ring-1 focus:ring-[#16A34A]"
         />
+        {canAuthor && (
+          <button
+            onClick={onWeb}
+            className="px-3 py-1.5 bg-white border border-gray-200 text-[#2D3F52] text-xs font-semibold rounded-lg hover:border-[#16A34A] hover:text-[#16A34A] transition-colors"
+          >
+            🌐 Web de clientes
+          </button>
+        )}
         {canAuthor && (
           <button
             onClick={onCreate}
@@ -325,6 +342,7 @@ function FeedTab({
                     </span>
                     {p.pinned && <span className="text-[10px] text-amber-600 font-semibold">📌 Fijado</span>}
                     {p.featured && <span className="text-[10px] text-blue-600 font-semibold">★ Destacado</span>}
+                    {p.web_document_id && <span className="text-[10px] text-[#2D3F52] font-semibold">🌐 En la web</span>}
                     <span className="text-[11px] text-gray-400">{fmtDate(p.published_at)}</span>
                   </div>
                   <p className={`text-sm mt-1 ${!p.read ? 'font-semibold text-gray-900' : 'text-gray-700'}`}>{p.title}</p>
@@ -610,7 +628,7 @@ function DetailPanel({
 }
 
 // Publicar (o sacar) el PDF de una publicación en la web de clientes. Siempre a mano.
-function WebClientesPanel({ post, onUpdated }: { post: Post; onUpdated: (post: Post) => void }) {
+function WebClientesPanel({ post, onUpdated, compacto = false }: { post: Post; onUpdated: (post: Post) => void; compacto?: boolean }) {
   const publicado = !!post.web_document_id
   const sugerida = seccionWebSugerida(post.type)
   const [seccion, setSeccion] = useState(
@@ -645,9 +663,9 @@ function WebClientesPanel({ post, onUpdated }: { post: Post; onUpdated: (post: P
     : ''
 
   return (
-    <div className="mt-6 rounded-xl border border-gray-200 p-4">
+    <div className={compacto ? 'mt-2' : 'mt-6 rounded-xl border border-gray-200 p-4'}>
       <div className="flex items-center justify-between gap-3">
-        <p className="text-xs font-semibold text-[#2D3F52] uppercase tracking-wide">Web de clientes</p>
+        {!compacto && <p className="text-xs font-semibold text-[#2D3F52] uppercase tracking-wide">Web de clientes</p>}
         {publicado ? (
           <span className="text-[11px] font-semibold text-[#16A34A] bg-[#16A34A]/10 px-2 py-0.5 rounded">
             Publicado · {seccionWebLabel(post.web_section, post.web_subsection)}
@@ -656,7 +674,7 @@ function WebClientesPanel({ post, onUpdated }: { post: Post; onUpdated: (post: P
           <span className="text-[11px] text-gray-400">No publicado</span>
         )}
       </div>
-      <div className="mt-3 flex flex-col sm:flex-row gap-2">
+      <div className={`${compacto ? 'mt-2' : 'mt-3'} flex flex-col sm:flex-row gap-2`}>
         <select
           value={seccion}
           onChange={(e) => setSeccion(e.target.value)}
@@ -688,6 +706,100 @@ function WebClientesPanel({ post, onUpdated }: { post: Post; onUpdated: (post: P
         )}
       </div>
       {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
+    </div>
+  )
+}
+
+// Lista de todas las publicaciones con PDF para elegir, una por una, cuáles
+// subir a la web de clientes (o sacar). Nada se publica solo.
+function WebClientesModal({ onClose }: { onClose: () => void }) {
+  const [posts, setPosts] = useState<Post[] | null>(null)
+  const [filtro, setFiltro] = useState<'todos' | 'pendientes' | 'publicados'>('pendientes')
+  const [q, setQ] = useState('')
+
+  useEffect(() => {
+    fetch('/api/research')
+      .then((r) => r.json())
+      .then((d) => setPosts((d.posts ?? []).filter((p: Post) => esPdf(p))))
+      .catch(() => setPosts([]))
+  }, [])
+
+  const actualizar = (p: Post) => setPosts((prev) => prev?.map((x) => (x.id === p.id ? { ...x, ...p } : x)) ?? null)
+
+  const visibles = (posts ?? [])
+    .filter((p) => filtro === 'todos' || (filtro === 'publicados' ? !!p.web_document_id : !p.web_document_id))
+    .filter((p) => !q || p.title.toLowerCase().includes(q.toLowerCase()))
+  const enWeb = (posts ?? []).filter((p) => p.web_document_id).length
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div className="relative w-full max-w-3xl bg-white rounded-2xl shadow-2xl max-h-[90vh] flex flex-col">
+        <div className="px-5 py-4 border-b border-gray-100 flex items-start justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-semibold text-gray-900">Publicar en la web de clientes</h3>
+            <p className="text-xs text-gray-400 mt-0.5">
+              Documentos PDF de Research. Elegí la sección y publicá los que quieras que vean los clientes.
+            </p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 shrink-0">
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="px-5 py-3 border-b border-gray-100 flex flex-wrap items-center gap-2">
+          {([
+            ['pendientes', 'Sin publicar'],
+            ['publicados', `En la web (${enWeb})`],
+            ['todos', 'Todos'],
+          ] as const).map(([k, label]) => (
+            <button
+              key={k}
+              onClick={() => setFiltro(k)}
+              className={`px-3 py-1 rounded-full text-xs font-semibold ${filtro === k ? 'bg-[#2D3F52] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+            >
+              {label}
+            </button>
+          ))}
+          <div className="flex-1" />
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Buscar…"
+            className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg w-44 focus:outline-none focus:ring-1 focus:ring-[#16A34A]"
+          />
+        </div>
+
+        <div className="overflow-y-auto p-5 space-y-3">
+          {posts === null ? (
+            <p className="text-sm text-gray-400 text-center py-6">Cargando…</p>
+          ) : visibles.length === 0 ? (
+            <p className="text-sm text-gray-400 text-center py-6">
+              {filtro === 'publicados' ? 'Todavía no hay documentos en la web.' : 'No hay documentos con PDF para mostrar.'}
+            </p>
+          ) : (
+            visibles.map((p) => (
+              <div key={p.id} className="rounded-xl border border-gray-200 p-3">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[10px] font-bold uppercase tracking-wide text-[#16A34A] bg-[#16A34A]/10 px-1.5 py-0.5 rounded">
+                    {TYPE_LABEL[p.type]}
+                  </span>
+                  <span className="text-[11px] text-gray-400">{fmtDate(p.published_at)}</span>
+                  {p.file_url && (
+                    <a href={p.file_url} target="_blank" rel="noopener noreferrer" className="text-[11px] text-blue-600 hover:underline">
+                      Ver PDF
+                    </a>
+                  )}
+                </div>
+                <p className="text-sm font-semibold text-gray-900 mt-1">{p.title}</p>
+                <WebClientesPanel post={p} onUpdated={actualizar} compacto />
+              </div>
+            ))
+          )}
+        </div>
+      </div>
     </div>
   )
 }
