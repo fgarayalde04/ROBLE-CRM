@@ -16,6 +16,8 @@ import ClientTimeline from '@/components/ClientTimeline'
 import { getClient360 } from '@/lib/db/client360'
 import { getRiesgoCliente } from '@/lib/db/clientPositions'
 import ClientAccountsCard from '@/components/ClientAccountsCard'
+import ClientCouponCalendarsCard from '@/components/ClientCouponCalendarsCard'
+import { listCouponCalendars } from '@/lib/db/couponCalendars'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 
@@ -54,15 +56,17 @@ export default async function ClientDetailPage({ params }: Props) {
 
   const canManageSharing = !!session && (session.role === 'admin' || session.name === client.advisor)
 
-  let documents, tasks, deadlines, c360, riesgo
+  let documents, tasks, deadlines, c360, riesgo, cupones
   try {
-    ;[documents, tasks, deadlines, c360, riesgo] = await Promise.all([
+    ;[documents, tasks, deadlines, c360, riesgo, cupones] = await Promise.all([
       getDocuments({ clientId: params.id }),
       getTasks({ clientId: params.id }),
       getDeadlines({ clientId: params.id }),
       getClient360({ id: client.id, client_number: client.client_number ?? null }),
       // null si no tiene número o las tablas de posiciones no están migradas en esta base
       client.client_number ? getRiesgoCliente(client.client_number).catch(() => null) : Promise.resolve(null),
+      // [] si la tabla todavía no está migrada en esta base
+      listCouponCalendars({ clientId: client.id, limit: 10 }).catch(() => []),
     ])
   } catch {
     notFound()
@@ -302,6 +306,8 @@ export default async function ClientDetailPage({ params }: Props) {
           </div>
 
           <ClientAccountsCard accounts={c360.accounts} riesgo={riesgo} />
+
+          <ClientCouponCalendarsCard calendarios={cupones} />
 
           <ClientTimeline items={c360.timeline} />
 
