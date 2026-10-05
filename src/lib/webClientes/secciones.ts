@@ -1,3 +1,5 @@
+import { TIPOS_PLANTILLA, type TipoPlantilla } from '@/lib/plantillas/tipos'
+
 export interface SeccionWeb { section: string; subsection: string }
 
 // Secciones de research de la web de clientes. Deben coincidir con
@@ -14,6 +16,13 @@ export const SECCIONES_WEB: (SeccionWeb & { label: string })[] = [
 
 export function esSeccionWeb(section: unknown, subsection: unknown): boolean {
   return SECCIONES_WEB.some((s) => s.section === section && s.subsection === subsection)
+}
+
+// Documentos que vienen de Plantillas: la sección de la web la define el tipo
+// de plantilla (ficha de bono → Nuevas emisiones, comparativo → Comparativos, …).
+export function seccionWebDePlantilla(tipo: string | null | undefined): SeccionWeb | null {
+  if (!tipo || !Object.prototype.hasOwnProperty.call(TIPOS_PLANTILLA, tipo)) return null
+  return TIPOS_PLANTILLA[tipo as TipoPlantilla].web
 }
 
 // Sección sugerida según la categoría de Research & Novedades (null = elegir a mano).

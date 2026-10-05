@@ -79,7 +79,6 @@ function DocumentosDeTipo({ tipo, documentos, puedePublicar, webConfigurada }: {
 }) {
   const router = useRouter()
   const [categoria, setCategoria] = useState(TIPOS_PLANTILLA[tipo].categoriaResearch)
-  const [web, setWeb] = useState(webConfigurada)
   const [busy, setBusy] = useState<string | null>(null)
   const [q, setQ] = useState('')
 
@@ -114,7 +113,7 @@ function DocumentosDeTipo({ tipo, documentos, puedePublicar, webConfigurada }: {
         <button
           type="button"
           disabled={!!busy}
-          onClick={() => crear({ tipo, categoria: puedePublicar ? categoria : null, web: puedePublicar && webConfigurada && web }, 'nuevo')}
+          onClick={() => crear({ tipo, categoria: puedePublicar ? categoria : null }, 'nuevo')}
           className="w-full sm:w-auto px-5 py-2.5 text-sm font-semibold bg-[#2D3F52] text-white rounded-lg hover:bg-[#354A5E] disabled:opacity-60"
         >
           {busy === 'nuevo' ? 'Creando…' : '+ Crear nuevo'}
@@ -128,10 +127,9 @@ function DocumentosDeTipo({ tipo, documentos, puedePublicar, webConfigurada }: {
           </label>
         )}
         {puedePublicar && webConfigurada && (
-          <label className="flex items-center gap-1.5 text-xs text-gray-600">
-            <input type="checkbox" checked={web} onChange={(e) => setWeb(e.target.checked)} />
-            y en la web de clientes
-          </label>
+          <span className="text-[11px] text-gray-400">
+            La web de clientes se sube a mano desde Research &amp; Novedades.
+          </span>
         )}
       </div>
 
@@ -166,9 +164,6 @@ function DocumentosDeTipo({ tipo, documentos, puedePublicar, webConfigurada }: {
                         {d.research_post_id
                           ? <span className="ml-2 text-emerald-700">● En Research · {researchCategoriaLabel(d.research_type)}</span>
                           : d.research_type ? <span className="ml-2 text-amber-600">○ Se publica en {researchCategoriaLabel(d.research_type)} al completarlo</span> : null}
-                        {d.web_report_id
-                          ? <span className="ml-2 text-emerald-700">● En la web</span>
-                          : d.web_publicar ? <span className="ml-2 text-amber-600">○ Web al completarlo</span> : null}
                       </p>
                     </td>
                     <td className="px-5 py-3 text-right whitespace-nowrap">

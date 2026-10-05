@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { SECCIONES_WEB, seccionWebSugerida } from '@/lib/webClientes/secciones'
+import { SECCIONES_WEB, seccionWebSugerida, seccionWebDePlantilla } from '@/lib/webClientes/secciones'
+import { TIPOS_PLANTILLA, type TipoPlantilla } from '@/lib/plantillas/tipos'
 
 type ResearchType =
   | 'morning_brief' | 'noticia_mercado' | 'bono' | 'fondo' | 'nueva_emision'
@@ -62,6 +63,7 @@ interface Post {
   web_section: string | null
   web_subsection: string | null
   web_publicado_at: string | null
+  plantilla_tipo: string | null
 }
 
 const seccionKey = (section: string, subsection: string) => `${section}/${subsection}`
@@ -75,7 +77,7 @@ function esPdf(post: Pick<Post, 'file_url' | 'file_name'>) {
 }
 
 async function publicarEnWeb(postId: string, key: string): Promise<{ post?: Post; error?: string }> {
-  const [section, subsection] = key.split('/')
+  const [section, subsection] = key ? key.split('/') : []
   const res = await fetch(`/api/research/${postId}/web`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -630,7 +632,9 @@ function DetailPanel({
 // Publicar (o sacar) el PDF de una publicación en la web de clientes. Siempre a mano.
 function WebClientesPanel({ post, onUpdated, compacto = false }: { post: Post; onUpdated: (post: Post) => void; compacto?: boolean }) {
   const publicado = !!post.web_document_id
-  const sugerida = seccionWebSugerida(post.type)
+  // Si viene de Plantillas, la sección de la web es fija según el tipo de plantilla
+  const fija = seccionWebDePlantilla(post.plantilla_tipo)
+  const sugerida = fija ?? seccionWebSugerida(post.type)
   const [seccion, setSeccion] = useState(
     publicado && post.web_section && post.web_subsection
       ? seccionKey(post.web_section, post.web_subsection)
@@ -640,9 +644,9 @@ function WebClientesPanel({ post, onUpdated, compacto = false }: { post: Post; o
   const [error, setError] = useState('')
 
   async function publicar() {
-    if (!seccion) { setError('Elegí la sección de la web'); return }
+    if (!fija && !seccion) { setError('Elegí la sección de la web'); return }
     setBusy(true); setError('')
-    const r = await publicarEnWeb(post.id, seccion)
+    const r = await publicarEnWeb(post.id, fija ? '' : seccion)
     setBusy(false)
     if (r.error) setError(r.error)
     else if (r.post) onUpdated({ ...post, ...r.post })
@@ -675,6 +679,12 @@ function WebClientesPanel({ post, onUpdated, compacto = false }: { post: Post; o
         )}
       </div>
       <div className={`${compacto ? 'mt-2' : 'mt-3'} flex flex-col sm:flex-row gap-2`}>
+        {fija ? (
+          <p className="flex-1 self-center text-xs text-gray-500">
+            {TIPOS_PLANTILLA[post.plantilla_tipo as TipoPlantilla].label} → se sube a{' '}
+            <span className="font-semibold text-gray-700">{seccionWebLabel(fija.section, fija.subsection)}</span>
+          </p>
+        ) : (
         <select
           value={seccion}
           onChange={(e) => setSeccion(e.target.value)}
@@ -686,13 +696,15 @@ function WebClientesPanel({ post, onUpdated, compacto = false }: { post: Post; o
             <option key={seccionKey(s.section, s.subsection)} value={seccionKey(s.section, s.subsection)}>{s.label}</option>
           ))}
         </select>
-        {(!publicado || seccion !== actual) && (
+        )}
+        {(!publicado || fija || seccion !== actual) && (
           <button
             onClick={publicar}
-            disabled={busy || !seccion}
+            disabled={busy || (!fija && !seccion)}
+            title={publicado && fija ? 'Reemplaza el PDF de la web por la versión actual' : undefined}
             className="px-4 py-2 bg-[#16A34A] text-white text-sm font-semibold rounded-lg hover:bg-[#15803D] disabled:opacity-50"
           >
-            {busy ? 'Publicando…' : publicado ? 'Mover a esta sección' : 'Publicar en la web'}
+            {busy ? 'Subiendo…' : !publicado ? 'Subir a la web de clientes' : fija ? 'Actualizar en la web' : 'Mover a esta sección'}
           </button>
         )}
         {publicado && (

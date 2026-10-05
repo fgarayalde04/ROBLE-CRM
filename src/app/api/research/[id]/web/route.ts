@@ -3,7 +3,7 @@ import { getSession, RESEARCH_AUTHOR_ROLES } from '@/lib/auth'
 import { getPost, updatePost } from '@/lib/db/research'
 import { getObjectBuffer } from '@/lib/storage/s3'
 import { despublicarDocumentoWeb, publicarReporteWeb, webClientesConfigurada } from '@/lib/webClientes/client'
-import { esSeccionWeb } from '@/lib/webClientes/secciones'
+import { esSeccionWeb, seccionWebDePlantilla } from '@/lib/webClientes/secciones'
 
 export const maxDuration = 60
 
@@ -29,20 +29,23 @@ async function autorizar() {
   return { session }
 }
 
-// POST /api/research/[id]/web { section, subsection }
-// Publica el PDF adjunto en esa sección de la web de clientes. Si ya estaba
-// publicado, lo reemplaza (por ejemplo para cambiarlo de sección).
+// POST /api/research/[id]/web { section?, subsection? }
+// Publica el PDF adjunto en la web de clientes. Si viene de Plantillas, la
+// sección la define el tipo de plantilla; si se cargó a mano, se elige.
+// Si ya estaba publicado, lo reemplaza con el PDF actual.
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   const auth = await autorizar()
   if (auth.error) return auth.error
 
-  const { section, subsection } = await req.json().catch(() => ({}))
+  const post = await getPost(params.id)
+  if (!post) return NextResponse.json({ error: 'Publicación no encontrada' }, { status: 404 })
+
+  const body = await req.json().catch(() => ({}))
+  const fija = seccionWebDePlantilla(post.plantilla_tipo)
+  const { section, subsection } = fija ?? body
   if (!esSeccionWeb(section, subsection)) {
     return NextResponse.json({ error: 'Elegí una sección de la web' }, { status: 400 })
   }
-
-  const post = await getPost(params.id)
-  if (!post) return NextResponse.json({ error: 'Publicación no encontrada' }, { status: 404 })
 
   const key = claveAdjunto(post.file_url)
   const esPdf = (post.file_name ?? key ?? '').toLowerCase().endsWith('.pdf')

@@ -54,7 +54,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   const body = await req.json().catch(() => ({}))
   const categoria = 'categoria' in body ? body.categoria : doc.research_type
-  const web = !!TIPOS_PLANTILLA[doc.tipo].web && ('web' in body ? body.web === true : doc.web_publicar)
+  // La web de clientes ya no se publica desde acá: se sube a mano desde Research.
+  const web = false
   if (categoria && !isResearchCategoria(categoria)) return NextResponse.json({ error: 'Categoría de Research inválida' }, { status: 400 })
   if (!categoria && !web) return NextResponse.json({ error: 'Elegí dónde publicarlo' }, { status: 400 })
   if (web && !webClientesConfigurada()) return NextResponse.json({ error: 'La web de clientes no está conectada (faltan WEB_CLIENTES_API_URL / WEB_CLIENTES_API_KEY en el servidor)' }, { status: 400 })
