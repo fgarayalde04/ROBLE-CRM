@@ -7,7 +7,8 @@
 //   WEB_CLIENTES_API_KEY → la CRM_API_KEY configurada en el backend de la web
 // No hay endpoint para editar: actualizar = publicar el nuevo y borrar el anterior.
 
-export interface SeccionWeb { section: string; subsection: string }
+export type { SeccionWeb } from './secciones'
+import type { SeccionWeb } from './secciones'
 
 export function webClientesConfigurada() {
   return !!(process.env.WEB_CLIENTES_API_URL && process.env.WEB_CLIENTES_API_KEY)
@@ -19,6 +20,14 @@ function base() {
 
 function headers() {
   return { 'X-API-Key': process.env.WEB_CLIENTES_API_KEY! }
+}
+
+/** Saca un documento de la web de clientes. Si ya no existe, no es error. */
+export async function despublicarDocumentoWeb(id: string) {
+  const res = await fetch(`${base()}/documents/${encodeURIComponent(id)}`, { method: 'DELETE', headers: headers() })
+  if (!res.ok && res.status !== 404 && res.status !== 422) {
+    throw new Error(`Web de clientes DELETE /documents → ${res.status}: ${await res.text()}`)
+  }
 }
 
 async function borrarDocumento(id: string) {

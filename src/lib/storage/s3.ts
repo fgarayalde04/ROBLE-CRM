@@ -62,6 +62,13 @@ export async function uploadObject(key: string, body: Buffer, contentType: strin
   }))
 }
 
+export async function getObjectBuffer(key: string): Promise<{ body: Buffer; contentType: string | undefined }> {
+  const client = getClient()
+  const res = await client.send(new GetObjectCommand({ Bucket: getBucket(), Key: key }))
+  const bytes = await res.Body!.transformToByteArray()
+  return { body: Buffer.from(bytes), contentType: res.ContentType }
+}
+
 export async function deleteObject(key: string) {
   const client = getClient()
   await client.send(new DeleteObjectCommand({ Bucket: getBucket(), Key: key }))

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useSearchParams } from 'next/navigation'
+import { SECCIONES_WEB, seccionWebSugerida } from '@/lib/webClientes/secciones'
 
 type ResearchType =
   | 'morning_brief' | 'noticia_mercado' | 'bono' | 'fondo' | 'nueva_emision'
@@ -57,6 +58,31 @@ interface Post {
   created_by_name: string | null
   published_at: string
   read: boolean
+  web_document_id: string | null
+  web_section: string | null
+  web_subsection: string | null
+  web_publicado_at: string | null
+}
+
+const seccionKey = (section: string, subsection: string) => `${section}/${subsection}`
+
+function seccionWebLabel(section: string | null, subsection: string | null) {
+  return SECCIONES_WEB.find((s) => s.section === section && s.subsection === subsection)?.label ?? section ?? ''
+}
+
+function esPdf(post: Pick<Post, 'file_url' | 'file_name'>) {
+  return !!post.file_url && (post.file_name ?? '').toLowerCase().endsWith('.pdf')
+}
+
+async function publicarEnWeb(postId: string, key: string): Promise<{ post?: Post; error?: string }> {
+  const [section, subsection] = key.split('/')
+  const res = await fetch(`/api/research/${postId}/web`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ section, subsection }),
+  })
+  const data = await res.json().catch(() => ({}))
+  return res.ok ? { post: data.post } : { error: data.error || 'No se pudo publicar en la web' }
 }
 
 function fmtDate(iso: string) {
@@ -200,6 +226,7 @@ export default function ResearchClient({
           canAuthor={canAuthor}
           onClose={() => setDetail(null)}
           onAction={handleAuthorAction}
+          onUpdated={(p) => { setDetail(p); fetchPosts() }}
         />
       )}
 
@@ -446,12 +473,13 @@ function ResendPushButton({ postId }: { postId: string }) {
 // ─── Detail panel ───────────────────────────────────────────────────────────
 
 function DetailPanel({
-  post, canAuthor, onClose, onAction,
+  post, canAuthor, onClose, onAction, onUpdated,
 }: {
   post: Post
   canAuthor: boolean
   onClose: () => void
   onAction: (post: Post, field: 'pinned' | 'featured' | 'archived', value: boolean) => void
+  onUpdated: (post: Post) => void
 }) {
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center p-4">
@@ -550,6 +578,10 @@ function DetailPanel({
           </div>
         )}
 
+        {canAuthor && post.type !== 'morning_brief' && esPdf(post) && (
+          <WebClientesPanel post={post} onUpdated={onUpdated} />
+        )}
+
         {canAuthor && post.type !== 'morning_brief' && (
           <div className="mt-6 pt-4 border-t border-gray-100 flex flex-wrap gap-2">
             <button
@@ -573,6 +605,89 @@ function DetailPanel({
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+// Publicar (o sacar) el PDF de una publicación en la web de clientes. Siempre a mano.
+function WebClientesPanel({ post, onUpdated }: { post: Post; onUpdated: (post: Post) => void }) {
+  const publicado = !!post.web_document_id
+  const sugerida = seccionWebSugerida(post.type)
+  const [seccion, setSeccion] = useState(
+    publicado && post.web_section && post.web_subsection
+      ? seccionKey(post.web_section, post.web_subsection)
+      : sugerida ? seccionKey(sugerida.section, sugerida.subsection) : ''
+  )
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+
+  async function publicar() {
+    if (!seccion) { setError('Elegí la sección de la web'); return }
+    setBusy(true); setError('')
+    const r = await publicarEnWeb(post.id, seccion)
+    setBusy(false)
+    if (r.error) setError(r.error)
+    else if (r.post) onUpdated({ ...post, ...r.post })
+  }
+
+  async function quitar() {
+    if (!confirm('¿Sacar este documento de la web de clientes? Los clientes dejan de verlo.')) return
+    setBusy(true); setError('')
+    const res = await fetch(`/api/research/${post.id}/web`, { method: 'DELETE' })
+    const data = await res.json().catch(() => ({}))
+    setBusy(false)
+    if (!res.ok) setError(data.error || 'No se pudo sacar de la web')
+    else onUpdated({ ...post, ...data.post })
+  }
+
+  const actual = publicado && post.web_section && post.web_subsection
+    ? seccionKey(post.web_section, post.web_subsection)
+    : ''
+
+  return (
+    <div className="mt-6 rounded-xl border border-gray-200 p-4">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-xs font-semibold text-[#2D3F52] uppercase tracking-wide">Web de clientes</p>
+        {publicado ? (
+          <span className="text-[11px] font-semibold text-[#16A34A] bg-[#16A34A]/10 px-2 py-0.5 rounded">
+            Publicado · {seccionWebLabel(post.web_section, post.web_subsection)}
+          </span>
+        ) : (
+          <span className="text-[11px] text-gray-400">No publicado</span>
+        )}
+      </div>
+      <div className="mt-3 flex flex-col sm:flex-row gap-2">
+        <select
+          value={seccion}
+          onChange={(e) => setSeccion(e.target.value)}
+          disabled={busy}
+          className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm"
+        >
+          <option value="">Elegí la sección…</option>
+          {SECCIONES_WEB.map((s) => (
+            <option key={seccionKey(s.section, s.subsection)} value={seccionKey(s.section, s.subsection)}>{s.label}</option>
+          ))}
+        </select>
+        {(!publicado || seccion !== actual) && (
+          <button
+            onClick={publicar}
+            disabled={busy || !seccion}
+            className="px-4 py-2 bg-[#16A34A] text-white text-sm font-semibold rounded-lg hover:bg-[#15803D] disabled:opacity-50"
+          >
+            {busy ? 'Publicando…' : publicado ? 'Mover a esta sección' : 'Publicar en la web'}
+          </button>
+        )}
+        {publicado && (
+          <button
+            onClick={quitar}
+            disabled={busy}
+            className="px-4 py-2 text-sm font-medium rounded-lg bg-gray-100 text-gray-600 hover:bg-red-100 hover:text-red-700 disabled:opacity-50"
+          >
+            Sacar de la web
+          </button>
+        )}
+      </div>
+      {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
     </div>
   )
 }
@@ -601,6 +716,11 @@ function CreatePostModal({ currentUserName, onClose, onCreated }: { currentUserN
   const [featured, setFeatured] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [creado, setCreado] = useState(false)
+
+  // Web de clientes: apagado por defecto, se activa a mano
+  const [publicarWeb, setPublicarWeb] = useState(false)
+  const [seccionWeb, setSeccionWeb] = useState('')
 
   // bono/fondo fields
   const [issuer, setIssuer] = useState('')
@@ -614,8 +734,26 @@ function CreatePostModal({ currentUserName, onClose, onCreated }: { currentUserN
 
   const isBondOrFund = type === 'bono' || type === 'fondo'
 
+  function cambiarTipo(t: ResearchType) {
+    setType(t)
+    const sugerida = seccionWebSugerida(t)
+    if (sugerida) setSeccionWeb(seccionKey(sugerida.section, sugerida.subsection))
+  }
+
+  function activarWeb(on: boolean) {
+    setPublicarWeb(on)
+    if (on && !seccionWeb) {
+      const sugerida = seccionWebSugerida(type)
+      if (sugerida) setSeccionWeb(seccionKey(sugerida.section, sugerida.subsection))
+    }
+  }
+
   async function handleSubmit() {
     if (!title.trim()) { setError('El título es obligatorio'); return }
+    if (publicarWeb) {
+      if (!file || !file.name.toLowerCase().endsWith('.pdf')) { setError('Para publicar en la web de clientes adjuntá un PDF'); return }
+      if (!seccionWeb) { setError('Elegí la sección de la web de clientes'); return }
+    }
     setSaving(true)
     setError('')
     try {
@@ -642,11 +780,20 @@ function CreatePostModal({ currentUserName, onClose, onCreated }: { currentUserN
       if (file) fd.set('file', file)
 
       const res = await fetch('/api/research', { method: 'POST', body: fd })
+      const data = await res.json().catch(() => ({}))
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
         setError(data.error || 'Error al publicar')
         setSaving(false)
         return
+      }
+      if (publicarWeb && data.post?.id) {
+        const r = await publicarEnWeb(data.post.id, seccionWeb)
+        if (r.error) {
+          setError(`Se publicó en el CRM, pero no en la web de clientes: ${r.error}. Podés reintentarlo desde la publicación.`)
+          setCreado(true)
+          setSaving(false)
+          return
+        }
       }
       onCreated()
     } catch {
@@ -660,7 +807,7 @@ function CreatePostModal({ currentUserName, onClose, onCreated }: { currentUserN
       <div className="space-y-3">
         <div>
           <label className="text-xs font-semibold text-gray-500">Categoría</label>
-          <select value={type} onChange={(e) => setType(e.target.value as ResearchType)} className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">
+          <select value={type} onChange={(e) => cambiarTipo(e.target.value as ResearchType)} className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">
             {MANUAL_TYPES.map((t) => <option key={t} value={t}>{TYPE_LABEL[t]}</option>)}
           </select>
         </div>
@@ -700,17 +847,58 @@ function CreatePostModal({ currentUserName, onClose, onCreated }: { currentUserN
           </label>
         </div>
 
+        <div className="rounded-lg border border-gray-200 p-3">
+          <label className="flex items-center justify-between gap-3 cursor-pointer">
+            <span>
+              <span className="block text-sm font-semibold text-gray-700">Publicar también en la web de clientes</span>
+              <span className="block text-[11px] text-gray-400">Necesita un PDF adjunto. Se puede hacer después desde la publicación.</span>
+            </span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={publicarWeb}
+              onClick={() => activarWeb(!publicarWeb)}
+              className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${publicarWeb ? 'bg-[#16A34A]' : 'bg-gray-300'}`}
+            >
+              <span className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${publicarWeb ? 'translate-x-5' : ''}`} />
+            </button>
+          </label>
+          {publicarWeb && (
+            <select
+              value={seccionWeb}
+              onChange={(e) => setSeccionWeb(e.target.value)}
+              className="mt-3 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+            >
+              <option value="">Elegí la sección de la web…</option>
+              {SECCIONES_WEB.map((s) => (
+                <option key={seccionKey(s.section, s.subsection)} value={seccionKey(s.section, s.subsection)}>{s.label}</option>
+              ))}
+            </select>
+          )}
+        </div>
+
         {error && <p className="text-xs text-red-600">{error}</p>}
 
         <div className="flex justify-end gap-2 pt-2">
-          <button onClick={onClose} className="px-4 py-2 text-sm text-gray-500 hover:text-gray-700">Cancelar</button>
-          <button
-            onClick={handleSubmit}
-            disabled={saving}
-            className="px-4 py-2 bg-[#16A34A] text-white text-sm font-semibold rounded-lg hover:bg-[#15803D] disabled:opacity-50"
-          >
-            {saving ? 'Publicando…' : 'Publicar'}
-          </button>
+          {creado ? (
+            <button
+              onClick={onCreated}
+              className="px-4 py-2 bg-[#16A34A] text-white text-sm font-semibold rounded-lg hover:bg-[#15803D]"
+            >
+              Cerrar
+            </button>
+          ) : (
+            <>
+              <button onClick={onClose} className="px-4 py-2 text-sm text-gray-500 hover:text-gray-700">Cancelar</button>
+              <button
+                onClick={handleSubmit}
+                disabled={saving}
+                className="px-4 py-2 bg-[#16A34A] text-white text-sm font-semibold rounded-lg hover:bg-[#15803D] disabled:opacity-50"
+              >
+                {saving ? 'Publicando…' : 'Publicar'}
+              </button>
+            </>
+          )}
         </div>
       </div>
     </Modal>
