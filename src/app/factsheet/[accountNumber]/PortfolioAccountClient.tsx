@@ -13,7 +13,7 @@ import ImportHistoryModal from '@/components/portfolio/ImportHistoryModal'
 import AccountPdfReport from './AccountPdfReport'
 import PdfOptionsModal, { type PdfSections, DEFAULT_PDF_SECTIONS } from '@/components/portfolio/PdfOptionsModal'
 import { cleanDisplayName } from '@/lib/portfolio/theme'
-import { computeFundDividends, looksLikeBond, fundGroupKey, findFundPositionValue, fuzzyNameMatch, type DividendTxn } from '@/lib/portfolio/dividendEngine'
+import { computeFundDividends, looksLikeBond, bondCouponRatePct, fundGroupKey, findFundPositionValue, fuzzyNameMatch, type DividendTxn } from '@/lib/portfolio/dividendEngine'
 import {
   ASSET_CLASS_ES,
   computeAssetAllocation, computeLiquidity, computeFixedIncomeBreakdown, computeCurrencyExposure,
@@ -260,7 +260,7 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
     try {
       const res = await fetch(`/api/portfolio/${encodeURIComponent(accountNumber)}/dividends`)
       const data = await res.json()
-      const entries: { fund_name: string; isin: string | null; entry_type: string; entry_date: string | null; amount: string | null }[] = data.entries ?? []
+      const entries: { fund_name: string; isin: string | null; entry_type: string; entry_date: string | null; amount: string | null; quantity: string | null }[] = data.entries ?? []
       // Mismo cruce ISIN↔nombre que la pestaña Dividendos, para que el PDF
       // no separe en dos fondos una compra importada (con ISIN) de un
       // dividendo cargado a mano para el mismo fondo (sin ISIN).
@@ -274,7 +274,7 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
         const key = fundGroupKey(isin, e.fund_name)
         let g = byKey.get(key)
         if (!g) { g = { label: e.fund_name, isin, txns: [] }; byKey.set(key, g) }
-        g.txns.push({ id: key, date: e.entry_date, type: e.entry_type as DividendTxn['type'], amount: e.amount != null ? Number(e.amount) : null })
+        g.txns.push({ id: key, date: e.entry_date, type: e.entry_type as DividendTxn['type'], amount: e.amount != null ? Number(e.amount) : null, quantity: e.quantity != null ? Number(e.quantity) : null })
       }
       // Misma fusión que la pestaña Dividendos: sin ISIN, un nombre cargado
       // a mano y el nombre largo del Activity para el mismo fondo no deben
@@ -286,7 +286,7 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
         else groups.push(g)
       }
       setDividendResults(groups.map(g => {
-        const r = computeFundDividends(g.txns, undefined, { isBond: looksLikeBond(g.label) })
+        const r = computeFundDividends(g.txns, undefined, { isBond: looksLikeBond(g.label), couponRatePct: bondCouponRatePct(g.label) })
         // "Valor del fondo" en el PDF es la misma posición real que ya usa
         // Portafolio, no una suma aparte de las compras de esta planilla.
         const fundValue = findFundPositionValue(g.isin, g.label, sortedByValue) ?? r.currentCapital

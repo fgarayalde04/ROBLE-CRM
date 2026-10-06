@@ -16,6 +16,7 @@ export interface DividendTxn {
   date: string | null // YYYY-MM-DD
   type: DividendTxnType
   amount: number | null
+  quantity?: number | null // nominal del bono al cobrar el cupón (del Activity)
 }
 
 export interface DividendHistoryEntry {
@@ -24,6 +25,10 @@ export interface DividendHistoryEntry {
   collected: number
   capitalAtPayment: number | null // null = no se pudo determinar
   yieldPct: number | null // null = pendiente de revisar
+  // Bonos: cupón menor al completo (nominal × tasa ÷ frecuencia), típico del
+  // primer cobro después de una transferencia — cuenta en lo cobrado pero
+  // no en la tasa anualizada.
+  partial?: boolean
 }
 
 // mensual ×12 / trimestral ×4 / semestral ×2 / anual ×1 — detectada por la
@@ -46,6 +51,9 @@ export interface FundDividendResult {
   currentCapital: number // compras - ventas a la fecha de hoy (0 si nunca hubo compras registradas)
   history: DividendHistoryEntry[] // más reciente primero, información secundaria
   pendingReviewCount: number // dividendos con rendimiento no determinado
+  // true = la tasa es la nominal del bono (todos los cupones cobrados fueron
+  // parciales), no una calculada con lo cobrado.
+  yieldIsNominal: boolean
 }
 
 function median(nums: number[]): number {
@@ -78,7 +86,9 @@ export function computeFundDividends(
   // Bonos: con un solo cupón cobrado no hay separación entre pagos para
   // detectar la frecuencia — se asume semestral (lo estándar en bonos en USD)
   // en vez de dejar la tasa de un cupón sin anualizar.
-  opts: { isBond?: boolean } = {}
+  // couponRatePct: tasa nominal del bono (del nombre, ver bondCouponRatePct)
+  // — permite detectar cupones parciales.
+  opts: { isBond?: boolean; couponRatePct?: number | null } = {}
 ): FundDividendResult {
   // Las compras/ventas SIN fecha no pueden ubicarse en la línea de tiempo —
   // se excluyen del capital cronológico (no se inventa un orden).
@@ -107,12 +117,34 @@ export function computeFundDividends(
     // monto, nunca se inventa el rendimiento.
     const capital = d.type === 'dividendo_total' ? null : capitalAt(d.date)
     const yieldPct = capital != null && capital > 0 ? (collected / capital) * 100 : null
-    return { id: d.id, date: d.date, collected, capitalAtPayment: capital, yieldPct }
+    return { id: d.id, date: d.date, collected, capitalAtPayment: capital, yieldPct, nominal: d.quantity ?? null }
   }).sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''))
 
+  // La frecuencia sale de la separación entre TODOS los cobros con fecha
+  // (no solo los que tienen capital determinado): un cupón sin compra previa
+  // registrada igual sirve para saber cada cuánto paga el instrumento.
+  const paymentDates = Array.from(new Set(history.filter(h => h.date).map(h => h.date as string))).sort()
+  const gaps: number[] = []
+  for (let i = 1; i < paymentDates.length; i++) {
+    gaps.push(Math.round((new Date(paymentDates[i] + 'T00:00:00').getTime() - new Date(paymentDates[i - 1] + 'T00:00:00').getTime()) / 86400000))
+  }
+  const detectedFrequency: DistributionFrequency | null = gaps.length > 0 ? detectFrequency(median(gaps)) : opts.isBond ? 'semestral' : null
+
+  // Cupón parcial: menos del 95% del cupón completo esperado para el nominal
+  // que tenía el cliente al cobrar. Solo se puede saber en bonos con tasa
+  // fija (en el nombre) y nominal conocido.
+  const couponRate = opts.isBond ? opts.couponRatePct ?? null : null
+  for (const h of history as (DividendHistoryEntry & { nominal?: number | null })[]) {
+    if (couponRate != null && detectedFrequency && h.nominal && h.nominal > 0) {
+      const fullCoupon = h.nominal * couponRate / 100 / FREQUENCY_MULTIPLIER[detectedFrequency]
+      if (h.collected < fullCoupon * 0.95) h.partial = true
+    }
+    delete h.nominal
+  }
+
   const totalCollected = history.reduce((s, h) => s + h.collected, 0)
-  const withYield = history.filter(h => h.yieldPct != null)
-  const pendingReviewCount = history.length - withYield.length
+  const withYield = history.filter(h => h.yieldPct != null && !h.partial)
+  const pendingReviewCount = history.filter(h => h.yieldPct == null).length
 
   const todayIso = today.toISOString().slice(0, 10)
   const currentCapital = capitalAt(todayIso) ?? capitalMoves.reduce((s, m) => s + (m.type === 'compra' ? Number(m.amount) : -Number(m.amount)), 0)
@@ -127,20 +159,12 @@ export function computeFundDividends(
   let annualizedYieldPct: number | null = null
   let frequency: DistributionFrequency | null = null
   let isEstimate = false
-
-  // La frecuencia sale de la separación entre TODOS los cobros con fecha
-  // (no solo los que tienen capital determinado): un cupón sin compra previa
-  // registrada igual sirve para saber cada cuánto paga el instrumento.
-  const paymentDates = Array.from(new Set(history.filter(h => h.date).map(h => h.date as string))).sort()
-  const gaps: number[] = []
-  for (let i = 1; i < paymentDates.length; i++) {
-    gaps.push(Math.round((new Date(paymentDates[i] + 'T00:00:00').getTime() - new Date(paymentDates[i - 1] + 'T00:00:00').getTime()) / 86400000))
-  }
+  let yieldIsNominal = false
 
   if (withYieldAsc.length > 0) {
     const avgRatePct = withYieldAsc.reduce((s, h) => s + (h.yieldPct as number), 0) / withYieldAsc.length
-    if (gaps.length > 0 || opts.isBond) {
-      frequency = gaps.length > 0 ? detectFrequency(median(gaps)) : 'semestral'
+    if (detectedFrequency) {
+      frequency = detectedFrequency
       annualizedYieldPct = avgRatePct * FREQUENCY_MULTIPLIER[frequency]
       if (withYieldAsc.length < 3) isEstimate = true
     } else {
@@ -150,9 +174,26 @@ export function computeFundDividends(
       annualizedYieldPct = avgRatePct
       isEstimate = true
     }
+  } else if (couponRate != null && history.some(h => h.partial)) {
+    // Todos los cupones cobrados fueron parciales (ej. la posición llegó por
+    // transferencia a mitad del período): la tasa calculada con ellos
+    // subestimaría el rendimiento, así que se muestra la nominal del bono.
+    annualizedYieldPct = couponRate
+    frequency = detectedFrequency
+    isEstimate = true
+    yieldIsNominal = true
   }
 
-  return { totalCollected, annualizedYieldPct, isEstimate, frequency, currentCapital, history, pendingReviewCount }
+  return { totalCollected, annualizedYieldPct, isEstimate, frequency, currentCapital, history, pendingReviewCount, yieldIsNominal }
+}
+
+// Tasa nominal de un bono de tasa fija según su nombre ("… 7.125% 01/20/37"
+// → 7.125). null en bonos de tasa variable o si el nombre no la trae.
+export function bondCouponRatePct(name: string): number | null {
+  const m = name.match(/(\d+(?:\.\d+)?)%\s+\d{1,2}\/\d{1,2}\/\d{2,4}/)
+  if (!m) return null
+  const rate = Number(m[1])
+  return rate > 0 && rate < 30 ? rate : null
 }
 
 // Clave de fondo para agrupar/consolidar — ISIN cuando está disponible

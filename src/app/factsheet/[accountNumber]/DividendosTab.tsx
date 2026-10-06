@@ -1,7 +1,7 @@
 'use client'
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { fmtUSD2 } from './PortfolioAccountClient'
-import { computeFundDividends, looksLikeBond, fundGroupKey, findFundPositionValue, fuzzyNameMatch, type DividendTxn } from '@/lib/portfolio/dividendEngine'
+import { computeFundDividends, looksLikeBond, bondCouponRatePct, fundGroupKey, findFundPositionValue, fuzzyNameMatch, type DividendTxn } from '@/lib/portfolio/dividendEngine'
 
 interface LedgerEntry {
   id: string
@@ -229,8 +229,8 @@ export default function DividendosTab({ accountNumber, positions }: { accountNum
 
   const results = useMemo(() => {
     return groups.map(g => {
-      const txns: DividendTxn[] = g.entries.map(e => ({ id: e.id, date: e.entry_date, type: e.entry_type, amount: e.amount != null ? Number(e.amount) : null }))
-      const result = computeFundDividends(txns, undefined, { isBond: looksLikeBond(g.label) })
+      const txns: DividendTxn[] = g.entries.map(e => ({ id: e.id, date: e.entry_date, type: e.entry_type, amount: e.amount != null ? Number(e.amount) : null, quantity: e.quantity != null ? Number(e.quantity) : null }))
+      const result = computeFundDividends(txns, undefined, { isBond: looksLikeBond(g.label), couponRatePct: bondCouponRatePct(g.label) })
       const fundValue = findFundPositionValue(g.isin, g.label, positions) ?? result.currentCapital
       return { group: g, result, fundValue }
     })
@@ -395,7 +395,10 @@ export default function DividendosTab({ accountNumber, positions }: { accountNum
                           <span className="inline-block w-3 text-gray-400">{isOpen ? '▾' : '▸'}</span> {group.label}
                         </td>
                         <td className="px-4 py-2.5 text-right font-semibold text-gray-900">{fmtUSD2(result.totalCollected)}</td>
-                        <td className={`px-4 py-2.5 text-right font-semibold ${result.annualizedYieldPct != null ? 'text-emerald-600' : 'text-amber-600 text-xs'}`}>{fmtYield(result.annualizedYieldPct, result.totalCollected)}</td>
+                        <td className={`px-4 py-2.5 text-right font-semibold ${result.annualizedYieldPct != null ? 'text-emerald-600' : 'text-amber-600 text-xs'}`} title={result.yieldIsNominal ? 'Tasa nominal del bono: los cupones cobrados hasta ahora fueron parciales (ej. posición transferida a mitad del período)' : undefined}>
+                          {fmtYield(result.annualizedYieldPct, result.totalCollected)}
+                          {result.yieldIsNominal && <span className="block text-[10px] font-medium text-gray-400">nominal del bono</span>}
+                        </td>
                         <td />
                       </tr>
                       {isOpen && (
@@ -426,7 +429,7 @@ export default function DividendosTab({ accountNumber, positions }: { accountNum
                                       <td className="py-1 text-right font-semibold text-gray-800">{fmtUSD2(h.collected)}</td>
                                       <td className="py-1 text-right text-gray-500">{h.capitalAtPayment != null ? fmtUSD2(h.capitalAtPayment) : '—'}</td>
                                       <td className="py-1 text-right">
-                                        {h.yieldPct != null ? <span className="font-semibold text-emerald-600">{fmtPct(h.yieldPct)}</span> : <span className="text-amber-600 text-[10px]">pendiente de revisar</span>}
+                                        {h.partial ? <span className="text-gray-400 text-[10px]" title="Cupón menor al completo para ese nominal (ej. posición transferida a mitad del período) — suma en lo cobrado, no en la tasa">cupón parcial</span> : h.yieldPct != null ? <span className="font-semibold text-emerald-600">{fmtPct(h.yieldPct)}</span> : <span className="text-amber-600 text-[10px]">pendiente de revisar</span>}
                                       </td>
                                     </tr>
                                   ))}
