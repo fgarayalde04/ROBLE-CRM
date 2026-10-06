@@ -160,7 +160,16 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
     await patchOrCreateAccount({ account_name: accountName })
   }
 
-  const totalValue = importRow ? Number(importRow.total_market_value) : 0
+  // Valor total = market value de las posiciones + cupón corrido (accrued
+  // interest de los bonos). Se recalcula desde las posiciones para que
+  // también valga en snapshots importados antes de sumar el cupón corrido al
+  // total guardado. Los % de cartera se calculan solo sobre positionsValue.
+  const accruedInterestTotal = useMemo(() => positions.reduce((s, p) => s + Number(p.accrued_interest ?? 0), 0), [positions])
+  const positionsValue = useMemo(
+    () => positions.length ? positions.reduce((s, p) => s + Number(p.market_value), 0) : (importRow ? Number(importRow.total_market_value) : 0),
+    [positions, importRow]
+  )
+  const totalValue = positionsValue + accruedInterestTotal
 
   const previousSnapshot = useMemo(() => {
     if (!importRow || history.length < 2) return null
@@ -174,13 +183,13 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
 
   const sortedByValue = useMemo(() => [...positions].sort((a, b) => Number(b.market_value) - Number(a.market_value)), [positions])
 
-  const assetAllocation = useMemo(() => computeAssetAllocation(positions, totalValue), [positions, totalValue])
+  const assetAllocation = useMemo(() => computeAssetAllocation(positions, positionsValue), [positions, positionsValue])
 
-  const liquidity = useMemo(() => computeLiquidity(positions, totalValue), [positions, totalValue])
+  const liquidity = useMemo(() => computeLiquidity(positions, positionsValue), [positions, positionsValue])
 
   const fixedIncomeBreakdown = useMemo(() => computeFixedIncomeBreakdown(positions), [positions])
 
-  const currencyExposure = useMemo(() => computeCurrencyExposure(positions, totalValue), [positions, totalValue])
+  const currencyExposure = useMemo(() => computeCurrencyExposure(positions, positionsValue), [positions, positionsValue])
 
   const cleanedNames = useMemo(() => {
     const map = new Map<string, { name: string; detail: string | null }>()
@@ -483,7 +492,7 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
         {tab === 'resumen' && (
           <ResumenTab
             accountNumber={accountNumber}
-            totalValue={totalValue} snapshotDate={importRow.snapshot_date} variation={variation}
+            totalValue={totalValue} accruedInterest={accruedInterestTotal} snapshotDate={importRow.snapshot_date} variation={variation}
             positions={positions} assetAllocation={assetAllocation} fixedIncomeBreakdown={fixedIncomeBreakdown}
             currencyExposure={currencyExposure} liquidity={liquidity} sortedByValue={sortedByValue}
             maturityBuckets={maturityBuckets} nextMaturity={nextMaturity}
@@ -495,7 +504,7 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
           />
         )}
         {tab === 'posiciones' && (
-          <PositionsTab positions={positions} totalValue={totalValue} glByCusip={glByCusip} onImport={() => setShowImport(true)} onReclassified={load} />
+          <PositionsTab positions={positions} totalValue={positionsValue} glByCusip={glByCusip} onImport={() => setShowImport(true)} onReclassified={load} />
         )}
         {tab === 'rendimiento' && (
           <RendimientoTab accountNumber={accountNumber} history={history} performance={performance} onPerformanceImported={load} />

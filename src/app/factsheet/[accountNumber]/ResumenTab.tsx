@@ -49,13 +49,14 @@ function DonutCard({ title, data }: { title: string; data: { label: string; valu
 }
 
 export default function ResumenTab({
-  accountNumber, totalValue, snapshotDate, variation, assetAllocation, fixedIncomeBreakdown, currencyExposure,
+  accountNumber, totalValue, accruedInterest, snapshotDate, variation, assetAllocation, fixedIncomeBreakdown, currencyExposure,
   liquidity, sortedByValue, maturityBuckets, nextMaturity, cashProjImport, projectedIncome12m, nextPayment,
   cleanedNames, unrealizedGLImport, unrealizedGLTotals, gainLossByInvestment, onUnrealizedGLImported, onSeeAll,
   performance,
 }: {
   accountNumber: string
   totalValue: number
+  accruedInterest: number
   snapshotDate: string
   variation: { abs: number; pct: number } | null
   positions: PortfolioPositionRow[]
@@ -87,6 +88,11 @@ export default function ResumenTab({
       <div className="rounded-2xl p-6 text-white" style={{ background: `linear-gradient(135deg, ${COLORS.darkGreen}, ${COLORS.charcoal})` }}>
         <p className="text-xs font-semibold uppercase tracking-wide text-white/60">Valor del portafolio</p>
         <p className="text-4xl font-bold mt-1.5">{fmtUSD(totalValue)}</p>
+        {accruedInterest !== 0 && (
+          <p className="text-xs text-white/50 mt-1">
+            Incluye cupón corrido: <span className="font-semibold text-white/80">{fmtUSD(accruedInterest)}</span>
+          </p>
+        )}
         <p className="text-xs text-white/50 mt-1.5">Actualizado al {fmtDate(snapshotDate)}</p>
         {initialValue != null && (
           <p className="text-xs text-white/50 mt-1">

@@ -5,7 +5,7 @@ import { fmtUSD2, fmtPct, fmtDate } from './PortfolioAccountClient'
 import { cleanDisplayName } from '@/lib/portfolio/theme'
 import { ASSET_CLASS_ES, assetClassRank } from '@/lib/portfolio/engine'
 
-type SortKey = 'name' | 'quantity' | 'price' | 'market_value' | 'weight_pct'
+type SortKey = 'name' | 'quantity' | 'price' | 'market_value' | 'accrued_interest' | 'weight_pct'
 
 function DetailRow({ label, value }: { label: string; value: string | null | undefined }) {
   if (value == null || value === '') return null
@@ -21,6 +21,9 @@ const RECLASSIFY_OPTIONS = ['Cash', 'Fixed Income', 'Fixed Income Fund', 'Fund',
 
 export default function PositionsTab({ positions, totalValue, glByCusip, onImport, onReclassified }: { positions: PortfolioPositionRow[]; totalValue: number; glByCusip: Map<string, PortfolioUnrealizedGainLossRow>; onImport?: () => void; onReclassified?: () => void }) {
   const hasGL = glByCusip.size > 0
+  // Cupón corrido (accrued interest) del custodio — solo bonos; la columna
+  // aparece únicamente si alguna posición lo trae.
+  const hasAccrued = positions.some(p => p.accrued_interest != null && Number(p.accrued_interest) !== 0)
   const [q, setQ] = useState('')
   const [assetFilter, setAssetFilter] = useState('')
   const [sortKey, setSortKey] = useState<SortKey>('market_value')
@@ -116,6 +119,7 @@ export default function PositionsTab({ positions, totalValue, glByCusip, onImpor
       .map(([assetClass, groupRows]) => {
         const subtotalValue = groupRows.reduce((s, p) => s + Number(p.market_value), 0)
         return {
+          subtotalAccrued: groupRows.reduce((s, p) => s + Number(p.accrued_interest ?? 0), 0),
           assetClass,
           label: ASSET_CLASS_ES[assetClass] ?? assetClass,
           rows: groupRows,
@@ -139,6 +143,7 @@ export default function PositionsTab({ positions, totalValue, glByCusip, onImpor
     { key: 'quantity', label: 'Cantidad', align: 'right' },
     { key: 'price', label: 'Precio', align: 'right' },
     { key: 'market_value', label: 'Market Value', align: 'right' },
+    ...(hasAccrued ? [{ key: 'accrued_interest' as const, label: 'Cupón corrido', align: 'right' as const }] : []),
     { key: 'weight_pct', label: '% Cartera', align: 'right' },
   ]
   const totalColSpan = cols.length + (hasGL ? 2 : 0)
@@ -216,6 +221,7 @@ export default function PositionsTab({ positions, totalValue, glByCusip, onImpor
                           <td className="px-4 py-2.5 text-right text-gray-700 font-mono">{p.quantity != null ? Number(p.quantity).toLocaleString('en-US') : '—'}</td>
                           <td className="px-4 py-2.5 text-right text-gray-700 font-mono">{p.price != null ? fmtUSD2(Number(p.price)) : '—'}</td>
                           <td className="px-4 py-2.5 text-right font-semibold font-mono" style={{ color: '#1B3A2B' }}>{fmtUSD2(Number(p.market_value))}</td>
+                          {hasAccrued && <td className="px-4 py-2.5 text-right text-gray-700 font-mono">{p.accrued_interest != null && Number(p.accrued_interest) !== 0 ? fmtUSD2(Number(p.accrued_interest)) : '—'}</td>}
                           <td className="px-4 py-2.5">
                             <div className="flex items-center justify-end gap-2">
                               <div className="w-12 h-1.5 bg-gray-100 rounded-full overflow-hidden hidden sm:block">
@@ -238,6 +244,7 @@ export default function PositionsTab({ positions, totalValue, glByCusip, onImpor
                     <tr className="bg-[#F7FAF9] border-b-2 border-[#D8E3DE]">
                       <td colSpan={3} className="px-4 py-2 text-right text-[11px] font-bold uppercase tracking-wide text-gray-500">Subtotal {group.label}</td>
                       <td className="px-4 py-2 text-right text-xs font-bold font-mono text-[#1B3A2B]">{fmtUSD2(group.subtotalValue)}</td>
+                      {hasAccrued && <td className="px-4 py-2 text-right text-xs font-bold font-mono text-gray-500">{group.subtotalAccrued !== 0 ? fmtUSD2(group.subtotalAccrued) : '—'}</td>}
                       <td className="px-4 py-2 text-right text-xs font-bold text-gray-500">{fmtPct(group.subtotalWeight)}</td>
                       {hasGL && (
                         <>
@@ -260,6 +267,7 @@ export default function PositionsTab({ positions, totalValue, glByCusip, onImpor
                 <tr style={{ background: '#1B2E3C' }}>
                   <td colSpan={3} className="px-4 py-2.5 text-right text-xs font-bold text-white/80">TOTAL</td>
                   <td className="px-4 py-2.5 text-right text-sm font-bold text-white">{fmtUSD2(rows.reduce((s, p) => s + Number(p.market_value), 0))}</td>
+                  {hasAccrued && <td className="px-4 py-2.5 text-right text-sm font-bold text-white">{fmtUSD2(rows.reduce((s, p) => s + Number(p.accrued_interest ?? 0), 0))}</td>}
                   <td className="px-4 py-2.5" />
                   {hasGL && (
                     <>
@@ -277,6 +285,13 @@ export default function PositionsTab({ positions, totalValue, glByCusip, onImpor
                     </>
                   )}
                 </tr>
+                {hasAccrued && (
+                  <tr style={{ background: '#1B2E3C' }} className="border-t border-white/10">
+                    <td colSpan={3} className="px-4 py-2.5 text-right text-xs font-bold text-white/80">TOTAL CON CUPÓN CORRIDO</td>
+                    <td colSpan={2} className="px-4 py-2.5 text-right text-sm font-bold text-white">{fmtUSD2(rows.reduce((s, p) => s + Number(p.market_value) + Number(p.accrued_interest ?? 0), 0))}</td>
+                    <td colSpan={totalColSpan - 5} />
+                  </tr>
+                )}
               </tfoot>
             )}
           </table>
@@ -364,7 +379,7 @@ export default function PositionsTab({ positions, totalValue, glByCusip, onImpor
               </div>
               <DetailRow label="Vencimiento" value={selected.maturity_date ? fmtDate(selected.maturity_date) : null} />
               <DetailRow label="Cupón" value={selected.coupon != null ? `${Number(selected.coupon).toFixed(2)}%` : null} />
-              <DetailRow label="Interés devengado" value={selected.accrued_interest != null ? fmtUSD2(Number(selected.accrued_interest)) : null} />
+              <DetailRow label="Cupón corrido" value={selected.accrued_interest != null ? fmtUSD2(Number(selected.accrued_interest)) : null} />
               <DetailRow label="Familia de fondo" value={selected.fund_family} />
               <DetailRow label="Política de dividendos" value={selected.dividend_policy} />
               {['Fund', 'Fixed Income Fund'].includes(selected.asset_class) && (

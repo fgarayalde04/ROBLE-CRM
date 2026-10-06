@@ -178,7 +178,10 @@ export default function ImportPositionsModal({ accountNumber, onClose, onImporte
                 <div><p className="text-xs text-gray-400">Fecha</p><p className="font-semibold text-gray-800">{preview.parsed.snapshotDate ?? '—'}</p></div>
                 <div><p className="text-xs text-gray-400">Moneda</p><p className="font-semibold text-gray-800">{preview.parsed.baseCurrency}</p></div>
                 <div><p className="text-xs text-gray-400">Cantidad de posiciones</p><p className="font-semibold text-gray-800">{preview.parsed.positions.length}</p></div>
-                <div><p className="text-xs text-gray-400">Market Value total</p><p className="font-semibold text-gray-800">{fmtUSD(preview.parsed.totalMarketValue)}</p></div>
+                <div><p className="text-xs text-gray-400">Valor total</p><p className="font-semibold text-gray-800">{fmtUSD(preview.parsed.totalMarketValue)}</p></div>
+                {!!preview.parsed.totalAccruedInterest && (
+                  <div><p className="text-xs text-gray-400">Cupón corrido (incluido)</p><p className="font-semibold text-gray-800">{fmtUSD(preview.parsed.totalAccruedInterest)}</p></div>
+                )}
               </div>
               {!preview.parsed.accountNumber && (
                 <p className="text-[11px] text-amber-600 -mt-2">No se pudo detectar el número de cuenta en el archivo — completalo a mano para poder importar.</p>

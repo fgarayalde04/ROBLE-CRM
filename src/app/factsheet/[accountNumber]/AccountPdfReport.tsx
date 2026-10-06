@@ -266,7 +266,11 @@ export default function AccountPdfReport({
   // fresco recién al generar el PDF, no vive en el resto del reporte.
   dividendResults?: { fundName: string; totalCollected: number; fundValue: number; annualizedYieldPct: number | null; isEstimate: boolean }[]
 }) {
-  const totalValue = Number(importRow.total_market_value)
+  // Mismo criterio que la pantalla: valor total = posiciones + cupón corrido;
+  // los % de cartera van solo sobre el market value de las posiciones.
+  const accruedInterestTotal = sortedByValue.reduce((s, p) => s + Number(p.accrued_interest ?? 0), 0)
+  const positionsValue = sortedByValue.length ? sortedByValue.reduce((s, p) => s + Number(p.market_value), 0) : Number(importRow.total_market_value)
+  const totalValue = positionsValue + accruedInterestTotal
   const clientName = account?.clientName || account?.accountName || accountNumber
   const topHoldings = sortedByValue.slice(0, 6)
   const maxHoldingValue = topHoldings[0] ? Number(topHoldings[0].market_value) : 1
@@ -290,7 +294,7 @@ export default function AccountPdfReport({
   // vista en pantalla). El % de cada fila se recalcula sobre el total real
   // en modo consolidado.
   const rowPct = (p: PortfolioPositionRow) =>
-    isConsolidated ? (totalValue > 0 ? (Number(p.market_value) / totalValue) * 100 : 0) : (p.weight_pct != null ? Number(p.weight_pct) : 0)
+    isConsolidated ? (positionsValue > 0 ? (Number(p.market_value) / positionsValue) * 100 : 0) : (p.weight_pct != null ? Number(p.weight_pct) : 0)
   const holdingGroups = (() => {
     const byClass = new Map<string, PortfolioPositionRow[]>()
     for (const p of sortedByValue) {
@@ -371,6 +375,11 @@ export default function AccountPdfReport({
           <div style={{ flex: '0 0 38%', borderRadius: 10, padding: '6mm', color: '#fff', background: `linear-gradient(135deg, ${COLORS.darkGreen}, ${COLORS.charcoal})` }}>
             <div style={{ fontSize: 8.5, textTransform: 'uppercase', letterSpacing: 1, opacity: 0.7 }}>Valor de la cuenta</div>
             <div style={{ fontSize: 32, fontWeight: 800, marginTop: '3mm' }}>{fmtUSD(totalValue)}</div>
+            {accruedInterestTotal !== 0 && (
+              <div style={{ fontSize: 8.5, marginTop: '2mm', opacity: 0.85 }}>
+                Incluye cupón corrido: <span style={{ fontWeight: 700 }}>{fmtUSD(accruedInterestTotal)}</span>
+              </div>
+            )}
             {(() => {
               const initial = computeInitialAccountValue(performance)
               if (initial == null) return null
@@ -609,7 +618,7 @@ export default function AccountPdfReport({
           <tfoot>
             <tr style={{ background: COLORS.charcoal }}>
               <td colSpan={3} style={{ padding: '2mm 1.5mm', color: '#fff', fontWeight: 700, textAlign: 'right' }}>TOTAL</td>
-              <td style={{ padding: '2mm 1.5mm', color: '#fff', fontWeight: 700, textAlign: 'right' }}>{fmtUSD2(totalValue)}</td>
+              <td style={{ padding: '2mm 1.5mm', color: '#fff', fontWeight: 700, textAlign: 'right' }}>{fmtUSD2(positionsValue)}</td>
               <td style={{ padding: '2mm 1.5mm' }} />
               {hasGL && (
                 <>
@@ -622,6 +631,20 @@ export default function AccountPdfReport({
               {hasMaturityCols && <td style={{ padding: '2mm 1.5mm' }} />}
               {isConsolidated && <td style={{ padding: '2mm 1.5mm' }} />}
             </tr>
+            {accruedInterestTotal !== 0 && (
+              <>
+                <tr style={{ background: COLORS.charcoal }}>
+                  <td colSpan={3} style={{ padding: '1.5mm', color: '#fff', opacity: 0.8, textAlign: 'right' }}>Cupón corrido</td>
+                  <td style={{ padding: '1.5mm', color: '#fff', textAlign: 'right' }}>{fmtUSD2(accruedInterestTotal)}</td>
+                  <td colSpan={holdingColSpan - 4} />
+                </tr>
+                <tr style={{ background: COLORS.charcoal }}>
+                  <td colSpan={3} style={{ padding: '2mm 1.5mm', color: '#fff', fontWeight: 700, textAlign: 'right' }}>TOTAL CON CUPÓN CORRIDO</td>
+                  <td style={{ padding: '2mm 1.5mm', color: '#fff', fontWeight: 700, textAlign: 'right' }}>{fmtUSD2(totalValue)}</td>
+                  <td colSpan={holdingColSpan - 4} />
+                </tr>
+              </>
+            )}
           </tfoot>
         </table>
         {disclosureOn === 'holdings' && <PdfDisclosure />}
