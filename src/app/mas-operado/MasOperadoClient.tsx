@@ -237,7 +237,9 @@ function Tabla({ filas, clase }: { filas: InstrumentoOperado[]; clase: ClaseActi
                         ))}
                         {fondos && (
                           <p className="text-[10px] text-gray-400 pt-1">
-                            {f.rendimientos ? `Rendimientos: ${f.rendimientos.fuente}` : 'Sin rendimientos: el fondo no está en el Monitor ni se buscó en Davinci.'}
+                            {f.rendimientos
+                              ? `Rendimientos: ${f.rendimientos.fuente}${f.rendimientos.fecha ? ` · datos al ${f.rendimientos.fecha}` : ''}`
+                              : 'Sin rendimientos todavía: se buscan en Davinci el 15 y el último día de cada mes (si el ISIN es válido y el fondo está en Davinci).'}
                           </p>
                         )}
                       </div>

@@ -251,7 +251,7 @@ async function registerFundMonitorSync() {
       if (!res.ok) {
         console.error('[fund-monitor] Error en el sync:', data.error ?? res.status)
       } else if (!data.skipped) {
-        console.log(`[fund-monitor] Sync: ${data.ok}/${data.total} ok, ${data.no_source} sin fuente, ${data.error} con error`)
+        console.log(`[fund-monitor] Sync: ${data.ok}/${data.total} ok, ${data.no_source} sin fuente, ${data.error} con error; operados fuera del Monitor: ${data.operados?.ok ?? 0}/${data.operados?.total ?? 0} ok`)
       }
     } catch (e: any) {
       console.error('[fund-monitor] Error en el sync:', e.message)
@@ -259,10 +259,11 @@ async function registerFundMonitorSync() {
   }
 
   // Chequea cada 15 minutos si ya pasó la hora de corrida; syncFundMonitor
-  // decide si toca (cada 15 días, y un intento fallido espera al día siguiente).
+  // decide si toca (el 15 y el último día de cada mes, y un intento fallido
+  // espera al día siguiente).
   setTimeout(() => maybeSync(), 15000)
   setInterval(() => maybeSync(), 15 * 60 * 1000)
-  console.log(`[fund-monitor] Auto-sync programado — cada ${process.env.FUND_MONITOR_SYNC_DAYS || 15} días, después de las ${SYNC_HOUR_UTC}:00 UTC`)
+  console.log(`[fund-monitor] Auto-sync programado — el 15 y el último día de cada mes, después de las ${SYNC_HOUR_UTC}:00 UTC`)
 }
 
 /**

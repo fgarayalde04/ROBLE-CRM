@@ -48,6 +48,7 @@ async function buscarEnDavinci(i: InstrumentoOperado): Promise<Rendimientos | nu
       const d = r.data
       return {
         fuente: `${d.nombreDavinci || i.nombre} (Davinci)`,
+        fecha: d.asOfDate ? d.asOfDate.split('-').reverse().join('/') : null,
         r_1y: d.r1a, r_3y: d.r3a, r_5y: d.r5a, r_ytd: d.ytd,
         y_2025: d.y2025, y_2024: d.y2024, y_2023: d.y2023, y_2022: d.y2022, y_2021: d.y2021,
       }

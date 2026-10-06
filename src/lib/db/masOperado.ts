@@ -6,13 +6,15 @@ import { pool } from './pool'
 // operaciones y clientes distintos; los montos y nominales no se suman (vienen
 // en monedas y unidades distintas). Cuenta lo mismo que el Blotter: una línea
 // por cada activo de la orden, sin las canceladas (la orden entera o un activo
-// suelto, y en el sistema anterior las que tienen fecha de cancelación).
+// suelto, y en el sistema anterior las que tienen fecha de cancelación) ni las
+// que el cliente no aprobó (esas no se ejecutan).
 
 export type ClaseActivo = 'fondos' | 'bonos' | 'acciones'
 export type Lado = 'compra' | 'venta'
 
 export interface Rendimientos {
   fuente: string          // nombre del fondo en el Monitor
+  fecha: string | null    // a qué fecha son los datos (dd/mm/aaaa)
   r_1y: number | null
   r_3y: number | null
   r_5y: number | null
@@ -64,7 +66,7 @@ export interface Operacion {
   cliente: string
 }
 
-const ESTADOS_EXCLUIDOS = ['cancelada']
+const ESTADOS_EXCLUIDOS = ['cancelada', 'rechazada_cliente']
 
 const txt = (v: unknown) => (v == null ? '' : String(v).trim())
 
@@ -339,6 +341,14 @@ const fmtFecha = (v: unknown) => {
   return `${String(d.getUTCDate()).padStart(2, '0')}/${String(d.getUTCMonth() + 1).padStart(2, '0')}/${d.getUTCFullYear()}`
 }
 
+// Fecha de los rendimientos: as_of_date (columna date, pg la da como Date a
+// medianoche local) o, si no hay, cuándo se bajó el dato.
+const fechaDato = (asOf: unknown, bajado: unknown) => {
+  if (asOf instanceof Date) return `${String(asOf.getDate()).padStart(2, '0')}/${String(asOf.getMonth() + 1).padStart(2, '0')}/${asOf.getFullYear()}`
+  if (typeof asOf === 'string' && /^\d{4}-\d{2}-\d{2}/.test(asOf)) return asOf.slice(0, 10).split('-').reverse().join('/')
+  return bajado ? fmtFecha(bajado) : null
+}
+
 const fmtCupon = (v: unknown) => {
   const n = Number(v)
   return v == null || v === '' || Number.isNaN(n) ? '' : `${String(n).replace('.', ',')}%`
@@ -351,13 +361,13 @@ async function completar(ranking: RankingMasOperado) {
   if (fondos.length) {
     try {
       const { rows } = await pool.query(
-        `select upper(f.isin) as isin, f.nombre, r.r_1y, r.r_3y, r.r_5y, r.r_ytd, r.y_2025, r.y_2024, r.y_2023, r.y_2022, r.y_2021
+        `select upper(f.isin) as isin, f.nombre, r.as_of_date, r.fetched_at, r.r_1y, r.r_3y, r.r_5y, r.r_ytd, r.y_2025, r.y_2024, r.y_2023, r.y_2022, r.y_2021
            from fund_monitor_funds f join fund_monitor_returns r on r.fund_id = f.id
           where f.active and r.status in ('ok', 'stale')`
       )
       const num = (v: unknown) => (v == null ? null : Number(v))
       const aRend = (m: any): Rendimientos => ({
-        fuente: `${m.nombre} (Monitor de fondos)`, r_1y: num(m.r_1y), r_3y: num(m.r_3y), r_5y: num(m.r_5y), r_ytd: num(m.r_ytd),
+        fuente: `${m.nombre} (Monitor de fondos)`, fecha: fechaDato(m.as_of_date, m.fetched_at), r_1y: num(m.r_1y), r_3y: num(m.r_3y), r_5y: num(m.r_5y), r_ytd: num(m.r_ytd),
         y_2025: num(m.y_2025), y_2024: num(m.y_2024), y_2023: num(m.y_2023), y_2022: num(m.y_2022), y_2021: num(m.y_2021),
       })
       const porIsin = new Map(rows.map((r) => [r.isin as string, r]))
@@ -389,16 +399,20 @@ async function completar(ranking: RankingMasOperado) {
     if (isins.length) {
       try {
         const { rows } = await pool.query(
-          `select upper(isin) as isin, data from davinci_lookup_cache where upper(isin) = any($1) and data is not null`,
+          `select upper(isin) as isin, data, fetched_at from davinci_lookup_cache where upper(isin) = any($1) and data is not null`,
           [isins]
         )
-        const porIsin = new Map(rows.map((r) => [r.isin as string, typeof r.data === 'string' ? JSON.parse(r.data) : r.data]))
+        const porIsin = new Map(rows.map((r) => {
+          const d = typeof r.data === 'string' ? JSON.parse(r.data) : r.data
+          return [r.isin as string, { ...d, fetched_at: r.fetched_at }]
+        }))
         for (const f of faltan) {
           const d = [f.isin, ...(f.variantes ?? []).map((v) => v.isin)].map((i) => porIsin.get(i)).find(Boolean)
           if (!d) continue
           const n = (v: unknown) => (v == null || Number.isNaN(Number(v)) ? null : Number(v))
           f.rendimientos = {
             fuente: d.nombreDavinci ? `${d.nombreDavinci} (búsqueda en Davinci)` : 'búsqueda en Davinci',
+            fecha: fechaDato(d.asOfDate, d.fetched_at),
             r_1y: n(d.r1a), r_3y: n(d.r3a), r_5y: n(d.r5a), r_ytd: n(d.ytd), y_2025: n(d.y2025), y_2024: n(d.y2024), y_2023: n(d.y2023),
             y_2022: n(d.y2022), y_2021: n(d.y2021),
           }
@@ -458,4 +472,22 @@ export function armarRanking(ops: Operacion[], limite: number, unirClases = true
     }
   }
   return ranking
+}
+
+const ISIN_RE = /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/
+
+/** Fondos comprados o vendidos alguna vez desde la plataforma (un ISIN por clase), para buscarles rendimientos. */
+export async function fondosOperados(): Promise<{ isin: string; nombre: string }[]> {
+  const hasta = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Montevideo' })
+  const [nuevas, anteriores] = await Promise.all([
+    operacionesSolicitudes('2000-01-01', hasta),
+    operacionesBlotterAnterior('2000-01-01', hasta).catch(() => [] as Operacion[]),
+  ])
+  const porIsin = new Map<string, string>()
+  for (const op of [...nuevas, ...anteriores]) {
+    if (op.clase !== 'fondos') continue
+    const isin = op.isin.toUpperCase().replace(/\s+/g, '')
+    if (ISIN_RE.test(isin) && !porIsin.has(isin)) porIsin.set(isin, op.nombre)
+  }
+  return Array.from(porIsin, ([isin, nombre]) => ({ isin, nombre }))
 }
