@@ -4,12 +4,12 @@ import { unstable_noStore as noStore } from 'next/cache'
 import { getSession } from '@/lib/auth'
 import { hasGoogleConnection } from '@/lib/google/tokens'
 import OrdenesClient from './OrdenesClient'
+import { ADMIN_ROLES, MESA_ROLES } from '@/lib/auth/roles'
 
 export const metadata: Metadata = { title: 'Enviar órdenes' }
 export const dynamic = 'force-dynamic'
 
-const ADMIN_ROLES = ['admin', 'ceo', 'direccion']
-const MESA_ROLES  = ['admin', 'ceo', 'direccion', 'mesa']
+// Igual que /solicitudes y /api/solicitudes — define qué datos y acciones ve el usuario
 
 interface Props {
   searchParams: { tab?: string }
@@ -24,7 +24,7 @@ export default async function OrdenesPage({ searchParams }: Props) {
   const isAdmin = ADMIN_ROLES.includes(session.role)
   const isMesa  = MESA_ROLES.includes(session.role)
 
-  const VALID_TABS = ['blotter', 'mesa', 'mis-ordenes', 'nueva', 'instrumentos', 'enviar', 'mis-solicitudes', 'historial'] as const
+  const VALID_TABS = ['blotter', 'mesa', 'mis-ordenes', 'nueva', 'instrumentos', 'posiciones', 'enviar', 'mis-solicitudes', 'historial'] as const
   type ValidTab = typeof VALID_TABS[number]
   const rawTab = searchParams.tab as string | undefined
   const initialTab: ValidTab | undefined = VALID_TABS.includes(rawTab as ValidTab)

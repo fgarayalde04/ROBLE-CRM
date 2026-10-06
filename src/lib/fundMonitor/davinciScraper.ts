@@ -69,7 +69,17 @@ export async function loginDavinci(page: Page, email: string, password: string):
   await passwordInput.fill(password)
   await page.getByRole('button', { name: 'Ingresar' }).click()
   // Login exitoso redirige fuera de /login.
-  await page.waitForFunction(() => !location.pathname.includes('/login'), { timeout: 15000 })
+  // (El segundo argumento de waitForFunction es el `arg` de la función; las
+  // opciones van en el tercero.)
+  try {
+    await page.waitForFunction(() => !location.pathname.includes('/login'), undefined, { timeout: 45000 })
+  } catch {
+    // Seguimos en /login: se devuelve lo que muestra la página (credenciales
+    // inválidas, captcha, etc.) para que el error diga por qué.
+    const aviso = (await page.locator('[role="alert"], .error, .text-red-500, .text-destructive').allTextContents().catch(() => []))
+      .map(t => t.trim()).filter(Boolean).join(' · ')
+    throw new Error(`Davinci no aceptó el login después de 45 s${aviso ? `: ${aviso}` : ' (sin mensaje en pantalla — revisar DAVINCI_EMAIL / DAVINCI_PASSWORD de este ambiente)'}`)
+  }
 }
 
 function norm(s: string): string {
@@ -227,6 +237,11 @@ export async function openDavinciPage(browser: Browser) {
   const context = await browser.newContext({
     userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36',
   })
+  // Imágenes, fuentes y video no hacen falta para leer las tablas: bloquearlos
+  // recorta buena parte de las descargas que Davinci registra por cada página.
+  await context.route('**/*', route =>
+    ['image', 'font', 'media'].includes(route.request().resourceType()) ? route.abort() : route.continue()
+  )
   const page = await context.newPage()
   page.setDefaultTimeout(20000)
   return { context, page }

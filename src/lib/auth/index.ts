@@ -3,7 +3,9 @@ import { cookies } from 'next/headers'
 import { getUserAuthExtras, getUserFolderPermissions } from '@/lib/db/users'
 import { getClientNumbersSharedWithUser } from '@/lib/db/clients'
 
-export type UserRole = 'admin' | 'asesor' | 'asistente' | 'compliance' | 'direccion' | 'ceo'
+import type { UserRole, Permission } from './roles'
+export type { UserRole, Permission } from './roles'
+export { hasPermission, getPermissions, ADMIN_ROLES, MESA_ROLES, isAdminRole, isMesaRole } from './roles'
 
 export interface SessionUser {
   id: string
@@ -120,41 +122,7 @@ export function hasPortfolioAccess(
 
 // ─── Role permissions ─────────────────────────────────────────────────────────
 
-export type Permission =
-  | 'panel' | 'tasks' | 'clients' | 'openings' | 'banco_central'
-  | 'calendar' | 'deadlines' | 'ceo_dashboard' | 'kpis'
-  | 'pagos' | 'impuestos' | 'liquidacion' | 'recursos' | 'claves'
-  | 'admin' | 'sincronizacion' | 'factsheet' | 'proposals' | 'orders' | 'fondos_monitor' | 'research'
-
 // Roles que pueden publicar/destacar/fijar/archivar en Research & Novedades
 // (Dirección/Inversiones — no existe un rol "inversiones" propio hoy, se usa el
 // más cercano: admin/ceo/direccion).
 export const RESEARCH_AUTHOR_ROLES: UserRole[] = ['admin', 'ceo', 'direccion']
-
-const ROLE_PERMISSIONS: Record<UserRole, Permission[] | ['*']> = {
-  admin:      ['*'],
-  ceo:        ['panel','clients','openings','tasks','banco_central','calendar','deadlines','ceo_dashboard','kpis','pagos','impuestos','liquidacion','recursos','factsheet','proposals','orders','fondos_monitor','research',],
-  direccion:  ['panel','clients','openings','tasks','banco_central','calendar','deadlines','ceo_dashboard','kpis','liquidacion','recursos','factsheet','proposals','orders','fondos_monitor','research',],
-  asesor:     ['panel','clients','openings','tasks','calendar','deadlines','recursos','factsheet','proposals','orders','fondos_monitor','research',],
-  asistente:  ['panel','clients','openings','tasks','banco_central','calendar','deadlines','recursos','fondos_monitor','research',],
-  compliance: ['panel','banco_central','calendar','deadlines','recursos','research'],
-}
-
-export function hasPermission(role: UserRole, permission: Permission, userPermissions?: Permission[]): boolean {
-  // Custom per-user permissions override role defaults
-  if (userPermissions && userPermissions.length > 0) {
-    return userPermissions.includes(permission)
-  }
-  const perms = ROLE_PERMISSIONS[role]
-  if (!perms) return false
-  if (perms[0] === '*') return true
-  return (perms as Permission[]).includes(permission)
-}
-
-export function getPermissions(role: UserRole): Permission[] {
-  const perms = ROLE_PERMISSIONS[role]
-  if (perms[0] === '*') {
-    return ['panel','clients','openings','tasks','banco_central','calendar','deadlines','ceo_dashboard','kpis','pagos','impuestos','liquidacion','recursos','admin','claves','sincronizacion','factsheet','proposals','orders','research',]
-  }
-  return perms as Permission[]
-}

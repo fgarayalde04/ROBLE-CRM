@@ -1,7 +1,7 @@
 'use client'
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { fmtUSD2 } from './PortfolioAccountClient'
-import { computeFundDividends, fundGroupKey, findFundPositionValue, fuzzyNameMatch, type DividendTxn } from '@/lib/portfolio/dividendEngine'
+import { computeFundDividends, looksLikeBond, bondCouponRatePct, fundGroupKey, findFundPositionValue, fuzzyNameMatch, type DividendTxn } from '@/lib/portfolio/dividendEngine'
 
 interface LedgerEntry {
   id: string
@@ -134,19 +134,39 @@ export default function DividendosTab({ accountNumber, positions }: { accountNum
     setEntries(prev => prev.filter(e => e.id !== id))
   }
 
-  async function handleFileSelected(file: File) {
+  // Se pueden elegir varios Activity a la vez (ej. uno por bono): se leen
+  // uno por uno y se juntan en un solo preview. Un movimiento que aparece en
+  // más de un archivo se marca como duplicado igual que si ya estuviera cargado.
+  async function handleFilesSelected(files: File[]) {
     setImportError('')
     setImporting(true)
     try {
-      const form = new FormData()
-      form.append('file', file)
-      const res = await fetch(`/api/portfolio/${encodeURIComponent(accountNumber)}/dividends/parse`, { method: 'POST', body: form })
-      const data = await res.json()
-      if (!res.ok) { setImportError(data.error ?? 'No se pudo leer el archivo.'); return }
-      setPreview(data.rows)
-      setPreviewChecked((data.rows as PreviewRow[]).map(r => !r.isDuplicate))
-      setPreviewWarnings(data.warnings ?? [])
-      setPreviewOtherAccountCount(data.otherAccountCount ?? 0)
+      const allRows: PreviewRow[] = []
+      const warnings: string[] = []
+      const errors: string[] = []
+      let otherAccount = 0
+      for (const file of files) {
+        const form = new FormData()
+        form.append('file', file)
+        const res = await fetch(`/api/portfolio/${encodeURIComponent(accountNumber)}/dividends/parse`, { method: 'POST', body: form })
+        const data = await res.json()
+        if (!res.ok) { errors.push(`${file.name}: ${data.error ?? 'No se pudo leer el archivo.'}`); continue }
+        allRows.push(...(data.rows as PreviewRow[]))
+        warnings.push(...(data.warnings ?? []).map((w: string) => files.length > 1 ? `${file.name}: ${w}` : w))
+        otherAccount += data.otherAccountCount ?? 0
+      }
+      if (errors.length) setImportError(errors.join(' · '))
+      if (allRows.length === 0) return
+      const seen = new Set<string>()
+      const rows = allRows.map(r => {
+        const dup = r.isDuplicate || seen.has(r.externalRef)
+        seen.add(r.externalRef)
+        return dup === r.isDuplicate ? r : { ...r, isDuplicate: true }
+      })
+      setPreview(rows)
+      setPreviewChecked(rows.map(r => !r.isDuplicate))
+      setPreviewWarnings(warnings)
+      setPreviewOtherAccountCount(otherAccount)
     } finally {
       setImporting(false)
       if (fileInputRef.current) fileInputRef.current.value = ''
@@ -209,8 +229,8 @@ export default function DividendosTab({ accountNumber, positions }: { accountNum
 
   const results = useMemo(() => {
     return groups.map(g => {
-      const txns: DividendTxn[] = g.entries.map(e => ({ id: e.id, date: e.entry_date, type: e.entry_type, amount: e.amount != null ? Number(e.amount) : null }))
-      const result = computeFundDividends(txns)
+      const txns: DividendTxn[] = g.entries.map(e => ({ id: e.id, date: e.entry_date, type: e.entry_type, amount: e.amount != null ? Number(e.amount) : null, quantity: e.quantity != null ? Number(e.quantity) : null }))
+      const result = computeFundDividends(txns, undefined, { isBond: looksLikeBond(g.label), couponRatePct: bondCouponRatePct(g.label) })
       const fundValue = findFundPositionValue(g.isin, g.label, positions) ?? result.currentCapital
       return { group: g, result, fundValue }
     })
@@ -260,17 +280,17 @@ export default function DividendosTab({ accountNumber, positions }: { accountNum
           >
             + Agregar fondo
           </button>
-          <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden"
-            onChange={e => { const f = e.target.files?.[0]; if (f) handleFileSelected(f) }} />
+          <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" multiple className="hidden"
+            onChange={e => { const fs = Array.from(e.target.files ?? []); if (fs.length) handleFilesSelected(fs) }} />
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={importing}
             className="text-xs font-semibold px-3 py-2 rounded-lg text-[#1B3A2B] border border-[#1B3A2B]/30 disabled:opacity-50"
           >
-            {importing ? 'Leyendo…' : '📄 Importar Activity'}
+            {importing ? 'Leyendo…' : '📄 Importar Activity (uno o varios)'}
           </button>
         </div>
-        <p className="text-[10px] text-gray-400 mt-1.5">El Activity aporta compras y dividendos/distribuciones. Agregá una compra a mano solo si el Activity empieza después de la compra real del cliente.</p>
+        <p className="text-[10px] text-gray-400 mt-1.5">El Activity aporta compras, dividendos/distribuciones y cupones de bonos — podés subir varios a la vez (por ejemplo uno por bono). Agregá una compra a mano solo si el Activity empieza después de la compra real del cliente.</p>
       </div>
       {importError && <p className="text-xs text-red-600">{importError}</p>}
 
@@ -289,7 +309,7 @@ export default function DividendosTab({ accountNumber, positions }: { accountNum
                   <tr className="border-b border-gray-200 text-left text-gray-400">
                     <th className="py-1 w-6" />
                     <th className="py-1">Fecha</th>
-                    <th className="py-1">Fondo</th>
+                    <th className="py-1">Fondo / bono</th>
                     <th className="py-1 w-24">Tipo</th>
                     <th className="py-1 text-right">Monto</th>
                     <th className="py-1 w-14">Moneda</th>
@@ -318,7 +338,7 @@ export default function DividendosTab({ accountNumber, positions }: { accountNum
                         >
                           <option value="compra">Compra</option>
                           <option value="venta">Venta</option>
-                          <option value="dividendo">Dividendo</option>
+                          <option value="dividendo">Dividendo / cupón</option>
                         </select>
                       </td>
                       <td className="py-1 text-right">
@@ -348,7 +368,7 @@ export default function DividendosTab({ accountNumber, positions }: { accountNum
           fecha por fecha va oculto salvo que se despliegue a propósito. ── */}
       {results.length === 0 ? (
         <div className="border-2 border-dashed border-gray-200 rounded-xl p-10 text-center">
-          <p className="text-sm text-gray-400">Sin fondos cargados. Escribí un nombre arriba y agregalo, o importá el Activity del custodio.</p>
+          <p className="text-sm text-gray-400">Sin fondos ni bonos cargados. Escribí un nombre arriba y agregalo, o importá el Activity del custodio.</p>
         </div>
       ) : (
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
@@ -356,8 +376,8 @@ export default function DividendosTab({ accountNumber, positions }: { accountNum
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-[#1B2E3C] text-left">
-                  <th className="px-4 py-2.5 text-[10px] font-semibold uppercase text-white">Fondo</th>
-                  <th className="px-4 py-2.5 text-[10px] font-semibold uppercase text-white text-right">Dividendos cobrados</th>
+                  <th className="px-4 py-2.5 text-[10px] font-semibold uppercase text-white">Fondo / bono</th>
+                  <th className="px-4 py-2.5 text-[10px] font-semibold uppercase text-white text-right">Cobrado (dividendos / cupones)</th>
                   <th className="px-4 py-2.5 text-[10px] font-semibold uppercase text-white text-right">Tasa anualizada</th>
                   <th className="w-8" />
                 </tr>
@@ -375,26 +395,29 @@ export default function DividendosTab({ accountNumber, positions }: { accountNum
                           <span className="inline-block w-3 text-gray-400">{isOpen ? '▾' : '▸'}</span> {group.label}
                         </td>
                         <td className="px-4 py-2.5 text-right font-semibold text-gray-900">{fmtUSD2(result.totalCollected)}</td>
-                        <td className={`px-4 py-2.5 text-right font-semibold ${result.annualizedYieldPct != null ? 'text-emerald-600' : 'text-amber-600 text-xs'}`}>{fmtYield(result.annualizedYieldPct, result.totalCollected)}</td>
+                        <td className={`px-4 py-2.5 text-right font-semibold ${result.annualizedYieldPct != null ? 'text-emerald-600' : 'text-amber-600 text-xs'}`} title={result.yieldIsNominal ? 'Tasa nominal del bono: los cupones cobrados hasta ahora fueron parciales (ej. posición transferida a mitad del período)' : undefined}>
+                          {fmtYield(result.annualizedYieldPct, result.totalCollected)}
+                          {result.yieldIsNominal && <span className="block text-[10px] font-medium text-gray-400">nominal del bono</span>}
+                        </td>
                         <td />
                       </tr>
                       {isOpen && (
                         <tr key={group.key + '-detail'} className="border-b border-gray-100 bg-gray-50/60">
                           <td colSpan={4} className="px-4 py-3">
                             <div className="flex items-center justify-between mb-2">
-                              <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Detalle por dividendo — control y auditoría</p>
+                              <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Detalle por cobro — control y auditoría</p>
                               <button onClick={e => { e.stopPropagation(); setEditingGroupKey(group.key) }} className="text-[11px] font-medium text-[#2E7D52] hover:underline">
                                 Editar movimientos
                               </button>
                             </div>
                             {result.history.length === 0 ? (
-                              <p className="text-xs text-gray-400">Sin dividendos cargados para este fondo. Valor del fondo (posición actual): {fmtUSD2(fundValue)}.</p>
+                              <p className="text-xs text-gray-400">Sin dividendos ni cupones cargados. Valor del fondo (posición actual): {fmtUSD2(fundValue)}.</p>
                             ) : (
                               <table className="w-full text-xs">
                                 <thead>
                                   <tr className="text-left text-gray-400 border-b border-gray-200">
                                     <th className="py-1">Fecha</th>
-                                    <th className="py-1 text-right">Dividendo</th>
+                                    <th className="py-1 text-right">Cobrado</th>
                                     <th className="py-1 text-right">Capital correspondiente</th>
                                     <th className="py-1 text-right">Yield</th>
                                   </tr>
@@ -406,7 +429,7 @@ export default function DividendosTab({ accountNumber, positions }: { accountNum
                                       <td className="py-1 text-right font-semibold text-gray-800">{fmtUSD2(h.collected)}</td>
                                       <td className="py-1 text-right text-gray-500">{h.capitalAtPayment != null ? fmtUSD2(h.capitalAtPayment) : '—'}</td>
                                       <td className="py-1 text-right">
-                                        {h.yieldPct != null ? <span className="font-semibold text-emerald-600">{fmtPct(h.yieldPct)}</span> : <span className="text-amber-600 text-[10px]">pendiente de revisar</span>}
+                                        {h.partial ? <span className="text-gray-400 text-[10px]" title="Cupón menor al completo para ese nominal (ej. posición transferida a mitad del período) — suma en lo cobrado, no en la tasa">cupón parcial</span> : h.yieldPct != null ? <span className="font-semibold text-emerald-600">{fmtPct(h.yieldPct)}</span> : <span className="text-amber-600 text-[10px]">pendiente de revisar</span>}
                                       </td>
                                     </tr>
                                   ))}
@@ -420,6 +443,13 @@ export default function DividendosTab({ accountNumber, positions }: { accountNum
                   )
                 })}
               </tbody>
+              <tfoot>
+                <tr className="bg-[#1B2E3C]">
+                  <td className="px-4 py-2.5 text-[11px] font-bold uppercase text-white/80">Total cobrado</td>
+                  <td className="px-4 py-2.5 text-right font-bold text-white">{fmtUSD2(results.reduce((s, r) => s + r.result.totalCollected, 0))}</td>
+                  <td colSpan={2} />
+                </tr>
+              </tfoot>
             </table>
           </div>
         </div>
@@ -473,7 +503,7 @@ export default function DividendosTab({ accountNumber, positions }: { accountNum
                         >
                           <option value="compra">Compra</option>
                           <option value="venta">Venta</option>
-                          <option value="dividendo">Dividendo</option>
+                          <option value="dividendo">Dividendo / cupón</option>
                           <option value="dividendo_total">Total acumulado</option>
                         </select>
                       </td>
@@ -521,7 +551,7 @@ export default function DividendosTab({ accountNumber, positions }: { accountNum
                       <div className="flex gap-2">
                         <button onClick={() => addRow(editingGroup.group.label, 'compra')} className="text-[11px] font-medium text-gray-500 hover:text-[#2E7D52]">+ compra</button>
                         <button onClick={() => addRow(editingGroup.group.label, 'venta')} className="text-[11px] font-medium text-gray-500 hover:text-red-600">+ venta</button>
-                        <button onClick={() => addRow(editingGroup.group.label, 'dividendo')} className="text-[11px] font-medium text-gray-500 hover:text-[#2E7D52]">+ dividendo</button>
+                        <button onClick={() => addRow(editingGroup.group.label, 'dividendo')} className="text-[11px] font-medium text-gray-500 hover:text-[#2E7D52]">+ dividendo / cupón</button>
                         {editingGroup.group.entries.every(r => r.entry_type !== 'dividendo_total') && (
                           <button onClick={() => addRow(editingGroup.group.label, 'dividendo_total')} className="text-[11px] font-medium text-gray-500 hover:text-blue-600" title="Cargar un solo monto acumulado en vez de fila por fila">
                             + total acumulado

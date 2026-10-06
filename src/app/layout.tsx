@@ -56,10 +56,10 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang="es" className={inter.variable}>
       <body className="bg-[#F4F6F8] font-sans">
-        <ClientLayout user={session}>
-          <ServiceWorkerRegister />
-          <SpotlightSearch />
-          <ChatWidget user={session} />
+        <ClientLayout
+          user={session}
+          widgets={<><ServiceWorkerRegister /><SpotlightSearch /><ChatWidget user={session} /></>}
+        >
           {children}
         </ClientLayout>
       </body>

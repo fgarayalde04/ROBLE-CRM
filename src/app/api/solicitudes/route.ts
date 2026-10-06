@@ -3,9 +3,8 @@ import { getSession } from '@/lib/auth'
 import { generateSolicitudId, listSolicitudes, createSolicitud, insertSolicitudEvento } from '@/lib/db/solicitudes'
 import { notifyNuevaOrden } from '@/lib/notifications/orderEvents'
 import { isAprobacionToken } from '@/lib/aprobacion'
+import { MESA_ROLES } from '@/lib/auth/roles'
 
-const MESA_ROLES  = ['admin', 'ceo', 'direccion', 'mesa', 'asistente']
-const ADMIN_ROLES = ['admin', 'ceo', 'direccion']
 
 // GET /api/solicitudes — bandeja
 export async function GET(req: NextRequest) {
@@ -13,14 +12,13 @@ export async function GET(req: NextRequest) {
   if (!session) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
   const isMesa  = MESA_ROLES.includes(session.role)
-  const isAdmin = ADMIN_ROLES.includes(session.role)
   const { searchParams } = req.nextUrl
 
   const estado   = searchParams.get('estado')
   const q        = searchParams.get('q')?.trim()
   const dateFrom = searchParams.get('dateFrom')
   const dateTo   = searchParams.get('dateTo')
-  const asesor   = isAdmin ? searchParams.get('asesor') : null
+  const asesor   = isMesa ? searchParams.get('asesor') : null
   const limit    = Math.min(parseInt(searchParams.get('limit') ?? '100', 10), 500)
   const page     = Math.max(parseInt(searchParams.get('page')  ?? '0',   10), 0)
 

@@ -6,10 +6,12 @@ export interface SendEmailInput {
   from: string          // sender email (must match connected account)
   to: string | string[] // recipient(s)
   cc?: string | string[]
+  bcc?: string | string[] // copia oculta: va en el header Bcc, que Gmail saca antes de entregar
   subject: string
   body: string          // plain text body
   html?: string         // versión HTML opcional — se manda como multipart/alternative junto al texto
   replyTo?: string
+  attachments?: { filename: string; contentType: string; content: Buffer }[]
 }
 
 export interface GmailMessage {
@@ -41,23 +43,57 @@ function multipartBody(text: string, html: string): string[] {
   ]
 }
 
+const b64lines = (buf: Buffer) => (buf.toString('base64').match(/.{1,76}/g) ?? []).join('\r\n')
+
+// RFC 2047 para headers con acentos (asunto, nombre de archivo).
+function encodeWord(v: string) {
+  return /^[\x20-\x7e]*$/.test(v) ? v : `=?UTF-8?B?${Buffer.from(v, 'utf8').toString('base64')}?=`
+}
+
+// Cuerpo + adjuntos como multipart/mixed (el cuerpo puede ser texto o texto + HTML).
+function mixedBody(input: SendEmailInput): string[] {
+  const boundary = `roble_mix_${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`
+  const cuerpo = input.html
+    ? multipartBody(input.body, input.html)
+    : ['Content-Type: text/plain; charset=UTF-8', 'Content-Transfer-Encoding: base64', '', b64lines(Buffer.from(input.body, 'utf8'))]
+  const partes = [`Content-Type: multipart/mixed; boundary="${boundary}"`, '', `--${boundary}`, ...cuerpo]
+  for (const a of input.attachments ?? []) {
+    const nombre = encodeWord(a.filename).replace(/"/g, '')
+    partes.push(
+      `--${boundary}`,
+      `Content-Type: ${a.contentType}; name="${nombre}"`,
+      `Content-Disposition: attachment; filename="${nombre}"`,
+      'Content-Transfer-Encoding: base64',
+      '',
+      b64lines(a.content),
+    )
+  }
+  partes.push(`--${boundary}--`)
+  return partes
+}
+
 /**
- * Encode an email (plain text, or text + HTML) as RFC 2822 base64url for Gmail API
+ * Encode an email (plain text, or text + HTML, optionally with attachments) as RFC 2822 base64url for Gmail API
  */
 function encodeEmail(input: SendEmailInput): string {
-  const toAddresses = Array.isArray(input.to) ? input.to.join(', ') : input.to
-  const ccAddresses = input.cc
-    ? Array.isArray(input.cc) ? input.cc.join(', ') : input.cc
-    : null
+  const list = (v?: string | string[]) => (v ? (Array.isArray(v) ? v.join(', ') : v) : null)
+  const toAddresses = list(input.to)
+  const ccAddresses = list(input.cc)
+  const bccAddresses = list(input.bcc)
+  const conAdjuntos = !!input.attachments?.length
 
   const lines = [
     `From: ${input.from}`,
     `To: ${toAddresses}`,
     ccAddresses ? `Cc: ${ccAddresses}` : null,
+    bccAddresses ? `Bcc: ${bccAddresses}` : null,
     input.replyTo ? `Reply-To: ${input.replyTo}` : null,
-    `Subject: ${input.subject}`,
+    // Los mails de siempre mantienen el asunto tal cual; los nuevos con adjuntos lo codifican (RFC 2047).
+    `Subject: ${conAdjuntos ? encodeWord(input.subject) : input.subject}`,
     'MIME-Version: 1.0',
-    ...(input.html ? multipartBody(input.body, input.html) : ['Content-Type: text/plain; charset=UTF-8', '', input.body]),
+    ...(conAdjuntos
+      ? mixedBody(input)
+      : input.html ? multipartBody(input.body, input.html) : ['Content-Type: text/plain; charset=UTF-8', '', input.body]),
   ]
     .filter((l) => l !== null)
     .join('\r\n')

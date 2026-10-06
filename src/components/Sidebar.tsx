@@ -5,7 +5,8 @@ import Image from 'next/image'
 import { useState, useEffect } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { clsx } from 'clsx'
-import type { SessionUser, Permission } from '@/lib/auth'
+import type { SessionUser } from '@/lib/auth'
+import { hasPermission, type Permission } from '@/lib/auth/roles'
 import { useAdvisorModeCtx } from '@/contexts/AdvisorModeContext'
 import NotificationBell from './NotificationBell'
 
@@ -19,7 +20,7 @@ const nav: NavSection[] = [
     label: 'Acceso rápido',
     items: [
       { href: '/solicitudes', label: 'Solicitudes', subtitle: 'Enviar a Trading Desk', icon: OrdersIcon, permission: 'orders' },
-      { href: '/ordenes', label: 'Blotter', subtitle: 'Historial de órdenes', icon: OrdersIcon, permission: 'orders' },
+      { href: '/ordenes?tab=historial', label: 'Blotter', subtitle: 'Historial de órdenes', icon: OrdersIcon, permission: 'orders' },
     ],
   },
   {
@@ -44,6 +45,7 @@ const nav: NavSection[] = [
       { href: '/fondos-monitor', label: 'Monitor de Fondos', subtitle: 'Rendimientos por ISIN', icon: FondosIcon, permission: 'fondos_monitor' },
       { href: '/factsheet',  label: 'Portafolio',  subtitle: 'Posiciones y valor de cartera',   icon: FactsheetIcon, permission: 'factsheet' },
       { href: '/propuestas', label: 'Propuestas', subtitle: 'Propuestas de inversión', icon: ProposalIcon,  permission: 'proposals' },
+      { href: '/mas-operado', label: 'Lo más operado', subtitle: 'Más comprado y vendido', icon: KpiIcon, permission: 'orders' },
       { href: '/admin/planillas', label: 'Planillas', subtitle: 'Herramientas especiales', icon: TemplateIcon, permission: 'admin' },
     ],
   },
@@ -58,6 +60,7 @@ const nav: NavSection[] = [
     label: 'Research',
     items: [
       { href: '/research', label: 'Research & Novedades', subtitle: 'Morning Brief y publicaciones', icon: ResearchIcon, permission: 'research' },
+      { href: '/plantillas', label: 'Plantillas', subtitle: 'Fichas, análisis y comparativos', icon: TemplateIcon, permission: 'research' },
     ],
   },
   // HIDDEN: Sección Finanzas temporalmente oculta
@@ -93,22 +96,8 @@ const nav: NavSection[] = [
   },
 ]
 
-const ROLE_PERMISSIONS: Record<string, Permission[]> = {
-  admin:      ['panel','tasks','clients','openings','banco_central','calendar','deadlines','pagos','impuestos','ceo_dashboard','kpis','liquidacion','recursos','claves','admin','sincronizacion','factsheet','proposals','orders','fondos_monitor','research'],
-  ceo:        ['panel','tasks','clients','openings','banco_central','calendar','deadlines','pagos','impuestos','ceo_dashboard','kpis','liquidacion','recursos','claves','factsheet','proposals','orders','fondos_monitor','research'],
-  direccion:  ['panel','tasks','clients','openings','banco_central','calendar','deadlines','ceo_dashboard','kpis','liquidacion','recursos','claves','factsheet','proposals','orders','fondos_monitor','research'],
-  asesor:     ['panel','tasks','clients','openings','calendar','deadlines','recursos','factsheet','proposals','orders','fondos_monitor','research'],
-  asistente:  ['panel','tasks','clients','openings','banco_central','calendar','deadlines','recursos','orders','fondos_monitor','research'],
-  compliance: ['panel','banco_central','calendar','deadlines','recursos','research'],
-}
-
 function canSee(user: SessionUser, permission: Permission): boolean {
-  // Custom per-user permissions override role defaults
-  if (user.permissions && user.permissions.length > 0) {
-    return (user.permissions as Permission[]).includes(permission)
-  }
-  const perms = ROLE_PERMISSIONS[user.role] ?? []
-  return perms.includes(permission)
+  return hasPermission(user.role, permission, user.permissions)
 }
 
 const ROLE_LABEL: Record<string, string> = {
@@ -279,7 +268,7 @@ export default function Sidebar({ user, isOpen = false, onToggle }: Props) {
             </p>
             <ul className="space-y-0.5">
               {section.items.map(({ href, label, subtitle, icon: Icon }) => {
-                const isActive = href === '/' ? pathname === '/' : pathname.startsWith(href)
+                const isActive = href === '/' ? pathname === '/' : pathname.startsWith(href.split('?')[0])
                 return (
                   <li key={href}>
                     <Link

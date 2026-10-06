@@ -13,7 +13,7 @@ import ImportHistoryModal from '@/components/portfolio/ImportHistoryModal'
 import AccountPdfReport from './AccountPdfReport'
 import PdfOptionsModal, { type PdfSections, DEFAULT_PDF_SECTIONS } from '@/components/portfolio/PdfOptionsModal'
 import { cleanDisplayName } from '@/lib/portfolio/theme'
-import { computeFundDividends, fundGroupKey, findFundPositionValue, fuzzyNameMatch, type DividendTxn } from '@/lib/portfolio/dividendEngine'
+import { computeFundDividends, looksLikeBond, bondCouponRatePct, fundGroupKey, findFundPositionValue, fuzzyNameMatch, type DividendTxn } from '@/lib/portfolio/dividendEngine'
 import {
   ASSET_CLASS_ES,
   computeAssetAllocation, computeLiquidity, computeFixedIncomeBreakdown, computeCurrencyExposure,
@@ -160,7 +160,16 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
     await patchOrCreateAccount({ account_name: accountName })
   }
 
-  const totalValue = importRow ? Number(importRow.total_market_value) : 0
+  // Valor total = market value de las posiciones + cupón corrido (accrued
+  // interest de los bonos). Se recalcula desde las posiciones para que
+  // también valga en snapshots importados antes de sumar el cupón corrido al
+  // total guardado. Los % de cartera se calculan solo sobre positionsValue.
+  const accruedInterestTotal = useMemo(() => positions.reduce((s, p) => s + Number(p.accrued_interest ?? 0), 0), [positions])
+  const positionsValue = useMemo(
+    () => positions.length ? positions.reduce((s, p) => s + Number(p.market_value), 0) : (importRow ? Number(importRow.total_market_value) : 0),
+    [positions, importRow]
+  )
+  const totalValue = positionsValue + accruedInterestTotal
 
   const previousSnapshot = useMemo(() => {
     if (!importRow || history.length < 2) return null
@@ -174,13 +183,13 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
 
   const sortedByValue = useMemo(() => [...positions].sort((a, b) => Number(b.market_value) - Number(a.market_value)), [positions])
 
-  const assetAllocation = useMemo(() => computeAssetAllocation(positions, totalValue), [positions, totalValue])
+  const assetAllocation = useMemo(() => computeAssetAllocation(positions, positionsValue), [positions, positionsValue])
 
-  const liquidity = useMemo(() => computeLiquidity(positions, totalValue), [positions, totalValue])
+  const liquidity = useMemo(() => computeLiquidity(positions, positionsValue), [positions, positionsValue])
 
   const fixedIncomeBreakdown = useMemo(() => computeFixedIncomeBreakdown(positions), [positions])
 
-  const currencyExposure = useMemo(() => computeCurrencyExposure(positions, totalValue), [positions, totalValue])
+  const currencyExposure = useMemo(() => computeCurrencyExposure(positions, positionsValue), [positions, positionsValue])
 
   const cleanedNames = useMemo(() => {
     const map = new Map<string, { name: string; detail: string | null }>()
@@ -251,7 +260,7 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
     try {
       const res = await fetch(`/api/portfolio/${encodeURIComponent(accountNumber)}/dividends`)
       const data = await res.json()
-      const entries: { fund_name: string; isin: string | null; entry_type: string; entry_date: string | null; amount: string | null }[] = data.entries ?? []
+      const entries: { fund_name: string; isin: string | null; entry_type: string; entry_date: string | null; amount: string | null; quantity: string | null }[] = data.entries ?? []
       // Mismo cruce ISIN↔nombre que la pestaña Dividendos, para que el PDF
       // no separe en dos fondos una compra importada (con ISIN) de un
       // dividendo cargado a mano para el mismo fondo (sin ISIN).
@@ -265,7 +274,7 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
         const key = fundGroupKey(isin, e.fund_name)
         let g = byKey.get(key)
         if (!g) { g = { label: e.fund_name, isin, txns: [] }; byKey.set(key, g) }
-        g.txns.push({ id: key, date: e.entry_date, type: e.entry_type as DividendTxn['type'], amount: e.amount != null ? Number(e.amount) : null })
+        g.txns.push({ id: key, date: e.entry_date, type: e.entry_type as DividendTxn['type'], amount: e.amount != null ? Number(e.amount) : null, quantity: e.quantity != null ? Number(e.quantity) : null })
       }
       // Misma fusión que la pestaña Dividendos: sin ISIN, un nombre cargado
       // a mano y el nombre largo del Activity para el mismo fondo no deben
@@ -277,7 +286,7 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
         else groups.push(g)
       }
       setDividendResults(groups.map(g => {
-        const r = computeFundDividends(g.txns)
+        const r = computeFundDividends(g.txns, undefined, { isBond: looksLikeBond(g.label), couponRatePct: bondCouponRatePct(g.label) })
         // "Valor del fondo" en el PDF es la misma posición real que ya usa
         // Portafolio, no una suma aparte de las compras de esta planilla.
         const fundValue = findFundPositionValue(g.isin, g.label, sortedByValue) ?? r.currentCapital
@@ -325,10 +334,16 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
         const scale = canvas.width / pageEl.scrollWidth
         const imgRatio = canvas.height / canvas.width
         const imgH = pdfW * imgRatio
-        if (imgH <= pdfH) {
+        // Una página que se pasa apenas del alto de la hoja (redondeos, o una
+        // sección que quedó justo al límite) se achica un poco para que entre
+        // entera — si no, el corte deja una segunda hoja casi en blanco con
+        // solo el margen y el pie.
+        const FIT_TOLERANCE = 1.06
+        if (imgH <= pdfH * FIT_TOLERANCE) {
           if (!firstPdfPage) pdf.addPage()
           firstPdfPage = false
-          pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, pdfW, imgH)
+          const fit = Math.min(1, pdfH / imgH)
+          pdf.addImage(canvas.toDataURL('image/png'), 'PNG', (pdfW - pdfW * fit) / 2, 0, pdfW * fit, imgH * fit)
         } else {
           // Reserva un margen abajo de cada hoja física: sin esto, una fila
           // que justo entraba al límite quedaba pegada al borde de la página,
@@ -349,6 +364,9 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
           let position = 0
           while (position < canvas.height) {
             const isContinuation = position > 0
+            // Lo que queda es solo el margen inferior + el pie de la página
+            // lógica (sin contenido): no vale una hoja nueva en blanco.
+            if (isContinuation && canvas.height - position <= pxPerMM * 18) break
             const budget = isContinuation ? maxSliceH - topContinuationPx : maxSliceH
             let sliceH = Math.min(canvas.height - position, budget)
             const pageEnd = position + sliceH
@@ -483,7 +501,7 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
         {tab === 'resumen' && (
           <ResumenTab
             accountNumber={accountNumber}
-            totalValue={totalValue} snapshotDate={importRow.snapshot_date} variation={variation}
+            totalValue={totalValue} accruedInterest={accruedInterestTotal} snapshotDate={importRow.snapshot_date} variation={variation}
             positions={positions} assetAllocation={assetAllocation} fixedIncomeBreakdown={fixedIncomeBreakdown}
             currencyExposure={currencyExposure} liquidity={liquidity} sortedByValue={sortedByValue}
             maturityBuckets={maturityBuckets} nextMaturity={nextMaturity}
@@ -495,7 +513,7 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
           />
         )}
         {tab === 'posiciones' && (
-          <PositionsTab positions={positions} totalValue={totalValue} glByCusip={glByCusip} onImport={() => setShowImport(true)} onReclassified={load} />
+          <PositionsTab positions={positions} totalValue={positionsValue} glByCusip={glByCusip} onImport={() => setShowImport(true)} onReclassified={load} />
         )}
         {tab === 'rendimiento' && (
           <RendimientoTab accountNumber={accountNumber} history={history} performance={performance} onPerformanceImported={load} />

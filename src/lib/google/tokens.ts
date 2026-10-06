@@ -203,6 +203,28 @@ export async function getGoogleName(): Promise<string | null> {
 // una sesión de usuario activa (un cron job no tiene sesión).
 export const MESA_GOOGLE_CONNECTION_KEY = 'trading@roblecapital.net'
 
+// Casilla de inversiones@: desde ahí salen los envíos de Plantillas a clientes
+// (fichas y análisis de bonos). Misma mecánica que la de Mesa.
+export const INVERSIONES_GOOGLE_CONNECTION_KEY = 'inversiones@roblecapital.net'
+
+/** Token vigente de una casilla compartida (Mesa, inversiones@) — no lee cookie ni sesión. */
+export async function getValidSharedGoogleToken(key: string): Promise<string | null> {
+  const data = await loadFromDb(key)
+  if (!data) return null
+  const now = Math.floor(Date.now() / 1000)
+  if (data.expires_at > now + 300) return data.access_token
+  if (!data.refresh_token) return null
+  const fresh = await doRefresh(data.refresh_token)
+  if (!fresh) return null
+  await saveToDb(key, { ...data, ...fresh })
+  return fresh.access_token
+}
+
+export async function getSharedConnectionStatus(key: string): Promise<{ connected: boolean; googleEmail: string | null }> {
+  const data = await loadFromDb(key)
+  return { connected: !!data, googleEmail: data?.email ?? null }
+}
+
 /** Igual a getValidGoogleToken() pero para la casilla de Mesa — no lee cookie ni sesión. */
 export async function getValidMesaGoogleToken(): Promise<string | null> {
   const data = await loadFromDb(MESA_GOOGLE_CONNECTION_KEY)

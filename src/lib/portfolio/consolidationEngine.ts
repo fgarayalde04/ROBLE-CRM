@@ -82,6 +82,9 @@ export function consolidatePositions(
       ...primary,
       id: `consolidated:${p.cusip ?? p.isin ?? p.symbol ?? p.id}`,
       market_value: String(pMv + mMv),
+      accrued_interest: p.accrued_interest != null || match.accrued_interest != null
+        ? String(Number(p.accrued_interest ?? 0) + Number(match.accrued_interest ?? 0))
+        : null,
       quantity: null, // combining face values/share counts across two custodians isn't meaningful
       weight_pct: null, // recalculated live against the consolidated total, never trusted from either leg
       custodian: 'Pershing + Morgan',

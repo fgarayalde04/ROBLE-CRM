@@ -39,6 +39,10 @@ export async function register() {
   // quedar sin registrarse solo porque esa integración no está configurada.
   await registerFundMonitorSync()
 
+  // Cierre del día de Órdenes (push a asesores y admin/asistentes).
+  registerCierreOrdenes()
+  registerPlantillasMensuales()
+
   const tenantId = process.env.MICROSOFT_TENANT_ID
   const clientId = process.env.MICROSOFT_CLIENT_ID
   const clientSecret = process.env.MICROSOFT_CLIENT_SECRET
@@ -127,9 +131,109 @@ export async function register() {
 // (que sí compila bien — ahí @sparticuz/chromium-min ya está en
 // serverComponentsExternalPackages) — mismo mecanismo que usaría un cron
 // externo, solo que disparado desde el propio proceso.
+// Cierre del día de Órdenes: de lunes a viernes, a partir de la hora de cierre
+// (Montevideo), manda el resumen por push. La ruta deduplica por día y
+// destinatario, así que reintentar o reiniciar no lo repite.
+//   ORDER_DAILY_CLOSE_ENABLED=false  → deshabilitado
+//   ORDER_DAILY_CLOSE_HOUR=18        → hora de Montevideo (default 18)
+// Plantillas de fin de mes: el día 1, desde las 9:00 (Montevideo), arma los
+// borradores de fondos y bonos más comprados del mes anterior y avisa por push.
+// La ruta es idempotente (un borrador por tipo y mes, un aviso por persona).
+// Solo en producción, para no mandar push desde desarrollo; en otro ambiente se
+// habilita con PLANTILLAS_AUTO_ENABLED=true.
+function registerPlantillasMensuales() {
+  const env = process.env.RAILWAY_ENVIRONMENT_NAME
+  if (env !== 'production' && process.env.PLANTILLAS_AUTO_ENABLED !== 'true') {
+    console.log(`[plantillas-mensuales] Deshabilitado en este ambiente (${env ?? 'local'})`)
+    return
+  }
+  if (process.env.PLANTILLAS_AUTO_ENABLED === 'false') return
+  const port = process.env.PORT ?? '3000'
+  let hechoMes = ''
+
+  async function maybeRun() {
+    const parts = Object.fromEntries(
+      new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Montevideo', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hourCycle: 'h23',
+      }).formatToParts(new Date()).map((p) => [p.type, p.value])
+    )
+    const mes = `${parts.year}-${parts.month}`
+    if (hechoMes === mes || parts.day !== '01' || parseInt(parts.hour, 10) < 9) return
+    try {
+      const headers: Record<string, string> = {}
+      if (process.env.CRON_SECRET) headers.Authorization = `Bearer ${process.env.CRON_SECRET}`
+      const res = await fetch(`http://127.0.0.1:${port}/api/cron/plantillas-mensuales?hoy=${mes}-01`, { headers })
+      const data = await res.json()
+      if (!res.ok) {
+        console.error('[plantillas-mensuales] Error:', data.error ?? res.status)
+        return
+      }
+      hechoMes = mes
+      console.log('[plantillas-mensuales]', JSON.stringify(data.resultados))
+    } catch (e: any) {
+      console.error('[plantillas-mensuales] Error:', e.message)
+    }
+  }
+
+  setTimeout(() => maybeRun(), 45000)
+  setInterval(() => maybeRun(), 15 * 60 * 1000)
+  console.log('[plantillas-mensuales] Programado — día 1 de cada mes desde las 9:00 (Montevideo)')
+}
+
+function registerCierreOrdenes() {
+  if (process.env.ORDER_DAILY_CLOSE_ENABLED === 'false') {
+    console.log('[cierre-ordenes] Deshabilitado (ORDER_DAILY_CLOSE_ENABLED=false)')
+    return
+  }
+  const parsed = parseInt(process.env.ORDER_DAILY_CLOSE_HOUR ?? '', 10)
+  const hora = Number.isFinite(parsed) && parsed >= 0 && parsed <= 23 ? parsed : 18
+  const port = process.env.PORT ?? '3000'
+  let enviadoFecha = ''
+
+  async function maybeSend() {
+    const now = new Date()
+    const parts = Object.fromEntries(
+      new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Montevideo', year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', hourCycle: 'h23', weekday: 'short',
+      }).formatToParts(now).map((p) => [p.type, p.value])
+    )
+    const fecha = `${parts.year}-${parts.month}-${parts.day}`
+    if (enviadoFecha === fecha) return
+    if (parts.weekday === 'Sat' || parts.weekday === 'Sun') return
+    if (parseInt(parts.hour, 10) < hora) return
+    try {
+      const headers: Record<string, string> = {}
+      if (process.env.CRON_SECRET) headers.Authorization = `Bearer ${process.env.CRON_SECRET}`
+      const res = await fetch(`http://127.0.0.1:${port}/api/cron/cierre-ordenes?fecha=${fecha}`, { headers })
+      const data = await res.json()
+      if (!res.ok) {
+        console.error('[cierre-ordenes] Error:', data.error ?? res.status)
+        return
+      }
+      enviadoFecha = fecha
+      console.log(`[cierre-ordenes] ${fecha}: ${data.enviados} avisos enviados`)
+    } catch (e: any) {
+      console.error('[cierre-ordenes] Error:', e.message)
+    }
+  }
+
+  setTimeout(() => maybeSend(), 30000)
+  setInterval(() => maybeSend(), 5 * 60 * 1000)
+  console.log(`[cierre-ordenes] Programado — lunes a viernes desde las ${hora}:00 (Montevideo)`)
+}
+
 async function registerFundMonitorSync() {
   if (!process.env.DAVINCI_EMAIL || !process.env.DAVINCI_PASSWORD) {
     console.log('[fund-monitor] Davinci no configurado — auto-sync del Monitor de Fondos deshabilitado')
+    return
+  }
+  // Solo producción actualiza el Monitor solo: dev y prod comparten la cuenta
+  // de Davinci y cada corrida suma miles de descargas. En otro ambiente se
+  // puede habilitar con FUND_MONITOR_AUTO_SYNC=true.
+  const env = process.env.RAILWAY_ENVIRONMENT_NAME
+  if (env !== 'production' && process.env.FUND_MONITOR_AUTO_SYNC !== 'true') {
+    console.log(`[fund-monitor] Auto-sync del Monitor de Fondos deshabilitado en este ambiente (${env ?? 'local'})`)
     return
   }
 
@@ -145,21 +249,20 @@ async function registerFundMonitorSync() {
       const res = await fetch(url, { headers })
       const data = await res.json()
       if (!res.ok) {
-        console.error('[fund-monitor] Error en el sync diario:', data.error ?? res.status)
+        console.error('[fund-monitor] Error en el sync:', data.error ?? res.status)
       } else if (!data.skipped) {
-        console.log(`[fund-monitor] Sync diario: ${data.ok}/${data.total} ok, ${data.no_source} sin fuente, ${data.error} con error`)
+        console.log(`[fund-monitor] Sync: ${data.ok}/${data.total} ok, ${data.no_source} sin fuente, ${data.error} con error`)
       }
     } catch (e: any) {
-      console.error('[fund-monitor] Error en el sync diario:', e.message)
+      console.error('[fund-monitor] Error en el sync:', e.message)
     }
   }
 
-  // Chequea cada 15 minutos si ya pasó la hora de corrida y todavía no se
-  // hizo hoy — si un intento falla (ej. Davinci caído), el próximo chequeo
-  // reintenta solo, sin esperar al día siguiente.
+  // Chequea cada 15 minutos si ya pasó la hora de corrida; syncFundMonitor
+  // decide si toca (cada 15 días, y un intento fallido espera al día siguiente).
   setTimeout(() => maybeSync(), 15000)
   setInterval(() => maybeSync(), 15 * 60 * 1000)
-  console.log(`[fund-monitor] Auto-sync programado — corre una vez por día después de las ${SYNC_HOUR_UTC}:00 UTC`)
+  console.log(`[fund-monitor] Auto-sync programado — cada ${process.env.FUND_MONITOR_SYNC_DAYS || 15} días, después de las ${SYNC_HOUR_UTC}:00 UTC`)
 }
 
 /**

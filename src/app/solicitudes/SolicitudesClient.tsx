@@ -5,7 +5,6 @@ import { useSearchParams } from 'next/navigation'
 import NuevaSolicitudForm from './NuevaSolicitudForm'
 import MesaHoy from './MesaHoy'
 import RespuestasClientes from './RespuestasClientes'
-import { useAdvisorModeCtx } from '@/contexts/AdvisorModeContext'
 
 interface Props { isMesa: boolean; userName: string; userEmail: string; gmailConnected: boolean }
 
@@ -48,18 +47,23 @@ function Section({
 }
 
 export default function SolicitudesClient({ isMesa, userName, userEmail, gmailConnected }: Props) {
-  const { advisorMode } = useAdvisorModeCtx()
   const searchParams = useSearchParams()
   const openId = searchParams.get('open')
   const openRespuestas = searchParams.get('respuestas') === '1'
-  // En modo asesor (toggle activo) siempre mostrar el formulario abierto
-  const showEnviar = !isMesa || advisorMode
 
   return (
     <div className="p-4 md:p-6 bg-[#F4F6F8] min-h-screen">
-      <div className="mb-6">
-        <h1 className="text-xl font-semibold text-[#2D3F52]">Órdenes</h1>
-        <p className="text-sm text-gray-400 mt-0.5">Enviá órdenes a Trading Desk y seguí el estado del día</p>
+      <div className="mb-6 flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h1 className="text-xl font-semibold text-[#2D3F52]">Órdenes</h1>
+          <p className="text-sm text-gray-400 mt-0.5">Enviá órdenes a Trading Desk y seguí el estado del día</p>
+        </div>
+        <a
+          href="/solicitudes/cierre"
+          className="px-3 py-1.5 text-sm border border-gray-200 bg-white text-[#2D3F52] rounded-md hover:bg-gray-50"
+        >
+          📊 Cierre del día
+        </a>
       </div>
 
       <div className="space-y-4">
@@ -68,22 +72,21 @@ export default function SolicitudesClient({ isMesa, userName, userEmail, gmailCo
           title="Enviar órdenes"
           subtitle="Crear una solicitud para Trading Desk"
           accent="blue"
-          defaultOpen={showEnviar}
+          defaultOpen
         >
           <NuevaSolicitudForm gmailConnected={gmailConnected} userEmail={userEmail} />
         </Section>
 
-        {!advisorMode && (
-          <Section
-            title="Trading Desk hoy"
-            subtitle="Solicitudes del día — estados y acciones"
-            accent="amber"
-            defaultOpen={isMesa}
-            forceOpen={!!openId}
-          >
-            <MesaHoy isMesa={isMesa} userName={userName} openId={openId} />
-          </Section>
-        )}
+        {/* Misma vista para todos: MesaHoy ya trae solo lo que el usuario puede ver */}
+        <Section
+          title="Trading Desk hoy"
+          subtitle="Solicitudes del día — estados y acciones"
+          accent="amber"
+          defaultOpen
+          forceOpen={!!openId}
+        >
+          <MesaHoy isMesa={isMesa} userName={userName} openId={openId} />
+        </Section>
 
         <Section
           title="Respuestas de clientes"

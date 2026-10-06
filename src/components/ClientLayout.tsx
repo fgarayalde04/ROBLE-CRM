@@ -13,9 +13,12 @@ import { useAdvisorMode } from '@/hooks/useAdvisorMode'
 interface Props {
   user: SessionUser
   children: React.ReactNode
+  // Chat, buscador y service worker: van aparte de children para que las
+  // hojas /print no los dibujen (el botón flotante del chat salía en los PDF).
+  widgets?: React.ReactNode
 }
 
-export default function ClientLayout({ user, children }: Props) {
+export default function ClientLayout({ user, children, widgets }: Props) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const pathname = usePathname()
   const router = useRouter()
@@ -46,7 +49,7 @@ export default function ClientLayout({ user, children }: Props) {
   // Hojas "para imprimir" (ej. /propuestas/[id]/print, capturadas por un
   // browser headless para generar el PDF) van sin sidebar/header/bottom
   // nav — solo el contenido, a página completa, tal como lo necesita
-  // page.pdf() para paginar.
+  // page.pdf() para paginar. Tampoco los widgets flotantes (chat, buscador).
   if (pathname?.endsWith('/print')) {
     return <>{children}</>
   }
@@ -82,6 +85,8 @@ export default function ClientLayout({ user, children }: Props) {
             la pantalla se recorta acá en vez de ensanchar la página entera (en
             el celular eso achica y corre todo). clip, no hidden, para no
             romper los position: sticky de adentro. */}
+        {widgets}
+
         <div className={contentCls}>
           <main className="flex-1 min-w-0 overflow-x-clip">{children}</main>
         </div>

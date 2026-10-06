@@ -34,7 +34,7 @@
  */
 import * as XLSX from 'xlsx'
 import { mapRegion, mapSector, parseDateStr, parseNum, parseStr } from '@/lib/factsheet-parser'
-import type { ParsedPortfolioImport, PortfolioPositionParsed } from './parser'
+import { sumAccruedInterest, type ParsedPortfolioImport, type PortfolioPositionParsed } from './parser'
 import type { ParsedUnrealizedGainLoss, UnrealizedGainLossRow } from './unrealizedGainLossParser'
 
 export interface ParsedMorganHoldings {
@@ -416,14 +416,17 @@ function parseMorganHoldingsUngrouped(raw: unknown[][]): ParsedMorganHoldings {
     }
   }
 
-  const totalMarketValue = positions.reduce((s, p) => s + p.marketValue, 0)
-  if (totalMarketValue > 0) {
-    for (const p of positions) p.weight = parseFloat(((p.marketValue / totalMarketValue) * 100).toFixed(4))
+  const positionsValue = positions.reduce((s, p) => s + p.marketValue, 0)
+  if (positionsValue > 0) {
+    for (const p of positions) p.weight = parseFloat(((p.marketValue / positionsValue) * 100).toFixed(4))
   }
+  // El total de la cuenta incluye el cupón corrido, igual que en Pershing.
+  const totalAccruedInterest = sumAccruedInterest(positions)
+  const totalMarketValue = positionsValue + totalAccruedInterest
 
   const declaredTotal = totals.get('total market value')
-  if (declaredTotal != null && declaredTotal > 0 && Math.abs(totalMarketValue - declaredTotal) / declaredTotal * 100 > 1) {
-    warnings.push(`El Market Value calculado (${totalMarketValue.toFixed(2)}) difiere del total del archivo (${declaredTotal.toFixed(2)}) en más de 1%`)
+  if (declaredTotal != null && declaredTotal > 0 && Math.abs(positionsValue - declaredTotal) / declaredTotal * 100 > 1) {
+    warnings.push(`El Market Value calculado (${positionsValue.toFixed(2)}) difiere del total del archivo (${declaredTotal.toFixed(2)}) en más de 1%`)
   }
   if (!positions.length) warnings.push('No se encontraron posiciones en el archivo')
   const unclassified = positions.filter(p => p.assetClass === 'Sin clasificar').length
@@ -435,7 +438,7 @@ function parseMorganHoldingsUngrouped(raw: unknown[][]): ParsedMorganHoldings {
   const netGainLoss = totals.get('total unrealized gain/loss ($)') ?? glRows.reduce((s, r) => s + r.gainLoss, 0)
 
   return {
-    portfolio: { accountNumber: null, snapshotDate: asOfDate, baseCurrency: 'USD', totalMarketValue, positions, warnings },
+    portfolio: { accountNumber: null, snapshotDate: asOfDate, baseCurrency: 'USD', totalMarketValue, totalAccruedInterest, positions, warnings },
     unrealizedGL: { clientName: nickname, asOfDate, netGainLoss, rows: glRows, warnings: [] },
   }
 }

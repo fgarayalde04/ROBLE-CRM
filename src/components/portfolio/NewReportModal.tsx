@@ -266,6 +266,14 @@ export default function NewReportModal({ onClose, onImported, initialMode, initi
                     {fmtUSD((pershingPreview?.parsed.totalMarketValue ?? 0) + (morganPreview?.parsed.portfolio.totalMarketValue ?? 0))}
                   </p>
                 </div>
+                {!!((pershingPreview?.parsed.totalAccruedInterest ?? 0) + (morganPreview?.parsed.portfolio.totalAccruedInterest ?? 0)) && (
+                  <div>
+                    <p className="text-xs text-gray-400">Cupón corrido (incluido)</p>
+                    <p className="font-semibold text-gray-800">
+                      {fmtUSD((pershingPreview?.parsed.totalAccruedInterest ?? 0) + (morganPreview?.parsed.portfolio.totalAccruedInterest ?? 0))}
+                    </p>
+                  </div>
+                )}
                 <div>
                   <p className="text-xs text-gray-400">Cantidad de posiciones</p>
                   <p className="font-semibold text-gray-800">

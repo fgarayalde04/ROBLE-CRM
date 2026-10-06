@@ -59,7 +59,8 @@ export async function listPosts(filters: ListFilters = {}) {
 
   const { rows } = await pool.query(
     `select p.*,
-            exists(select 1 from research_reads r where r.post_id = p.id and r.user_id = $${userIdParamIdx}) as is_read
+            exists(select 1 from research_reads r where r.post_id = p.id and r.user_id = $${userIdParamIdx}) as is_read,
+            (select d.tipo from plantillas_documentos d where d.research_post_id = p.id order by d.updated_at desc limit 1) as plantilla_tipo
      from research_posts p
      where ${where.join(' and ')}
      order by pinned desc, published_at desc
@@ -72,7 +73,8 @@ export async function listPosts(filters: ListFilters = {}) {
 export async function getPost(id: string, userId?: string) {
   const { rows } = await pool.query(
     `select p.*,
-            exists(select 1 from research_reads r where r.post_id = p.id and r.user_id = $2) as is_read
+            exists(select 1 from research_reads r where r.post_id = p.id and r.user_id = $2) as is_read,
+            (select d.tipo from plantillas_documentos d where d.research_post_id = p.id order by d.updated_at desc limit 1) as plantilla_tipo
      from research_posts p where p.id = $1`,
     [id, userId ?? null]
   )

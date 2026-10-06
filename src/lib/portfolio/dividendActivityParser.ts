@@ -76,10 +76,54 @@ function matchCol(header: string): Field | null {
 // Dividend/Distribution/Income/Cash Dividend, y sus equivalentes en español).
 export function classifyActivityType(activityType: string | null, description: string | null): DividendTxnType | null {
   const t = norm((activityType ?? '') + ' ' + (description ?? ''))
+  // Cupones de bonos (Pershing: "BOND INTEREST RECEIVED", "FOREIGN BOND
+  // INTEREST") cuentan como cobro, igual que un dividendo. El interés de
+  // depósitos/sweep ("DEPOSITS INTEREST RECEIVED") no es un bono y se ignora.
+  if (isBondCouponActivity(activityType, description)) return 'dividendo'
   if (/dividend|distribution|\bincome\b|cash div|dividendo|distribuci[oó]n/.test(t)) return 'dividendo'
   if (/\bbuy\b|purchase|\bcompra\b/.test(t)) return 'compra'
   if (/\bsell\b|\bsale\b|\bventa\b/.test(t)) return 'venta'
   return null
+}
+
+export function isBondCouponActivity(activityType: string | null, description: string | null): boolean {
+  return /bond interest|coupon|cup[oó]n/.test(norm((activityType ?? '') + ' ' + (description ?? '')))
+}
+
+// ISIN de un CUSIP norteamericano: "US" + CUSIP + dígito verificador (Luhn
+// sobre los caracteres convertidos a números, A=10…Z=35). Pershing usa este
+// mismo ISIN en el Excel de posiciones, así el bono cruza con su posición.
+export function isinFromCusip(cusip: string): string | null {
+  const c = cusip.trim().toUpperCase()
+  if (!/^[0-9A-Z]{8}[0-9]$/.test(c) || /^PER/.test(c)) return null
+  const body = 'US' + c
+  const digits = body.split('').map(ch => /[0-9]/.test(ch) ? ch : String(ch.charCodeAt(0) - 55)).join('')
+  let sum = 0
+  for (let i = 0; i < digits.length; i++) {
+    let d = Number(digits[digits.length - 1 - i])
+    if (i % 2 === 0) { d *= 2; if (d > 9) d -= 9 }
+    sum += d
+  }
+  return body + String((10 - (sum % 10)) % 10)
+}
+
+// La descripción de Pershing cambia en cada pago ("45000 FEDERATIVE REPUBLIC
+// OF BRAZIL … REGDTD 01/18/06 RD 07/17 PD 07/20/26", "VONTOBEL … 127.0220
+// SHRS RD 09/19 PD 09/27/24") — se limpia la cantidad, las fechas de
+// registro/pago y el "dated date" para que todos los cobros del mismo
+// instrumento queden con el mismo nombre.
+export function cleanActivitySecurityName(desc: string): { name: string; leadingQuantity: number | null } {
+  let s = desc.replace(/\s+/g, ' ').trim()
+  let leadingQuantity: number | null = null
+  const lead = s.match(/^([\d,]+(?:\.\d+)?)\s+(?:SHRS\s+)?(?=[A-Za-z])/)
+  if (lead) { leadingQuantity = Number(lead[1].replace(/,/g, '')); s = s.slice(lead[0].length) }
+  s = s.replace(/\s+RD\s+\d{1,2}\/\d{1,2}\s+PD\s+\d{1,2}\/\d{1,2}\/\d{2,4}.*$/i, '')
+  s = s.replace(/\s+\S*DTD\b.*$/i, '')
+  s = s.replace(/\s+[\d,]+(?:\.\d+)?\s+SHRS\b.*$/i, '')
+  s = s.replace(/\s+FOR ACCRUAL PERIOD ENDING\b.*$/i, '')
+  s = s.replace(/\s+SHRS$/i, '')
+  s = s.replace(/\s+ISIN\s*#?\s*[A-Z]{2}[0-9A-Z]{9}[0-9]/i, '')
+  return { name: s.trim() || desc.trim(), leadingQuantity }
 }
 
 export function parseDividendActivityExcel(buffer: ArrayBuffer, isCsv: boolean): ParsedDividendActivity {
@@ -126,22 +170,33 @@ export function parseDividendActivityExcel(buffer: ArrayBuffer, isCsv: boolean):
     const classified = classifyActivityType(type, desc)
     if (!classified) { ignoredCount++; continue }
 
-    const isin = parseStr(get(row, 'isin'))
+    const isinCol = parseStr(get(row, 'isin'))
     const symbol = parseStr(get(row, 'symbol'))
     const cusip = parseStr(get(row, 'cusip'))
+    const isCoupon = isBondCouponActivity(type, desc)
+    const cleaned = desc ? cleanActivitySecurityName(desc) : null
+    // ISIN: columna del archivo, si no el que viene en la descripción
+    // ("ISIN#US105756BK57"), y para cupones el derivado del CUSIP — así
+    // todos los cupones del mismo bono se agrupan aunque la descripción no
+    // traiga ISIN.
+    const isinInDesc = desc?.match(/ISIN\s*#?\s*([A-Z]{2}[0-9A-Z]{9}[0-9])/i)?.[1] ?? null
+    const isin = !isBlank(isinCol) ? isinCol : isinInDesc ?? (isCoupon && cusip && !isBlank(cusip) ? isinFromCusip(cusip) : null)
     const currency = parseStr(get(row, 'currency'))
     const account = parseStr(get(row, 'account'))
     const custodian = parseStr(get(row, 'custodian'))
     rows.push({
       date,
-      fundName: (desc ?? type ?? '—').replace(/\s+/g, ' ').trim(),
+      fundName: (cleaned?.name ?? type ?? '—').replace(/\s+/g, ' ').trim(),
       isin: isBlank(isin) ? null : isin!.toUpperCase(),
       symbol: isBlank(symbol) ? null : symbol,
       cusip: isBlank(cusip) ? null : cusip,
       type: classified,
       rawActivityType: type,
-      amount,
-      quantity: parseNum(get(row, 'quantity')),
+      // Pershing trae las compras en negativo (salida de caja) — el capital
+      // invertido se reconstruye con montos positivos.
+      amount: amount != null && (classified === 'compra' || classified === 'venta') ? Math.abs(amount) : amount,
+      // En cupones el nominal viene al principio de la descripción ("45000 …").
+      quantity: parseNum(get(row, 'quantity')) ?? (isCoupon ? cleaned?.leadingQuantity ?? null : null),
       price: parseNum(get(row, 'price')),
       currency: isBlank(currency) ? null : currency!.toUpperCase(),
       account: isBlank(account) ? null : account,

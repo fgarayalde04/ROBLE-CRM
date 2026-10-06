@@ -48,7 +48,11 @@ export interface ParsedPortfolioImport {
   accountNumber:    string | null
   snapshotDate:     string | null   // YYYY-MM-DD
   baseCurrency:     string
+  // Market value de las posiciones + cupón corrido (accrued interest) — el
+  // valor total real de la cuenta. Los weights se calculan solo sobre el
+  // market value de las posiciones.
   totalMarketValue: number
+  totalAccruedInterest?: number
   positions:        PortfolioPositionParsed[]
   warnings:         string[]
 }
@@ -71,7 +75,10 @@ const COL_ALIASES: Record<string, string[]> = {
   price:           ['market price (position ccy)', 'market price', 'price'],
   maturityDate:    ['maturity date', 'maturity'],
   coupon:          ['% coupon rate', 'coupon rate', 'coupon'],
-  accruedInterest: ['accrued interest (usde)', 'accrued interest (position ccy)', 'accrued interest'],
+  // Igual que el market value: el USDE manda (suma al total en USD), el de
+  // la moneda de la posición es fallback.
+  accruedInterestUsd: ['accrued interest (usde)', 'accrued interest usd'],
+  accruedInterest: ['accrued interest (position ccy)', 'accrued interest'],
   fundFamily:      ['fund family'],
 }
 
@@ -364,19 +371,25 @@ export function parsePortfolioExcel(buffer: ArrayBuffer): ParsedPortfolioImport 
       maturityDate:    parseDateStr(get(row, 'maturityDate')),
       purchaseDate:    null, // not present in this export format
       coupon:          parseNum(get(row, 'coupon')),
-      accruedInterest: parseNum(get(row, 'accruedInterest')),
+      accruedInterest: parseNum(get(row, 'accruedInterestUsd')) ?? parseNum(get(row, 'accruedInterest')),
       fundFamily:      parseStr(get(row, 'fundFamily')),
       dividendPolicy:  null,
     })
   }
 
-  const totalMarketValue = positions.reduce((s, p) => s + p.marketValue, 0)
-  if (totalMarketValue > 0) {
-    for (const p of positions) p.weight = parseFloat(((p.marketValue / totalMarketValue) * 100).toFixed(4))
+  const positionsValue = positions.reduce((s, p) => s + p.marketValue, 0)
+  if (positionsValue > 0) {
+    for (const p of positions) p.weight = parseFloat(((p.marketValue / positionsValue) * 100).toFixed(4))
   }
+  const totalAccruedInterest = sumAccruedInterest(positions)
+  const totalMarketValue = positionsValue + totalAccruedInterest
 
   if (!positions.length) warnings.push('No se encontraron posiciones en el archivo')
   if (positions.length) warnings.push('Este formato ("Positions") no trae fecha de compra por posición — subí el Excel de "Unrealized Gain Loss" si la necesitás.')
 
-  return { accountNumber, snapshotDate, baseCurrency, totalMarketValue, positions, warnings }
+  return { accountNumber, snapshotDate, baseCurrency, totalMarketValue, totalAccruedInterest, positions, warnings }
+}
+
+export function sumAccruedInterest(positions: { accruedInterest: number | null }[]): number {
+  return parseFloat(positions.reduce((s, p) => s + (p.accruedInterest ?? 0), 0).toFixed(2))
 }

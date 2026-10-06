@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
-import { searchInstruments, createInstrument } from '@/lib/db/instruments'
+import { searchInstruments, createInstrument, ensureRiskClassified, reclassifyInstrumentsSafe } from '@/lib/db/instruments'
+import type { RiskGroup, RiskFuente } from '@/lib/riskGroups'
+import { hayAccionesPendientes, startYahooSectores } from '@/lib/riskYahoo'
 
 export const dynamic = 'force-dynamic'
 
@@ -20,6 +22,15 @@ export interface Instrument {
   rating?: string | null
   frequency?: string | null
   day_count_convention?: string | null
+  riesgo_grupo?: RiskGroup | null
+  riesgo_puntaje?: number | null
+  riesgo_fuente?: RiskFuente | null
+  riesgo_revisar?: boolean
+  riesgo_motivo?: string | null
+  riesgo_updated_by?: string | null
+  sector?: string | null
+  industria?: string | null
+  pais?: string | null
   created_at: string
   updated_at: string
 }
@@ -35,6 +46,9 @@ export async function GET(req: NextRequest) {
   const all   = searchParams.get('all') === 'true'
   const limit = Math.min(parseInt(searchParams.get('limit') ?? '20'), 200)
 
+  await ensureRiskClassified()
+  // Acciones sin sector/país: se buscan una vez en Yahoo, en segundo plano.
+  hayAccionesPendientes().then((p) => { if (p) startYahooSectores() }).catch(() => {})
   const data = await searchInstruments(q, tipo, limit, all)
   return NextResponse.json({ instruments: data })
 }
@@ -65,6 +79,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const data = await createInstrument(record)
+    await reclassifyInstrumentsSafe([data.id])
     return NextResponse.json(data, { status: 201 })
   } catch (err: any) {
     if (err.code === '23505') {

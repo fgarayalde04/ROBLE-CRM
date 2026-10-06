@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
+import { ADMIN_ROLES } from '@/lib/auth/roles'
 
 export const dynamic = 'force-dynamic'
 
-const ADMIN_ROLES = ['admin', 'ceo', 'direccion']
 
 /**
  * GET /api/auth/google-connect
@@ -16,6 +16,9 @@ const ADMIN_ROLES = ['admin', 'ceo', 'direccion']
  * rol es redirigido sin iniciar el flujo. El callback (mismo redirect_uri,
  * distinguido por `state`) guarda el token bajo una clave fija en vez del
  * email de sesión.
+ *
+ * GET /api/auth/google-connect?mode=inversiones — igual, para la casilla
+ * inversiones@roblecapital.net (envíos de Plantillas a clientes).
  */
 export async function GET(req: NextRequest) {
   const session = await getSession()
@@ -25,7 +28,7 @@ export async function GET(req: NextRequest) {
   }
 
   const mode = req.nextUrl.searchParams.get('mode')
-  if (mode === 'mesa' && !ADMIN_ROLES.includes(session.role)) {
+  if ((mode === 'mesa' || mode === 'inversiones') && !ADMIN_ROLES.includes(session.role)) {
     return NextResponse.redirect(`${base}/settings?google_error=forbidden`)
   }
 
@@ -59,7 +62,7 @@ export async function GET(req: NextRequest) {
   authUrl.searchParams.set('access_type', 'offline')   // get refresh_token
   authUrl.searchParams.set('prompt', 'consent')         // always show consent to get refresh_token
   authUrl.searchParams.set('include_granted_scopes', 'true')
-  if (mode === 'mesa') authUrl.searchParams.set('state', 'mesa')
+  if (mode === 'mesa' || mode === 'inversiones') authUrl.searchParams.set('state', mode)
 
   return NextResponse.redirect(authUrl.toString())
 }

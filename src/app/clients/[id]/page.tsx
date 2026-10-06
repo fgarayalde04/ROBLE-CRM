@@ -11,6 +11,13 @@ import OneDriveFolderButton from '@/components/OneDriveFolderButton'
 import ClientCloseButton from '@/components/ClientCloseButton'
 import DeleteClientButton from '@/components/DeleteClientButton'
 import PortfolioShareControl from '@/components/PortfolioShareControl'
+import ClientRiskCard from '@/components/ClientRiskCard'
+import ClientTimeline from '@/components/ClientTimeline'
+import { getClient360 } from '@/lib/db/client360'
+import { getRiesgoCliente } from '@/lib/db/clientPositions'
+import ClientAccountsCard from '@/components/ClientAccountsCard'
+import ClientCouponCalendarsCard from '@/components/ClientCouponCalendarsCard'
+import { listCouponCalendars } from '@/lib/db/couponCalendars'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 
@@ -49,12 +56,17 @@ export default async function ClientDetailPage({ params }: Props) {
 
   const canManageSharing = !!session && (session.role === 'admin' || session.name === client.advisor)
 
-  let documents, tasks, deadlines
+  let documents, tasks, deadlines, c360, riesgo, cupones
   try {
-    ;[documents, tasks, deadlines] = await Promise.all([
+    ;[documents, tasks, deadlines, c360, riesgo, cupones] = await Promise.all([
       getDocuments({ clientId: params.id }),
       getTasks({ clientId: params.id }),
       getDeadlines({ clientId: params.id }),
+      getClient360({ id: client.id, client_number: client.client_number ?? null }),
+      // null si no tiene número o las tablas de posiciones no están migradas en esta base
+      client.client_number ? getRiesgoCliente(client.client_number).catch(() => null) : Promise.resolve(null),
+      // [] si la tabla todavía no está migrada en esta base
+      listCouponCalendars({ clientId: client.id, limit: 10 }).catch(() => []),
     ])
   } catch {
     notFound()
@@ -210,6 +222,8 @@ export default async function ClientDetailPage({ params }: Props) {
             </dl>
           </div>
 
+          <ClientRiskCard riesgo={riesgo} />
+
           {canManageSharing && (
             <PortfolioShareControl
               clientId={client.id}
@@ -241,27 +255,61 @@ export default async function ClientDetailPage({ params }: Props) {
 
         {/* Panel derecho */}
         <div className="xl:col-span-2 space-y-4">
-          {/* Resumen */}
-          <div className="grid grid-cols-3 gap-3">
+          {/* Resumen 360 */}
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
             <div className="bg-white rounded-lg border border-gray-200 p-4">
-              <p className="text-xs text-gray-400">Documentos</p>
-              <p className="text-2xl font-bold text-gray-900 mt-1">{documents.length}</p>
-              {pendingDocs.length > 0 && (
-                <p className="text-xs text-amber-600 mt-0.5">{pendingDocs.length} pendientes</p>
+              <p className="text-xs text-gray-400">Patrimonio</p>
+              <p className="text-xl md:text-2xl font-bold text-gray-900 mt-1 break-words">
+                {c360.totalMarketValue != null
+                  ? fmtMoney(c360.totalMarketValue)
+                  : riesgo && riesgo.montoTotal > 0 ? fmtMoney(riesgo.montoTotal) : '—'}
+              </p>
+              {c360.lastSnapshotDate ? (
+                <p className="text-xs text-gray-400 mt-0.5">al {fmtDay(c360.lastSnapshotDate)}</p>
+              ) : riesgo && riesgo.montoTotal > 0 ? (
+                <p className="text-xs text-gray-400 mt-0.5">según posiciones</p>
+              ) : null}
+            </div>
+            <div className="bg-white rounded-lg border border-gray-200 p-4">
+              <p className="text-xs text-gray-400">Órdenes en curso</p>
+              <p className="text-xl md:text-2xl font-bold text-gray-900 mt-1">{c360.ordersInProgress}</p>
+            </div>
+            <div className="bg-white rounded-lg border border-gray-200 p-4">
+              <p className="text-xs text-gray-400">Propuestas abiertas</p>
+              <p className="text-xl md:text-2xl font-bold text-gray-900 mt-1">{c360.openProposals}</p>
+            </div>
+            <div className="bg-white rounded-lg border border-gray-200 p-4">
+              <p className="text-xs text-gray-400">Próxima reunión</p>
+              {c360.nextMeeting ? (
+                <>
+                  <p className="text-sm font-semibold text-gray-900 mt-1 break-words line-clamp-2">{c360.nextMeeting.title}</p>
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    {fmtDay(c360.nextMeeting.date)}{c360.nextMeeting.start_time ? ` · ${c360.nextMeeting.start_time.slice(0, 5)}` : ''}
+                  </p>
+                </>
+              ) : (
+                <p className="text-xl md:text-2xl font-bold text-gray-300 mt-1">—</p>
               )}
             </div>
             <div className="bg-white rounded-lg border border-gray-200 p-4">
               <p className="text-xs text-gray-400">Tareas</p>
-              <p className="text-2xl font-bold text-gray-900 mt-1">{tasks.length}</p>
-              {openTasks.length > 0 && (
-                <p className="text-xs text-amber-600 mt-0.5">{openTasks.length} abiertas</p>
-              )}
+              <p className="text-xl md:text-2xl font-bold text-gray-900 mt-1">{openTasks.length}</p>
+              <p className="text-xs text-gray-400 mt-0.5">abiertas de {tasks.length}</p>
             </div>
             <div className="bg-white rounded-lg border border-gray-200 p-4">
-              <p className="text-xs text-gray-400">Vencimientos</p>
-              <p className="text-2xl font-bold text-gray-900 mt-1">{deadlines.length}</p>
+              <p className="text-xs text-gray-400">Documentos</p>
+              <p className="text-xl md:text-2xl font-bold text-gray-900 mt-1">{documents.length}</p>
+              {pendingDocs.length > 0 && (
+                <p className="text-xs text-amber-600 mt-0.5">{pendingDocs.length} pendientes</p>
+              )}
             </div>
           </div>
+
+          <ClientAccountsCard accounts={c360.accounts} riesgo={riesgo} />
+
+          <ClientCouponCalendarsCard calendarios={cupones} />
+
+          <ClientTimeline items={c360.timeline} />
 
           {/* Documentos */}
           <div className="bg-white rounded-lg border border-gray-200">
@@ -365,6 +413,16 @@ export default async function ClientDetailPage({ params }: Props) {
       </div>
     </div>
   )
+}
+
+function fmtMoney(n: number, cur?: string | null) {
+  return `${cur || 'USD'} ${n.toLocaleString('es-UY', { maximumFractionDigits: 0 })}`
+}
+
+function fmtDay(v: unknown) {
+  const iso = v instanceof Date ? v.toISOString() : String(v)
+  const [y, m, d] = iso.slice(0, 10).split('-')
+  return `${d}/${m}/${y}`
 }
 
 function FolderIcon({ className }: { className?: string }) {

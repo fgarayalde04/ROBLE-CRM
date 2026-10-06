@@ -179,7 +179,7 @@ export async function listClients(opts: ListClientsOptions) {
 
   if (opts.search) {
     params.push(`%${opts.search}%`)
-    where.push(`(first_name ilike $${params.length} or last_name ilike $${params.length})`)
+    where.push(`(first_name ilike $${params.length} or last_name ilike $${params.length} or client_number ilike $${params.length})`)
   }
 
   if (!opts.folderFilter && opts.advisor) {

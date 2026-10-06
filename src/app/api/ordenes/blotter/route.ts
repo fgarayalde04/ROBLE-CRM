@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { getBlotterRows } from '@/lib/db/ordenes'
+import { MESA_ROLES } from '@/lib/auth/roles'
 
-const ADMIN_ROLES = ['admin', 'ceo', 'direccion']
 
 export interface BlotterRow {
   id: string
@@ -49,7 +49,7 @@ export async function GET(req: NextRequest) {
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
-  const isAdmin = ADMIN_ROLES.includes(session.role)
+  const isAdmin = MESA_ROLES.includes(session.role)
   const sp = req.nextUrl.searchParams
 
   const dateFrom  = sp.get('dateFrom')

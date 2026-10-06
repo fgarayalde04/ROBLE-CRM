@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import AssetDetailCard from './AssetDetailCard'
+import ReenviarMailModal from './ReenviarMailModal'
 
 interface Solicitud {
   id: string; solicitud_id: string; asesor: string; estado: string
@@ -11,6 +12,7 @@ interface Solicitud {
   clase: string | null; moneda: string; monto: number | null; cantidad: number | null
   fecha_operacion: string; client_name: string; client_number: string
   client_email?: string | null
+  additional_emails?: string[] | null
   operador: string | null; tomado_at: string | null
   mail_enviado_at: string | null; ejecutado_at: string | null; created_at: string
   observaciones?: string | null; comision?: string | null
@@ -96,6 +98,7 @@ function DetalleSolicitud({ sol, eventos, isMesa, userName, onAction, onClose, o
 }) {
   const [showEjecutar, setShowEjecutar] = useState(false)
   const [showCancelar, setShowCancelar] = useState(false)
+  const [showReenviar, setShowReenviar] = useState(false)
   const [precio, setPrecio] = useState('')
   const [valor,  setValor]  = useState('')
   const [comentarioEj, setComentarioEj] = useState('')
@@ -165,6 +168,12 @@ function DetalleSolicitud({ sol, eventos, isMesa, userName, onAction, onClose, o
             <button onClick={() => setShowEjecutar(true)}
               className="w-full py-2 text-xs font-semibold bg-emerald-600 text-white rounded-lg hover:bg-emerald-700">
               Marcar como ejecutada
+            </button>
+          )}
+          {(sol.estado === 'mail_enviado' || sol.estado === 'rechazada_cliente') && (
+            <button onClick={() => setShowReenviar(true)} disabled={busy}
+              className="w-full py-2 text-xs font-semibold border border-blue-300 text-blue-700 rounded-lg hover:bg-blue-50 disabled:opacity-50">
+              ✉️ Corregir mail y reenviar
             </button>
           )}
           <button onClick={() => setShowCancelar(true)}
@@ -315,6 +324,14 @@ function DetalleSolicitud({ sol, eventos, isMesa, userName, onAction, onClose, o
       )}
 
       {/* Modal cancelar */}
+      {showReenviar && (
+        <ReenviarMailModal
+          sol={{ ...sol, client_name: sol.client_name, client_number: sol.client_number, client_email: sol.client_email ?? null }}
+          onAction={onAction}
+          onClose={() => setShowReenviar(false)}
+        />
+      )}
+
       {showCancelar && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-sm">
@@ -501,7 +518,8 @@ export default function BlotterSolicitudes({ isMesa, userName }: { isMesa: boole
 
     const [res, legacyRes] = await Promise.all([
       fetch('/api/solicitudes?' + p),
-      isMesa && pageNum === 0 ? fetch('/api/ordenes/blotter') : Promise.resolve(null),
+      // Órdenes del sistema anterior — la API ya las limita a las del usuario si no es Mesa
+      pageNum === 0 ? fetch('/api/ordenes/blotter') : Promise.resolve(null),
     ])
     const json = await res.json()
     let data: Solicitud[] = json.solicitudes ?? []
