@@ -334,10 +334,16 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
         const scale = canvas.width / pageEl.scrollWidth
         const imgRatio = canvas.height / canvas.width
         const imgH = pdfW * imgRatio
-        if (imgH <= pdfH) {
+        // Una página que se pasa apenas del alto de la hoja (redondeos, o una
+        // sección que quedó justo al límite) se achica un poco para que entre
+        // entera — si no, el corte deja una segunda hoja casi en blanco con
+        // solo el margen y el pie.
+        const FIT_TOLERANCE = 1.06
+        if (imgH <= pdfH * FIT_TOLERANCE) {
           if (!firstPdfPage) pdf.addPage()
           firstPdfPage = false
-          pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, pdfW, imgH)
+          const fit = Math.min(1, pdfH / imgH)
+          pdf.addImage(canvas.toDataURL('image/png'), 'PNG', (pdfW - pdfW * fit) / 2, 0, pdfW * fit, imgH * fit)
         } else {
           // Reserva un margen abajo de cada hoja física: sin esto, una fila
           // que justo entraba al límite quedaba pegada al borde de la página,
@@ -358,6 +364,9 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
           let position = 0
           while (position < canvas.height) {
             const isContinuation = position > 0
+            // Lo que queda es solo el margen inferior + el pie de la página
+            // lógica (sin contenido): no vale una hoja nueva en blanco.
+            if (isContinuation && canvas.height - position <= pxPerMM * 18) break
             const budget = isContinuation ? maxSliceH - topContinuationPx : maxSliceH
             let sliceH = Math.min(canvas.height - position, budget)
             const pageEnd = position + sliceH
