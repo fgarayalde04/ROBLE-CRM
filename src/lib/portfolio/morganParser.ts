@@ -275,7 +275,7 @@ function parseMorganCostBasisExcel(raw: unknown[][]): ParsedMorganHoldings {
   const netGainLoss = totals.get('total unrealized gain/loss ($)') ?? glRows.reduce((s, r) => s + r.gainLoss, 0)
 
   return {
-    portfolio: { accountNumber: null, snapshotDate: asOfDate, baseCurrency: 'USD', totalMarketValue, totalAccruedInterest, positions, warnings },
+    portfolio: { accountNumber: null, snapshotDate: asOfDate, baseCurrency: 'USD', totalMarketValue, positions, warnings },
     unrealizedGL: { clientName: nickname, asOfDate, netGainLoss, rows: glRows, warnings: [] },
   }
 }
