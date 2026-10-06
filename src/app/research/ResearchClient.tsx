@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { SECCIONES_WEB, seccionWebSugerida, seccionWebDePlantilla } from '@/lib/webClientes/secciones'
+import { SECCIONES_WEB, requiereComentario, seccionWebSugerida, seccionWebDePlantilla } from '@/lib/webClientes/secciones'
 import { TIPOS_PLANTILLA, type TipoPlantilla } from '@/lib/plantillas/tipos'
 
 type ResearchType =
@@ -972,6 +972,9 @@ function CreatePostModal({ currentUserName, onClose, onCreated }: { currentUserN
     if (publicarWeb) {
       if (!file || !file.name.toLowerCase().endsWith('.pdf')) { setError('Para publicar en la web de clientes adjuntá un PDF'); return }
       if (!seccionWeb) { setError('Elegí la sección de la web de clientes'); return }
+      if (requiereComentario(seccionWeb.split('/')[0]) && !body.trim()) {
+        setError('Para Comité de Inversiones escribí el comentario del comité además de adjuntar el PDF'); return
+      }
     }
     setSaving(true)
     setError('')
@@ -1033,7 +1036,11 @@ function CreatePostModal({ currentUserName, onClose, onCreated }: { currentUserN
         <Input label="Título *" value={title} onChange={setTitle} />
         <Input label="Sub-categoría (opcional)" value={category} onChange={setCategory} placeholder="ej: Renta fija UY" />
         <Textarea label="Resumen" value={summary} onChange={setSummary} rows={2} />
-        <Textarea label="Desarrollo" value={body} onChange={setBody} rows={4} />
+        <Textarea
+          label={type === 'comite_inversiones' ? 'Comentario del comité (va a la web con el PDF)' : 'Desarrollo'}
+          value={body} onChange={setBody} rows={type === 'comite_inversiones' ? 8 : 4}
+        />
+        {publicarWeb && body.trim() && <p className="-mt-2 text-[11px] text-gray-400">El resumen y este texto se ven en la web de clientes junto al PDF.</p>}
         <Input label="Link" value={linkUrl} onChange={setLinkUrl} placeholder="https://…" />
         <Input label="Autor" value={author} onChange={setAuthor} />
 

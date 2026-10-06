@@ -32,3 +32,15 @@ export function seccionWebSugerida(type: string): SeccionWeb | null {
   if (type === 'comite_inversiones') return { section: 'comite-inversiones', subsection: 'comentarios' }
   return null
 }
+
+// Comité de Inversiones: va el PDF que arma el equipo y, además, el comentario
+// del comité escrito en texto (se ve en la web debajo del título).
+export function requiereComentario(section: unknown) {
+  return section === 'comite-inversiones'
+}
+
+/** Texto que acompaña al PDF en la web: el resumen y el desarrollo (comentario). */
+export function textoParaWeb(post: { summary?: string | null; body?: string | null }, conDesarrollo: boolean) {
+  const partes = [post.summary, conDesarrollo ? post.body : null].map((t) => (t ?? '').trim()).filter(Boolean)
+  return partes.length ? partes.join('\n\n') : null
+}
