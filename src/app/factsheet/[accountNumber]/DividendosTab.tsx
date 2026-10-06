@@ -1,7 +1,7 @@
 'use client'
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { fmtUSD2 } from './PortfolioAccountClient'
-import { computeFundDividends, fundGroupKey, findFundPositionValue, fuzzyNameMatch, type DividendTxn } from '@/lib/portfolio/dividendEngine'
+import { computeFundDividends, looksLikeBond, fundGroupKey, findFundPositionValue, fuzzyNameMatch, type DividendTxn } from '@/lib/portfolio/dividendEngine'
 
 interface LedgerEntry {
   id: string
@@ -230,7 +230,7 @@ export default function DividendosTab({ accountNumber, positions }: { accountNum
   const results = useMemo(() => {
     return groups.map(g => {
       const txns: DividendTxn[] = g.entries.map(e => ({ id: e.id, date: e.entry_date, type: e.entry_type, amount: e.amount != null ? Number(e.amount) : null }))
-      const result = computeFundDividends(txns)
+      const result = computeFundDividends(txns, undefined, { isBond: looksLikeBond(g.label) })
       const fundValue = findFundPositionValue(g.isin, g.label, positions) ?? result.currentCapital
       return { group: g, result, fundValue }
     })

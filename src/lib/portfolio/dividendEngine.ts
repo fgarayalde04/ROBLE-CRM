@@ -65,7 +65,21 @@ const FREQUENCY_MULTIPLIER: Record<DistributionFrequency, number> = {
   mensual: 12, trimestral: 4, semestral: 2, anual: 1,
 }
 
-export function computeFundDividends(transactions: DividendTxn[], today: Date = new Date()): FundDividendResult {
+// Un bono se reconoce por el nombre limpio del Activity / posición: cupón
+// con % seguido de vencimiento ("7.125% 01/20/37") o tasa variable con
+// vencimiento ("VARIABL 05/25/34").
+export function looksLikeBond(name: string): boolean {
+  return /\d+(?:\.\d+)?%\s+\d{1,2}\/\d{1,2}\/\d{2,4}/.test(name) || /\bVARIABL\w*\s+\d{1,2}\/\d{1,2}\/\d{2,4}/i.test(name)
+}
+
+export function computeFundDividends(
+  transactions: DividendTxn[],
+  today: Date = new Date(),
+  // Bonos: con un solo cupón cobrado no hay separación entre pagos para
+  // detectar la frecuencia — se asume semestral (lo estándar en bonos en USD)
+  // en vez de dejar la tasa de un cupón sin anualizar.
+  opts: { isBond?: boolean } = {}
+): FundDividendResult {
   // Las compras/ventas SIN fecha no pueden ubicarse en la línea de tiempo —
   // se excluyen del capital cronológico (no se inventa un orden).
   const capitalMoves = transactions
@@ -114,15 +128,19 @@ export function computeFundDividends(transactions: DividendTxn[], today: Date = 
   let frequency: DistributionFrequency | null = null
   let isEstimate = false
 
+  // La frecuencia sale de la separación entre TODOS los cobros con fecha
+  // (no solo los que tienen capital determinado): un cupón sin compra previa
+  // registrada igual sirve para saber cada cuánto paga el instrumento.
+  const paymentDates = Array.from(new Set(history.filter(h => h.date).map(h => h.date as string))).sort()
+  const gaps: number[] = []
+  for (let i = 1; i < paymentDates.length; i++) {
+    gaps.push(Math.round((new Date(paymentDates[i] + 'T00:00:00').getTime() - new Date(paymentDates[i - 1] + 'T00:00:00').getTime()) / 86400000))
+  }
+
   if (withYieldAsc.length > 0) {
     const avgRatePct = withYieldAsc.reduce((s, h) => s + (h.yieldPct as number), 0) / withYieldAsc.length
-    if (withYieldAsc.length >= 2) {
-      const dates = withYieldAsc.map(h => h.date as string)
-      const gaps: number[] = []
-      for (let i = 1; i < dates.length; i++) {
-        gaps.push(Math.round((new Date(dates[i] + 'T00:00:00').getTime() - new Date(dates[i - 1] + 'T00:00:00').getTime()) / 86400000))
-      }
-      frequency = detectFrequency(median(gaps))
+    if (gaps.length > 0 || opts.isBond) {
+      frequency = gaps.length > 0 ? detectFrequency(median(gaps)) : 'semestral'
       annualizedYieldPct = avgRatePct * FREQUENCY_MULTIPLIER[frequency]
       if (withYieldAsc.length < 3) isEstimate = true
     } else {

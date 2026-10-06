@@ -13,7 +13,7 @@ import ImportHistoryModal from '@/components/portfolio/ImportHistoryModal'
 import AccountPdfReport from './AccountPdfReport'
 import PdfOptionsModal, { type PdfSections, DEFAULT_PDF_SECTIONS } from '@/components/portfolio/PdfOptionsModal'
 import { cleanDisplayName } from '@/lib/portfolio/theme'
-import { computeFundDividends, fundGroupKey, findFundPositionValue, fuzzyNameMatch, type DividendTxn } from '@/lib/portfolio/dividendEngine'
+import { computeFundDividends, looksLikeBond, fundGroupKey, findFundPositionValue, fuzzyNameMatch, type DividendTxn } from '@/lib/portfolio/dividendEngine'
 import {
   ASSET_CLASS_ES,
   computeAssetAllocation, computeLiquidity, computeFixedIncomeBreakdown, computeCurrencyExposure,
@@ -286,7 +286,7 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
         else groups.push(g)
       }
       setDividendResults(groups.map(g => {
-        const r = computeFundDividends(g.txns)
+        const r = computeFundDividends(g.txns, undefined, { isBond: looksLikeBond(g.label) })
         // "Valor del fondo" en el PDF es la misma posición real que ya usa
         // Portafolio, no una suma aparte de las compras de esta planilla.
         const fundValue = findFundPositionValue(g.isin, g.label, sortedByValue) ?? r.currentCapital
