@@ -16,7 +16,11 @@ export async function filasMasOperado(tipo: 'mas_operado_fondos' | 'mas_operado_
   const ranking = await getRankingMasOperado(desde, hasta, Math.max(1, Math.min(cantidad, 15)))
   if (tipo === 'mas_operado_fondos') {
     const compras = ranking.fondos.compras
-    for (const i of compras) if (!i.rendimientos) i.rendimientos = await buscarEnDavinci(i)
+    // Se buscan en Davinci solo los que no tienen datos o tienen una búsqueda
+    // guardada de hace 15 días o más; si Davinci no responde queda lo que había.
+    for (const i of compras) {
+      if (!i.rendimientos || i.rendimientos.vencido) i.rendimientos = (await buscarEnDavinci(i)) ?? i.rendimientos
+    }
     const fila = (i: InstrumentoOperado): FilaFondoOperado => {
       const r = i.rendimientos
       return {
@@ -34,10 +38,11 @@ export async function filasMasOperado(tipo: 'mas_operado_fondos' | 'mas_operado_
 
 const ISIN_RE = /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/
 
-// Fondo que no está en el Monitor ni en búsquedas guardadas: se busca en Davinci
-// por el ISIN de cada clase operada hasta encontrar uno. Usa la misma búsqueda
-// que las propuestas (una sola sesión, en cola, con cache de 15 días y pausa si
-// el login falla), así que no multiplica logins.
+// Fondo que no está en el Monitor ni tiene una búsqueda guardada de menos de 15
+// días: se busca en Davinci por el ISIN de cada clase operada hasta encontrar
+// uno. Usa la misma búsqueda que las propuestas (una sola sesión, en cola, que
+// devuelve lo guardado si tiene menos de 15 días, con pausa si el login falla),
+// así que no multiplica logins.
 async function buscarEnDavinci(i: InstrumentoOperado): Promise<Rendimientos | null> {
   const isins = Array.from(new Set([i.isin, ...(i.variantes ?? []).map((v) => v.isin)].filter((x) => ISIN_RE.test(x))))
   for (const isin of isins) {

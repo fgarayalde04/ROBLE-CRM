@@ -1,4 +1,5 @@
 import { pool } from './pool'
+import { vigente } from '@/lib/fundMonitor/cortes'
 
 // "Lo más operado": ranking de instrumentos comprados y vendidos en un período,
 // a partir de las órdenes que se envían desde la plataforma (Solicitudes, con
@@ -15,6 +16,7 @@ export type Lado = 'compra' | 'venta'
 export interface Rendimientos {
   fuente: string          // nombre del fondo en el Monitor
   fecha: string | null    // a qué fecha son los datos (dd/mm/aaaa)
+  vencido?: boolean       // búsqueda guardada de hace 15 días o más: el reporte la vuelve a buscar
   r_1y: number | null
   r_3y: number | null
   r_5y: number | null
@@ -413,6 +415,7 @@ async function completar(ranking: RankingMasOperado) {
           f.rendimientos = {
             fuente: d.nombreDavinci ? `${d.nombreDavinci} (búsqueda en Davinci)` : 'búsqueda en Davinci',
             fecha: fechaDato(d.asOfDate, d.fetched_at),
+            vencido: !vigente(d.fetched_at),
             r_1y: n(d.r1a), r_3y: n(d.r3a), r_5y: n(d.r5a), r_ytd: n(d.ytd), y_2025: n(d.y2025), y_2024: n(d.y2024), y_2023: n(d.y2023),
             y_2022: n(d.y2022), y_2021: n(d.y2021),
           }
@@ -474,20 +477,3 @@ export function armarRanking(ops: Operacion[], limite: number, unirClases = true
   return ranking
 }
 
-const ISIN_RE = /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/
-
-/** Fondos comprados o vendidos alguna vez desde la plataforma (un ISIN por clase), para buscarles rendimientos. */
-export async function fondosOperados(): Promise<{ isin: string; nombre: string }[]> {
-  const hasta = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Montevideo' })
-  const [nuevas, anteriores] = await Promise.all([
-    operacionesSolicitudes('2000-01-01', hasta),
-    operacionesBlotterAnterior('2000-01-01', hasta).catch(() => [] as Operacion[]),
-  ])
-  const porIsin = new Map<string, string>()
-  for (const op of [...nuevas, ...anteriores]) {
-    if (op.clase !== 'fondos') continue
-    const isin = op.isin.toUpperCase().replace(/\s+/g, '')
-    if (ISIN_RE.test(isin) && !porIsin.has(isin)) porIsin.set(isin, op.nombre)
-  }
-  return Array.from(porIsin, ([isin, nombre]) => ({ isin, nombre }))
-}

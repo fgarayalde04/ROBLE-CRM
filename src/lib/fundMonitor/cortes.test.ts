@@ -19,3 +19,13 @@ describe('cortes de rendimientos (15 y fin de mes)', () => {
     expect(proximoCorte('2026-12-31')).toBe('2027-01-15')
   })
 })
+
+describe('vigencia de 15 días', () => {
+  it('se usa lo guardado hasta 14 días, a los 15 se vuelve a buscar', async () => {
+    const { vigente } = await import('./cortes')
+    expect(vigente('2026-10-15T12:00:00Z', '2026-10-29')).toBe(true)
+    expect(vigente('2026-10-15T12:00:00Z', '2026-10-30')).toBe(false)
+    expect(vigente('2026-10-15T12:00:00Z', '2026-10-31')).toBe(false)
+    expect(vigente(null, '2026-10-31')).toBe(false)
+  })
+})

@@ -8,47 +8,92 @@
  * nunca se ejecuta.
  */
 import { getBrowser } from '@/lib/fondos/browser'
-import { loginDavinci, searchFundReturns, openDavinciPage } from '@/lib/fundMonitor/davinciScraper'
-import { listActiveFunds, upsertFundReturns, markFundSyncIssue, getSyncState, markSyncAttempt, setLookupCache } from '@/lib/db/fundMonitor'
-import { fondosOperados } from '@/lib/db/masOperado'
-import { fechaMontevideo, proximoCorte, ultimoCorte } from '@/lib/fundMonitor/cortes'
+import { loginDavinci, searchFundReturns, openDavinciPage, type DavinciFundReturns } from '@/lib/fundMonitor/davinciScraper'
+import {
+  listActiveFunds, upsertFundReturns, markFundSyncIssue, getSyncState, markSyncAttempt, setLookupCache, getReturnsFetched, getLookupCaches,
+} from '@/lib/db/fundMonitor'
+import { fechaMontevideo, proximoCorte, ultimoCorte, vigente } from '@/lib/fundMonitor/cortes'
 
-export interface FundSyncRowResult { isin: string; nombre: string; status: 'ok' | 'no_source' | 'error'; error?: string }
+// vigente: no se bajó en esta corrida, se usó lo guardado (menos de 15 días)
+export interface FundSyncRowResult { isin: string; nombre: string; status: 'ok' | 'no_source' | 'error'; error?: string; vigente?: boolean }
 export interface FundSyncResult {
-  total: number; ok: number; no_source: number; error: number; results: FundSyncRowResult[]
-  operados: { total: number; ok: number; no_source: number; error: number }
+  total: number; ok: number; no_source: number; error: number; vigentes: number; results: FundSyncRowResult[]
 }
 export interface FundSyncSkipped { skipped: true; reason: string }
 
-// Davinci reportó ~50 mil descargas por día desde nuestro usuario: el Monitor
-// ya no se actualiza a diario sino en dos cortes por mes, el 15 y el último día
-// (Montevideo). Los fondos nuevos o editados se buscan en el momento
-// (syncSingleFund) y los que no están en el Monitor, desde Propuestas
-// (liveLookup).
-//
-// En la misma corrida (mismo login) se actualizan también los fondos operados
-// desde la plataforma que no están en el Monitor (Lo más operado), y quedan en
-// davinci_lookup_cache.
-//
-// Las fechas se guardan en la base (davinci_sync_state): antes vivían en
-// memoria y cada deploy volvía a disparar la corrida completa. Un intento
-// fallido (ej. login rechazado) no se reintenta hasta el día siguiente —
-// Davinci bloquea la cuenta ante logins repetidos. ?force=1 saltea todo.
+// Davinci reportó ~50 mil descargas por día desde nuestro usuario. Reglas:
+//  - Un dato bajado se usa durante 15 días (DIAS_VIGENCIA); no se vuelve a
+//    buscar lo que tiene menos de 15 días, venga del sync, de Propuestas o de
+//    un alta en el Monitor.
+//  - El sync corre en dos cortes por mes, el 15 y el último día (Montevideo),
+//    y solo baja los fondos del Monitor que están vencidos o nunca se
+//    buscaron. Si no hay nada vencido no se loguea. Los fondos que no están en
+//    el Monitor se buscan solo cuando hacen falta (Propuestas, reporte de lo
+//    más operado), con la misma regla de 15 días.
+//  - Un solo login por corrida. Un intento fallido no se reintenta hasta el
+//    día siguiente (Davinci bloquea la cuenta ante logins repetidos).
+// Las fechas se guardan en la base (davinci_sync_state y fetched_at), no en
+// memoria, así un deploy no dispara nada. ?force=1 saltea el calendario, pero
+// igual respeta los 15 días de cada dato.
 const SYNC_KEY = 'fund_monitor'
 const DAY_MS = 24 * 60 * 60 * 1000
 
+const aReturns = (d: DavinciFundReturns) => ({
+  as_of_date: d.asOfDate, r_ytd: d.ytd, r_1y: d.r1a, r_3y: d.r3a, r_5y: d.r5a,
+  y_2025: d.y2025, y_2024: d.y2024, y_2023: d.y2023, y_2022: d.y2022, y_2021: d.y2021,
+})
+
 export async function syncFundMonitor(opts?: { force?: boolean }): Promise<FundSyncResult | FundSyncSkipped> {
   const force = opts?.force ?? false
+  const hoy = fechaMontevideo()
   if (!force) {
     const state = await getSyncState(SYNC_KEY)
     const now = Date.now()
-    const corte = ultimoCorte(fechaMontevideo())
-    if (state.last_success_at && fechaMontevideo(state.last_success_at) >= corte) {
-      return { skipped: true, reason: `last sync ${state.last_success_at.toISOString()} (next on ${proximoCorte(fechaMontevideo())})` }
+    if (state.last_success_at && fechaMontevideo(state.last_success_at) >= ultimoCorte(hoy)) {
+      return { skipped: true, reason: `last sync ${state.last_success_at.toISOString()} (next on ${proximoCorte(hoy)})` }
     }
     if (state.last_attempt_at && now - state.last_attempt_at.getTime() < DAY_MS) {
       return { skipped: true, reason: `last attempt failed ${state.last_attempt_at.toISOString()}, retry tomorrow` }
     }
+  }
+
+  const funds = await listActiveFunds()
+  const results: FundSyncRowResult[] = []
+
+  // Lo que ya está guardado: Monitor (fund_monitor_returns) y búsquedas
+  // hechas desde Propuestas o el reporte (davinci_lookup_cache).
+  const guardado = await getReturnsFetched()
+  const cache = await getLookupCaches(funds.map((f) => f.isin ?? '').filter(Boolean))
+
+  const fondosABajar: typeof funds = []
+  for (const fund of funds) {
+    const g = guardado.get(fund.id)
+    if (g && g.status !== 'error' && vigente(g.fetched_at, hoy)) {
+      results.push({ isin: fund.isin, nombre: fund.nombre, status: g.status === 'ok' ? 'ok' : 'no_source', vigente: true })
+      continue
+    }
+    const c = cache.get((fund.isin ?? '').toUpperCase())
+    if (c?.data && vigente(c.fetched_at, hoy)) {
+      // Ya se bajó desde Propuestas o el reporte hace menos de 15 días: se usa eso
+      await upsertFundReturns(fund.id, aReturns(c.data), c.fetched_at)
+      results.push({ isin: fund.isin, nombre: fund.nombre, status: 'ok', vigente: true })
+      continue
+    }
+    fondosABajar.push(fund)
+  }
+
+  const resultado = (): FundSyncResult => ({
+    total: funds.length,
+    ok: results.filter(r => r.status === 'ok').length,
+    no_source: results.filter(r => r.status === 'no_source').length,
+    error: results.filter(r => r.status === 'error').length,
+    vigentes: results.filter(r => r.vigente).length,
+    results,
+  })
+
+  if (!fondosABajar.length) {
+    await markSyncAttempt(SYNC_KEY, true)
+    return resultado()
   }
 
   const email = process.env.DAVINCI_EMAIL
@@ -62,15 +107,6 @@ export async function syncFundMonitor(opts?: { force?: boolean }): Promise<FundS
     throw new Error('No se pudo iniciar el browser headless')
   }
 
-  const funds = await listActiveFunds()
-  const results: FundSyncRowResult[] = []
-  const enMonitor = new Set(funds.map((f) => (f.isin ?? '').toUpperCase()))
-  const operados = (await fondosOperados().catch((e) => {
-    console.error('[fund-monitor] No se pudieron leer los fondos operados:', e.message)
-    return []
-  })).filter((f) => !enMonitor.has(f.isin))
-  const operadosRes = { total: operados.length, ok: 0, no_source: 0, error: 0 }
-
   // Se registra el intento antes de loguear: si el login falla o el proceso
   // se corta a mitad (ej. un deploy), no se vuelve a correr hasta mañana.
   await markSyncAttempt(SYNC_KEY, false)
@@ -79,7 +115,7 @@ export async function syncFundMonitor(opts?: { force?: boolean }): Promise<FundS
   try {
     await loginDavinci(page, email, password)
 
-    for (const fund of funds) {
+    for (const fund of fondosABajar) {
       try {
         const data = await searchFundReturns(page, fund.isin, fund.nombre)
         if (!data) {
@@ -88,39 +124,14 @@ export async function syncFundMonitor(opts?: { force?: boolean }): Promise<FundS
           results.push({ isin: fund.isin, nombre: fund.nombre, status: 'no_source' })
           continue
         }
-        await upsertFundReturns(fund.id, {
-          as_of_date: data.asOfDate,
-          r_ytd: data.ytd,
-          r_1y: data.r1a,
-          r_3y: data.r3a,
-          r_5y: data.r5a,
-          y_2025: data.y2025,
-          y_2024: data.y2024,
-          y_2023: data.y2023,
-          y_2022: data.y2022,
-          y_2021: data.y2021,
-        })
+        await upsertFundReturns(fund.id, aReturns(data))
         results.push({ isin: fund.isin, nombre: fund.nombre, status: 'ok' })
       } catch (e: any) {
         // Un fondo que falla no corta el resto de la corrida — se registra
-        // el error y se sigue con el próximo (Fase 6: "probar el
-        // siguiente... seguir funcionando el resto de la aplicación").
+        // el error y se sigue con el próximo.
         console.error(`[fund-monitor] Error: ${fund.isin} · ${fund.nombre}:`, e.message)
         await markFundSyncIssue(fund.id, 'error', e.message ?? 'Error desconocido')
         results.push({ isin: fund.isin, nombre: fund.nombre, status: 'error', error: e.message })
-      }
-    }
-
-    // Fondos operados que no están en el Monitor: se guardan en
-    // davinci_lookup_cache, de donde los lee Lo más operado.
-    for (const f of operados) {
-      try {
-        const data = await searchFundReturns(page, f.isin, f.nombre)
-        // Un "no encontrado" no pisa datos que ya se habían bajado
-        if (data) { await setLookupCache(f.isin, data); operadosRes.ok++ } else operadosRes.no_source++
-      } catch (e: any) {
-        console.error(`[fund-monitor] Error (operado): ${f.isin} · ${f.nombre}:`, e.message)
-        operadosRes.error++
       }
     }
   } catch (e: any) {
@@ -133,14 +144,7 @@ export async function syncFundMonitor(opts?: { force?: boolean }): Promise<FundS
   }
 
   await markSyncAttempt(SYNC_KEY, true)
-  return {
-    total: funds.length,
-    ok: results.filter(r => r.status === 'ok').length,
-    no_source: results.filter(r => r.status === 'no_source').length,
-    error: results.filter(r => r.status === 'error').length,
-    results,
-    operados: operadosRes,
-  }
+  return resultado()
 }
 
 export type SingleFundSyncStatus = 'ok' | 'no_source' | 'error' | 'unavailable'
@@ -150,6 +154,17 @@ export type SingleFundSyncStatus = 'ok' | 'no_source' | 'error' | 'unavailable'
 // fondo ya se hizo y una falla de Davinci no debe deshacerla — el estado queda
 // registrado en fund_monitor_returns y el próximo sync lo reintenta.
 export async function syncSingleFund(fund: { id: string; isin: string; nombre: string }): Promise<SingleFundSyncStatus> {
+  // Si ese ISIN ya se buscó hace menos de 15 días (Propuestas o el reporte), se usa eso
+  try {
+    const c = (await getLookupCaches([fund.isin])).get(fund.isin.toUpperCase())
+    if (c?.data && vigente(c.fetched_at)) {
+      await upsertFundReturns(fund.id, aReturns(c.data), c.fetched_at)
+      return 'ok'
+    }
+  } catch (e: any) {
+    console.error('[fund-monitor] No se pudo leer la búsqueda guardada:', fund.isin, e.message)
+  }
+
   const email = process.env.DAVINCI_EMAIL
   const password = process.env.DAVINCI_PASSWORD
   if (!email || !password) return 'unavailable'
@@ -166,18 +181,7 @@ export async function syncSingleFund(fund: { id: string; isin: string; nombre: s
         await markFundSyncIssue(fund.id, 'no_source', 'Fondo no encontrado en Davinci (ni por ISIN ni por nombre)')
         return 'no_source'
       }
-      await upsertFundReturns(fund.id, {
-        as_of_date: data.asOfDate,
-        r_ytd: data.ytd,
-        r_1y: data.r1a,
-        r_3y: data.r3a,
-        r_5y: data.r5a,
-        y_2025: data.y2025,
-        y_2024: data.y2024,
-        y_2023: data.y2023,
-        y_2022: data.y2022,
-        y_2021: data.y2021,
-      })
+      await upsertFundReturns(fund.id, aReturns(data))
       return 'ok'
     } finally {
       await context.close()

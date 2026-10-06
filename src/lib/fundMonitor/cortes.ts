@@ -25,3 +25,15 @@ export function proximoCorte(hoy: string): string {
 export function fechaMontevideo(d: Date = new Date()): string {
   return d.toLocaleDateString('en-CA', { timeZone: 'America/Montevideo' })
 }
+
+// Un dato bajado de Davinci se usa durante 15 días; recién después se vuelve a buscar.
+export const DIAS_VIGENCIA = 15
+
+/** true si el dato se bajó hace menos de DIAS_VIGENCIA días (por fecha de Montevideo). */
+export function vigente(bajado: Date | string | null | undefined, hoy: string = fechaMontevideo()): boolean {
+  if (!bajado) return false
+  const d = bajado instanceof Date ? bajado : new Date(bajado)
+  if (Number.isNaN(d.getTime())) return false
+  const dias = (Date.parse(`${hoy}T00:00:00Z`) - Date.parse(`${fechaMontevideo(d)}T00:00:00Z`)) / 86400000
+  return dias < DIAS_VIGENCIA
+}
