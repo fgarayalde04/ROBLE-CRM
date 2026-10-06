@@ -161,8 +161,10 @@ describe('igual que el Blotter', () => {
 })
 
 describe('armado automático de fin de mes', () => {
-  it('el día 1 arma el informe del mes anterior', async () => {
+  it('el último día del mes arma el de ese mes; el día 1 (respaldo), el del mes anterior', async () => {
     const { mesDelInforme } = await import('./plantillas/autoMensual')
+    expect(mesDelInforme('2026-10-31')).toMatchObject({ desde: '2026-10-01', hasta: '2026-10-31', label: 'Octubre 2026' })
+    expect(mesDelInforme('2027-02-28')).toMatchObject({ desde: '2027-02-01', hasta: '2027-02-28' })
     expect(mesDelInforme('2026-10-01')).toMatchObject({ desde: '2026-09-01', hasta: '2026-09-30', label: 'Septiembre 2026' })
     expect(mesDelInforme('2027-01-01')).toMatchObject({ desde: '2026-12-01', hasta: '2026-12-31' })
   })

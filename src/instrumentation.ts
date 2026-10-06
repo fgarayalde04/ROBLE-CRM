@@ -136,8 +136,10 @@ export async function register() {
 // destinatario, así que reintentar o reiniciar no lo repite.
 //   ORDER_DAILY_CLOSE_ENABLED=false  → deshabilitado
 //   ORDER_DAILY_CLOSE_HOUR=18        → hora de Montevideo (default 18)
-// Plantillas de fin de mes: el día 1, desde las 9:00 (Montevideo), arma los
-// borradores de fondos y bonos más comprados del mes anterior y avisa por push.
+// Plantillas de fin de mes: el último día del mes, desde las 18:00 (Montevideo,
+// PLANTILLAS_AUTO_HOUR), arma los borradores de fondos y bonos más comprados del
+// mes (y busca en Davinci los rendimientos que falten) y avisa por push. Si ese
+// día no corrió, el día 1 desde las 9:00 arma el del mes anterior.
 // La ruta es idempotente (un borrador por tipo y mes, un aviso por persona).
 // Solo en producción, para no mandar push desde desarrollo; en otro ambiente se
 // habilita con PLANTILLAS_AUTO_ENABLED=true.
@@ -149,7 +151,9 @@ function registerPlantillasMensuales() {
   }
   if (process.env.PLANTILLAS_AUTO_ENABLED === 'false') return
   const port = process.env.PORT ?? '3000'
-  let hechoMes = ''
+  const parsedHora = parseInt(process.env.PLANTILLAS_AUTO_HOUR ?? '', 10)
+  const horaFinDeMes = Number.isFinite(parsedHora) && parsedHora >= 0 && parsedHora <= 23 ? parsedHora : 18
+  let hechoDia = ''
 
   async function maybeRun() {
     const parts = Object.fromEntries(
@@ -157,18 +161,21 @@ function registerPlantillasMensuales() {
         timeZone: 'America/Montevideo', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hourCycle: 'h23',
       }).formatToParts(new Date()).map((p) => [p.type, p.value])
     )
-    const mes = `${parts.year}-${parts.month}`
-    if (hechoMes === mes || parts.day !== '01' || parseInt(parts.hour, 10) < 9) return
+    const hoy = `${parts.year}-${parts.month}-${parts.day}`
+    const ultimoDia = new Date(Date.UTC(Number(parts.year), Number(parts.month), 0)).getUTCDate()
+    const hora = parseInt(parts.hour, 10)
+    const toca = (Number(parts.day) === ultimoDia && hora >= horaFinDeMes) || (parts.day === '01' && hora >= 9)
+    if (hechoDia === hoy || !toca) return
     try {
       const headers: Record<string, string> = {}
       if (process.env.CRON_SECRET) headers.Authorization = `Bearer ${process.env.CRON_SECRET}`
-      const res = await fetch(`http://127.0.0.1:${port}/api/cron/plantillas-mensuales?hoy=${mes}-01`, { headers })
+      const res = await fetch(`http://127.0.0.1:${port}/api/cron/plantillas-mensuales?hoy=${hoy}`, { headers })
       const data = await res.json()
       if (!res.ok) {
         console.error('[plantillas-mensuales] Error:', data.error ?? res.status)
         return
       }
-      hechoMes = mes
+      hechoDia = hoy
       console.log('[plantillas-mensuales]', JSON.stringify(data.resultados))
     } catch (e: any) {
       console.error('[plantillas-mensuales] Error:', e.message)
@@ -177,7 +184,7 @@ function registerPlantillasMensuales() {
 
   setTimeout(() => maybeRun(), 45000)
   setInterval(() => maybeRun(), 15 * 60 * 1000)
-  console.log('[plantillas-mensuales] Programado — día 1 de cada mes desde las 9:00 (Montevideo)')
+  console.log(`[plantillas-mensuales] Programado — último día del mes desde las ${horaFinDeMes}:00 (Montevideo), respaldo el día 1`)
 }
 
 function registerCierreOrdenes() {

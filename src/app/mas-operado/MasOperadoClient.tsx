@@ -239,7 +239,7 @@ function Tabla({ filas, clase }: { filas: InstrumentoOperado[]; clase: ClaseActi
                           <p className="text-[10px] text-gray-400 pt-1">
                             {f.rendimientos
                               ? `Rendimientos: ${f.rendimientos.fuente}${f.rendimientos.fecha ? ` · datos al ${f.rendimientos.fecha}` : ''}`
-                              : 'Sin rendimientos guardados: se buscan en Davinci al generar el reporte.'}
+                              : 'Sin rendimientos: no está en el Monitor; se busca en Davinci el último día del mes, al armar el reporte.'}
                           </p>
                         )}
                       </div>

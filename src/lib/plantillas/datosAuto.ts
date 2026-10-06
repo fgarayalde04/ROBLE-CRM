@@ -12,14 +12,20 @@ import {
 const num = (v: unknown) => (v == null || v === '' || Number.isNaN(Number(v)) ? null : Number(v))
 
 // Solo las compras; fondos por nombre (las clases ya vienen unidas) con todos sus rendimientos.
-export async function filasMasOperado(tipo: 'mas_operado_fondos' | 'mas_operado_bonos', desde: string, hasta: string, cantidad: number) {
+// Rendimientos: los del Monitor y las búsquedas guardadas. A Davinci se va solo
+// con `davinci` (el armado automático del último día del mes), y solo por los
+// fondos sin datos o con una búsqueda de hace 15 días o más.
+export async function filasMasOperado(
+  tipo: 'mas_operado_fondos' | 'mas_operado_bonos', desde: string, hasta: string, cantidad: number, opts: { davinci?: boolean } = {},
+) {
   const ranking = await getRankingMasOperado(desde, hasta, Math.max(1, Math.min(cantidad, 15)))
   if (tipo === 'mas_operado_fondos') {
     const compras = ranking.fondos.compras
-    // Se buscan en Davinci solo los que no tienen datos o tienen una búsqueda
-    // guardada de hace 15 días o más; si Davinci no responde queda lo que había.
-    for (const i of compras) {
-      if (!i.rendimientos || i.rendimientos.vencido) i.rendimientos = (await buscarEnDavinci(i)) ?? i.rendimientos
+    // Si Davinci no responde queda lo que había
+    if (opts.davinci) {
+      for (const i of compras) {
+        if (!i.rendimientos || i.rendimientos.vencido) i.rendimientos = (await buscarEnDavinci(i)) ?? i.rendimientos
+      }
     }
     const fila = (i: InstrumentoOperado): FilaFondoOperado => {
       const r = i.rendimientos
@@ -99,7 +105,7 @@ export async function categoriasMonitor(): Promise<CategoriaMonitor[]> {
 }
 
 /** Datos con los que arranca un documento nuevo; los automáticos se completan solos. */
-export async function datosIniciales(tipo: TipoPlantilla, opts: { desde?: string; hasta?: string; asset_class?: string }) {
+export async function datosIniciales(tipo: TipoPlantilla, opts: { desde?: string; hasta?: string; asset_class?: string; davinci?: boolean }) {
   const datos = datosVacios(tipo)
   if (tipo === 'mas_operado_fondos' || tipo === 'mas_operado_bonos') {
     const p = opts.desde && opts.hasta ? { desde: opts.desde, hasta: opts.hasta, label: labelRango(opts.desde, opts.hasta) } : mesParaInforme()
@@ -107,7 +113,7 @@ export async function datosIniciales(tipo: TipoPlantilla, opts: { desde?: string
     datos.hasta = p.hasta
     datos.periodo = p.label
     try {
-      Object.assign(datos, await filasMasOperado(tipo, p.desde, p.hasta, datos.cantidad))
+      Object.assign(datos, await filasMasOperado(tipo, p.desde, p.hasta, datos.cantidad, { davinci: opts.davinci }))
     } catch (e: any) {
       console.error('[plantillas] más operado', e.message)
     }
