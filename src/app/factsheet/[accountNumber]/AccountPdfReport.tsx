@@ -310,6 +310,7 @@ export default function AccountPdfReport({
           label: ASSET_CLASS_ES[assetClass] ?? assetClass,
           rows,
           subtotalValue,
+          subtotalAccrued: rows.reduce((s, p) => s + Number(p.accrued_interest ?? 0), 0),
           subtotalPct: rows.reduce((s, p) => s + rowPct(p), 0),
           subtotalCost: rows.reduce((s, p) => s + (p.cusip && glByCusip.get(p.cusip) ? Number(glByCusip.get(p.cusip)!.cost_basis) : 0), 0),
           subtotalGL: rows.reduce((s, p) => s + (p.cusip && glByCusip.get(p.cusip) ? Number(glByCusip.get(p.cusip)!.gain_loss) : 0), 0),
@@ -320,7 +321,9 @@ export default function AccountPdfReport({
         return rk !== 0 ? rk : b.subtotalValue - a.subtotalValue
       })
   })()
-  const holdingColSpan = 5 + (hasGL ? 2 : 0) + (hasMaturityCols ? 1 : 0) + (isConsolidated ? 1 : 0)
+  // Columna de cupón corrido en Holdings solo si alguna posición lo trae.
+  const hasAccrued = sortedByValue.some(p => p.accrued_interest != null && Number(p.accrued_interest) !== 0)
+  const holdingColSpan = 5 + (hasAccrued ? 1 : 0) + (hasGL ? 2 : 0) + (hasMaturityCols ? 1 : 0) + (isConsolidated ? 1 : 0)
 
   const sec = { performance: true, composicion: true, holdings: true, income: true, dividendos: true, ...(sections ?? {}) }
   const periodsOn = { ytd: true, oneYear: true, threeYear: true, fiveYear: true, sinceInception: true, ...(sections?.performancePeriods ?? {}) }
@@ -471,6 +474,9 @@ export default function AccountPdfReport({
         </div>
 
         <div data-pdf-keep-together style={{ display: 'flex', gap: '3mm', marginBottom: '5mm' }}>
+          {accruedInterestTotal !== 0 && (
+            <StatTile label="Valor total" value={fmtUSD(totalValue)} sub={`Incluye cupón corrido ${fmtUSD(accruedInterestTotal)}`} color={COLORS.darkGreen} />
+          )}
           <StatTile label="Liquidez" value={fmtUSD(liquidity.value)} sub={`${fmtPct(liquidity.pct)} del portafolio`} />
           <StatTile label="Projected Income · próx. 12 meses" value={hasIncomePage ? fmtUSD(projectedIncome12m) : '—'} sub={hasIncomePage ? 'Cupones y dividendos estimados' : 'Sin archivo importado'} />
           <StatTile
@@ -542,6 +548,7 @@ export default function AccountPdfReport({
               <th style={{ textAlign: 'right', padding: '2mm 1.5mm', color: '#fff', fontWeight: 700 }}>Quantity</th>
               <th style={{ textAlign: 'right', padding: '2mm 1.5mm', color: '#fff', fontWeight: 700 }}>Price</th>
               <th style={{ textAlign: 'right', padding: '2mm 1.5mm', color: '#fff', fontWeight: 700 }}>Market Value</th>
+              {hasAccrued && <th style={{ textAlign: 'right', padding: '2mm 1.5mm', color: '#fff', fontWeight: 700 }}>Cupón corrido</th>}
               <th style={{ textAlign: 'right', padding: '2mm 1.5mm', color: '#fff', fontWeight: 700 }}>Portfolio %</th>
               {hasGL && (
                 <>
@@ -579,6 +586,7 @@ export default function AccountPdfReport({
                       <td style={{ padding: '2.2mm 1.5mm', textAlign: 'right', color: COLORS.slate }}>{p.quantity != null ? Number(p.quantity).toLocaleString('en-US') : '—'}</td>
                       <td style={{ padding: '2.2mm 1.5mm', textAlign: 'right', color: COLORS.slate }}>{p.price != null ? fmtUSD2(Number(p.price)) : '—'}</td>
                       <td style={{ padding: '2.2mm 1.5mm', textAlign: 'right', fontWeight: 700, color: COLORS.ink }}>{fmtUSD2(Number(p.market_value))}</td>
+                      {hasAccrued && <td style={{ padding: '2.2mm 1.5mm', textAlign: 'right', color: COLORS.slate }}>{p.accrued_interest != null && Number(p.accrued_interest) !== 0 ? fmtUSD2(Number(p.accrued_interest)) : '—'}</td>}
                       <td style={{ padding: '2.2mm 1.5mm', textAlign: 'right', color: COLORS.slate }}>{fmtPct(pct)}</td>
                       {hasGL && (
                         <>
@@ -599,6 +607,7 @@ export default function AccountPdfReport({
                     <tr data-pdf-keep-together style={{ background: '#EEF2F1', borderBottom: `1.5px solid ${COLORS.border}` }}>
                       <td colSpan={3} style={{ padding: '1.8mm 1.5mm', textAlign: 'right', fontWeight: 700, color: COLORS.slate, fontSize: 6.8 }}>Subtotal {group.label}</td>
                       <td style={{ padding: '1.8mm 1.5mm', textAlign: 'right', fontWeight: 700, color: COLORS.ink }}>{fmtUSD2(group.subtotalValue)}</td>
+                      {hasAccrued && <td style={{ padding: '1.8mm 1.5mm', textAlign: 'right', fontWeight: 700, color: COLORS.slate }}>{group.subtotalAccrued !== 0 ? fmtUSD2(group.subtotalAccrued) : '—'}</td>}
                       <td style={{ padding: '1.8mm 1.5mm', textAlign: 'right', fontWeight: 700, color: COLORS.slate }}>{fmtPct(group.subtotalPct)}</td>
                       {hasGL && (
                         <>
@@ -619,6 +628,7 @@ export default function AccountPdfReport({
             <tr style={{ background: COLORS.charcoal }}>
               <td colSpan={3} style={{ padding: '2mm 1.5mm', color: '#fff', fontWeight: 700, textAlign: 'right' }}>TOTAL</td>
               <td style={{ padding: '2mm 1.5mm', color: '#fff', fontWeight: 700, textAlign: 'right' }}>{fmtUSD2(positionsValue)}</td>
+              {hasAccrued && <td style={{ padding: '2mm 1.5mm', color: '#fff', fontWeight: 700, textAlign: 'right' }}>{fmtUSD2(accruedInterestTotal)}</td>}
               <td style={{ padding: '2mm 1.5mm' }} />
               {hasGL && (
                 <>
@@ -631,19 +641,12 @@ export default function AccountPdfReport({
               {hasMaturityCols && <td style={{ padding: '2mm 1.5mm' }} />}
               {isConsolidated && <td style={{ padding: '2mm 1.5mm' }} />}
             </tr>
-            {accruedInterestTotal !== 0 && (
-              <>
-                <tr style={{ background: COLORS.charcoal }}>
-                  <td colSpan={3} style={{ padding: '1.5mm', color: '#fff', opacity: 0.8, textAlign: 'right' }}>Cupón corrido</td>
-                  <td style={{ padding: '1.5mm', color: '#fff', textAlign: 'right' }}>{fmtUSD2(accruedInterestTotal)}</td>
-                  <td colSpan={holdingColSpan - 4} />
-                </tr>
-                <tr style={{ background: COLORS.charcoal }}>
-                  <td colSpan={3} style={{ padding: '2mm 1.5mm', color: '#fff', fontWeight: 700, textAlign: 'right' }}>TOTAL CON CUPÓN CORRIDO</td>
-                  <td style={{ padding: '2mm 1.5mm', color: '#fff', fontWeight: 700, textAlign: 'right' }}>{fmtUSD2(totalValue)}</td>
-                  <td colSpan={holdingColSpan - 4} />
-                </tr>
-              </>
+            {hasAccrued && (
+              <tr style={{ background: COLORS.charcoal, borderTop: '1px solid rgba(255,255,255,0.15)' }}>
+                <td colSpan={3} style={{ padding: '2mm 1.5mm', color: '#fff', fontWeight: 700, textAlign: 'right' }}>TOTAL CON CUPÓN CORRIDO</td>
+                <td colSpan={2} style={{ padding: '2mm 1.5mm', color: '#fff', fontWeight: 700, textAlign: 'right' }}>{fmtUSD2(totalValue)}</td>
+                <td colSpan={holdingColSpan - 5} />
+              </tr>
             )}
           </tfoot>
         </table>
