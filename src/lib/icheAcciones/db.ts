@@ -137,6 +137,24 @@ export async function closePosition(ticker: string, analyst: Analyst, year: numb
   }
 }
 
+// Cierre de una compraventa del período: se agrega a cerradas sin tocar las
+// abiertas (o no había posición, o sigue abierta con la misma cantidad).
+export async function insertClosedPosition(ticker: string, analyst: Analyst, year: number, details: {
+  openingDate: string
+  costBasis: number
+  closingDate: string
+  quantity: number
+  saleProceeds: number
+  description: string
+}): Promise<void> {
+  await pool.query(
+    `insert into iche_closed_positions
+       (analyst, year, ticker, description, opening_date, cost_basis, closing_date, quantity, sale_proceeds)
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+    [analyst, year, ticker, details.description, details.openingDate, details.costBasis, details.closingDate, details.quantity, details.saleProceeds]
+  )
+}
+
 export async function logGeneration(
   fileName: string,
   item: { id: string; webUrl: string | null },

@@ -66,3 +66,68 @@ export function findBuys(ticker: string, activity: ActivityRow[]): BuyLot[] {
     .filter(b => b.quantity > 0 && b.unitCost > 0 && b.tradeDate)
     .sort((a, b) => a.tradeDate.localeCompare(b.tradeDate))
 }
+
+const CASH_LIKE = /money\s*(fund|market)|\bmmf\b|fdic|sweep|interest|dividend/i
+
+export interface TickerTrades {
+  ticker: string
+  description: string
+  source: 'pershing' | 'morgan'
+  cusip: string | null
+  buyQty: number
+  buyCost: number
+  firstBuyDate: string | null
+  buyDates: string[]
+  sellQty: number
+  sellProceeds: number
+  lastSellDate: string | null
+}
+
+/**
+ * Compras y ventas de acciones/ETFs del período, agrupadas por ticker. Sirve
+ * para detectar compraventas dentro del mismo período (un ticker que se
+ * compró y vendió entre dos corridas no aparece ni en el Holdings ni en las
+ * posiciones guardadas, así que sin esto se pierde). Se descartan fondos de
+ * money market, intereses y símbolos que no son tickers (bonos de Pershing).
+ */
+export function summarizeTrades(pershingActivity: ActivityRow[], morganActivity: ActivityRow[]): TickerTrades[] {
+  const byTicker = new Map<string, TickerTrades>()
+  const add = (rows: ActivityRow[], source: 'pershing' | 'morgan') => {
+    for (const row of rows) {
+      const ticker = row.symbol?.trim().toUpperCase()
+      if (!ticker || (ticker.length >= 8 && /\d/.test(ticker))) continue
+      const type = row.activityType ?? ''
+      const desc = row.description ?? ''
+      if (CASH_LIKE.test(type) || CASH_LIKE.test(desc)) continue
+      const isSell = SELL_PATTERN.test(type) || SELL_PATTERN.test(desc)
+      const isBuy = !isSell && (BUY_PATTERN.test(type) || BUY_PATTERN.test(desc))
+      if (!isSell && !isBuy) continue
+      const qty = Math.abs(row.quantity ?? 0)
+      if (qty === 0) continue
+      const date = row.tradeDate ?? row.settleDate ?? null
+      // El importe neto incluye comisiones; si no viene, cantidad × precio.
+      const value = Math.abs(row.amount ?? 0) || qty * Math.abs(row.price ?? 0)
+      const t = byTicker.get(ticker) ?? {
+        ticker, description: desc, source, cusip: null, buyQty: 0, buyCost: 0, firstBuyDate: null, buyDates: [],
+        sellQty: 0, sellProceeds: 0, lastSellDate: null,
+      }
+      t.cusip ??= row.cusip?.trim().toUpperCase() || null
+      if (isBuy) {
+        t.buyQty += qty
+        t.buyCost += value
+        if (date) {
+          t.buyDates.push(date)
+          if (!t.firstBuyDate || date < t.firstBuyDate) t.firstBuyDate = date
+        }
+      } else {
+        t.sellQty += qty
+        t.sellProceeds += value
+        if (date && (!t.lastSellDate || date > t.lastSellDate)) t.lastSellDate = date
+      }
+      byTicker.set(ticker, t)
+    }
+  }
+  add(pershingActivity, 'pershing')
+  add(morganActivity, 'morgan')
+  return [...byTicker.values()]
+}

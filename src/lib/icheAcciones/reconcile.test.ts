@@ -39,3 +39,43 @@ describe('reconcile trade date / last price', () => {
     expect(plan.pendingQuestions[0]).toMatchObject({ lastPrice: 20, unitCost: 12, tradeDate: '2026-08-12' })
   })
 })
+
+describe('compraventa dentro del período', () => {
+  const act = (over: any) => ({ settleDate: null, cusip: null, price: null, description: 'NIKE INC CL B', symbol: 'NKE', ...over })
+  const nkeActivity: any = [
+    act({ tradeDate: '2026-09-02', activityType: 'Bought', quantity: 100, price: 70, amount: -7000 }),
+    act({ tradeDate: '2026-09-20', activityType: 'Sold', quantity: -100, price: 80, amount: 8000 }),
+  ]
+
+  it('ticker comprado y vendido en el mes pregunta el analista con el cierre armado', () => {
+    const plan = reconcile([], [], [], [], nkeActivity)
+    expect(plan.pendingQuestions).toHaveLength(1)
+    expect(plan.pendingQuestions[0]).toMatchObject({
+      type: 'roundtrip_close', ticker: 'NKE', quantity: 100, costBasis: 7000, saleProceeds: 8000,
+      openingDate: '2026-09-02', closingDate: '2026-09-20',
+    })
+  })
+
+  it('no la vuelve a proponer si ya está en cerradas', () => {
+    const closed: any = [{ ticker: 'NKE', closingDate: '09/20/2026', quantity: 100, year: 2026 }]
+    const plan = reconcile([], [], [], [], nkeActivity, [], new Map(), closed)
+    expect(plan.pendingQuestions).toHaveLength(0)
+  })
+
+  it('posición abierta que compró y vendió la misma cantidad registra el cierre sin tocarla', () => {
+    const nke: OpenPosition = { id: '2', analyst: 'CHINO', ticker: 'NKE', cusip: null, description: 'NIKE INC CL B', source: 'morgan',
+      lots: [{ quantity: 50, unitCost: 90, tradeDate: '2025-05-01' }], lastPrice: 75 }
+    const pos: any = { symbol: 'NKE', name: 'NIKE', securityType: 'Stocks / Options', quantity: 50, price: 78, cusip: null }
+    const plan = reconcile([nke], [], [pos], [], nkeActivity)
+    expect(plan.changes.find(c => c.kind === 'roundtrip_closed')).toMatchObject({ analyst: 'CHINO', quantity: 100, costBasis: 7000 })
+    expect(plan.changes.some(c => c.kind === 'price_update')).toBe(true)
+  })
+
+  it('ignora fondos money market', () => {
+    const mmf: any = [
+      act({ symbol: 'DUTG', tradeDate: '2026-09-02', activityType: 'MONEY FUND PURCHASE', quantity: 10, amount: -10 }),
+      act({ symbol: 'DUTG', tradeDate: '2026-09-03', activityType: 'MONEY FUND SALE', quantity: 10, amount: 10 }),
+    ]
+    expect(reconcile([], [], [], mmf, []).pendingQuestions).toHaveLength(0)
+  })
+})

@@ -10,6 +10,7 @@ import {
   fixPosition,
   getClosedPositions,
   getOpenPositions,
+  insertClosedPosition,
   logGeneration,
   updateLastPrice,
 } from '@/lib/icheAcciones/db'
@@ -67,6 +68,9 @@ export async function POST(req: NextRequest) {
         })
         break
       }
+      case 'roundtrip_closed':
+        await insertClosedPosition(change.ticker, change.analyst, Number(change.closingDate.slice(0, 4)), change)
+        break
       case 'quantity_mismatch':
         // Ya quedó como warning — no se aplica ningún cambio automático.
         break
@@ -106,6 +110,10 @@ export async function POST(req: NextRequest) {
         })
       }
       // 'leave_as_is' -> no se toca, la posición sigue abierta tal cual.
+    } else if (q.type === 'roundtrip_close') {
+      if (answer.resolution === 'ignore') continue
+      if (!answer.analyst) { warnings.push(`${q.ticker}: falta el analista de la compraventa — se omitió.`); continue }
+      await insertClosedPosition(q.ticker, answer.analyst, Number(q.closingDate.slice(0, 4)), q)
     }
   }
 
@@ -132,8 +140,11 @@ export async function POST(req: NextRequest) {
     warnings.push(`No se pudo subir el archivo a OneDrive: ${err.message}`)
   }
 
+  const isNewClose = (c: { ticker: string; closingDate: string }) =>
+    plan.changes.some(ch => (ch.kind === 'closed_matched' || ch.kind === 'roundtrip_closed') && ch.ticker === c.ticker && ch.closingDate === c.closingDate) ||
+    plan.pendingQuestions.some(q => q.type === 'roundtrip_close' && q.ticker === c.ticker && q.closingDate === c.closingDate && answers[q.id]?.analyst && answers[q.id]?.resolution !== 'ignore')
   const nuevosCierres = closedAfter
-    .filter(c => plan.changes.some(ch => ch.kind === 'closed_matched' && ch.ticker === c.ticker))
+    .filter(isNewClose)
     .map(c => ({
       ticker: c.ticker,
       description: c.description,

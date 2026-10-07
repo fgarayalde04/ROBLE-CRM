@@ -10,9 +10,9 @@
 import type { ActivityRow } from '@/lib/portfolio/activityParser'
 import type { PortfolioPositionParsed } from '@/lib/portfolio/parser'
 import type { UnrealizedGainLossRow } from '@/lib/portfolio/unrealizedGainLossParser'
-import { findBuys, findSale, type BuyLot } from './activityMatcher'
+import { findBuys, findSale, summarizeTrades, type BuyLot } from './activityMatcher'
 import type { PershingUnrealizedRow } from './pershingUnrealizedParser'
-import type { IcheQuestion, Lot, OpenPosition, ReconcilePlan, TickerChange } from './types'
+import type { ClosedPosition, IcheQuestion, Lot, OpenPosition, ReconcilePlan, TickerChange } from './types'
 
 const PERSHING_ASSET_CATEGORIES = new Set(['Common Stocks', 'Exchange-Traded Funds'])
 const MORGAN_PRODUCT_TYPES = new Set(['Stocks / Options', 'ETFs / CEFs'])
@@ -69,6 +69,12 @@ function nextQuestionId(): string {
   return `q${Date.now()}_${questionCounter}`
 }
 
+// Las cerradas cargadas del Excel original tienen fechas MM/DD/YYYY.
+const isoDate = (d: string) => {
+  const m = d.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
+  return m ? `${m[3]}-${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}` : d
+}
+
 const isPlaceholderTicker = (t: string) => t.length >= 8 && /\d/.test(t)
 const isValidDate = (d: string | null) => d == null || /^\d{4}-\d{2}-\d{2}$/.test(d)
 
@@ -79,7 +85,8 @@ export function reconcile(
   pershingActivity: ActivityRow[],
   morganActivity: ActivityRow[],
   morganCosts: UnrealizedGainLossRow[] = [],
-  knownTickers: Map<string, string> = new Map()
+  knownTickers: Map<string, string> = new Map(),
+  closedPositions: ClosedPosition[] = []
 ): ReconcilePlan {
   const changes: TickerChange[] = []
   const pendingQuestions: IcheQuestion[] = []
@@ -288,6 +295,71 @@ export function reconcile(
         lastKnownQuantity: pos.lots.reduce((s, l) => s + l.quantity, 0),
       })
     }
+  }
+
+  // ── Compraventas dentro del período ──────────────────────────────────────
+  // Un ticker comprado y vendido entre dos corridas no está en el Holdings ni
+  // en las posiciones guardadas, así que los pasos de arriba no lo ven. Se
+  // arma desde el Activity. Si el Activity cubre más de un mes, las que ya
+  // están en iche_closed_positions (mismo ticker, fecha y cantidad) se saltean.
+  const heldTickers = new Set<string>([
+    ...morganStocks.map(p => (p.symbol ?? '').toUpperCase()),
+    ...pendingQuestions.flatMap(q => (q.type === 'assign_analyst' ? [q.suggestedTicker.toUpperCase()] : [])),
+  ])
+  const heldCusips = new Set(pershingStocks.map(r => r.cusip.toUpperCase()))
+  const fmt = (n: number) => n.toLocaleString('en-US', { maximumFractionDigits: 4 })
+
+  for (const t of summarizeTrades(pershingActivity, morganActivity)) {
+    if (t.sellQty === 0 || !t.lastSellDate) continue
+    const open = currentOpen.filter(p => p.ticker.toUpperCase() === t.ticker)
+    // Abierta antes y ya no está: la venta la resuelve closed_matched / unmatched_close.
+    if (open.length > 0 && !open.some(p => matched.has(`${p.analyst}:${p.ticker}`))) continue
+    const sellDate = t.lastSellDate
+    const alreadyClosed = closedPositions.some(c =>
+      c.ticker.toUpperCase() === t.ticker && Math.abs(c.quantity - t.sellQty) < QTY_EPS &&
+      (isoDate(c.closingDate) === sellDate || (c.closingDate === 'Multiple' && c.year === Number(sellDate.slice(0, 4))))
+    )
+    if (alreadyClosed) continue
+
+    const label = `${t.ticker} (${t.source === 'pershing' ? 'Pershing' : 'Morgan'})`
+    if (t.buyQty + QTY_EPS < t.sellQty) {
+      warnings.push(`${label}: el Activity muestra ventas por ${fmt(t.sellQty)} acciones pero compras por solo ${fmt(t.buyQty)} — no se pudo armar el cierre de la compraventa, cargarlo a mano.`)
+      continue
+    }
+    const roundtrip = Math.abs(t.buyQty - t.sellQty) < QTY_EPS
+    const costBasis = parseFloat((t.buyCost * (t.sellQty / t.buyQty)).toFixed(2))
+    const dates = [...new Set(t.buyDates)]
+    const openingDate = dates.length === 1 ? dates[0] : 'Multiple'
+    const details = {
+      ticker: t.ticker,
+      description: t.description,
+      openingDate,
+      costBasis,
+      closingDate: t.lastSellDate,
+      quantity: t.sellQty,
+      saleProceeds: parseFloat(t.sellProceeds.toFixed(2)),
+    }
+
+    if (open.length > 0) {
+      // Sigue abierta: solo se registra si compró y vendió la misma cantidad
+      // (la cantidad final no cambió). Otros casos se avisan para no adivinar
+      // qué lote se vendió.
+      const pos = open.find(p => matched.has(`${p.analyst}:${p.ticker}`))!
+      const kind = changes.find(c => c.ticker === pos.ticker && c.analyst === pos.analyst && c.kind !== 'position_fix')?.kind
+      if (roundtrip && (kind === 'unchanged' || kind === 'price_update') && open.length === 1) {
+        changes.push({ kind: 'roundtrip_closed', analyst: pos.analyst, ...details, description: pos.description })
+      } else {
+        warnings.push(`${label}: hubo compras (${fmt(t.buyQty)}) y ventas (${fmt(t.sellQty)}) en el período sobre una posición que sigue abierta — la venta no se registró como cierre, revisarla a mano.`)
+      }
+      continue
+    }
+
+    const stillHeld = heldTickers.has(t.ticker) || (t.cusip != null && heldCusips.has(t.cusip))
+    if (stillHeld || !roundtrip) {
+      warnings.push(`${label}: posición nueva vendida en parte (compró ${fmt(t.buyQty)}, vendió ${fmt(t.sellQty)}) — la parte vendida no se registró como cierre, cargarla a mano.`)
+      continue
+    }
+    pendingQuestions.push({ id: nextQuestionId(), type: 'roundtrip_close', source: t.source, ...details })
   }
 
   return { changes, pendingQuestions, warnings, inputsFolder: null }
