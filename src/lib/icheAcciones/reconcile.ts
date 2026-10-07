@@ -328,7 +328,7 @@ export function reconcile(
     }
     const roundtrip = Math.abs(t.buyQty - t.sellQty) < QTY_EPS
     const costBasis = parseFloat((t.buyCost * (t.sellQty / t.buyQty)).toFixed(2))
-    const dates = [...new Set(t.buyDates)]
+    const dates = t.buyDates.filter((d, i, a) => a.indexOf(d) === i)
     const openingDate = dates.length === 1 ? dates[0] : 'Multiple'
     const details = {
       ticker: t.ticker,

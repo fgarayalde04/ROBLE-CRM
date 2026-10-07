@@ -129,5 +129,5 @@ export function summarizeTrades(pershingActivity: ActivityRow[], morganActivity:
   }
   add(pershingActivity, 'pershing')
   add(morganActivity, 'morgan')
-  return [...byTicker.values()]
+  return Array.from(byTicker.values())
 }
