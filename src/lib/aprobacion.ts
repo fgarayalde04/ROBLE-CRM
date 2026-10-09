@@ -29,6 +29,13 @@ function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
 
+// Saltos de línea como <br>: Outlook y varias apps de mail ignoran
+// white-space:pre-wrap y juntan todo el detalle en un solo párrafo (lo mismo
+// pasa en la cita del mail original cuando el cliente responde).
+function textoAHtml(s: string): string {
+  return escapeHtml(s).replace(/\r?\n/g, '<br>\r\n')
+}
+
 function mailtoLink(to: string, cc: string | null, subject: string, body: string): string {
   const params = [`subject=${encodeURIComponent(subject)}`, `body=${encodeURIComponent(body)}`]
   if (cc) params.unshift(`cc=${encodeURIComponent(cc)}`)
@@ -75,7 +82,7 @@ export function buildAprobacionEmail(opts: {
 <a href="${escapeHtml(aprueboHref)}" style="display:inline-block;padding:10px 22px;border-radius:8px;background:#2E7D52;color:#ffffff;font-weight:600;font-size:14px;text-decoration:none">Confirmar la orden</a>
 <p style="margin:6px 0 0;font-size:12px;color:#9ca3af">Se abre su respuesta lista para enviar.</p>
 </div>
-<div style="white-space:pre-wrap">${escapeHtml(opts.body)}</div>
+<div>${textoAHtml(opts.body)}</div>
 <p style="margin:20px 0 0;font-size:11px;color:#9ca3af">${REF_LABEL}: ${opts.ref}</p>
 </div></body></html>`
 
