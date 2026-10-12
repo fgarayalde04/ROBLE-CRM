@@ -13,7 +13,7 @@ import {
   listActiveFunds, upsertFundReturns, markFundSyncIssue, getSyncState, markSyncAttempt, setLookupCache, getReturnsFetched, getLookupCaches,
 } from '@/lib/db/fundMonitor'
 import { fechaMontevideo, proximoCorte, ultimoCorte, vigente } from '@/lib/fundMonitor/cortes'
-import { getRankingMasOperado } from '@/lib/db/masOperado'
+import { claveNombreDavinci, getRankingMasOperado } from '@/lib/db/masOperado'
 
 // vigente: no se bajó en esta corrida, se usó lo guardado (menos de 15 días)
 export interface FundSyncRowResult { isin: string; nombre: string; status: 'ok' | 'no_source' | 'error'; error?: string; vigente?: boolean }
@@ -87,7 +87,7 @@ export async function syncFundMonitor(opts?: { force?: boolean }): Promise<FundS
   }
 
   // Fondos operados que no están en el Monitor y no tienen una búsqueda vigente
-  let operados: { nombre: string; isins: string[] }[] = []
+  let operados: { nombre: string; claves: string[] }[] = []
   try {
     operados = await operadosABuscar(hoy)
   } catch (e: any) {
@@ -150,12 +150,14 @@ export async function syncFundMonitor(opts?: { force?: boolean }): Promise<FundS
     }
 
     // Lo más operado: se prueba el ISIN de cada clase operada hasta encontrar
-    // uno. Lo encontrado y lo no encontrado queda en davinci_lookup_cache.
+    // uno y, si no, el nombre. Lo encontrado y lo no encontrado queda en
+    // davinci_lookup_cache.
     for (const f of operados) {
       op.buscados++
-      for (const isin of f.isins) {
+      for (const isin of f.claves) {
         try {
-          const data = await searchFundReturns(page, isin, f.nombre)
+          const porNombre = isin.startsWith('NM:')
+          const data = await searchFundReturns(page, porNombre ? '' : isin, porNombre ? f.nombre : undefined)
           await setLookupCache(isin, data)
           if (data) { op.encontrados++; break }
         } catch (e: any) {
@@ -184,15 +186,16 @@ const ISIN_RE = /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/
 // traen sus datos y quedan afuera.
 async function operadosABuscar(hoy: string) {
   const ranking = await getRankingMasOperado('2000-01-01', hoy, 60)
-  const porClave = new Map<string, { nombre: string; isins: string[] }>()
+  const porClave = new Map<string, { nombre: string; claves: string[] }>()
   for (const f of [...ranking.fondos.compras, ...ranking.fondos.ventas]) {
     if (porClave.has(f.key) || (f.rendimientos && !f.rendimientos.vencido)) continue
     const isins = Array.from(new Set([f.isin, ...(f.variantes ?? []).map((v) => v.isin)].map((i) => i.toUpperCase()).filter((i) => ISIN_RE.test(i))))
-    if (isins.length) porClave.set(f.key, { nombre: f.nombre, isins })
+    // Por ISIN y, si no aparece o no tiene, por nombre
+    porClave.set(f.key, { nombre: f.nombre, claves: [...isins, claveNombreDavinci(f.nombre)] })
   }
   // Uno que ya se buscó y no se encontró hace menos de 15 días no se vuelve a buscar
-  const cache = await getLookupCaches(Array.from(porClave.values()).flatMap((f) => f.isins))
-  return Array.from(porClave.values()).filter((f) => !f.isins.every((i) => {
+  const cache = await getLookupCaches(Array.from(porClave.values()).flatMap((f) => f.claves))
+  return Array.from(porClave.values()).filter((f) => !f.claves.every((i) => {
     const c = cache.get(i)
     return c && !c.data && vigente(c.fetched_at, hoy)
   }))
