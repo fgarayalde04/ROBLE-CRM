@@ -5,6 +5,7 @@
 import { pool } from '@/lib/db/pool'
 import { createNotification } from '@/lib/db/notifications'
 import { sendPushNotification } from '@/lib/push/server'
+import { getPlanillas } from '@/lib/planillas/settings'
 
 const NOTIF_TYPE = 'recordatorio_planillas'
 // Por mail para no depender de ids; se cambia con PLANILLAS_REMINDER_EMAILS (separados por coma).
@@ -25,7 +26,8 @@ export async function enviarRecordatorioPlanillas(mes: string) {
   )
 
   const title = '🗓️ Hacer las planillas del mes'
-  const message = 'Es día 5: bajá de Pershing el Unrealized y el Activity y actualizá Iche Acciones y Análisis Albojer.'
+  const nombres = (await getPlanillas()).map(p => p.title).join(' y ')
+  const message = `Es día 5: bajá de Pershing el Unrealized y el Activity y actualizá ${nombres}.`
   const url = '/admin/planillas'
   let enviados = 0
   for (const u of users) {
