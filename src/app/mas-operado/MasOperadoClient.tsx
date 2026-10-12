@@ -14,7 +14,7 @@ const CLASES: { key: ClaseActivo; label: string; plantilla?: string }[] = [
 const segmento = (activo: boolean) =>
   `px-3 py-1 rounded ${activo ? 'bg-[#2D3F52] text-white' : 'text-gray-600 hover:bg-gray-50'}`
 
-export default function MasOperadoClient({ puedeCrearPlantilla }: { puedeCrearPlantilla: boolean }) {
+export default function MasOperadoClient({ puedeCrearPlantilla, puedeUnir }: { puedeCrearPlantilla: boolean; puedeUnir: boolean }) {
   const router = useRouter()
   const [periodo, setPeriodo] = useState<Periodo>(() => periodoDe('todo', hoyMontevideo()))
   const [clase, setClase] = useState<ClaseActivo>('fondos')
@@ -137,7 +137,7 @@ export default function MasOperadoClient({ puedeCrearPlantilla }: { puedeCrearPl
       ) : datos ? (
         <div className={cargando ? 'opacity-60' : ''}>
           <Tabla
-            filas={filas} clase={clase} puedeUnir={puedeCrearPlantilla}
+            filas={filas} clase={clase} puedeUnir={puedeUnir}
             otros={ranking ? [...ranking.fondos.compras, ...ranking.fondos.ventas] : []}
             onCambio={() => setRecarga((n) => n + 1)}
           />
@@ -167,6 +167,7 @@ function Tabla({ filas, clase, puedeUnir, otros, onCambio }: {
   filas: InstrumentoOperado[]; clase: ClaseActivo; puedeUnir: boolean; otros: InstrumentoOperado[]; onCambio: () => void
 }) {
   const [abiertos, setAbiertos] = useState<Set<string>>(new Set())
+  const [uniendo, setUniendo] = useState<string | null>(null)   // fila con el buscador de "Unir con…" abierto
   const alternar = (k: string) => setAbiertos((a) => {
     const n = new Set(a)
     if (n.has(k)) n.delete(k); else n.add(k)
@@ -218,6 +219,15 @@ function Tabla({ filas, clase, puedeUnir, otros, onCambio }: {
                   <td className={`${td} px-3 whitespace-normal`}>
                     <span className="inline-block w-3 text-[10px] text-gray-400">{abierto ? '▾' : '▸'}</span>
                     <span className="font-medium text-gray-800">{nombre}</span>
+                    {fondos && puedeUnir && (
+                      <button
+                        type="button" title="Unir con otro fondo operado o del Monitor de fondos"
+                        onClick={(e) => { e.stopPropagation(); setAbiertos((a) => new Set(a).add(f.key)); setUniendo(f.key) }}
+                        className="ml-2 px-1.5 py-0.5 text-[10px] text-[#2D3F52] border border-gray-200 rounded hover:bg-gray-100"
+                      >
+                        Unir con…
+                      </button>
+                    )}
                   </td>
                   {fondos && COLS_REND.map((c) => {
                     const v = f.rendimientos?.[c.key]
@@ -255,7 +265,7 @@ function Tabla({ filas, clase, puedeUnir, otros, onCambio }: {
                             )}
                           </div>
                         ))}
-                        {fondos && puedeUnir && <UnirCon fila={f} otros={otros} onCambio={onCambio} />}
+                        {fondos && puedeUnir && <UnirCon fila={f} otros={otros} onCambio={onCambio} abierto={uniendo === f.key} setAbierto={(v) => setUniendo(v ? f.key : null)} />}
                         {fondos && (
                           <p className="text-[10px] text-gray-400 pt-1">
                             {f.rendimientos
@@ -287,8 +297,9 @@ const sinAcentos = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g,
 
 // "Unir con…": la fila (todas sus clases) pasa a contar junto con otro fondo
 // operado o con uno del Monitor de fondos, del que toma nombre y rendimientos.
-function UnirCon({ fila, otros, onCambio }: { fila: InstrumentoOperado; otros: InstrumentoOperado[]; onCambio: () => void }) {
-  const [abierto, setAbierto] = useState(false)
+function UnirCon({ fila, otros, onCambio, abierto, setAbierto }: {
+  fila: InstrumentoOperado; otros: InstrumentoOperado[]; onCambio: () => void; abierto: boolean; setAbierto: (v: boolean) => void
+}) {
   const [texto, setTexto] = useState('')
   const [monitor, setMonitor] = useState<FondoMonitor[]>([])
   const [guardando, setGuardando] = useState(false)
