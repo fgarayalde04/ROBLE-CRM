@@ -25,6 +25,7 @@ export default function QuestionsForm({ questions, onSubmit, loading }: Props) {
       return !!a.analyst && !!ticker && ticker !== (q.cusip ?? '').toUpperCase()
     }
     if (q.type === 'unmatched_close') return !!a.resolution && (a.resolution === 'leave_as_is' || !!a.closeDetails)
+    if (q.type === 'roundtrip_close') return a.resolution === 'ignore' || !!a.analyst
     return false
   })
 
@@ -38,6 +39,13 @@ export default function QuestionsForm({ questions, onSubmit, loading }: Props) {
         <div key={q.id} className="rounded-lg border border-gray-200 p-4">
           {q.type === 'assign_analyst' && (
             <AssignAnalystQuestion
+              q={q}
+              value={answers[q.id]}
+              onChange={patch => setAnswer(q.id, patch)}
+            />
+          )}
+          {q.type === 'roundtrip_close' && (
+            <RoundtripCloseQuestion
               q={q}
               value={answers[q.id]}
               onChange={patch => setAnswer(q.id, patch)}
@@ -161,6 +169,48 @@ function UnmatchedCloseQuestion({ q, value, onChange }: {
             />
           </div>
         )}
+      </div>
+    </div>
+  )
+}
+
+function RoundtripCloseQuestion({ q, value, onChange }: {
+  q: Extract<IcheQuestion, { type: 'roundtrip_close' }>
+  value: QuestionAnswer | undefined
+  onChange: (patch: Partial<QuestionAnswer>) => void
+}) {
+  const gain = q.saleProceeds - q.costBasis
+  const usd = (n: number) => n.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
+  return (
+    <div>
+      <p className="font-medium text-[#2D3F52]">{q.ticker}: compra y venta dentro del período</p>
+      <p className="mt-1 text-sm text-gray-600">
+        {q.description} — {q.quantity} acciones, compradas {q.openingDate} por {usd(q.costBasis)} y vendidas {q.closingDate} por {usd(q.saleProceeds)}
+        {' '}(<span className={gain >= 0 ? 'text-green-700' : 'text-red-700'}>{usd(gain)}</span>) — {q.source === 'pershing' ? 'Pershing' : 'Morgan Stanley'}.
+        Se carga como posición cerrada.
+      </p>
+
+      <div className="mt-2 flex gap-4">
+        {(['CHINO', 'INDIO'] as Analyst[]).map(a => (
+          <label key={a} className="flex items-center gap-1 text-sm">
+            <input
+              type="radio"
+              name={`roundtrip-${q.id}`}
+              checked={value?.analyst === a && value?.resolution !== 'ignore'}
+              onChange={() => onChange({ analyst: a, resolution: undefined })}
+            />
+            {a === 'CHINO' ? 'Chino' : 'Indio'}
+          </label>
+        ))}
+        <label className="flex items-center gap-1 text-sm text-gray-500">
+          <input
+            type="radio"
+            name={`roundtrip-${q.id}`}
+            checked={value?.resolution === 'ignore'}
+            onChange={() => onChange({ resolution: 'ignore', analyst: undefined })}
+          />
+          No va en la planilla
+        </label>
       </div>
     </div>
   )

@@ -1,7 +1,9 @@
-// Armado automático a fin de mes: el día 1 se crean los borradores de "Fondos
-// más comprados" y "Bonos más comprados" del mes anterior (con las órdenes y los
-// rendimientos ya cargados) y se avisa por notificación + push a quienes
-// publican Research, para que escriban la visión y lo manden.
+// Armado automático a fin de mes: el último día del mes se crean los borradores
+// de "Fondos más comprados" y "Bonos más comprados" de ese mes y se avisa por
+// notificación + push a quienes publican Research, para que escriban la visión
+// y lo manden. Es la única vez en el mes que "Lo más operado" va a Davinci: los
+// fondos que no están en el Monitor (ni tienen una búsqueda de menos de 15
+// días) se buscan ahí. Si ese día no corrió, el día 1 arma el del mes anterior.
 // Idempotente: un borrador por tipo y mes, y un aviso por borrador y persona.
 
 import { RESEARCH_AUTHOR_ROLES } from '@/lib/auth'
@@ -24,8 +26,10 @@ export interface ResultadoAuto {
   avisos: number
 }
 
-/** Mes (YYYY-MM) que cubre el informe: el anterior a la fecha dada. */
+/** Mes que cubre el informe: el actual si `hoy` es el último día del mes; si no, el anterior. */
 export function mesDelInforme(hoy: string): Periodo {
+  const actual = periodoMes(hoy)
+  if (actual.hasta === hoy) return actual
   const d = new Date(`${hoy}T12:00:00Z`)
   return periodoMes(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - 1, 1)).toISOString().slice(0, 10))
 }
@@ -60,7 +64,7 @@ export async function armarPlantillasMensuales(hoy: string, opts: { avisar: bool
     let doc = await getPlantillaAuto(tipo, mes)
     let estado: ResultadoAuto['estado'] = 'ya_existia'
     if (!doc) {
-      const datos = await datosIniciales(tipo, { desde: periodo.desde, hasta: periodo.hasta })
+      const datos = await datosIniciales(tipo, { desde: periodo.desde, hasta: periodo.hasta, davinci: true })
       if (!datos.compras?.length) {
         resultados.push({ mes, tipo, estado: 'sin_compras', avisos: 0 })
         continue

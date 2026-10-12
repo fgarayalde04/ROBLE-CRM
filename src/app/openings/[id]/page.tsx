@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation'
 import { unstable_noStore as noStore } from 'next/cache'
 import { getOpening, getOpeningNotes, getOpeningTasks, getOpeningDocuments } from '@/lib/db/openings'
 import OpeningDetail from '@/components/openings/OpeningDetail'
+import MarkAccountOpenedButton from '@/components/MarkAccountOpenedButton'
 import type { OpeningNote, OpeningTask, OpeningDocument } from '@/types/platform'
 
 export const dynamic = 'force-dynamic'
@@ -63,12 +64,17 @@ export default async function OpeningDetailPage({ params }: { params: { id: stri
             )}
           </div>
         </div>
-        <Link
-          href="/openings"
-          className="px-3 py-2 text-sm border border-gray-200 rounded text-gray-600 hover:bg-gray-50 transition-colors shrink-0"
-        >
-          Volver
-        </Link>
+        <div className="flex items-center gap-2 shrink-0">
+          {opening.status !== 'cuenta_abierta' && opening.status !== 'descartado' && (
+            <MarkAccountOpenedButton openingId={opening.id} name={opening.folder_name} />
+          )}
+          <Link
+            href="/openings"
+            className="px-3 py-2 text-sm border border-gray-200 rounded text-gray-600 hover:bg-gray-50 transition-colors"
+          >
+            Volver
+          </Link>
+        </div>
       </div>
 
       {/* Detail tabs */}

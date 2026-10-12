@@ -5,6 +5,11 @@
  * Value, Gain/Loss, Gain/Loss %, % of Portfolio, Trade Date, Cusip, Current
  * Total Cost, Asset Category, Unit Cost).
  *
+ * También acepta la otra vista del mismo reporte (la que se bajaba para
+ * Albojer): headers en la fila 5 con Symbol, Current Total Cost, Security
+ * Identifier y Security Type, sin Cusip ni Asset Category. Ahí el ticker
+ * viene directo en Symbol y las filas se agrupan por Security Identifier.
+ *
  * NO reusar `src/lib/portfolio/unrealizedGainLossParser.ts`: ese parser está
  * hecho para otro reporte de Pershing ("Client: <nombre>" en vez de
  * "Account: <número>") cuya columna de costo es "Current Total Cost" — acá
@@ -15,7 +20,8 @@
 import * as XLSX from 'xlsx'
 
 export interface PershingUnrealizedRow {
-  cusip: string
+  cusip: string // '' cuando el archivo no trae CUSIP (vista con Symbol)
+  symbol?: string | null
   description: string
   quantity: number
   originalTotalCost: number
@@ -45,6 +51,11 @@ const HEADERS: Record<string, string> = {
   cusip: 'cusip',
   'asset category': 'assetCategory',
   'unit cost': 'unitCost',
+  // Vista alternativa (con Symbol):
+  symbol: 'symbol',
+  'current total cost': 'currentTotalCost',
+  'security identifier': 'securityId',
+  'security type': 'securityType',
 }
 
 function parseNum(v: unknown): number | null {
@@ -107,23 +118,27 @@ export function parsePershingUnrealizedExcel(buffer: ArrayBuffer): ParsedPershin
   })
   const get = (row: unknown[], field: string) => (colIdx[field] != null ? row[colIdx[field]!] : undefined)
 
-  interface LotRow { description: string; quantity: number; originalTotalCost: number; marketValue: number; unitCost: number | null; assetCategory: string; tradeDate: string | null; isSubtotal: boolean }
+  interface LotRow { symbol: string | null; description: string; quantity: number; originalTotalCost: number; marketValue: number; unitCost: number | null; assetCategory: string; tradeDate: string | null; isSubtotal: boolean }
   const lotsByCusip = new Map<string, LotRow[]>()
 
   for (let i = headerIdx + 1; i < raw.length; i++) {
     const row = raw[i] as unknown[]
-    const cusip = String(get(row, 'cusip') ?? '').trim()
+    const realCusip = String(get(row, 'cusip') ?? '').trim()
+    const symbol = String(get(row, 'symbol') ?? '').trim() || null
+    // Clave de agrupación: el CUSIP, o en la vista con Symbol el Security Identifier.
+    const cusip = realCusip || String(get(row, 'securityId') ?? '').trim() || (symbol ?? '')
     const description = String(get(row, 'description') ?? '').trim()
     if (!cusip || !description) continue
 
     const tradeDateRaw = get(row, 'tradeDate')
     const lot: LotRow = {
+      symbol,
       description,
       quantity: parseNum(get(row, 'quantity')) ?? 0,
-      originalTotalCost: parseNum(get(row, 'originalTotalCost')) ?? 0,
+      originalTotalCost: parseNum(get(row, 'originalTotalCost')) ?? parseNum(get(row, 'currentTotalCost')) ?? 0,
       marketValue: parseNum(get(row, 'marketValue')) ?? 0,
       unitCost: parseNum(get(row, 'unitCost')),
-      assetCategory: String(get(row, 'assetCategory') ?? '').trim(),
+      assetCategory: String(get(row, 'assetCategory') ?? get(row, 'securityType') ?? '').trim(),
       tradeDate: parseDate(tradeDateRaw),
       isSubtotal: /^multiple$/i.test(String(tradeDateRaw ?? '').trim()),
     }
@@ -158,7 +173,8 @@ export function parsePershingUnrealizedExcel(buffer: ArrayBuffer): ParsedPershin
         }]
     rows.push({
       lots: lotsOut,
-      cusip,
+      cusip: colIdx.cusip != null ? cusip : '',
+      symbol: used[0].symbol,
       description: used[0].description,
       quantity,
       originalTotalCost: parseFloat(originalTotalCost.toFixed(4)),

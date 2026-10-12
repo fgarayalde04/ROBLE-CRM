@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import Sidebar from './Sidebar'
 import MobileHeader from './MobileHeader'
 import BottomNav from './BottomNav'
+import BackBar from './BackBar'
 import type { SessionUser } from '@/lib/auth'
 import { AdvisorModeContext } from '@/contexts/AdvisorModeContext'
 import { ChatProvider } from '@/contexts/ChatContext'
@@ -88,7 +89,10 @@ export default function ClientLayout({ user, children, widgets }: Props) {
         {widgets}
 
         <div className={contentCls}>
-          <main className="flex-1 min-w-0 overflow-x-clip">{children}</main>
+          <main className="flex-1 min-w-0 overflow-x-clip">
+            <BackBar />
+            {children}
+          </main>
         </div>
 
         {/* Bottom nav — always visible in Advisor Mode, mobile-only otherwise */}

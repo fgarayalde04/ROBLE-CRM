@@ -68,16 +68,16 @@ export async function upsertFundReturns(fundId: string, data: {
   y_2023: number | null
   y_2022: number | null
   y_2021: number | null
-}) {
+}, fetchedAt?: Date | null) {
   await pool.query(
     `insert into fund_monitor_returns
        (fund_id, as_of_date, r_ytd, r_1y, r_3y, r_5y, y_2025, y_2024, y_2023, y_2022, y_2021, source, status, error_message, fetched_at)
-     values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'davinci','ok',null,now())
+     values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'davinci','ok',null,coalesce($12, now()))
      on conflict (fund_id) do update set
        as_of_date=excluded.as_of_date, r_ytd=excluded.r_ytd, r_1y=excluded.r_1y, r_3y=excluded.r_3y, r_5y=excluded.r_5y,
        y_2025=excluded.y_2025, y_2024=excluded.y_2024, y_2023=excluded.y_2023, y_2022=excluded.y_2022, y_2021=excluded.y_2021,
-       source='davinci', status='ok', error_message=null, fetched_at=now()`,
-    [fundId, data.as_of_date, data.r_ytd, data.r_1y, data.r_3y, data.r_5y, data.y_2025, data.y_2024, data.y_2023, data.y_2022, data.y_2021]
+       source='davinci', status='ok', error_message=null, fetched_at=excluded.fetched_at`,
+    [fundId, data.as_of_date, data.r_ytd, data.r_1y, data.r_3y, data.r_5y, data.y_2025, data.y_2024, data.y_2023, data.y_2022, data.y_2021, fetchedAt ?? null]
   )
 }
 
@@ -163,4 +163,20 @@ export async function setLookupCache(isin: string, data: unknown) {
      on conflict (isin) do update set data = excluded.data, fetched_at = now()`,
     [isin, data == null ? null : JSON.stringify(data)]
   )
+}
+
+/** Último resultado guardado de cada fondo del Monitor (para no volver a bajar lo que está vigente). */
+export async function getReturnsFetched(): Promise<Map<string, { status: string; fetched_at: Date | null }>> {
+  const { rows } = await pool.query(`select fund_id, status, fetched_at from fund_monitor_returns`)
+  return new Map(rows.map((r) => [r.fund_id as string, { status: r.status, fetched_at: r.fetched_at }]))
+}
+
+/** Búsquedas guardadas en davinci_lookup_cache para varios ISIN. */
+export async function getLookupCaches(isins: string[]): Promise<Map<string, { data: any; fetched_at: Date }>> {
+  if (!isins.length) return new Map()
+  const { rows } = await pool.query(
+    `select upper(isin) as isin, data, fetched_at from davinci_lookup_cache where upper(isin) = any($1)`,
+    [isins.map((i) => i.toUpperCase())]
+  )
+  return new Map(rows.map((r) => [r.isin as string, { data: typeof r.data === 'string' ? JSON.parse(r.data) : r.data, fetched_at: r.fetched_at }]))
 }

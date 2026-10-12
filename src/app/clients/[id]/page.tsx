@@ -19,6 +19,7 @@ import ClientAccountsCard from '@/components/ClientAccountsCard'
 import ClientCouponCalendarsCard from '@/components/ClientCouponCalendarsCard'
 import { listCouponCalendars } from '@/lib/db/couponCalendars'
 import { format } from 'date-fns'
+import MarkAccountOpenedButton from '@/components/MarkAccountOpenedButton'
 import { es } from 'date-fns/locale'
 
 export const dynamic = 'force-dynamic'
@@ -109,6 +110,9 @@ export default async function ClientDetailPage({ params }: Props) {
               {client.first_name} {client.last_name}
             </h1>
             <StatusBadge type="client_status" value={client.status} />
+            {(client.status === 'pendiente' || client.status === 'prospecto') && (
+              <MarkAccountOpenedButton clientId={client.id} name={`${client.first_name} ${client.last_name}`.trim()} />
+            )}
           </div>
           <p className="mt-1 text-sm text-gray-500">
             #{client.client_number}

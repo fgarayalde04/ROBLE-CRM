@@ -12,11 +12,17 @@ export type Permission =
   | 'calendar' | 'deadlines' | 'ceo_dashboard' | 'kpis'
   | 'pagos' | 'impuestos' | 'liquidacion' | 'recursos' | 'claves'
   | 'admin' | 'sincronizacion' | 'factsheet' | 'proposals' | 'orders' | 'fondos_monitor' | 'research'
+  // Ítems del menú que comparten permiso de fondo con otro ítem: cada uno
+  // tiene su clave para poder mostrarlo u ocultarlo por usuario (ver menu.ts).
+  | 'menu_solicitudes' | 'menu_blotter' | 'menu_mas_operado' | 'menu_planillas'
+  | 'menu_mail' | 'menu_plantillas' | 'menu_mi_carpeta' | 'menu_usuarios'
 
 export const ALL_PERMISSIONS: Permission[] = [
   'panel','tasks','clients','openings','banco_central','calendar','deadlines','pagos','impuestos',
   'ceo_dashboard','kpis','liquidacion','recursos','claves','admin','sincronizacion','factsheet',
   'proposals','orders','fondos_monitor','research',
+  'menu_solicitudes','menu_blotter','menu_mas_operado','menu_planillas',
+  'menu_mail','menu_plantillas','menu_mi_carpeta','menu_usuarios',
 ]
 
 export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {

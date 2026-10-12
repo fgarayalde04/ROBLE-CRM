@@ -3,7 +3,8 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 
-import { ROLE_PERMISSIONS, type UserRole, type Permission } from '@/lib/auth/roles'
+import type { UserRole, Permission } from '@/lib/auth/roles'
+import { MENU, OTHER_PERMISSIONS, checkedKeys, permissionsToSave } from '@/lib/auth/menu'
 
 interface CrmUser {
   id: string
@@ -20,74 +21,11 @@ interface CrmUser {
   updated_at: string | null
 }
 
-// ─── Permission definitions ───────────────────────────────────────────────────
+// ─── Permisos ─────────────────────────────────────────────────────────────────
+// La lista sale de lib/auth/menu.ts: los mismos ítems y secciones que el menú.
+// `customPerms` guarda lo tildado (claves de ítems + otros permisos); al
+// guardar se completa con los permisos de fondo (permissionsToSave).
 
-const PERMISSION_GROUPS: { label: string; items: { key: Permission; label: string }[] }[] = [
-  {
-    label: 'Principal',
-    items: [
-      { key: 'panel', label: 'Panel del día' },
-      { key: 'tasks', label: 'Tareas' },
-    ],
-  },
-  {
-    label: 'Operación',
-    items: [
-      { key: 'clients', label: 'Clientes' },
-      { key: 'openings', label: 'Clientes nuevos / Aperturas' },
-      { key: 'banco_central', label: 'Banco Central' },
-    ],
-  },
-  {
-    label: 'Agenda',
-    items: [
-      { key: 'calendar', label: 'Agenda / Calendario' },
-      { key: 'deadlines', label: 'Vencimientos' },
-    ],
-  },
-  {
-    label: 'Inversiones',
-    items: [
-      { key: 'orders', label: 'Enviar órdenes' },
-      { key: 'factsheet', label: 'Factsheet / Portafolio' },
-      { key: 'proposals', label: 'Propuestas de inversión' },
-      { key: 'fondos_monitor', label: 'Monitor de Fondos' },
-    ],
-  },
-  {
-    label: 'Research',
-    items: [
-      { key: 'research', label: 'Research & Novedades' },
-    ],
-  },
-  {
-    label: 'Finanzas',
-    items: [
-      { key: 'pagos', label: 'Pagos mensuales' },
-      { key: 'impuestos', label: 'Impuestos' },
-    ],
-  },
-  {
-    label: 'Dirección',
-    items: [
-      { key: 'ceo_dashboard', label: 'Dashboard financiero' },
-      { key: 'kpis', label: 'KPIs internos' },
-      { key: 'liquidacion', label: 'Liquidación Brokers' },
-      { key: 'recursos', label: 'Biblioteca / Recursos' },
-      { key: 'claves', label: 'Claves' },
-    ],
-  },
-  {
-    label: 'Administración',
-    items: [
-      { key: 'admin', label: 'Gestión de usuarios' },
-      { key: 'sincronizacion', label: 'Sincronización' },
-    ],
-  },
-]
-
-// Mismos defaults que rigen el menú y el servidor (lib/auth/roles.ts)
-const ROLE_DEFAULT_PERMISSIONS = ROLE_PERMISSIONS
 
 const ROLE_LABELS: Record<UserRole, string> = {
   admin: 'Admin',
@@ -198,7 +136,7 @@ export default function UsersManager({ initialUsers, pendingUsers: initialPendin
   async function openEdit(user: CrmUser) {
     setSelectedUser(user)
     setForm({ name: user.name, email: user.email ?? '', password: '', role: user.role })
-    setCustomPerms(user.permissions ?? null)
+    setCustomPerms(user.permissions?.length ? checkedKeys(user.role, user.permissions) : null)
     setModoAsesor(user.modo_asesor ?? false)
     setEditTab('info')
     setError('')
@@ -355,7 +293,7 @@ export default function UsersManager({ initialUsers, pendingUsers: initialPendin
         name: form.name,
         email: form.email,
         role: form.role,
-        permissions: customPerms,
+        permissions: customPerms ? permissionsToSave(customPerms, form.role, selectedUser.permissions) : null,
         modo_asesor: modoAsesor,
         onedrive_drive_id:    onedriveDriveId.trim()    || null,
         onedrive_folder_id:   onedriveFolderId.trim()   || null,
@@ -912,7 +850,7 @@ export default function UsersManager({ initialUsers, pendingUsers: initialPendin
                       if (customPerms) {
                         setCustomPerms(null)
                       } else {
-                        setCustomPerms([...ROLE_DEFAULT_PERMISSIONS[form.role]])
+                        setCustomPerms(checkedKeys(form.role, null))
                       }
                     }}
                     className={`relative w-10 h-5 rounded-full transition-colors ${customPerms ? 'bg-[#2D3F52]' : 'bg-gray-200'}`}
@@ -973,31 +911,35 @@ export default function UsersManager({ initialUsers, pendingUsers: initialPendin
                   )}
                 </div>
 
-                {customPerms && (
-                  <div className="space-y-3 max-h-60 overflow-y-auto pr-1">
-                    {PERMISSION_GROUPS.map((group) => (
+                <div className="border-t border-gray-100 pt-4">
+                  <p className="text-[9px] font-semibold tracking-widest uppercase text-gray-400 mb-1">Qué ve en el menú</p>
+                  <p className="text-[10px] text-gray-400 mb-3">
+                    {customPerms ? 'Personalizado: tildá lo que querés que vea.' : 'Según el rol. Tocá cualquier casilla para personalizar.'}
+                  </p>
+                  <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
+                    {[...MENU, { label: 'Otros permisos (fuera del menú)', items: OTHER_PERMISSIONS.map(o => ({ ...o, href: '', subtitle: '', onlyRole: undefined })) }].map((group) => (
                       <div key={group.label}>
                         <p className="text-[9px] font-semibold tracking-widest uppercase text-gray-400 mb-1.5">{group.label}</p>
                         <div className="space-y-1">
-                          {group.items.map(({ key, label }) => {
-                            const checked = customPerms.includes(key)
+                          {group.items.map(({ key, label, subtitle, onlyRole }) => {
+                            const current = customPerms ?? checkedKeys(form.role, null)
+                            const blocked = !!onlyRole && form.role !== onlyRole
+                            const checked = !blocked && current.includes(key)
                             return (
-                              <label key={key} className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-gray-50 cursor-pointer">
+                              <label key={key} className={`flex items-center gap-2.5 px-2 py-1.5 rounded-lg ${blocked ? 'opacity-50' : 'hover:bg-gray-50 cursor-pointer'}`}>
                                 <input
                                   type="checkbox"
                                   checked={checked}
+                                  disabled={blocked}
                                   onChange={() => {
-                                    setCustomPerms((prev) =>
-                                      prev
-                                        ? checked
-                                          ? prev.filter((p) => p !== key)
-                                          : [...prev, key]
-                                        : [key]
-                                    )
+                                    const base = customPerms ?? checkedKeys(form.role, null)
+                                    setCustomPerms(checked ? base.filter((p) => p !== key) : [...base, key as Permission])
                                   }}
                                   className="w-3.5 h-3.5 rounded accent-[#2D3F52]"
                                 />
                                 <span className="text-xs text-gray-700">{label}</span>
+                                {subtitle && <span className="text-[10px] text-gray-400">{subtitle}</span>}
+                                {blocked && <span className="ml-auto text-[10px] text-gray-400">solo {ROLE_LABELS[onlyRole!]}</span>}
                               </label>
                             )
                           })}
@@ -1005,7 +947,7 @@ export default function UsersManager({ initialUsers, pendingUsers: initialPendin
                       </div>
                     ))}
                   </div>
-                )}
+                </div>
               </div>
             )}
 

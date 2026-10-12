@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { unstable_noStore as noStore } from 'next/cache'
 import { getSession } from '@/lib/auth'
+import { canSeeMenuKey } from '@/lib/auth/menu'
 
 export const metadata: Metadata = { title: 'Planillas' }
 export const dynamic = 'force-dynamic'
@@ -13,7 +14,7 @@ export default async function PlanillasPage() {
   noStore()
 
   const session = await getSession()
-  if (!session || session.role !== 'admin') redirect('/')
+  if (!session || !canSeeMenuKey(session.role, 'menu_planillas', session.permissions)) redirect('/')
 
   return (
     <div className="p-4 md:p-6 bg-[#F4F6F8] min-h-screen">
@@ -22,13 +23,22 @@ export default async function PlanillasPage() {
         <p className="mt-0.5 text-sm text-gray-400">Herramientas especiales de planillas para casos puntuales</p>
       </div>
 
-      <Link
-        href="/admin/planillas/iche-acciones"
-        className="block max-w-sm rounded-lg border border-gray-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md"
-      >
-        <h2 className="font-medium text-[#2D3F52]">Iche Acciones</h2>
-        <p className="mt-1 text-sm text-gray-500">Actualización mensual — cliente Isaac Shcolnik</p>
-      </Link>
+      <div className="grid max-w-3xl grid-cols-1 gap-4 sm:grid-cols-2">
+        <Link
+          href="/admin/planillas/iche-acciones"
+          className="block rounded-lg border border-gray-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md"
+        >
+          <h2 className="font-medium text-[#2D3F52]">Iche Acciones</h2>
+          <p className="mt-1 text-sm text-gray-500">Actualización mensual — cliente Isaac Shcolnik</p>
+        </Link>
+        <Link
+          href="/admin/planillas/albojer"
+          className="block rounded-lg border border-gray-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md"
+        >
+          <h2 className="font-medium text-[#2D3F52]">Análisis Albojer</h2>
+          <p className="mt-1 text-sm text-gray-500">Actualización mensual — De Bellis (Pershing ROJ900554)</p>
+        </Link>
+      </div>
     </div>
   )
 }

@@ -1,4 +1,6 @@
 import { pool } from './pool'
+import { randomUUID } from 'crypto'
+import { vigente } from '@/lib/fundMonitor/cortes'
 
 // "Lo más operado": ranking de instrumentos comprados y vendidos en un período,
 // a partir de las órdenes que se envían desde la plataforma (Solicitudes, con
@@ -6,13 +8,16 @@ import { pool } from './pool'
 // operaciones y clientes distintos; los montos y nominales no se suman (vienen
 // en monedas y unidades distintas). Cuenta lo mismo que el Blotter: una línea
 // por cada activo de la orden, sin las canceladas (la orden entera o un activo
-// suelto, y en el sistema anterior las que tienen fecha de cancelación).
+// suelto, y en el sistema anterior las que tienen fecha de cancelación) ni las
+// que el cliente no aprobó (esas no se ejecutan).
 
 export type ClaseActivo = 'fondos' | 'bonos' | 'acciones'
 export type Lado = 'compra' | 'venta'
 
 export interface Rendimientos {
   fuente: string          // nombre del fondo en el Monitor
+  fecha: string | null    // a qué fecha son los datos (dd/mm/aaaa)
+  vencido?: boolean       // búsqueda guardada de hace 15 días o más: el reporte la vuelve a buscar
   r_1y: number | null
   r_3y: number | null
   r_5y: number | null
@@ -39,8 +44,11 @@ export interface InstrumentoOperado {
   r_ytd: number | null
   r_1y: number | null
   rendimientos: Rendimientos | null
-  // Fondos: cada clase operada que se unió en esta fila (con una sola clase, esa)
-  variantes?: { nombre: string; isin: string; clase: string; moneda: string; operaciones: number }[]
+  // Fondos: cada clase operada que se unió en esta fila (con una sola clase, esa).
+  // clave: el instrumento (para unirlo a mano); unido: está en una unión hecha a mano.
+  variantes?: { clave: string; nombre: string; isin: string; clase: string; moneda: string; operaciones: number; unido?: boolean }[]
+  // Unión hecha a mano ("Unir con…"): 'mon:<id>' si está unido a un fondo del Monitor
+  grupo?: string
 }
 
 export interface RankingClase {
@@ -64,7 +72,7 @@ export interface Operacion {
   cliente: string
 }
 
-const ESTADOS_EXCLUIDOS = ['cancelada']
+const ESTADOS_EXCLUIDOS = ['cancelada', 'rechazada_cliente']
 
 const txt = (v: unknown) => (v == null ? '' : String(v).trim())
 
@@ -312,21 +320,29 @@ const porOperaciones = (a: InstrumentoOperado, b: InstrumentoOperado) =>
 // se cargó, ISIN, moneda, órdenes), que se ve al desplegarla.
 // unirClases (fondos): las distintas clases o formas de escribir un mismo fondo
 // cuentan como uno, con el nombre limpio.
-function rankear(ops: Operacion[], unirClases: boolean): InstrumentoOperado[] {
+// uniones (fondos): instrumento → grupo, las uniones hechas a mano con "Unir
+// con…" (fondos iguales con otro ISIN o clase que el nombre no reconoce). Se
+// aplican siempre, aunque no se unan las clases.
+function rankear(ops: Operacion[], unirClases: boolean, uniones: Map<string, string> = new Map()): InstrumentoOperado[] {
   const porInstrumento = Array.from(agrupar(ops, claveDe), ([key, g]) => ({ key, g, item: resumen(key, g) }))
   const familias = new Map<string, typeof porInstrumento>()
   for (const x of porInstrumento) {
-    const k = unirClases ? `fam:${familiaFondo(x.item.nombre) || normalizar(x.item.nombre)}` : x.key
+    const grupo = uniones.get(x.key)
+    const k = grupo ? `u:${grupo}` : unirClases ? `fam:${familiaFondo(x.item.nombre) || normalizar(x.item.nombre)}` : x.key
     const f = familias.get(k)
     if (f) f.push(x); else familias.set(k, [x])
   }
   const lista: InstrumentoOperado[] = []
   familias.forEach((f, key) => {
     const variantes = f.map((x) => x.item).sort(porOperaciones)
-    const nombre = unirClases ? nombreFondoMostrado(variantes[0].nombre) : variantes[0].nombre.toUpperCase().replace(/\s+/g, ' ').trim()
+    const limpio = unirClases || key.startsWith('u:')
+    const nombre = limpio ? nombreFondoMostrado(variantes[0].nombre) : variantes[0].nombre.toUpperCase().replace(/\s+/g, ' ').trim()
     const item = resumen(f.length === 1 ? f[0].key : key, f.flatMap((x) => x.g), nombre)
     item.isin = variantes[0].isin   // el más operado (para buscar rendimientos)
-    item.variantes = variantes.map((v) => ({ nombre: v.nombre, isin: v.isin, clase: v.clase, moneda: v.moneda, operaciones: v.operaciones }))
+    item.variantes = variantes.map((v) => ({
+      clave: v.key, nombre: v.nombre, isin: v.isin, clase: v.clase, moneda: v.moneda, operaciones: v.operaciones, unido: uniones.has(v.key),
+    }))
+    if (key.startsWith('u:')) item.grupo = key.slice(2)
     lista.push(item)
   })
   return lista.sort(porOperaciones)
@@ -337,6 +353,14 @@ const fmtFecha = (v: unknown) => {
   const d = v instanceof Date ? v : new Date(String(v))
   if (Number.isNaN(d.getTime())) return String(v)
   return `${String(d.getUTCDate()).padStart(2, '0')}/${String(d.getUTCMonth() + 1).padStart(2, '0')}/${d.getUTCFullYear()}`
+}
+
+// Fecha de los rendimientos: as_of_date (columna date, pg la da como Date a
+// medianoche local) o, si no hay, cuándo se bajó el dato.
+const fechaDato = (asOf: unknown, bajado: unknown) => {
+  if (asOf instanceof Date) return `${String(asOf.getDate()).padStart(2, '0')}/${String(asOf.getMonth() + 1).padStart(2, '0')}/${asOf.getFullYear()}`
+  if (typeof asOf === 'string' && /^\d{4}-\d{2}-\d{2}/.test(asOf)) return asOf.slice(0, 10).split('-').reverse().join('/')
+  return bajado ? fmtFecha(bajado) : null
 }
 
 const fmtCupon = (v: unknown) => {
@@ -350,14 +374,17 @@ async function completar(ranking: RankingMasOperado) {
   const fondos = [...ranking.fondos.compras, ...ranking.fondos.ventas]
   if (fondos.length) {
     try {
-      const { rows } = await pool.query(
-        `select upper(f.isin) as isin, f.nombre, r.r_1y, r.r_3y, r.r_5y, r.r_ytd, r.y_2025, r.y_2024, r.y_2023, r.y_2022, r.y_2021
-           from fund_monitor_funds f join fund_monitor_returns r on r.fund_id = f.id
-          where f.active and r.status in ('ok', 'stale')`
+      const { rows: todos } = await pool.query(
+        `select f.id::text as id, upper(f.isin) as isin, f.nombre, r.status, r.as_of_date, r.fetched_at,
+                r.r_1y, r.r_3y, r.r_5y, r.r_ytd, r.y_2025, r.y_2024, r.y_2023, r.y_2022, r.y_2021
+           from fund_monitor_funds f left join fund_monitor_returns r on r.fund_id = f.id
+          where f.active`
       )
+      const rows = todos.filter((r) => r.status === 'ok' || r.status === 'stale')
+      const porId = new Map(todos.map((r) => [r.id as string, r]))
       const num = (v: unknown) => (v == null ? null : Number(v))
       const aRend = (m: any): Rendimientos => ({
-        fuente: `${m.nombre} (Monitor de fondos)`, r_1y: num(m.r_1y), r_3y: num(m.r_3y), r_5y: num(m.r_5y), r_ytd: num(m.r_ytd),
+        fuente: `${m.nombre} (Monitor de fondos)`, fecha: fechaDato(m.as_of_date, m.fetched_at), r_1y: num(m.r_1y), r_3y: num(m.r_3y), r_5y: num(m.r_5y), r_ytd: num(m.r_ytd),
         y_2025: num(m.y_2025), y_2024: num(m.y_2024), y_2023: num(m.y_2023), y_2022: num(m.y_2022), y_2021: num(m.y_2021),
       })
       const porIsin = new Map(rows.map((r) => [r.isin as string, r]))
@@ -367,6 +394,17 @@ async function completar(ranking: RankingMasOperado) {
         if (k && !porFamilia.has(k)) porFamilia.set(k, r)
       }
       for (const f of fondos) {
+        // Unido a mano a un fondo del Monitor: ese nombre y esos rendimientos
+        const unido = f.grupo?.startsWith('mon:') ? porId.get(f.grupo.slice(4)) : undefined
+        if (unido) {
+          f.nombre = nombreFondoMostrado(unido.nombre)
+          if (unido.status === 'ok' || unido.status === 'stale') {
+            f.rendimientos = aRend(unido)
+            f.r_ytd = f.rendimientos.r_ytd
+            f.r_1y = f.rendimientos.r_1y
+            continue
+          }
+        }
         // Primero el ISIN de la clase más operada, después el de cualquier otra
         // clase del mismo fondo y, si no, el mismo fondo por nombre
         const isins = [f.isin, ...(f.variantes ?? []).map((v) => v.isin)].filter(Boolean)
@@ -389,16 +427,21 @@ async function completar(ranking: RankingMasOperado) {
     if (isins.length) {
       try {
         const { rows } = await pool.query(
-          `select upper(isin) as isin, data from davinci_lookup_cache where upper(isin) = any($1) and data is not null`,
+          `select upper(isin) as isin, data, fetched_at from davinci_lookup_cache where upper(isin) = any($1) and data is not null`,
           [isins]
         )
-        const porIsin = new Map(rows.map((r) => [r.isin as string, typeof r.data === 'string' ? JSON.parse(r.data) : r.data]))
+        const porIsin = new Map(rows.map((r) => {
+          const d = typeof r.data === 'string' ? JSON.parse(r.data) : r.data
+          return [r.isin as string, { ...d, fetched_at: r.fetched_at }]
+        }))
         for (const f of faltan) {
           const d = [f.isin, ...(f.variantes ?? []).map((v) => v.isin)].map((i) => porIsin.get(i)).find(Boolean)
           if (!d) continue
           const n = (v: unknown) => (v == null || Number.isNaN(Number(v)) ? null : Number(v))
           f.rendimientos = {
             fuente: d.nombreDavinci ? `${d.nombreDavinci} (búsqueda en Davinci)` : 'búsqueda en Davinci',
+            fecha: fechaDato(d.asOfDate, d.fetched_at),
+            vencido: !vigente(d.fetched_at),
             r_1y: n(d.r1a), r_3y: n(d.r3a), r_5y: n(d.r5a), r_ytd: n(d.ytd), y_2025: n(d.y2025), y_2024: n(d.y2024), y_2023: n(d.y2023),
             y_2022: n(d.y2022), y_2021: n(d.y2021),
           }
@@ -433,29 +476,88 @@ async function completar(ranking: RankingMasOperado) {
 }
 
 export async function getRankingMasOperado(desde: string, hasta: string, limite = 25, unirClases = true): Promise<RankingMasOperado> {
-  const [nuevas, anteriores] = await Promise.all([
+  const [nuevas, anteriores, uniones] = await Promise.all([
     operacionesSolicitudes(desde, hasta),
     operacionesBlotterAnterior(desde, hasta).catch((e) => {
       console.error('[mas-operado] blotter anterior', e.message)
       return [] as Operacion[]
     }),
+    getUniones(),
   ])
-  const ranking = armarRanking([...nuevas, ...anteriores], limite, unirClases)
+  const ranking = armarRanking([...nuevas, ...anteriores], limite, unirClases, uniones)
   await completar(ranking)
   return ranking
 }
 
-export function armarRanking(ops: Operacion[], limite: number, unirClases = true): RankingMasOperado {
+export function armarRanking(ops: Operacion[], limite: number, unirClases = true, uniones: Map<string, string> = new Map()): RankingMasOperado {
   const ranking = {} as RankingMasOperado
   for (const clase of ['fondos', 'bonos', 'acciones'] as ClaseActivo[]) {
     const deClase = ops.filter((o) => o.clase === clase)
     const compras = deClase.filter((o) => o.lado === 'compra')
     const ventas = deClase.filter((o) => o.lado === 'venta')
+    const u = clase === 'fondos' ? uniones : undefined
     ranking[clase] = {
-      compras: rankear(compras, unirClases && clase === 'fondos').slice(0, limite),
-      ventas: rankear(ventas, unirClases && clase === 'fondos').slice(0, limite),
+      compras: rankear(compras, unirClases && clase === 'fondos', u).slice(0, limite),
+      ventas: rankear(ventas, unirClases && clase === 'fondos', u).slice(0, limite),
       totales: { compras: compras.length, ventas: ventas.length },
     }
   }
   return ranking
+}
+
+
+// ── Uniones a mano ("Unir con…") ─────────────────────────────────────────────
+// Fondos iguales que el nombre no alcanza a unir (otro ISIN, otra clase, otra
+// forma de escribirlo). Cada instrumento (claveDe) apunta a un grupo; el grupo
+// 'mon:<id>' es un fondo del Monitor, del que se toman nombre y rendimientos.
+
+async function getUniones(): Promise<Map<string, string>> {
+  try {
+    const { rows } = await pool.query(`select clave, grupo from mas_operado_uniones`)
+    return new Map(rows.map((r) => [r.clave as string, r.grupo as string]))
+  } catch (e: any) {
+    if (e.code !== '42P01') console.error('[mas-operado] uniones', e.message)
+    return new Map()
+  }
+}
+
+/** Une los instrumentos `claves` con otros (`con.claves`) o con un fondo del Monitor (`con.monitorId`). */
+export async function unirFondos(claves: string[], con: { claves: string[] } | { monitorId: string }, usuario: string) {
+  const todas = Array.from(new Set('monitorId' in con ? claves : [...claves, ...con.claves]))
+  const client = await pool.connect()
+  try {
+    await client.query('begin')
+    const { rows } = await client.query(`select distinct grupo from mas_operado_uniones where clave = any($1)`, [todas])
+    const previos = rows.map((r) => r.grupo as string)
+    const grupo = 'monitorId' in con
+      ? `mon:${con.monitorId}`
+      : previos.find((g) => g.startsWith('mon:')) ?? previos[0] ?? `grp:${randomUUID()}`
+    // Lo que ya estaba unido a cualquiera de ellos pasa al mismo grupo
+    if (previos.length) await client.query(`update mas_operado_uniones set grupo = $1 where grupo = any($2)`, [grupo, previos])
+    await client.query(
+      `insert into mas_operado_uniones (clave, grupo, creado_por)
+       select unnest($1::text[]), $2, $3
+       on conflict (clave) do update set grupo = excluded.grupo, creado_por = excluded.creado_por, created_at = now()`,
+      [todas, grupo, usuario]
+    )
+    await client.query('commit')
+  } catch (e) {
+    await client.query('rollback').catch(() => {})
+    throw e
+  } finally {
+    client.release()
+  }
+}
+
+/** Saca instrumentos de la unión hecha a mano (vuelven a agruparse solo por nombre). */
+export async function separarFondos(claves: string[]) {
+  await pool.query(`delete from mas_operado_uniones where clave = any($1)`, [claves])
+}
+
+/** Fondos del Monitor para elegir en "Unir con…". */
+export async function fondosMonitorParaUnir(): Promise<{ id: string; nombre: string; isin: string }[]> {
+  const { rows } = await pool.query(
+    `select id::text as id, nombre, coalesce(isin, '') as isin from fund_monitor_funds where active order by nombre`
+  )
+  return rows
 }

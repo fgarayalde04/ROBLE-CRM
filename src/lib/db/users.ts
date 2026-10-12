@@ -79,6 +79,19 @@ export async function getUsersByRoles(roles: string[]) {
   return rows as { id: string; name: string }[]
 }
 
+// Opciones del desplegable "Asesor": usuarios activos con rol asesor (o en
+// modo asesor) más los nombres de asesor que ya usan los clientes (carpetas
+// como "Fernando - Federico"), para no perder los valores existentes.
+export async function listAdvisorOptions() {
+  const { rows } = await pool.query(
+    `select name from crm_users where active = true and (role = 'asesor' or modo_asesor = true) and name is not null
+     union
+     select advisor from clients where advisor is not null and advisor <> ''
+     order by 1`
+  )
+  return rows.map((r) => r.name as string)
+}
+
 export async function listAdvisorFolders() {
   const { rows } = await pool.query(
     `select distinct advisor from clients where advisor is not null order by advisor`

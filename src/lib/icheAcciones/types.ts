@@ -75,6 +75,19 @@ export type TickerChange =
       quantity: number
       saleProceeds: number
     }
+  // Compra y venta dentro del período de un ticker que ya estaba abierto y
+  // sigue con la misma cantidad: se agrega el cierre sin tocar la posición.
+  | {
+      kind: 'roundtrip_closed'
+      ticker: string
+      analyst: Analyst
+      description: string
+      openingDate: string
+      costBasis: number
+      closingDate: string
+      quantity: number
+      saleProceeds: number
+    }
   | {
       kind: 'quantity_mismatch'
       ticker: string
@@ -112,6 +125,20 @@ export type IcheQuestion =
       analyst: Analyst
       lastKnownQuantity: number
     }
+  | {
+      // Ticker comprado y vendido dentro del período: no estaba abierto ni
+      // sigue abierto, así que solo falta saber de qué analista es.
+      id: string
+      type: 'roundtrip_close'
+      ticker: string
+      description: string
+      openingDate: string
+      costBasis: number
+      closingDate: string
+      quantity: number
+      saleProceeds: number
+      source: Source
+    }
 
 export interface ReconcilePlan {
   changes: TickerChange[]
@@ -128,7 +155,7 @@ export interface ReconcileResponse {
 export interface QuestionAnswer {
   analyst?: Analyst
   ticker?: string // confirmado/corregido por el usuario en 'assign_analyst'
-  resolution?: 'closed_with_details' | 'leave_as_is'
+  resolution?: 'closed_with_details' | 'leave_as_is' | 'ignore'
   closeDetails?: { closingDate: string; quantity: number; proceeds: number }
 }
 
@@ -155,6 +182,18 @@ export interface PreviewSummaryRow {
   gainLossPct: number | null
 }
 
+export interface AmountSummary {
+  cost: number
+  value: number // valor de mercado (abiertas) o de venta (cerradas)
+  count: number
+}
+
+// Resumen por estrategia para el preview: abiertas + cerradas por año.
+export interface AnalystSummary {
+  abiertas: AmountSummary
+  cerradas: (AmountSummary & { year: number })[]
+}
+
 export interface GenerateResponse {
   fileName: string
   uploadedItem: { id: string; webUrl: string | null }
@@ -168,6 +207,8 @@ export interface GenerateResponse {
     abiertasIndio: PreviewRow[]
     abiertasChino: PreviewRow[]
     nuevosCierres: PreviewRow[]
+    // Desde oct-2026; los previews guardados antes no lo traen.
+    porAnalista?: Record<Analyst, AnalystSummary>
   }
   warnings: string[]
 }

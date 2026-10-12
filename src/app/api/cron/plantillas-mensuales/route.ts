@@ -7,9 +7,10 @@ export const maxDuration = 300
 
 /**
  * GET /api/cron/plantillas-mensuales[?hoy=YYYY-MM-DD][&avisar=0]
- * Arma los borradores de fondos y bonos más comprados del mes anterior a `hoy`
- * y avisa (notificación + push) a quienes publican Research. Lo dispara
- * instrumentation.ts el día 1; también sirve como gatillo manual (avisar=0:
+ * Arma los borradores de fondos y bonos más comprados del mes (el de `hoy` si es
+ * el último día del mes; si no, el anterior) y avisa (notificación + push) a
+ * quienes publican Research. Lo dispara instrumentation.ts el último día del mes
+ * (y el día 1 como respaldo); también sirve como gatillo manual (avisar=0:
  * solo crea los borradores). Idempotente. Bearer CRON_SECRET, igual que el resto.
  */
 export async function GET(req: NextRequest) {

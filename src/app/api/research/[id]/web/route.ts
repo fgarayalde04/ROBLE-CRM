@@ -3,7 +3,7 @@ import { getSession, RESEARCH_AUTHOR_ROLES } from '@/lib/auth'
 import { getPost, updatePost } from '@/lib/db/research'
 import { getObjectBuffer } from '@/lib/storage/s3'
 import { despublicarDocumentoWeb, publicarReporteWeb, webClientesConfigurada } from '@/lib/webClientes/client'
-import { esSeccionWeb, seccionWebDePlantilla } from '@/lib/webClientes/secciones'
+import { esSeccionWeb, requiereComentario, seccionWebDePlantilla, textoParaWeb } from '@/lib/webClientes/secciones'
 
 export const maxDuration = 60
 
@@ -30,8 +30,10 @@ async function autorizar() {
 }
 
 // POST /api/research/[id]/web { section?, subsection?, notify_user_ids? }
-// Publica el PDF adjunto en la web de clientes. Si viene de Plantillas, la
-// sección la define el tipo de plantilla; si se cargó a mano, se elige.
+// Publica el PDF adjunto en la web de clientes, con el resumen y el desarrollo
+// escrito como texto (en Comité de Inversiones el comentario es obligatorio).
+// Si viene de Plantillas, la sección la define el tipo de plantilla; si se
+// cargó a mano, se elige.
 // Si ya estaba publicado, lo reemplaza con el PDF actual. notify_user_ids =
 // clientes de la web (GET /api/research/web-clientes) a avisar por mail.
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
@@ -50,6 +52,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   if (!esSeccionWeb(section, subsection)) {
     return NextResponse.json({ error: 'Elegí una sección de la web' }, { status: 400 })
   }
+  // Lo cargado a mano lleva a la web el resumen y el desarrollo; lo de Plantillas, solo el resumen
+  const descripcion = textoParaWeb(post, !fija)
+  if (requiereComentario(section) && !post.body?.trim()) {
+    return NextResponse.json({ error: 'Para Comité de Inversiones escribí el comentario del comité (Desarrollo) además del PDF' }, { status: 400 })
+  }
 
   const key = claveAdjunto(post.file_url)
   const esPdf = (post.file_name ?? key ?? '').toLowerCase().endsWith('.pdf')
@@ -63,7 +70,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       existente: post.web_document_id ? { reportId: post.web_document_id, filePath: '' } : null,
       seccion: { section, subsection },
       titulo: post.title,
-      descripcion: post.summary,
+      descripcion,
       pdf: body,
       nombreArchivo: post.file_name || 'documento.pdf',
       notificar,

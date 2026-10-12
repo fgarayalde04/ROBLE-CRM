@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
+import { canSeeMenuKey } from '@/lib/auth/menu'
 import { getClosedPositions, getLatestGeneration, getOpenPositions } from '@/lib/icheAcciones/db'
 import { generateWorkbook } from '@/lib/icheAcciones/excelGenerator'
 import { monthNameEs } from '@/lib/icheAcciones/monthNameEs'
@@ -10,7 +11,7 @@ export const dynamic = 'force-dynamic'
 // que al generarlo, así se puede volver a descargar sin repetir la carga.
 export async function GET() {
   const session = await getSession()
-  if (!session || session.role !== 'admin') {
+  if (!session || !canSeeMenuKey(session.role, 'menu_planillas', session.permissions)) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
   }
 

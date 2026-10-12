@@ -12,11 +12,22 @@ import {
 const num = (v: unknown) => (v == null || v === '' || Number.isNaN(Number(v)) ? null : Number(v))
 
 // Solo las compras; fondos por nombre (las clases ya vienen unidas) con todos sus rendimientos.
-export async function filasMasOperado(tipo: 'mas_operado_fondos' | 'mas_operado_bonos', desde: string, hasta: string, cantidad: number) {
+// Rendimientos: los del Monitor y las búsquedas guardadas. A Davinci se va solo
+// con `davinci` (el armado automático del último día del mes), y solo por los
+// fondos sin datos o con una búsqueda de hace 15 días o más.
+export async function filasMasOperado(
+  tipo: 'mas_operado_fondos' | 'mas_operado_bonos', desde: string, hasta: string, cantidad: number, opts: { davinci?: boolean } = {},
+) {
   const ranking = await getRankingMasOperado(desde, hasta, Math.max(1, Math.min(cantidad, 15)))
   if (tipo === 'mas_operado_fondos') {
     const compras = ranking.fondos.compras
-    for (const i of compras) if (!i.rendimientos) i.rendimientos = await buscarEnDavinci(i)
+    // Si Davinci no responde queda lo que había
+    if (opts.davinci) {
+      for (const i of compras) {
+        if (!i.rendimientos || i.rendimientos.vencido) i.rendimientos = (await buscarEnDavinci(i)) ?? i.rendimientos
+      }
+      await guardarRendimientosOperados(hasta)
+    }
     const fila = (i: InstrumentoOperado): FilaFondoOperado => {
       const r = i.rendimientos
       return {
@@ -34,26 +45,49 @@ export async function filasMasOperado(tipo: 'mas_operado_fondos' | 'mas_operado_
 
 const ISIN_RE = /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/
 
-// Fondo que no está en el Monitor ni en búsquedas guardadas: se busca en Davinci
-// por el ISIN de cada clase operada hasta encontrar uno. Usa la misma búsqueda
-// que las propuestas (una sola sesión, en cola, con cache de 15 días y pausa si
-// el login falla), así que no multiplica logins.
-async function buscarEnDavinci(i: InstrumentoOperado): Promise<Rendimientos | null> {
+// En la misma pasada (misma sesión de Davinci, un solo login) se buscan todos
+// los fondos que se operaron alguna vez — comprados y vendidos, no solo los del
+// reporte — que no tienen datos o los tienen vencidos. Queda guardado en
+// davinci_lookup_cache y la pantalla de lo más operado lo muestra.
+async function guardarRendimientosOperados(hasta: string) {
+  try {
+    const ranking = await getRankingMasOperado('2000-01-01', hasta, 60)
+    const vistos = new Set<string>()
+    for (const i of [...ranking.fondos.compras, ...ranking.fondos.ventas]) {
+      if (vistos.has(i.key)) continue
+      vistos.add(i.key)
+      if (i.rendimientos && !i.rendimientos.vencido) continue
+      const r = await buscarEnDavinci(i)
+      if (r === undefined) return     // Davinci no disponible: no seguir
+    }
+  } catch (e: any) {
+    console.error('[plantillas] rendimientos de lo operado', e.message)
+  }
+}
+
+// Fondo que no está en el Monitor ni tiene una búsqueda guardada de menos de 15
+// días: se busca en Davinci por el ISIN de cada clase operada hasta encontrar
+// uno. Usa la misma búsqueda que las propuestas (una sola sesión, en cola, que
+// devuelve lo guardado si tiene menos de 15 días, con pausa si el login falla),
+// así que no multiplica logins.
+// null: no está en Davinci; undefined: Davinci no disponible (no seguir probando otros fondos).
+async function buscarEnDavinci(i: InstrumentoOperado): Promise<Rendimientos | null | undefined> {
   const isins = Array.from(new Set([i.isin, ...(i.variantes ?? []).map((v) => v.isin)].filter((x) => ISIN_RE.test(x))))
   for (const isin of isins) {
     try {
       const r = await lookupDavinciLive(isin, i.nombre)
-      if (r.status === 'unavailable') return null      // sin credenciales o Davinci en pausa: no seguir probando
+      if (r.status === 'unavailable') return undefined   // sin credenciales o Davinci en pausa: no seguir probando
       if (r.status !== 'ok') continue
       const d = r.data
       return {
         fuente: `${d.nombreDavinci || i.nombre} (Davinci)`,
+        fecha: d.asOfDate ? d.asOfDate.split('-').reverse().join('/') : null,
         r_1y: d.r1a, r_3y: d.r3a, r_5y: d.r5a, r_ytd: d.ytd,
         y_2025: d.y2025, y_2024: d.y2024, y_2023: d.y2023, y_2022: d.y2022, y_2021: d.y2021,
       }
     } catch (e: any) {
       console.error('[plantillas] davinci', isin, e.message)
-      return null
+      return undefined
     }
   }
   return null
@@ -93,7 +127,7 @@ export async function categoriasMonitor(): Promise<CategoriaMonitor[]> {
 }
 
 /** Datos con los que arranca un documento nuevo; los automáticos se completan solos. */
-export async function datosIniciales(tipo: TipoPlantilla, opts: { desde?: string; hasta?: string; asset_class?: string }) {
+export async function datosIniciales(tipo: TipoPlantilla, opts: { desde?: string; hasta?: string; asset_class?: string; davinci?: boolean }) {
   const datos = datosVacios(tipo)
   if (tipo === 'mas_operado_fondos' || tipo === 'mas_operado_bonos') {
     const p = opts.desde && opts.hasta ? { desde: opts.desde, hasta: opts.hasta, label: labelRango(opts.desde, opts.hasta) } : mesParaInforme()
@@ -101,7 +135,7 @@ export async function datosIniciales(tipo: TipoPlantilla, opts: { desde?: string
     datos.hasta = p.hasta
     datos.periodo = p.label
     try {
-      Object.assign(datos, await filasMasOperado(tipo, p.desde, p.hasta, datos.cantidad))
+      Object.assign(datos, await filasMasOperado(tipo, p.desde, p.hasta, datos.cantidad, { davinci: opts.davinci }))
     } catch (e: any) {
       console.error('[plantillas] más operado', e.message)
     }

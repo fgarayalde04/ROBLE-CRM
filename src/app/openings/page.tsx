@@ -2,13 +2,14 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { unstable_noStore as noStore } from 'next/cache'
 import { getSession } from '@/lib/auth'
-import { listOpeningsWithStats } from '@/lib/db/openings'
+import { listOpeningsWithStats, reconcileOpeningsWithClients } from '@/lib/db/openings'
 import type { AccountOpening, Client, OpeningStatus } from '@/types/platform'
 import { differenceInDays, parseISO, startOfMonth, endOfMonth } from 'date-fns'
 import AutoRefresh from '@/components/AutoRefresh'
 import AutoSyncOpenings from '@/components/AutoSyncOpenings'
 import DeleteOpeningButton from '@/components/DeleteOpeningButton'
 import StartOpeningButton from '@/components/StartOpeningButton'
+import MarkAccountOpenedButton from '@/components/MarkAccountOpenedButton'
 
 export const metadata: Metadata = { title: 'Apertura de cuentas' }
 export const dynamic = 'force-dynamic'
@@ -65,6 +66,7 @@ export default async function OpeningsPage({ searchParams }: Props) {
 
   const filter = (searchParams.filter ?? 'activas') as FilterKey
 
+  await reconcileOpeningsWithClients().catch(() => {})
   const { openings: allOpenings, openNotesByOpening, pendingTasksByOpening } = await listOpeningsWithStats(folderFilter)
 
   const openings = allOpenings as (AccountOpening & {
@@ -246,6 +248,9 @@ export default async function OpeningsPage({ searchParams }: Props) {
                     {o.status === 'carpeta_creada' && (
                       <StartOpeningButton openingId={o.id} clientId={o.client?.id ?? null} />
                     )}
+                    {!TERMINAL_STATUSES.includes(o.status as OpeningStatus) && (
+                      <MarkAccountOpenedButton openingId={o.id} name={o.folder_name} />
+                    )}
                     <Link
                       href={`/openings/${o.id}`}
                       className="text-xs px-3 py-1.5 border border-gray-200 rounded text-gray-600 whitespace-nowrap"
@@ -340,6 +345,9 @@ export default async function OpeningsPage({ searchParams }: Props) {
                         <div className="flex items-center gap-1">
                           {o.status === 'carpeta_creada' && (
                             <StartOpeningButton openingId={o.id} clientId={o.client?.id ?? null} />
+                          )}
+                          {!TERMINAL_STATUSES.includes(o.status as OpeningStatus) && (
+                            <MarkAccountOpenedButton openingId={o.id} name={o.folder_name} />
                           )}
                           <Link
                             href={`/openings/${o.id}`}
