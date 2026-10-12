@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
+import { canSeeMenuKey } from '@/lib/auth/menu'
 import { albojerFileName, generateAlbojerWorkbook } from '@/lib/albojer/excelGenerator'
 import { positionsStore } from '@/lib/icheAcciones/db'
 
@@ -8,7 +9,7 @@ export const dynamic = 'force-dynamic'
 // Se redibuja desde la base (fuente de verdad), igual que al generarlo.
 export async function GET() {
   const session = await getSession()
-  if (!session || session.role !== 'admin') {
+  if (!session || !canSeeMenuKey(session.role, 'menu_planillas', session.permissions)) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
   }
 

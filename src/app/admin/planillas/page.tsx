@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { unstable_noStore as noStore } from 'next/cache'
 import { getSession } from '@/lib/auth'
+import { canSeeMenuKey } from '@/lib/auth/menu'
 
 export const metadata: Metadata = { title: 'Planillas' }
 export const dynamic = 'force-dynamic'
@@ -13,7 +14,7 @@ export default async function PlanillasPage() {
   noStore()
 
   const session = await getSession()
-  if (!session || session.role !== 'admin') redirect('/')
+  if (!session || !canSeeMenuKey(session.role, 'menu_planillas', session.permissions)) redirect('/')
 
   return (
     <div className="p-4 md:p-6 bg-[#F4F6F8] min-h-screen">

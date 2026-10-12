@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
+import { canSeeMenuKey } from '@/lib/auth/menu'
 import { downloadDriveFile, getGraphToken } from '@/lib/microsoft/graph'
 import { positionsStore, type PositionsBook } from './db'
 
@@ -10,7 +11,7 @@ import { positionsStore, type PositionsBook } from './db'
  */
 export async function downloadHistoryFile(book: PositionsBook, id: string, getFolder: () => Promise<{ driveId: string }>) {
   const session = await getSession()
-  if (!session || session.role !== 'admin') {
+  if (!session || !canSeeMenuKey(session.role, 'menu_planillas', session.permissions)) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
   }
   if (!/^[0-9a-f-]{36}$/i.test(id)) return NextResponse.json({ error: 'id inválido' }, { status: 400 })

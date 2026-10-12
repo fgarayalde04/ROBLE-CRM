@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
 import { unstable_noStore as noStore } from 'next/cache'
 import { getSession } from '@/lib/auth'
+import { canSeeMenuKey } from '@/lib/auth/menu'
 import { positionsStore } from '@/lib/icheAcciones/db'
 import AccionesWizard from '@/components/icheAcciones/AccionesWizard'
 import HistoryList from '@/components/icheAcciones/HistoryList'
@@ -13,7 +14,7 @@ export default async function AlbojerPage() {
   noStore()
 
   const session = await getSession()
-  if (!session || session.role !== 'admin') redirect('/')
+  if (!session || !canSeeMenuKey(session.role, 'menu_planillas', session.permissions)) redirect('/')
 
   const store = positionsStore('albojer')
   const [latest, history] = await Promise.all([store.getLatestGeneration(), store.listGenerations()])

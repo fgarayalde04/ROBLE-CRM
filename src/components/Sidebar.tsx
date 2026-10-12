@@ -6,98 +6,33 @@ import { useState, useEffect } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { clsx } from 'clsx'
 import type { SessionUser } from '@/lib/auth'
-import { hasPermission, type Permission } from '@/lib/auth/roles'
+import { MENU, canSeeMenuItem, type MenuItem } from '@/lib/auth/menu'
 import { useAdvisorModeCtx } from '@/contexts/AdvisorModeContext'
 import NotificationBell from './NotificationBell'
 
 // ─── Nav structure ────────────────────────────────────────────────────────────
 
-type NavItem = { href: string; label: string; subtitle: string; icon: (p: { className?: string }) => JSX.Element; permission: Permission; badge?: number }
+type NavItem = MenuItem & { icon: (p: { className?: string }) => JSX.Element; badge?: number }
 type NavSection = { label: string; items: NavItem[] }
 
-const nav: NavSection[] = [
-  {
-    label: 'Acceso rápido',
-    items: [
-      { href: '/solicitudes', label: 'Solicitudes', subtitle: 'Enviar a Trading Desk', icon: OrdersIcon, permission: 'orders' },
-      { href: '/ordenes?tab=historial', label: 'Blotter', subtitle: 'Historial de órdenes', icon: OrdersIcon, permission: 'orders' },
-    ],
-  },
-  {
-    label: 'Principal',
-    items: [
-      { href: '/',      label: 'Panel del día', subtitle: 'Resumen de actividad',    icon: GridIcon,    permission: 'panel' },
-      { href: '/tasks', label: 'Tareas',        subtitle: 'Pendientes y seguimiento', icon: CheckIcon,   permission: 'tasks' },
-    ],
-  },
-  {
-    label: 'Operación',
-    items: [
-      { href: '/clients',       label: 'Clientes',      subtitle: 'Gestión de clientes',          icon: UsersIcon,  permission: 'clients' },
-      { href: '/banco-central', label: 'Banco Central', subtitle: 'Legajos · Monitoreo · Scoring', icon: ShieldIcon, permission: 'banco_central' },
-    ],
-  },
-  {
-    label: 'Inversiones',
-    items: [
-      // HIDDEN: Fondos temporalmente oculto
-      // { href: '/fondos',     label: 'Fondos',     subtitle: 'Biblioteca de factsheets',icon: FondosIcon,    permission: 'fondos' },
-      { href: '/fondos-monitor', label: 'Monitor de Fondos', subtitle: 'Rendimientos por ISIN', icon: FondosIcon, permission: 'fondos_monitor' },
-      { href: '/factsheet',  label: 'Portafolio',  subtitle: 'Posiciones y valor de cartera',   icon: FactsheetIcon, permission: 'factsheet' },
-      { href: '/propuestas', label: 'Propuestas', subtitle: 'Propuestas de inversión', icon: ProposalIcon,  permission: 'proposals' },
-      { href: '/mas-operado', label: 'Lo más operado', subtitle: 'Más comprado y vendido', icon: KpiIcon, permission: 'orders' },
-      { href: '/admin/planillas', label: 'Planillas', subtitle: 'Herramientas especiales', icon: TemplateIcon, permission: 'admin' },
-    ],
-  },
-  {
-    label: 'Agenda y Mail',
-    items: [
-      { href: '/events', label: 'Agenda', subtitle: 'Google Calendar y eventos', icon: CalendarIcon, permission: 'calendar' },
-      { href: '/mail',   label: 'Mail',   subtitle: 'Gmail y comunicaciones',    icon: MailIcon,     permission: 'calendar' },
-    ],
-  },
-  {
-    label: 'Research',
-    items: [
-      { href: '/research', label: 'Research & Novedades', subtitle: 'Morning Brief y publicaciones', icon: ResearchIcon, permission: 'research' },
-      { href: '/plantillas', label: 'Plantillas', subtitle: 'Fichas, análisis y comparativos', icon: TemplateIcon, permission: 'research' },
-    ],
-  },
-  // HIDDEN: Sección Finanzas temporalmente oculta
-  // {
-  //   label: 'Finanzas',
-  //   items: [
-  //     { href: '/pagos-mensuales', label: 'Pagos mensuales', subtitle: 'Control de pagos',    icon: CoinIcon, permission: 'pagos' },
-  //     { href: '/impuestos',       label: 'Impuestos',       subtitle: 'Gestión tributaria',  icon: TaxIcon,  permission: 'impuestos' },
-  //   ],
-  // },
-  {
-    label: 'Recursos',
-    items: [
-      { href: '/recursos',    label: 'Biblioteca', subtitle: 'Documentos y recursos', icon: LibraryIcon,        permission: 'recursos' },
-      { href: '/claves',      label: 'Claves',     subtitle: 'Bóveda de accesos',     icon: KeyIcon,            permission: 'claves' },
-      { href: '/mi-carpeta',  label: 'Mi carpeta', subtitle: 'Documentos en OneDrive', icon: FolderPersonalIcon, permission: 'panel' },
-    ],
-  },
-  {
-    label: 'Dirección',
-    items: [
-      { href: '/ceo',                 label: 'Dashboard',   subtitle: 'Métricas ejecutivas',   icon: BIIcon,     permission: 'ceo_dashboard' },
-      { href: '/kpis',                label: 'KPIs',        subtitle: 'Indicadores clave',      icon: KpiIcon,    permission: 'kpis' },
-      { href: '/liquidacion-brokers', label: 'Liquidación', subtitle: 'Brokers y comisiones',   icon: BrokerIcon, permission: 'liquidacion' },
-    ],
-  },
-  {
-    label: 'Admin',
-    items: [
-      { href: '/admin/users',     label: 'Usuarios',        subtitle: 'Gestión de acceso',     icon: AdminIcon,    permission: 'admin' },
-      { href: '/sincronizacion',  label: 'Sincronización',  subtitle: 'SharePoint y OneDrive', icon: SyncIcon,     permission: 'sincronizacion' },
-    ],
-  },
-]
+// Ícono de cada ítem; la estructura del menú vive en lib/auth/menu.ts (la
+// misma que muestra la pestaña Permisos de Usuarios).
+const ICONS: Record<string, (p: { className?: string }) => JSX.Element> = {
+  menu_solicitudes: OrdersIcon, menu_blotter: OrdersIcon, panel: GridIcon, tasks: CheckIcon,
+  clients: UsersIcon, banco_central: ShieldIcon, fondos_monitor: FondosIcon, factsheet: FactsheetIcon,
+  proposals: ProposalIcon, menu_mas_operado: KpiIcon, menu_planillas: TemplateIcon, calendar: CalendarIcon,
+  menu_mail: MailIcon, research: ResearchIcon, menu_plantillas: TemplateIcon, recursos: LibraryIcon,
+  claves: KeyIcon, menu_mi_carpeta: FolderPersonalIcon, ceo_dashboard: BIIcon, kpis: KpiIcon,
+  liquidacion: BrokerIcon, menu_usuarios: AdminIcon, sincronizacion: SyncIcon,
+}
 
-function canSee(user: SessionUser, permission: Permission): boolean {
-  return hasPermission(user.role, permission, user.permissions)
+const nav: NavSection[] = MENU.map(section => ({
+  label: section.label,
+  items: section.items.map(item => ({ ...item, icon: ICONS[item.key] ?? GridIcon })),
+}))
+
+function canSee(user: SessionUser, item: MenuItem): boolean {
+  return canSeeMenuItem(user.role, item, user.permissions)
 }
 
 const ROLE_LABEL: Record<string, string> = {
@@ -160,7 +95,7 @@ export default function Sidebar({ user, isOpen = false, onToggle }: Props) {
   const visibleNav = nav
     .map((section) => ({
       ...section,
-      items: section.items.filter((item) => canSee(user, item.permission)),
+      items: section.items.filter((item) => canSee(user, item)),
     }))
     .filter((section) => section.items.length > 0)
 

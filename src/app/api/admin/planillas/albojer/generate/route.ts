@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
+import { canSeeMenuKey } from '@/lib/auth/menu'
 import { getGraphToken, uploadFile } from '@/lib/microsoft/graph'
 import { getAlbojerClientFolder } from '@/lib/albojer/clientLookup'
 import { albojerFileName, generateAlbojerWorkbook } from '@/lib/albojer/excelGenerator'
@@ -9,7 +10,7 @@ import type { GenerateRequest, GenerateResponse } from '@/lib/icheAcciones/types
 
 export async function POST(req: NextRequest) {
   const session = await getSession()
-  if (!session || session.role !== 'admin') {
+  if (!session || !canSeeMenuKey(session.role, 'menu_planillas', session.permissions)) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
   }
 

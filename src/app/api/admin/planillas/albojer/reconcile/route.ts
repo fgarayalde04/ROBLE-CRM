@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
+import { canSeeMenuKey } from '@/lib/auth/menu'
 import { createFolder, getGraphToken, listFolderChildren, uploadFile } from '@/lib/microsoft/graph'
 import { parseActivityExcel } from '@/lib/portfolio/activityParser'
 import { getAlbojerClientFolder } from '@/lib/albojer/clientLookup'
@@ -24,7 +25,7 @@ async function getOrCreateChild(driveId: string, parentId: string, name: string,
 
 export async function POST(req: NextRequest) {
   const session = await getSession()
-  if (!session || session.role !== 'admin') {
+  if (!session || !canSeeMenuKey(session.role, 'menu_planillas', session.permissions)) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
   }
 
