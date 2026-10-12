@@ -6,7 +6,7 @@ const fecha = (iso: string) =>
 // Historial de planillas generadas, con el Excel de cada corrida.
 export default function HistoryList({ rows, apiBase }: { rows: GenerationHistoryRow[]; apiBase: string }) {
   return (
-    <div className="mt-10 max-w-3xl">
+    <div className="mt-10 max-w-5xl">
       <h2 className="mb-2 text-sm font-semibold text-[#2D3F52]">Historial de planillas</h2>
       {rows.length === 0 ? (
         <p className="text-sm text-gray-400">Todavía no se generó ninguna.</p>

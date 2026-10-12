@@ -3,7 +3,7 @@ import { getSession } from '@/lib/auth'
 import { getGraphToken, uploadFile } from '@/lib/microsoft/graph'
 import { getAlbojerClientFolder } from '@/lib/albojer/clientLookup'
 import { albojerFileName, generateAlbojerWorkbook } from '@/lib/albojer/excelGenerator'
-import { applyPlan, newClosesPreview } from '@/lib/icheAcciones/applyPlan'
+import { analystSummary, applyPlan, newClosesPreview } from '@/lib/icheAcciones/applyPlan'
 import { positionsStore } from '@/lib/icheAcciones/db'
 import type { GenerateRequest, GenerateResponse } from '@/lib/icheAcciones/types'
 
@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
     warnings.push(`No se pudo subir el archivo a OneDrive: ${err.message}`)
   }
 
-  const fullPreview = { ...preview, nuevosCierres: newClosesPreview(body, closedAfter) }
+  const fullPreview = { ...preview, nuevosCierres: newClosesPreview(body, closedAfter), porAnalista: analystSummary(openAfter, closedAfter) }
   await store.logGeneration(fileName, uploadedItem, session.id ?? null, fullPreview, warnings, buffer)
 
   const response: GenerateResponse = { fileName, uploadedItem, fileBase64: buffer.toString('base64'), preview: fullPreview, warnings }

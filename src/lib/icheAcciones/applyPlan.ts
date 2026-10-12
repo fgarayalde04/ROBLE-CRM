@@ -1,5 +1,5 @@
 import type { PositionsStore } from './db'
-import type { ClosedPosition, GenerateRequest, PreviewRow } from './types'
+import type { Analyst, AnalystSummary, ClosedPosition, GenerateRequest, OpenPosition, PreviewRow } from './types'
 
 /**
  * Aplica a la base un plan de reconciliación ya confirmado: primero los
@@ -119,4 +119,28 @@ export function newClosesPreview({ plan, answers }: GenerateRequest, closedAfter
     gainLoss: c.saleProceeds - c.costBasis,
     gainLossPct: c.costBasis !== 0 ? (c.saleProceeds - c.costBasis) / c.costBasis : 0,
   }))
+}
+
+// Totales por estrategia (abiertas y cerradas por año) para el preview.
+export function analystSummary(open: OpenPosition[], closed: ClosedPosition[]): Record<Analyst, AnalystSummary> {
+  const out = {} as Record<Analyst, AnalystSummary>
+  for (const analyst of ['INDIO', 'CHINO'] as Analyst[]) {
+    const abiertas = { cost: 0, value: 0, count: 0 }
+    for (const p of open.filter(p => p.analyst === analyst)) {
+      const qty = p.lots.reduce((s, l) => s + l.quantity, 0)
+      abiertas.cost += p.lots.reduce((s, l) => s + l.quantity * l.unitCost, 0)
+      abiertas.value += p.lastPrice != null ? qty * p.lastPrice : 0
+      abiertas.count += 1
+    }
+    const byYear = new Map<number, AnalystSummary['cerradas'][number]>()
+    for (const c of closed.filter(c => c.analyst === analyst)) {
+      const y = byYear.get(c.year) ?? { year: c.year, cost: 0, value: 0, count: 0 }
+      y.cost += c.costBasis
+      y.value += c.saleProceeds
+      y.count += 1
+      byYear.set(c.year, y)
+    }
+    out[analyst] = { abiertas, cerradas: Array.from(byYear.values()).sort((a, b) => a.year - b.year) }
+  }
+  return out
 }

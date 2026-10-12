@@ -182,6 +182,18 @@ export interface PreviewSummaryRow {
   gainLossPct: number | null
 }
 
+export interface AmountSummary {
+  cost: number
+  value: number // valor de mercado (abiertas) o de venta (cerradas)
+  count: number
+}
+
+// Resumen por estrategia para el preview: abiertas + cerradas por año.
+export interface AnalystSummary {
+  abiertas: AmountSummary
+  cerradas: (AmountSummary & { year: number })[]
+}
+
 export interface GenerateResponse {
   fileName: string
   uploadedItem: { id: string; webUrl: string | null }
@@ -195,6 +207,8 @@ export interface GenerateResponse {
     abiertasIndio: PreviewRow[]
     abiertasChino: PreviewRow[]
     nuevosCierres: PreviewRow[]
+    // Desde oct-2026; los previews guardados antes no lo traen.
+    porAnalista?: Record<Analyst, AnalystSummary>
   }
   warnings: string[]
 }

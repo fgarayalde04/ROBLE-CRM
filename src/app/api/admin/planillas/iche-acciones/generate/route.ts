@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { getGraphToken, uploadFile } from '@/lib/microsoft/graph'
 import { getIcheClientFolder } from '@/lib/icheAcciones/clientLookup'
-import { applyPlan, newClosesPreview } from '@/lib/icheAcciones/applyPlan'
+import { analystSummary, applyPlan, newClosesPreview } from '@/lib/icheAcciones/applyPlan'
 import { getClosedPositions, getOpenPositions, logGeneration, positionsStore } from '@/lib/icheAcciones/db'
 import { generateWorkbook } from '@/lib/icheAcciones/excelGenerator'
 import { monthNameEs } from '@/lib/icheAcciones/monthNameEs'
@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
   }
 
   const nuevosCierres = newClosesPreview(body, closedAfter)
-  const fullPreview = { ...preview, nuevosCierres }
+  const fullPreview = { ...preview, nuevosCierres, porAnalista: analystSummary(openAfter, closedAfter) }
 
   // Se guarda el preview aunque falle la subida a OneDrive: los cambios en
   // la base ya se aplicaron, así que igual conviene poder verlo después.

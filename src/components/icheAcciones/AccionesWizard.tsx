@@ -80,7 +80,7 @@ export default function AccionesWizard({ initialResult, apiBase, fileCount, drop
   }
 
   return (
-    <div className="max-w-3xl">
+    <div className="max-w-5xl">
       {error && (
         <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">{error}</div>
       )}
