@@ -26,7 +26,6 @@ export async function filasMasOperado(
       for (const i of compras) {
         if (!i.rendimientos || i.rendimientos.vencido) i.rendimientos = (await buscarEnDavinci(i)) ?? i.rendimientos
       }
-      await guardarRendimientosOperados(hasta)
     }
     const fila = (i: InstrumentoOperado): FilaFondoOperado => {
       const r = i.rendimientos
@@ -44,26 +43,6 @@ export async function filasMasOperado(
 }
 
 const ISIN_RE = /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/
-
-// En la misma pasada (misma sesión de Davinci, un solo login) se buscan todos
-// los fondos que se operaron alguna vez — comprados y vendidos, no solo los del
-// reporte — que no tienen datos o los tienen vencidos. Queda guardado en
-// davinci_lookup_cache y la pantalla de lo más operado lo muestra.
-async function guardarRendimientosOperados(hasta: string) {
-  try {
-    const ranking = await getRankingMasOperado('2000-01-01', hasta, 60)
-    const vistos = new Set<string>()
-    for (const i of [...ranking.fondos.compras, ...ranking.fondos.ventas]) {
-      if (vistos.has(i.key)) continue
-      vistos.add(i.key)
-      if (i.rendimientos && !i.rendimientos.vencido) continue
-      const r = await buscarEnDavinci(i)
-      if (r === undefined) return     // Davinci no disponible: no seguir
-    }
-  } catch (e: any) {
-    console.error('[plantillas] rendimientos de lo operado', e.message)
-  }
-}
 
 // Fondo que no está en el Monitor ni tiene una búsqueda guardada de menos de 15
 // días: se busca en Davinci por el ISIN de cada clase operada hasta encontrar

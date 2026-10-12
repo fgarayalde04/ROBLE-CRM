@@ -302,7 +302,7 @@ async function registerFundMonitorSync() {
       if (!res.ok) {
         console.error('[fund-monitor] Error en el sync:', data.error ?? res.status)
       } else if (!data.skipped) {
-        console.log(`[fund-monitor] Sync: ${data.ok}/${data.total} ok, ${data.no_source} sin fuente, ${data.error} con error (${data.vigentes ?? 0} sin bajar: datos de menos de 15 días)`)
+        console.log(`[fund-monitor] Sync: ${data.ok}/${data.total} ok, ${data.no_source} sin fuente, ${data.error} con error (${data.vigentes ?? 0} sin bajar: datos de menos de 15 días); lo más operado: ${data.operados?.encontrados ?? 0}/${data.operados?.buscados ?? 0} encontrados`)
       }
     } catch (e: any) {
       console.error('[fund-monitor] Error en el sync:', e.message)

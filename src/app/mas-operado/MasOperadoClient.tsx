@@ -270,7 +270,7 @@ function Tabla({ filas, clase, puedeUnir, otros, onCambio }: {
                           <p className="text-[10px] text-gray-400 pt-1">
                             {f.rendimientos
                               ? `Rendimientos: ${f.rendimientos.fuente}${f.rendimientos.fecha ? ` · datos al ${f.rendimientos.fecha}` : ''}`
-                              : 'Sin rendimientos todavía: no está en el Monitor; se busca en Davinci el último día del mes y queda guardado. Si es el mismo fondo que otro con datos, unilo con ese.'}
+                              : 'Sin rendimientos todavía: no está en el Monitor; se busca en Davinci el 15 y el último día del mes y queda guardado. Si es el mismo fondo que otro con datos, unilo con ese.'}
                           </p>
                         )}
                       </div>
