@@ -42,6 +42,7 @@ export async function register() {
   // Cierre del día de Órdenes (push a asesores y admin/asistentes).
   registerCierreOrdenes()
   registerPlantillasMensuales()
+  registerRecordatorioPlanillas()
 
   const tenantId = process.env.MICROSOFT_TENANT_ID
   const clientId = process.env.MICROSOFT_CLIENT_ID
@@ -185,6 +186,49 @@ function registerPlantillasMensuales() {
   setTimeout(() => maybeRun(), 45000)
   setInterval(() => maybeRun(), 15 * 60 * 1000)
   console.log(`[plantillas-mensuales] Programado — último día del mes desde las ${horaFinDeMes}:00 (Montevideo), respaldo el día 1`)
+}
+
+// Recordatorio de hacer las planillas de acciones (Iche, Albojer): el día 5 de
+// cada mes desde las 9:00 (Montevideo). Si ese día el server no estuvo arriba,
+// sale el primer día después en que esté. La ruta deduplica por mes.
+// Solo en producción; en otro ambiente se habilita con PLANILLAS_REMINDER_ENABLED=true.
+function registerRecordatorioPlanillas() {
+  const env = process.env.RAILWAY_ENVIRONMENT_NAME
+  if (env !== 'production' && process.env.PLANILLAS_REMINDER_ENABLED !== 'true') {
+    console.log(`[recordatorio-planillas] Deshabilitado en este ambiente (${env ?? 'local'})`)
+    return
+  }
+  if (process.env.PLANILLAS_REMINDER_ENABLED === 'false') return
+  const port = process.env.PORT ?? '3000'
+  let enviadoMes = ''
+
+  async function maybeSend() {
+    const parts = Object.fromEntries(
+      new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Montevideo', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hourCycle: 'h23',
+      }).formatToParts(new Date()).map((p) => [p.type, p.value])
+    )
+    const mes = `${parts.year}-${parts.month}`
+    if (enviadoMes === mes || Number(parts.day) < 5 || parseInt(parts.hour, 10) < 9) return
+    try {
+      const headers: Record<string, string> = {}
+      if (process.env.CRON_SECRET) headers.Authorization = `Bearer ${process.env.CRON_SECRET}`
+      const res = await fetch(`http://127.0.0.1:${port}/api/cron/recordatorio-planillas?mes=${mes}`, { headers })
+      const data = await res.json()
+      if (!res.ok) {
+        console.error('[recordatorio-planillas] Error:', data.error ?? res.status)
+        return
+      }
+      enviadoMes = mes
+      console.log(`[recordatorio-planillas] ${mes}: ${data.enviados} avisos enviados`)
+    } catch (e: any) {
+      console.error('[recordatorio-planillas] Error:', e.message)
+    }
+  }
+
+  setTimeout(() => maybeSend(), 50000)
+  setInterval(() => maybeSend(), 15 * 60 * 1000)
+  console.log('[recordatorio-planillas] Programado — día 5 de cada mes desde las 9:00 (Montevideo)')
 }
 
 function registerCierreOrdenes() {
