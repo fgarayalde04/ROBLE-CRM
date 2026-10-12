@@ -43,6 +43,23 @@ const ALIASES: Record<keyof Omit<ActivityRow, never>, string[]> = {
 
 const isBlank = (s: string | null) => s == null || s === '' || s === '-' || s.toUpperCase() === 'N/A'
 
+// Pershing no trae columnas de cantidad ni precio: van dentro de ACTIVITY,
+// p.ej. "Buy 3000.00000 share(s) of NKE at 35.657019000" o
+// "Sell -3000.00000 share(s) of NKE at 32.570000000" (bonos: "parValue").
+const PERSHING_TRADE = /^(buy|sell)\s+(-?[\d,]+(?:\.\d+)?)\s+(share\(s\)|parvalue)\s+of\s+(\S+)\s+at\s+([\d,]+(?:\.\d+)?)/i
+
+export function parsePershingTradeText(text: string | null): { side: 'buy' | 'sell'; quantity: number; price: number; symbol: string; isShares: boolean } | null {
+  const m = text?.match(PERSHING_TRADE)
+  if (!m) return null
+  return {
+    side: m[1].toLowerCase() as 'buy' | 'sell',
+    quantity: parseFloat(m[2].replace(/,/g, '')),
+    price: parseFloat(m[5].replace(/,/g, '')),
+    symbol: m[4].toUpperCase(),
+    isShares: m[3].toLowerCase() !== 'parvalue',
+  }
+}
+
 function matchCol(header: string): keyof ActivityRow | null {
   const h = norm(header)
   for (const [field, names] of Object.entries(ALIASES)) {
@@ -75,6 +92,9 @@ export function parseActivityExcel(buffer: ArrayBuffer): ParsedActivity {
     if (f && colIdx[f] == null) colIdx[f] = i
   })
   const get = (row: unknown[], f: keyof ActivityRow) => (colIdx[f] != null ? row[colIdx[f]!] : undefined)
+  // Pershing trae "DATE" (que en las operaciones del día dice "TODAY") y
+  // además "TRADE DATE": si la primera no es fecha se usa la segunda.
+  const tradeDateAltIdx = headers.findIndex((h, i) => norm(h) === 'trade date' && i !== colIdx.tradeDate)
 
   // Meta de las filas previas al header.
   const metaLines = raw.slice(0, headerIdx).map(r => (r as unknown[]).map(c => String(c ?? '')).join(' ').trim()).filter(Boolean)
@@ -90,7 +110,7 @@ export function parseActivityExcel(buffer: ArrayBuffer): ParsedActivity {
     const row = raw[i] as unknown[]
     const desc = parseStr(get(row, 'description'))
     const type = parseStr(get(row, 'activityType'))
-    const td = parseDateStr(get(row, 'tradeDate'))
+    const td = parseDateStr(get(row, 'tradeDate')) ?? (tradeDateAltIdx >= 0 ? parseDateStr(row[tradeDateAltIdx]) : null)
     const sd = parseDateStr(get(row, 'settleDate'))
     const amount = parseNum(get(row, 'amount'))
     // fin de datos: fila vacía o "total"/texto legal
@@ -103,6 +123,7 @@ export function parseActivityExcel(buffer: ArrayBuffer): ParsedActivity {
     if (d) dates.push(d)
     const sym = parseStr(get(row, 'symbol'))
     const cus = parseStr(get(row, 'cusip'))
+    const trade = parsePershingTradeText(type)
     rows.push({
       tradeDate: td,
       settleDate: sd,
@@ -110,8 +131,8 @@ export function parseActivityExcel(buffer: ArrayBuffer): ParsedActivity {
       description: (desc ?? type ?? '—').replace(/\s+/g, ' ').trim(),
       symbol: isBlank(sym) ? null : sym,
       cusip: isBlank(cus) ? null : cus,
-      quantity: parseNum(get(row, 'quantity')),
-      price: parseNum(get(row, 'price')),
+      quantity: parseNum(get(row, 'quantity')) ?? (trade ? trade.quantity : null),
+      price: parseNum(get(row, 'price')) ?? (trade ? trade.price : null),
       amount,
     })
   }

@@ -86,7 +86,10 @@ export function reconcile(
   morganActivity: ActivityRow[],
   morganCosts: UnrealizedGainLossRow[] = [],
   knownTickers: Map<string, string> = new Map(),
-  closedPositions: ClosedPosition[] = []
+  closedPositions: ClosedPosition[] = [],
+  // Fecha (YYYY-MM-DD) de la corrida anterior: solo se miran operaciones del
+  // Activity desde ahí. null = todo el Activity.
+  periodStart: string | null = null
 ): ReconcilePlan {
   const changes: TickerChange[] = []
   const pendingQuestions: IcheQuestion[] = []
@@ -275,7 +278,7 @@ export function reconcile(
   // ── Posiciones que desaparecieron de ambas fuentes ────────────────────────
   for (const pos of currentOpen) {
     if (matched.has(`${pos.analyst}:${pos.ticker}`)) continue
-    const sale = findSale(pos.ticker, pershingActivity, morganActivity)
+    const sale = findSale(pos.ticker, pershingActivity, morganActivity, periodStart)
     if (sale) {
       changes.push({
         kind: 'closed_matched',
@@ -309,7 +312,8 @@ export function reconcile(
   const heldCusips = new Set(pershingStocks.map(r => r.cusip.toUpperCase()))
   const fmt = (n: number) => n.toLocaleString('en-US', { maximumFractionDigits: 4 })
 
-  for (const t of summarizeTrades(pershingActivity, morganActivity)) {
+  const openTickers = new Set(currentOpen.map(p => p.ticker.toUpperCase()))
+  for (const t of summarizeTrades(pershingActivity, morganActivity, { since: periodStart, openTickers })) {
     if (t.sellQty === 0 || !t.lastSellDate) continue
     const open = currentOpen.filter(p => p.ticker.toUpperCase() === t.ticker)
     // Abierta antes y ya no está: la venta la resuelve closed_matched / unmatched_close.
@@ -354,9 +358,11 @@ export function reconcile(
       continue
     }
 
-    const stillHeld = heldTickers.has(t.ticker) || (t.cusip != null && heldCusips.has(t.cusip))
-    if (stillHeld || !roundtrip) {
-      warnings.push(`${label}: posición nueva vendida en parte (compró ${fmt(t.buyQty)}, vendió ${fmt(t.sellQty)}) — la parte vendida no se registró como cierre, cargarla a mano.`)
+    // Un ciclo completo (compró y vendió todo) se cierra aunque el ticker se
+    // haya vuelto a comprar después: esa recompra es otro ciclo, abierto.
+    if (!roundtrip) {
+      const stillHeld = heldTickers.has(t.ticker) || (t.cusip != null && heldCusips.has(t.cusip))
+      warnings.push(`${label}: ${stillHeld ? 'posición nueva vendida en parte' : 'compras y ventas que no cierran'} (compró ${fmt(t.buyQty)}, vendió ${fmt(t.sellQty)}) — la parte vendida no se registró como cierre, cargarla a mano.`)
       continue
     }
     pendingQuestions.push({ id: nextQuestionId(), type: 'roundtrip_close', source: t.source, ...details })

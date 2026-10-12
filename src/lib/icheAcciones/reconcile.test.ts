@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { parsePershingTradeText } from '@/lib/portfolio/activityParser'
 import { reconcile } from './reconcile'
 import type { OpenPosition } from './types'
 import type { PershingUnrealizedRow } from './pershingUnrealizedParser'
@@ -77,5 +78,58 @@ describe('compraventa dentro del período', () => {
       act({ symbol: 'DUTG', tradeDate: '2026-09-03', activityType: 'MONEY FUND SALE', quantity: 10, amount: 10 }),
     ]
     expect(reconcile([], [], [], mmf, []).pendingQuestions).toHaveLength(0)
+  })
+})
+
+describe('Activity de Pershing (cantidad y precio en el texto de ACTIVITY)', () => {
+  // Así llegan del parser las filas de Pershing: sin columna de cantidad.
+  const pershing = (date: string, text: string, amount: number, symbol = 'NKE'): any => ({
+    tradeDate: date, settleDate: null, activityType: text, description: 'NIKE INC CL B SOLICITED ORDER',
+    symbol, cusip: '654106103', quantity: null, price: null, amount,
+  })
+
+  it('lee cantidad y precio del texto', () => {
+    expect(parsePershingTradeText('Sell -3000.00000 share(s) of NKE at 32.570000000')).toEqual({
+      side: 'sell', quantity: -3000, price: 32.57, symbol: 'NKE', isShares: true,
+    })
+    expect(parsePershingTradeText('Buy 200000.00000 parValue of PEMX5677787 at 88.418000000')?.isShares).toBe(false)
+    expect(parsePershingTradeText('CASH DIVIDEND RECEIVED')).toBeNull()
+  })
+
+  const withQty = (r: any) => {
+    const t = parsePershingTradeText(r.activityType)!
+    return { ...r, quantity: t.quantity, price: t.price }
+  }
+
+  it('compraventa de Pershing en el período pregunta chino/indio', () => {
+    const rows = [
+      withQty(pershing('2026-09-30', 'Buy 3000.00000 share(s) of NKE at 35.657019000', -107061.06)),
+      withQty(pershing('2026-10-02', 'Sell -3000.00000 share(s) of NKE at 32.570000000', 97617.98)),
+    ]
+    const plan = reconcile([], [], [], rows, [], [], new Map(), [], '2026-09-10')
+    expect(plan.pendingQuestions).toHaveLength(1)
+    expect(plan.pendingQuestions[0]).toMatchObject({
+      type: 'roundtrip_close', ticker: 'NKE', quantity: 3000, costBasis: 107061.06, saleProceeds: 97617.98,
+      openingDate: '2026-09-30', closingDate: '2026-10-02', source: 'pershing',
+    })
+  })
+
+  it('ignora lo operado antes del período', () => {
+    const rows = [
+      withQty(pershing('2026-05-01', 'Buy 100.00000 share(s) of NKE at 70', -7000)),
+      withQty(pershing('2026-05-20', 'Sell -100.00000 share(s) of NKE at 80', 8000)),
+    ]
+    expect(reconcile([], [], [], rows, [], [], new Map(), [], '2026-09-10').pendingQuestions).toHaveLength(0)
+  })
+
+  it('dos compraventas del mismo ticker en el período son dos cierres', () => {
+    const rows = [
+      withQty(pershing('2026-09-12', 'Buy 100.00000 share(s) of LUNR at 30', -3000, 'LUNR')),
+      withQty(pershing('2026-09-15', 'Sell -100.00000 share(s) of LUNR at 33', 3300, 'LUNR')),
+      withQty(pershing('2026-09-20', 'Buy 50.00000 share(s) of LUNR at 31', -1550, 'LUNR')),
+      withQty(pershing('2026-09-25', 'Sell -50.00000 share(s) of LUNR at 35', 1750, 'LUNR')),
+    ]
+    const qs = reconcile([], [], [], rows, [], [], new Map(), [], '2026-09-10').pendingQuestions
+    expect(qs.map(q => q.type === 'roundtrip_close' && [q.quantity, q.closingDate])).toEqual([[100, '2026-09-15'], [50, '2026-09-25']])
   })
 })
