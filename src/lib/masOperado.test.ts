@@ -28,6 +28,23 @@ describe('operacionesDeSolicitud', () => {
 })
 
 describe('armarRanking', () => {
+  it('une a mano fondos con otro ISIN o nombre, aunque no se unan las clases', () => {
+    const ops = [
+      ...operacionesDeSolicitud({ client_number: '1', assets_json: [fondo('Fondo Alfa', 'LU0000000001', 'compra')] }),
+      ...operacionesDeSolicitud({ client_number: '2', assets_json: [fondo('Beta Distinto', 'IE0000000002', 'compra')] }),
+      ...operacionesDeSolicitud({ client_number: '3', assets_json: [fondo('Gamma', 'IE0000000003', 'compra')] }),
+    ]
+    const uniones = new Map([['id:LU0000000001', 'mon:abc'], ['id:IE0000000002', 'mon:abc']])
+    for (const unir of [true, false]) {
+      const r = armarRanking(ops, 10, unir, uniones)
+      expect(r.fondos.compras).toHaveLength(2)
+      expect(r.fondos.compras[0]).toMatchObject({ operaciones: 2, clientes: 2, grupo: 'mon:abc' })
+      expect(r.fondos.compras[0].variantes?.map((v) => [v.clave, v.unido])).toEqual(
+        expect.arrayContaining([['id:LU0000000001', true], ['id:IE0000000002', true]]),
+      )
+      expect(r.fondos.compras[1].grupo).toBeUndefined()
+    }
+  })
   it('agrupa por ISIN, ordena por órdenes y cuenta clientes distintos', () => {
     const ops = [
       ...operacionesDeSolicitud({ client_number: '1', assets_json: [fondo('PIMCO Income E Acc', 'ie00b87kcf77', 'compra')] }),

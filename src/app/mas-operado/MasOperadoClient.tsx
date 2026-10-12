@@ -24,6 +24,7 @@ export default function MasOperadoClient({ puedeCrearPlantilla }: { puedeCrearPl
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [creando, setCreando] = useState(false)
+  const [recarga, setRecarga] = useState(0)
 
   useEffect(() => {
     let vigente = true
@@ -38,7 +39,7 @@ export default function MasOperadoClient({ puedeCrearPlantilla }: { puedeCrearPl
       .catch((e) => { if (vigente) setError(e.message) })
       .finally(() => { if (vigente) setCargando(false) })
     return () => { vigente = false }
-  }, [periodo, unir])
+  }, [periodo, unir, recarga])
 
   const cambiarTipo = (t: TipoPeriodo) => setPeriodo(periodoDe(t, t === periodo.tipo ? periodo.desde : hoyMontevideo()))
   const esActual = periodo.desde === periodoDe(periodo.tipo, hoyMontevideo()).desde
@@ -135,7 +136,11 @@ export default function MasOperadoClient({ puedeCrearPlantilla }: { puedeCrearPl
         <p className="text-sm text-gray-400">Calculando…</p>
       ) : datos ? (
         <div className={cargando ? 'opacity-60' : ''}>
-          <Tabla filas={filas} clase={clase} />
+          <Tabla
+            filas={filas} clase={clase} puedeUnir={puedeCrearPlantilla}
+            otros={ranking ? [...ranking.fondos.compras, ...ranking.fondos.ventas] : []}
+            onCambio={() => setRecarga((n) => n + 1)}
+          />
         </div>
       ) : null}
     </div>
@@ -158,7 +163,9 @@ const COLS_REND: { key: 'r_1y' | 'r_3y' | 'r_5y' | 'r_ytd' | 'y_2025' | 'y_2024'
 const fmtRend = (n: number | null | undefined) => (n == null ? '—' : `${n >= 0 ? '+' : ''}${n.toFixed(2)}%`)
 const colorRend = (n: number | null | undefined) => (n == null ? 'text-gray-300' : n >= 0 ? 'text-emerald-600' : 'text-red-500')
 
-function Tabla({ filas, clase }: { filas: InstrumentoOperado[]; clase: ClaseActivo }) {
+function Tabla({ filas, clase, puedeUnir, otros, onCambio }: {
+  filas: InstrumentoOperado[]; clase: ClaseActivo; puedeUnir: boolean; otros: InstrumentoOperado[]; onCambio: () => void
+}) {
   const [abiertos, setAbiertos] = useState<Set<string>>(new Set())
   const alternar = (k: string) => setAbiertos((a) => {
     const n = new Set(a)
@@ -170,6 +177,14 @@ function Tabla({ filas, clase }: { filas: InstrumentoOperado[]; clase: ClaseActi
   const max = Math.max(1, ...filas.map((f) => f.operaciones))
   const fondos = clase === 'fondos'
   const columnas = 4 + (fondos ? COLS_REND.length : clase === 'bonos' ? 3 : 1)
+
+  async function separar(clave: string) {
+    const res = await fetch('/api/mas-operado/uniones', {
+      method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ claves: [clave] }),
+    })
+    if (!res.ok) { alert((await res.json().catch(() => ({}))).error ?? 'No se pudo separar'); return }
+    onCambio()
+  }
 
   if (filas.length === 0) {
     return <p className="bg-white rounded-xl border border-gray-200 px-4 py-6 text-sm text-gray-400">Sin operaciones en el período.</p>
@@ -233,13 +248,19 @@ function Tabla({ filas, clase }: { filas: InstrumentoOperado[]; clase: ClaseActi
                             <span className="font-mono text-gray-500 w-32">{v.isin || 'sin ISIN'}</span>
                             <span className="text-gray-400 w-10">{v.moneda || '—'}</span>
                             <span className="tabular-nums w-20 text-right">{v.operaciones} {v.operaciones === 1 ? 'orden' : 'órdenes'}</span>
+                            {fondos && puedeUnir && (
+                              v.unido
+                                ? <button type="button" onClick={() => separar(v.clave)} className="w-14 text-right text-[10px] text-gray-400 hover:text-red-600" title="Sacarlo de la unión hecha a mano">Separar</button>
+                                : <span className="w-14" />
+                            )}
                           </div>
                         ))}
+                        {fondos && puedeUnir && <UnirCon fila={f} otros={otros} onCambio={onCambio} />}
                         {fondos && (
                           <p className="text-[10px] text-gray-400 pt-1">
                             {f.rendimientos
                               ? `Rendimientos: ${f.rendimientos.fuente}${f.rendimientos.fecha ? ` · datos al ${f.rendimientos.fecha}` : ''}`
-                              : 'Sin rendimientos: no está en el Monitor; se busca en Davinci el último día del mes, al armar el reporte.'}
+                              : 'Sin rendimientos todavía: no está en el Monitor; se busca en Davinci el último día del mes y queda guardado. Si es el mismo fondo que otro con datos, unilo con ese.'}
                           </p>
                         )}
                       </div>
@@ -251,6 +272,93 @@ function Tabla({ filas, clase }: { filas: InstrumentoOperado[]; clase: ClaseActi
           })}
         </tbody>
       </table>
+    </div>
+  )
+}
+
+type FondoMonitor = { id: string; nombre: string; isin: string }
+let monitorCache: Promise<FondoMonitor[]> | null = null
+const cargarMonitor = () => (monitorCache ??= fetch('/api/mas-operado/uniones')
+  .then((r) => r.json())
+  .then((d) => (d.monitor ?? []) as FondoMonitor[])
+  .catch(() => { monitorCache = null; return [] }))
+
+const sinAcentos = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+
+// "Unir con…": la fila (todas sus clases) pasa a contar junto con otro fondo
+// operado o con uno del Monitor de fondos, del que toma nombre y rendimientos.
+function UnirCon({ fila, otros, onCambio }: { fila: InstrumentoOperado; otros: InstrumentoOperado[]; onCambio: () => void }) {
+  const [abierto, setAbierto] = useState(false)
+  const [texto, setTexto] = useState('')
+  const [monitor, setMonitor] = useState<FondoMonitor[]>([])
+  const [guardando, setGuardando] = useState(false)
+
+  useEffect(() => { if (abierto) cargarMonitor().then(setMonitor) }, [abierto])
+
+  const propias = new Set((fila.variantes ?? []).map((v) => v.clave))
+  const q = sinAcentos(texto.trim())
+  const coincide = (...t: string[]) => !q || t.some((x) => sinAcentos(x).includes(q))
+  const operados = Array.from(new Map(otros.map((o) => [o.key, o])).values())
+    .filter((o) => o.key !== fila.key && (o.variantes ?? []).some((v) => !propias.has(v.clave)))
+    .filter((o) => coincide(o.nombre, ...(o.variantes ?? []).flatMap((v) => [v.nombre, v.isin])))
+    .slice(0, 8)
+  const delMonitor = monitor
+    .filter((m) => `mon:${m.id}` !== fila.grupo && coincide(m.nombre, m.isin))
+    .slice(0, 8)
+
+  async function unir(con: { claves: string[] } | { monitorId: string }) {
+    setGuardando(true)
+    try {
+      const res = await fetch('/api/mas-operado/uniones', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ claves: Array.from(propias), con }),
+      })
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? 'No se pudo unir')
+      setAbierto(false)
+      setTexto('')
+      onCambio()
+    } catch (e: any) {
+      alert(e.message)
+    } finally {
+      setGuardando(false)
+    }
+  }
+
+  if (!abierto) {
+    return (
+      <button type="button" onClick={() => setAbierto(true)} className="mt-1 text-[11px] text-[#2D3F52] hover:underline">
+        Unir con…
+      </button>
+    )
+  }
+  const opcion = 'w-full text-left px-2 py-1 rounded hover:bg-gray-100 flex items-center gap-3 disabled:opacity-40'
+  return (
+    <div className="mt-2 max-w-xl bg-white border border-gray-200 rounded-md p-2 text-[11px]">
+      <div className="flex items-center gap-2 mb-1">
+        <input
+          autoFocus value={texto} onChange={(e) => setTexto(e.target.value)} placeholder="Buscar fondo por nombre o ISIN"
+          className="flex-1 px-2 py-1 border border-gray-200 rounded text-xs"
+        />
+        <button type="button" onClick={() => setAbierto(false)} className="text-gray-400 hover:text-gray-700">Cancelar</button>
+      </div>
+      {operados.length > 0 && <p className="px-2 pt-1 text-[10px] font-semibold uppercase text-gray-400">Fondos operados</p>}
+      {operados.map((o) => (
+        <button
+          key={o.key} type="button" disabled={guardando} className={opcion}
+          onClick={() => unir({ claves: (o.variantes ?? []).map((v) => v.clave) })}
+        >
+          <span className="flex-1 min-w-0 truncate">{o.nombre}</span>
+          <span className="font-mono text-gray-400">{o.isin || 'sin ISIN'}</span>
+        </button>
+      ))}
+      {delMonitor.length > 0 && <p className="px-2 pt-1 text-[10px] font-semibold uppercase text-gray-400">Monitor de fondos</p>}
+      {delMonitor.map((m) => (
+        <button key={m.id} type="button" disabled={guardando} className={opcion} onClick={() => unir({ monitorId: m.id })}>
+          <span className="flex-1 min-w-0 truncate">{m.nombre}</span>
+          <span className="font-mono text-gray-400">{m.isin || 'sin ISIN'}</span>
+        </button>
+      ))}
+      {!operados.length && !delMonitor.length && <p className="px-2 py-1 text-gray-400">Sin resultados.</p>}
     </div>
   )
 }
