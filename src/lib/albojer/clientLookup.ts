@@ -1,16 +1,14 @@
-import { pool } from '@/lib/db/pool'
+import { getClients } from '@/lib/db/clients'
 
 /**
- * Carpeta de OneDrive donde vive la planilla "Analisis Albojer": la de De
- * Bellis (cuenta Pershing ROJ900554, titulares Alejandro y Patricia De
- * Bellis), no la de "Albojer, Nicolas" que es otro cliente.
+ * Carpeta de OneDrive de Patricia De Bellis (cuenta Pershing ROJ900554,
+ * apodada "Albojer") — ahí vive la planilla "Analisis Albojer". No confundir
+ * con el cliente "Albojer, Nicolas" (7877323), que es otro.
  *
- * Se busca por la URL de la carpeta y no por client_number porque el
- * registro de Patricia De Bellis (7877214) apunta a esa carpeta pero sin
- * drive_id/item_id; se toma cualquier cliente vinculado a esa carpeta que sí
- * los tenga.
+ * Mismo criterio que Iche: `client_number` como clave estable y, si cambiara,
+ * fallback por nombre fallando explícito si no hay exactamente 1 resultado.
  */
-const FOLDER_URL_SUFFIX = '/Clientes/Sandra/De%20Bellis'
+const ALBOJER_CLIENT_NUMBER = '7877214'
 
 export interface AlbojerClientFolder {
   driveId: string
@@ -18,17 +16,23 @@ export interface AlbojerClientFolder {
 }
 
 export async function getAlbojerClientFolder(): Promise<AlbojerClientFolder> {
-  const { rows } = await pool.query<{ drive_id: string; item_id: string }>(
-    `select distinct drive_id, item_id from clients
-     where onedrive_folder_url ilike '%' || $1
-       and drive_id is not null and item_id is not null`,
-    [FOLDER_URL_SUFFIX]
-  )
-  if (rows.length === 0) {
-    throw new Error('No hay ningún cliente vinculado a la carpeta "Clientes/Sandra/De Bellis" con drive_id/item_id de OneDrive.')
+  let candidates = (await getClients(ALBOJER_CLIENT_NUMBER)).filter(c => c.client_number === ALBOJER_CLIENT_NUMBER)
+
+  if (candidates.length === 0) {
+    const byName = await getClients('De Bellis')
+    candidates = byName.filter(c => /patricia/i.test(c.first_name ?? '') && /de\s*bellis/i.test(c.last_name ?? ''))
   }
-  if (rows.length > 1) {
-    throw new Error(`La carpeta "Clientes/Sandra/De Bellis" aparece con ${rows.length} IDs de OneDrive distintos — hace falta revisar los vínculos de clientes.`)
+
+  if (candidates.length === 0) {
+    throw new Error('No se encontró a Patricia De Bellis en la tabla clients (ni por client_number "7877214" ni por nombre).')
   }
-  return { driveId: rows[0].drive_id, itemId: rows[0].item_id }
+  if (candidates.length > 1) {
+    throw new Error(`Hay ${candidates.length} clientes que matchean "Patricia De Bellis" — hace falta desambiguar a mano antes de continuar.`)
+  }
+
+  const client = candidates[0]
+  if (!client.drive_id || !client.item_id) {
+    throw new Error('Patricia De Bellis existe en clients pero no tiene vinculada su carpeta de OneDrive (drive_id/item_id).')
+  }
+  return { driveId: client.drive_id, itemId: client.item_id }
 }
