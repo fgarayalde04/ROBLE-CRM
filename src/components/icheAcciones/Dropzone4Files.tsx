@@ -5,9 +5,16 @@ import { useRef, useState } from 'react'
 interface Props {
   onSubmit: (files: File[]) => void
   loading: boolean
+  expected?: number
+  hint?: string
 }
 
-export default function Dropzone4Files({ onSubmit, loading }: Props) {
+export default function Dropzone4Files({
+  onSubmit,
+  loading,
+  expected = 4,
+  hint = 'Soltá acá los 4 archivos del mes (Unrealized Pershing, Activity Pershing, Holdings Morgan, Activity Morgan) — el sistema detecta cuál es cuál. Podés subirlos de a uno, cada archivo nuevo se suma a los anteriores.',
+}: Props) {
   const [files, setFiles] = useState<File[]>([])
   const [dragOver, setDragOver] = useState(false)
   const [readError, setReadError] = useState<string | null>(null)
@@ -57,9 +64,7 @@ export default function Dropzone4Files({ onSubmit, loading }: Props) {
           dragOver ? 'border-[#3A3A3C] bg-gray-50' : 'border-gray-300'
         }`}
       >
-        <p className="text-sm text-gray-600">
-          Soltá acá los 4 archivos del mes (Unrealized Pershing, Activity Pershing, Holdings Morgan, Activity Morgan) — el sistema detecta cuál es cuál. Podés subirlos de a uno, cada archivo nuevo se suma a los anteriores.
-        </p>
+        <p className="text-sm text-gray-600">{hint}</p>
         <input
           ref={inputRef}
           type="file"
@@ -94,11 +99,11 @@ export default function Dropzone4Files({ onSubmit, loading }: Props) {
       )}
 
       <button
-        disabled={files.length !== 4 || loading}
+        disabled={files.length !== expected || loading}
         onClick={() => onSubmit(files)}
         className="mt-4 rounded-md bg-[#3A3A3C] px-4 py-2 text-sm font-medium text-white disabled:opacity-40"
       >
-        {loading ? 'Procesando…' : `Analizar (${files.length}/4 archivos)`}
+        {loading ? 'Procesando…' : `Analizar (${files.length}/${expected} archivos)`}
       </button>
     </div>
   )

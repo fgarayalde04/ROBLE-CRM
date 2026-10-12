@@ -22,9 +22,9 @@ function downloadXlsx(fileName: string, fileBase64: string) {
   URL.revokeObjectURL(url)
 }
 
-export default function PreviewTables({ preview, fileName, uploadedItem, fileBase64, warnings }: GenerateResponse) {
-  const realizedChartData = preview.resumen.slice(0, 4).map(r => ({ name: r.label.replace('Cerradas ', ''), ganancia: r.gainLoss }))
-  const actualesChartData = preview.resumen.slice(4).map(r => ({ name: r.label.replace('Actuales ', ''), Costo: r.cost, 'Valor de mercado': r.value }))
+export default function PreviewTables({ preview, fileName, uploadedItem, fileBase64, warnings, downloadHref = '/api/admin/planillas/iche-acciones/download' }: GenerateResponse & { downloadHref?: string }) {
+  const realizedChartData = preview.resumen.filter(r => r.label.startsWith('Cerradas ')).map(r => ({ name: r.label.replace('Cerradas ', ''), ganancia: r.gainLoss }))
+  const actualesChartData = preview.resumen.filter(r => r.label.startsWith('Actuales ')).map(r => ({ name: r.label.replace('Actuales ', ''), Costo: r.cost, 'Valor de mercado': r.value }))
 
   return (
     <div className="space-y-8">
@@ -39,7 +39,7 @@ export default function PreviewTables({ preview, fileName, uploadedItem, fileBas
           </button>
         ) : (
           <a
-            href="/api/admin/planillas/iche-acciones/download"
+            href={downloadHref}
             className="rounded-md bg-[#1B4332] px-3 py-1.5 text-xs font-medium text-white"
           >
             Descargar Excel

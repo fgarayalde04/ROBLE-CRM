@@ -10,7 +10,19 @@ type Step = 'upload' | 'questions' | 'preview'
 
 type PersistedResult = Omit<GenerateResponse, 'fileBase64'> & { generatedAt: string }
 
-export default function IcheAccionesWizard({ initialResult }: { initialResult: PersistedResult | null }) {
+interface Props {
+  initialResult: PersistedResult | null
+  // p.ej. '/api/admin/planillas/iche-acciones' — de ahí cuelgan reconcile,
+  // generate y download.
+  apiBase: string
+  fileCount: number
+  dropzoneHint: string
+}
+
+// Wizard compartido por las planillas de acciones (Iche, Albojer): subir los
+// archivos del mes, responder las preguntas (chino/indio, cierres) y ver el
+// preview del Excel generado.
+export default function AccionesWizard({ initialResult, apiBase, fileCount, dropzoneHint }: Props) {
   const [step, setStep] = useState<Step>(initialResult ? 'preview' : 'upload')
   const [plan, setPlan] = useState<ReconcilePlan | null>(null)
   const [result, setResult] = useState<GenerateResponse | PersistedResult | null>(initialResult)
@@ -23,7 +35,7 @@ export default function IcheAccionesWizard({ initialResult }: { initialResult: P
     try {
       const form = new FormData()
       files.forEach(f => form.append('files', f))
-      const res = await fetch('/api/admin/planillas/iche-acciones/reconcile', { method: 'POST', body: form })
+      const res = await fetch(`${apiBase}/reconcile`, { method: 'POST', body: form })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Error desconocido')
 
@@ -36,7 +48,7 @@ export default function IcheAccionesWizard({ initialResult }: { initialResult: P
     } catch (err: any) {
       setError(
         err instanceof TypeError
-          ? 'No se pudieron enviar los archivos al servidor (el navegador cortó la conexión antes de recibir respuesta). Recargá la página, volvé a elegir los 4 archivos y reintentá.'
+          ? `No se pudieron enviar los archivos al servidor (el navegador cortó la conexión antes de recibir respuesta). Recargá la página, volvé a elegir los ${fileCount} archivos y reintentá.`
           : err.message
       )
     } finally {
@@ -48,7 +60,7 @@ export default function IcheAccionesWizard({ initialResult }: { initialResult: P
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch('/api/admin/planillas/iche-acciones/generate', {
+      const res = await fetch(`${apiBase}/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ plan: planToUse, answers }),
@@ -70,7 +82,7 @@ export default function IcheAccionesWizard({ initialResult }: { initialResult: P
         <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">{error}</div>
       )}
 
-      {step === 'upload' && <Dropzone4Files onSubmit={handleUpload} loading={loading} />}
+      {step === 'upload' && <Dropzone4Files onSubmit={handleUpload} loading={loading} expected={fileCount} hint={dropzoneHint} />}
 
       {step === 'questions' && plan && (
         <QuestionsForm
@@ -95,7 +107,7 @@ export default function IcheAccionesWizard({ initialResult }: { initialResult: P
               Subir archivos de un mes nuevo
             </button>
           </div>
-          <PreviewTables {...result} />
+          <PreviewTables {...result} downloadHref={`${apiBase}/download`} />
         </>
       )}
     </div>

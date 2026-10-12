@@ -133,3 +133,21 @@ describe('Activity de Pershing (cantidad y precio en el texto de ACTIVITY)', () 
     expect(qs.map(q => q.type === 'roundtrip_close' && [q.quantity, q.closingDate])).toEqual([[100, '2026-09-15'], [50, '2026-09-25']])
   })
 })
+
+describe('Unrealized de Pershing con Symbol (sin CUSIP)', () => {
+  it('matchea por símbolo y completa lotes sin fecha', () => {
+    const seeded: OpenPosition = { id: '9', analyst: 'INDIO', ticker: 'AMPX', cusip: null, description: 'AMPRIUS TECH', source: 'pershing',
+      lots: [{ quantity: 4700, unitCost: 12.77, tradeDate: null }], lastPrice: 10 }
+    const row = pershingRow({ cusip: '', symbol: 'AMPX', description: 'AMPRIUS TECHNOLOGIES INC COM', quantity: 4700, originalTotalCost: 60037.73, marketValue: 47533.45,
+      lots: [{ quantity: 2270, unitCost: 13.33, tradeDate: '2025-10-16' }, { quantity: 2430, unitCost: 12.25, tradeDate: '2025-10-17' }] })
+    const plan = reconcile([seeded], [row], [], [], [])
+    expect(plan.pendingQuestions).toHaveLength(0)
+    expect(plan.changes.find(c => c.kind === 'position_fix')).toMatchObject({ id: '9', newLots: row.lots })
+    expect(plan.changes.find(c => c.kind === 'price_update')).toMatchObject({ ticker: 'AMPX', cusip: '' })
+  })
+
+  it('ticker nuevo usa el Symbol del archivo y toma ADRs', () => {
+    const row = pershingRow({ cusip: '', symbol: 'WKEY', assetCategory: 'American Depository Receipt / Global Depository Receipt (Common)' })
+    expect(reconcile([], [row], [], [], []).pendingQuestions[0]).toMatchObject({ type: 'assign_analyst', suggestedTicker: 'WKEY', cusip: null })
+  })
+})

@@ -15,6 +15,8 @@ import type { PershingUnrealizedRow } from './pershingUnrealizedParser'
 import type { ClosedPosition, IcheQuestion, Lot, OpenPosition, ReconcilePlan, TickerChange } from './types'
 
 const PERSHING_ASSET_CATEGORIES = new Set(['Common Stocks', 'Exchange-Traded Funds'])
+// ADRs (p.ej. "American Depository Receipt / Global Depository Receipt (Common)").
+const isPershingStock = (category: string) => PERSHING_ASSET_CATEGORIES.has(category) || /depository receipt/i.test(category)
 const MORGAN_PRODUCT_TYPES = new Set(['Stocks / Options', 'ETFs / CEFs'])
 
 function normDesc(s: string): string {
@@ -106,7 +108,7 @@ export function reconcile(
     return (fromMorgan ?? fromOpen ?? fromActivity ?? knownTickers.get(key) ?? null)?.trim().toUpperCase() ?? null
   }
 
-  const pershingStocks = pershingRows.filter(r => PERSHING_ASSET_CATEGORIES.has(r.assetCategory))
+  const pershingStocks = pershingRows.filter(r => isPershingStock(r.assetCategory))
 
   // Reparación de filas ya guardadas con datos malos de corridas anteriores:
   // ticker = CUSIP (Pershing no trae ticker) y fechas de compra inválidas.
@@ -119,11 +121,19 @@ export function reconcile(
       const resolved = resolveTicker(p.cusip ?? p.ticker)
       if (resolved && resolved !== p.ticker.toUpperCase()) { newTicker = resolved; ticker = resolved }
     }
-    if (p.source === 'pershing' && p.lots.some(l => !isValidDate(l.tradeDate))) {
-      const row = p.cusip ? pershingStocks.find(r => r.cusip === p.cusip) : undefined
+    // También se completan lotes sin fecha (p.ej. posiciones "Multiple" del
+    // seed inicial) con los lotes reales de Pershing si la cantidad coincide.
+    const invalidDates = p.lots.some(l => !isValidDate(l.tradeDate))
+    const missingDates = p.lots.some(l => l.tradeDate == null)
+    if (p.source === 'pershing' && (invalidDates || missingDates)) {
+      const row = (p.cusip ? pershingStocks.find(r => r.cusip === p.cusip) : undefined) ??
+        pershingStocks.find(r => r.symbol?.toUpperCase() === p.ticker.toUpperCase()) ??
+        pershingStocks.find(r => normDesc(r.description) === normDesc(p.description)) ??
+          pershingStocks.find(r => normDesc(r.description).slice(0, 15) === normDesc(p.description).slice(0, 15))
       const qty = p.lots.reduce((s, l) => s + l.quantity, 0)
-      if (row && Math.abs(row.quantity - qty) < QTY_EPS) { newLots = row.lots; lots = row.lots }
-      else warnings.push(`${p.ticker}: tiene fechas de compra inválidas y no se pudieron reparar solas — revisar a mano.`)
+      const fileLotsDated = !!row && row.lots.length > 0 && row.lots.every(l => l.tradeDate != null)
+      if (row && Math.abs(row.quantity - qty) < QTY_EPS && (invalidDates || fileLotsDated)) { newLots = row.lots; lots = row.lots }
+      else if (invalidDates) warnings.push(`${p.ticker}: tiene fechas de compra inválidas y no se pudieron reparar solas — revisar a mano.`)
     }
     if (newTicker || newLots) {
       changes.push({ kind: 'position_fix', id: p.id, ticker: p.ticker, analyst: p.analyst, newTicker, newLots })
@@ -138,18 +148,20 @@ export function reconcile(
 
   // ── Pershing: match por CUSIP, luego por descripción ──────────────────────
   for (const row of pershingStocks) {
-    let match = pershingOpen.find(p => p.cusip && p.cusip === row.cusip) ?? null
+    const symbol = row.symbol?.toUpperCase() ?? null
+    let match = (row.cusip ? pershingOpen.find(p => p.cusip && p.cusip === row.cusip) : null) ?? null
+    if (!match && symbol) match = pershingOpen.find(p => p.ticker.toUpperCase() === symbol) ?? null
     if (!match) match = matchByDescription(row.description, pershingOpen)
 
     if (!match) {
-      const resolved = resolveTicker(row.cusip)
+      const resolved = symbol ?? (row.cusip ? resolveTicker(row.cusip) : null)
       if (!resolved) warnings.push(`${row.description}: no se encontró el ticker del CUSIP ${row.cusip} — ingresarlo a mano en el formulario.`)
       pendingQuestions.push({
         id: nextQuestionId(),
         type: 'assign_analyst',
         suggestedTicker: resolved ?? row.cusip,
         tickerEditable: true,
-        cusip: row.cusip,
+        cusip: row.cusip || null,
         description: row.description,
         quantity: row.quantity,
         unitCost: row.unitCost,
@@ -309,7 +321,7 @@ export function reconcile(
     ...morganStocks.map(p => (p.symbol ?? '').toUpperCase()),
     ...pendingQuestions.flatMap(q => (q.type === 'assign_analyst' ? [q.suggestedTicker.toUpperCase()] : [])),
   ])
-  const heldCusips = new Set(pershingStocks.map(r => r.cusip.toUpperCase()))
+  const heldCusips = new Set(pershingStocks.map(r => r.cusip.toUpperCase()).filter(Boolean))
   const fmt = (n: number) => n.toLocaleString('en-US', { maximumFractionDigits: 4 })
 
   const openTickers = new Set(currentOpen.map(p => p.ticker.toUpperCase()))

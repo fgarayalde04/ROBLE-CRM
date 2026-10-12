@@ -12,20 +12,20 @@ import type { Analyst, ClosedPosition, OpenPosition, PreviewRow, PreviewSummaryR
 
 // Paleta verde (estándar desde set-2026, ver diseno.md — inspirada en el
 // reporte "Bonos & Renta Fija" ROJ900877 que ya usa la firma).
-const DARK_GREEN = 'FF1B4332'
-const LIGHT_GREEN = 'FFDCE9D8'
-const GREEN_TEXT = 'FF1B4332'
-const GRAY_TEXT = 'FF6B7280'
-const RED_TEXT = 'FF8C1D1D'
+export const DARK_GREEN = 'FF1B4332'
+export const LIGHT_GREEN = 'FFDCE9D8'
+export const GREEN_TEXT = 'FF1B4332'
+export const GRAY_TEXT = 'FF6B7280'
+export const RED_TEXT = 'FF8C1D1D'
 const BAND_FILL = 'FFF7FAF7'
-const BORDER_COLOR = 'FFD9D9D9'
-const FONT_NAME = 'Arial'
-const MONEY_FMT = '$#,##0.00;[RED]-$#,##0.00'
-const PCT_FMT = '0.00%'
+export const BORDER_COLOR = 'FFD9D9D9'
+export const FONT_NAME = 'Arial'
+export const MONEY_FMT = '$#,##0.00;[RED]-$#,##0.00'
+export const PCT_FMT = '0.00%'
 
 const hairBottom = { bottom: { style: 'hair' as const, color: { argb: BORDER_COLOR } } }
 
-function addSubtitleAndLogo(wb: ExcelJS.Workbook, ws: ExcelJS.Worksheet, lastCol: number) {
+export function addSubtitleAndLogo(wb: ExcelJS.Workbook, ws: ExcelJS.Worksheet, lastCol: number) {
   const subCol = Math.max(1, lastCol - 2)
   ws.mergeCells(1, subCol, 1, lastCol)
   const sub = ws.getCell(1, subCol)
@@ -40,14 +40,14 @@ function addSubtitleAndLogo(wb: ExcelJS.Workbook, ws: ExcelJS.Worksheet, lastCol
   ws.addImage(imageId, { tl: { col: subCol - 1, row: 1 } as any, ext: { width: 110, height: 30 } })
 }
 
-function plainTitle(ws: ExcelJS.Worksheet, row: number, text: string) {
+export function plainTitle(ws: ExcelJS.Worksheet, row: number, text: string) {
   const cell = ws.getCell(row, 1)
   cell.value = text
   cell.font = { name: FONT_NAME, size: 13, bold: true, color: { argb: 'FF000000' } }
   ws.getRow(row).height = 24
 }
 
-function headerRow(ws: ExcelJS.Worksheet, row: number, headers: string[]) {
+export function headerRow(ws: ExcelJS.Worksheet, row: number, headers: string[]) {
   headers.forEach((h, i) => {
     if (!h) return
     const cell = ws.getCell(row, i + 1)
@@ -59,21 +59,21 @@ function headerRow(ws: ExcelJS.Worksheet, row: number, headers: string[]) {
   ws.getRow(row).height = 26
 }
 
-function styleDataCell(cell: ExcelJS.Cell, band: boolean, numFmt?: string, muted?: boolean) {
+export function styleDataCell(cell: ExcelJS.Cell, band: boolean, numFmt?: string, muted?: boolean) {
   cell.font = { name: FONT_NAME, size: 10, color: { argb: muted ? GRAY_TEXT : 'FF000000' } }
   cell.border = hairBottom
   cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: band ? BAND_FILL : 'FFFFFFFF' } }
   if (numFmt) cell.numFmt = numFmt
 }
 
-function styleTotalCell(cell: ExcelJS.Cell, numFmt?: string) {
+export function styleTotalCell(cell: ExcelJS.Cell, numFmt?: string) {
   cell.font = { name: FONT_NAME, size: 10, bold: true, color: { argb: GREEN_TEXT } }
   cell.border = { top: { style: 'thin', color: { argb: DARK_GREEN } } }
   cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: LIGHT_GREEN } }
   if (numFmt) cell.numFmt = numFmt
 }
 
-function resetView(ws: ExcelJS.Worksheet) {
+export function resetView(ws: ExcelJS.Worksheet) {
   // El workbook siempre se arma de cero (nunca releyendo un .xlsx anterior),
   // así que una hoja recién creada ya arranca en A1 sin scroll ni panes
   // heredados — alcanza con fijar el estado 'normal'. topLeftCell no es una
@@ -250,7 +250,7 @@ function buildAbiertasSheet(wb: ExcelJS.Workbook, analyst: Analyst, positions: O
   return { totalCost, totalValue, rows: previewRows }
 }
 
-function colLetter(n: number): string {
+export function colLetter(n: number): string {
   let s = ''
   while (n > 0) {
     const m = (n - 1) % 26

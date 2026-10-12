@@ -30,6 +30,10 @@ export function detectIcheFileKind(buffer: ArrayBuffer): IcheFileKind {
       if (cells.includes('asset category') && cells.includes('trade date') && !cells.includes('symbol')) {
         return 'pershing_unrealized'
       }
+      // Otra vista del mismo reporte: con Symbol y Security Type.
+      if (cells.includes('symbol') && cells.includes('security type') && cells.includes('trade date') && cells.includes('unit cost')) {
+        return 'pershing_unrealized'
+      }
     }
   }
 
@@ -77,13 +81,13 @@ export interface DetectAllResult {
 
 const REQUIRED: IcheFileKind[] = ['pershing_unrealized', 'pershing_activity', 'morgan_holdings', 'morgan_activity']
 
-export function detectAll(files: { fileName: string; buffer: ArrayBuffer }[]): DetectAllResult {
+export function detectAll(files: { fileName: string; buffer: ArrayBuffer }[], required: IcheFileKind[] = REQUIRED): DetectAllResult {
   const results = files.map(f => ({ fileName: f.fileName, kind: detectIcheFileKind(f.buffer) }))
   const byKind = new Map<IcheFileKind, number>()
   for (const r of results) byKind.set(r.kind, (byKind.get(r.kind) ?? 0) + 1)
 
-  const missing = REQUIRED.filter(k => !byKind.get(k))
-  const duplicated = REQUIRED.filter(k => (byKind.get(k) ?? 0) > 1)
+  const missing = required.filter(k => !byKind.get(k))
+  const duplicated = required.filter(k => (byKind.get(k) ?? 0) > 1)
 
   return { results, missing, duplicated }
 }
