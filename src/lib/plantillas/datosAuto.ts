@@ -50,7 +50,7 @@ const ISIN_RE = /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/
 // devuelve lo guardado si tiene menos de 15 días, con pausa si el login falla),
 // así que no multiplica logins.
 // null: no está en Davinci; undefined: Davinci no disponible (no seguir probando otros fondos).
-async function buscarEnDavinci(i: InstrumentoOperado): Promise<Rendimientos | null | undefined> {
+export async function buscarEnDavinci(i: InstrumentoOperado): Promise<Rendimientos | null | undefined> {
   const isins = Array.from(new Set([i.isin, ...(i.variantes ?? []).map((v) => v.isin)].filter((x) => ISIN_RE.test(x))))
   for (const isin of isins) {
     try {
