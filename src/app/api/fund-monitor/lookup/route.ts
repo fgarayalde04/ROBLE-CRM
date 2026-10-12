@@ -1,17 +1,18 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
-import { getFundReturnsByIsin } from '@/lib/db/fundMonitor'
+import { getFundReturnsByIsin, getLookupCache } from '@/lib/db/fundMonitor'
 import { lookupDavinciLive } from '@/lib/fundMonitor/liveLookup'
+import type { DavinciFundReturns } from '@/lib/fundMonitor/davinciScraper'
 
 export const maxDuration = 120 // la búsqueda en vivo abre un browser headless y puede esperar en cola
 
 const toNum = (v: unknown) => (v != null ? Number(v) : null)
 
 // Usado por Propuestas (selección de fondo / edición de ISIN) para autocompletar
-// los rendimientos. Primero el Monitor de Fondos (ya sincronizado con Davinci);
-// si el fondo no está ahí, o no tiene datos, se consulta Davinci en vivo — los
-// rendimientos se traen siempre que Davinci tenga el fondo, esté o no en el
-// Monitor.
+// los rendimientos. Siempre primero lo que ya está en la base: el Monitor de
+// Fondos y las búsquedas guardadas (lo más operado y propuestas anteriores),
+// que el sync del 15 y fin de mes mantiene al día. Solo si el fondo no está en
+// la base se busca puntualmente en Davinci, y queda guardado.
 export async function GET(req: Request) {
   const session = await getSession()
   if (!session) {
@@ -40,12 +41,16 @@ export async function GET(req: Request) {
     })
   }
 
-  const live = await lookupDavinciLive(isin, nombre ?? row?.nombre)
+  // Búsqueda guardada con datos, sea de cuando sea
+  const guardado = await getLookupCache(isin.toUpperCase()).catch(() => null)
+  const live = guardado?.data
+    ? { status: 'ok' as const, data: (typeof guardado.data === 'string' ? JSON.parse(guardado.data) : guardado.data) as DavinciFundReturns }
+    : await lookupDavinciLive(isin, nombre ?? row?.nombre)
   if (live.status === 'ok') {
     const d = live.data
     return NextResponse.json({
       found: true,
-      source: 'davinci_live',
+      source: guardado?.data ? 'guardado' : 'davinci_live',
       nombre: d.nombreDavinci,
       returns: {
         return_ytd: d.ytd, return_1y: d.r1a, return_3y: d.r3a, return_5y: d.r5a,

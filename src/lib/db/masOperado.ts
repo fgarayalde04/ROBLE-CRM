@@ -267,6 +267,11 @@ export function nombreFondoMostrado(nombre: string) {
     .trim()
 }
 
+/** Clave de davinci_lookup_cache para un fondo buscado por nombre (sin ISIN, o sin resultado por ISIN). */
+export function claveNombreDavinci(nombre: string) {
+  return `NM:${nombreFondoMostrado(nombre)}`
+}
+
 /** Clave para reconocer el mismo fondo aunque cambie la clase o se escriba con/sin el paraguas. */
 export function familiaFondo(nombre: string) {
   const texto = sinAcentos(nombreSinClase(nombre))
@@ -423,7 +428,8 @@ async function completar(ranking: RankingMasOperado) {
     // Davinci (propuestas) y quedaron guardadas. Solo se lee lo guardado; nunca
     // se dispara una búsqueda nueva (Davinci bloquea la cuenta por logins).
     const faltan = fondos.filter((f) => !f.rendimientos)
-    const isins = Array.from(new Set(faltan.flatMap((f) => [f.isin, ...(f.variantes ?? []).map((v) => v.isin)]).filter(Boolean)))
+    const clavesDe = (f: InstrumentoOperado) => [f.isin, ...(f.variantes ?? []).map((v) => v.isin)].filter(Boolean).map((i) => i.toUpperCase()).concat(claveNombreDavinci(f.nombre))
+    const isins = Array.from(new Set(faltan.flatMap(clavesDe)))
     if (isins.length) {
       try {
         const { rows } = await pool.query(
@@ -435,7 +441,7 @@ async function completar(ranking: RankingMasOperado) {
           return [r.isin as string, { ...d, fetched_at: r.fetched_at }]
         }))
         for (const f of faltan) {
-          const d = [f.isin, ...(f.variantes ?? []).map((v) => v.isin)].map((i) => porIsin.get(i)).find(Boolean)
+          const d = clavesDe(f).map((i) => porIsin.get(i)).find(Boolean)
           if (!d) continue
           const n = (v: unknown) => (v == null || Number.isNaN(Number(v)) ? null : Number(v))
           f.rendimientos = {

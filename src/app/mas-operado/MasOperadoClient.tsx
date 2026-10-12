@@ -14,7 +14,7 @@ const CLASES: { key: ClaseActivo; label: string; plantilla?: string }[] = [
 const segmento = (activo: boolean) =>
   `px-3 py-1 rounded ${activo ? 'bg-[#2D3F52] text-white' : 'text-gray-600 hover:bg-gray-50'}`
 
-export default function MasOperadoClient({ puedeCrearPlantilla, puedeUnir }: { puedeCrearPlantilla: boolean; puedeUnir: boolean }) {
+export default function MasOperadoClient({ puedeCrearPlantilla, puedeUnir, puedeBuscar }: { puedeCrearPlantilla: boolean; puedeUnir: boolean; puedeBuscar: boolean }) {
   const router = useRouter()
   const [periodo, setPeriodo] = useState<Periodo>(() => periodoDe('todo', hoyMontevideo()))
   const [clase, setClase] = useState<ClaseActivo>('fondos')
@@ -25,6 +25,7 @@ export default function MasOperadoClient({ puedeCrearPlantilla, puedeUnir }: { p
   const [error, setError] = useState<string | null>(null)
   const [creando, setCreando] = useState(false)
   const [recarga, setRecarga] = useState(0)
+  const [buscando, setBuscando] = useState(false)
 
   useEffect(() => {
     let vigente = true
@@ -64,6 +65,28 @@ export default function MasOperadoClient({ puedeCrearPlantilla, puedeUnir }: { p
     }
   }
 
+  // Búsqueda puntual en Davinci de los rendimientos que faltan en los 10 primeros del período
+  async function buscarRendimientos() {
+    if (!confirm(`Buscar en Davinci los rendimientos que faltan en los 10 primeros fondos comprados y vendidos de ${periodo.label}? Puede tardar unos minutos.`)) return
+    setBuscando(true)
+    try {
+      const res = await fetch('/api/mas-operado/rendimientos', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ desde: periodo.desde, hasta: periodo.hasta, limite: 10 }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'No se pudo buscar')
+      alert(data.buscados === 0
+        ? 'Los 10 primeros ya tienen rendimientos.'
+        : `Encontrados: ${data.encontrados.length} de ${data.buscados}.${data.sinDatos.length ? `\nSin datos en Davinci: ${data.sinDatos.join(', ')}` : ''}`)
+      setRecarga((n) => n + 1)
+    } catch (e: any) {
+      alert(e.message)
+    } finally {
+      setBuscando(false)
+    }
+  }
+
   return (
     <div className="p-4 md:p-6 lg:p-8">
       <div className="flex items-start justify-between gap-4 flex-wrap mb-5">
@@ -73,6 +96,15 @@ export default function MasOperadoClient({ puedeCrearPlantilla, puedeUnir }: { p
             Lo que más se compró y vendió en la empresa: cuenta las mismas líneas que el Blotter (cada activo de cada orden), sin las canceladas.
           </p>
         </div>
+        <div className="flex items-center gap-2">
+        {puedeBuscar && clase === 'fondos' && (
+          <button
+            type="button" onClick={buscarRendimientos} disabled={buscando || cargando}
+            className="px-3 py-1.5 text-sm border border-[#2D3F52] text-[#2D3F52] rounded-md hover:bg-gray-50 disabled:opacity-40"
+          >
+            {buscando ? 'Buscando en Davinci…' : 'Buscar rendimientos que faltan'}
+          </button>
+        )}
         {puedeCrearPlantilla && plantilla && (
           <button
             type="button" onClick={armarPlantilla} disabled={creando || cargando || !datos || datos.compras.length + datos.ventas.length === 0}
@@ -81,6 +113,7 @@ export default function MasOperadoClient({ puedeCrearPlantilla, puedeUnir }: { p
             {creando ? 'Creando…' : `Armar plantilla de ${clase} más comprados`}
           </button>
         )}
+        </div>
       </div>
 
       {/* Filtros en una sola línea: período · tipo de activo · compras/ventas · unir fondos */}
@@ -270,7 +303,7 @@ function Tabla({ filas, clase, puedeUnir, otros, onCambio }: {
                           <p className="text-[10px] text-gray-400 pt-1">
                             {f.rendimientos
                               ? `Rendimientos: ${f.rendimientos.fuente}${f.rendimientos.fecha ? ` · datos al ${f.rendimientos.fecha}` : ''}`
-                              : 'Sin rendimientos todavía: no está en el Monitor; se busca en Davinci el último día del mes y queda guardado. Si es el mismo fondo que otro con datos, unilo con ese.'}
+                              : 'Sin rendimientos todavía: no está en el Monitor; se busca en Davinci el 15 y el último día del mes y queda guardado. Si es el mismo fondo que otro con datos, unilo con ese.'}
                           </p>
                         )}
                       </div>

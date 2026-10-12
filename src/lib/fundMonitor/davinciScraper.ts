@@ -214,7 +214,8 @@ async function searchAlternativesByName(page: Page, nombre: string): Promise<Dav
  * null si el fondo no aparece en Davinci (sin cobertura).
  */
 export async function searchFundReturns(page: Page, isin: string, nombre?: string): Promise<DavinciFundReturns | null> {
-  const byIsin = await searchExplorer(page, isin)
+  // Sin un ISIN válido (fondo cargado sin ISIN) se va directo al nombre
+  const byIsin = /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/i.test(isin.trim()) ? await searchExplorer(page, isin) : []
   const isinHit = byIsin.length > 0 ? parseRow(byIsin[0]) : null
   if (isinHit) return isinHit
 

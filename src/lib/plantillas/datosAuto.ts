@@ -1,5 +1,5 @@
 import { listFundsWithReturns } from '@/lib/db/fundMonitor'
-import { getRankingMasOperado, type InstrumentoOperado, type Rendimientos } from '@/lib/db/masOperado'
+import { claveNombreDavinci, getRankingMasOperado, type InstrumentoOperado, type Rendimientos } from '@/lib/db/masOperado'
 import { lookupDavinciLive } from '@/lib/fundMonitor/liveLookup'
 import { labelRango, mesParaInforme } from '@/lib/masOperado/periodos'
 import {
@@ -26,7 +26,6 @@ export async function filasMasOperado(
       for (const i of compras) {
         if (!i.rendimientos || i.rendimientos.vencido) i.rendimientos = (await buscarEnDavinci(i)) ?? i.rendimientos
       }
-      await guardarRendimientosOperados(hasta)
     }
     const fila = (i: InstrumentoOperado): FilaFondoOperado => {
       const r = i.rendimientos
@@ -45,37 +44,19 @@ export async function filasMasOperado(
 
 const ISIN_RE = /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/
 
-// En la misma pasada (misma sesión de Davinci, un solo login) se buscan todos
-// los fondos que se operaron alguna vez — comprados y vendidos, no solo los del
-// reporte — que no tienen datos o los tienen vencidos. Queda guardado en
-// davinci_lookup_cache y la pantalla de lo más operado lo muestra.
-async function guardarRendimientosOperados(hasta: string) {
-  try {
-    const ranking = await getRankingMasOperado('2000-01-01', hasta, 60)
-    const vistos = new Set<string>()
-    for (const i of [...ranking.fondos.compras, ...ranking.fondos.ventas]) {
-      if (vistos.has(i.key)) continue
-      vistos.add(i.key)
-      if (i.rendimientos && !i.rendimientos.vencido) continue
-      const r = await buscarEnDavinci(i)
-      if (r === undefined) return     // Davinci no disponible: no seguir
-    }
-  } catch (e: any) {
-    console.error('[plantillas] rendimientos de lo operado', e.message)
-  }
-}
-
 // Fondo que no está en el Monitor ni tiene una búsqueda guardada de menos de 15
 // días: se busca en Davinci por el ISIN de cada clase operada hasta encontrar
-// uno. Usa la misma búsqueda que las propuestas (una sola sesión, en cola, que
+// uno y, si ninguno aparece (o no tiene ISIN), por el nombre. Usa la misma búsqueda que las propuestas (una sola sesión, en cola, que
 // devuelve lo guardado si tiene menos de 15 días, con pausa si el login falla),
 // así que no multiplica logins.
 // null: no está en Davinci; undefined: Davinci no disponible (no seguir probando otros fondos).
-async function buscarEnDavinci(i: InstrumentoOperado): Promise<Rendimientos | null | undefined> {
-  const isins = Array.from(new Set([i.isin, ...(i.variantes ?? []).map((v) => v.isin)].filter((x) => ISIN_RE.test(x))))
-  for (const isin of isins) {
+export async function buscarEnDavinci(i: InstrumentoOperado): Promise<Rendimientos | null | undefined> {
+  const isins = Array.from(new Set([i.isin, ...(i.variantes ?? []).map((v) => v.isin)].map((x) => x.toUpperCase()).filter((x) => ISIN_RE.test(x))))
+  // Por ISIN sin el nombre (así no se repite la búsqueda por nombre en cada clase); al final, por nombre
+  const intentos: [string, string | undefined][] = [...isins.map((x): [string, undefined] => [x, undefined]), [claveNombreDavinci(i.nombre), i.nombre]]
+  for (const [isin, nombre] of intentos) {
     try {
-      const r = await lookupDavinciLive(isin, i.nombre)
+      const r = await lookupDavinciLive(isin, nombre)
       if (r.status === 'unavailable') return undefined   // sin credenciales o Davinci en pausa: no seguir probando
       if (r.status !== 'ok') continue
       const d = r.data

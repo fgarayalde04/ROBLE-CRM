@@ -13,11 +13,14 @@ import {
   listActiveFunds, upsertFundReturns, markFundSyncIssue, getSyncState, markSyncAttempt, setLookupCache, getReturnsFetched, getLookupCaches,
 } from '@/lib/db/fundMonitor'
 import { fechaMontevideo, proximoCorte, ultimoCorte, vigente } from '@/lib/fundMonitor/cortes'
+import { claveNombreDavinci, getRankingMasOperado } from '@/lib/db/masOperado'
 
 // vigente: no se bajó en esta corrida, se usó lo guardado (menos de 15 días)
 export interface FundSyncRowResult { isin: string; nombre: string; status: 'ok' | 'no_source' | 'error'; error?: string; vigente?: boolean }
 export interface FundSyncResult {
   total: number; ok: number; no_source: number; error: number; vigentes: number; results: FundSyncRowResult[]
+  // Fondos operados (lo más operado) que no están en el Monitor: buscados y encontrados en esta corrida
+  operados?: { buscados: number; encontrados: number }
 }
 export interface FundSyncSkipped { skipped: true; reason: string }
 
@@ -26,10 +29,11 @@ export interface FundSyncSkipped { skipped: true; reason: string }
 //    buscar lo que tiene menos de 15 días, venga del sync, de Propuestas o de
 //    un alta en el Monitor.
 //  - El sync corre en dos cortes por mes, el 15 y el último día (Montevideo),
-//    y solo baja los fondos del Monitor que están vencidos o nunca se
-//    buscaron. Si no hay nada vencido no se loguea. Los fondos que no están en
-//    el Monitor se buscan solo cuando hacen falta (Propuestas, reporte de lo
-//    más operado), con la misma regla de 15 días.
+//    y baja los fondos del Monitor y los operados (lo más operado, comprados y
+//    vendidos) que están vencidos o nunca se buscaron, con el mismo login.
+//    Quedan guardados para Propuestas y las planillas. Si no hay nada vencido
+//    no se loguea. Los demás fondos se buscan solo cuando hacen falta
+//    (Propuestas, si no están en la base).
 //  - Un solo login por corrida. Un intento fallido no se reintenta hasta el
 //    día siguiente (Davinci bloquea la cuenta ante logins repetidos).
 // Las fechas se guardan en la base (davinci_sync_state y fetched_at), no en
@@ -82,6 +86,15 @@ export async function syncFundMonitor(opts?: { force?: boolean }): Promise<FundS
     fondosABajar.push(fund)
   }
 
+  // Fondos operados que no están en el Monitor y no tienen una búsqueda vigente
+  let operados: { nombre: string; claves: string[] }[] = []
+  try {
+    operados = await operadosABuscar(hoy)
+  } catch (e: any) {
+    console.error('[fund-monitor] No se pudieron leer los fondos operados:', e.message)
+  }
+  const op = { buscados: 0, encontrados: 0 }
+
   const resultado = (): FundSyncResult => ({
     total: funds.length,
     ok: results.filter(r => r.status === 'ok').length,
@@ -89,9 +102,10 @@ export async function syncFundMonitor(opts?: { force?: boolean }): Promise<FundS
     error: results.filter(r => r.status === 'error').length,
     vigentes: results.filter(r => r.vigente).length,
     results,
+    operados: op,
   })
 
-  if (!fondosABajar.length) {
+  if (!fondosABajar.length && !operados.length) {
     await markSyncAttempt(SYNC_KEY, true)
     return resultado()
   }
@@ -134,6 +148,24 @@ export async function syncFundMonitor(opts?: { force?: boolean }): Promise<FundS
         results.push({ isin: fund.isin, nombre: fund.nombre, status: 'error', error: e.message })
       }
     }
+
+    // Lo más operado: se prueba el ISIN de cada clase operada hasta encontrar
+    // uno y, si no, el nombre. Lo encontrado y lo no encontrado queda en
+    // davinci_lookup_cache.
+    for (const f of operados) {
+      op.buscados++
+      for (const isin of f.claves) {
+        try {
+          const porNombre = isin.startsWith('NM:')
+          const data = await searchFundReturns(page, porNombre ? '' : isin, porNombre ? f.nombre : undefined)
+          await setLookupCache(isin, data)
+          if (data) { op.encontrados++; break }
+        } catch (e: any) {
+          console.error(`[fund-monitor] Error (operado): ${isin} · ${f.nombre}:`, e.message)
+          break
+        }
+      }
+    }
   } catch (e: any) {
     // Un login fallido NO se reintenta en el día: el scheduler chequea cada 15
     // minutos y reintentar el login con la misma cuenta desde dev y prod hizo
@@ -145,6 +177,28 @@ export async function syncFundMonitor(opts?: { force?: boolean }): Promise<FundS
 
   await markSyncAttempt(SYNC_KEY, true)
   return resultado()
+}
+
+const ISIN_RE = /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/
+
+// Fondos operados alguna vez (hasta 60 comprados y 60 vendidos) sin
+// rendimientos o con una búsqueda vencida. Los del Monitor (o unidos a uno) ya
+// traen sus datos y quedan afuera.
+async function operadosABuscar(hoy: string) {
+  const ranking = await getRankingMasOperado('2000-01-01', hoy, 60)
+  const porClave = new Map<string, { nombre: string; claves: string[] }>()
+  for (const f of [...ranking.fondos.compras, ...ranking.fondos.ventas]) {
+    if (porClave.has(f.key) || (f.rendimientos && !f.rendimientos.vencido)) continue
+    const isins = Array.from(new Set([f.isin, ...(f.variantes ?? []).map((v) => v.isin)].map((i) => i.toUpperCase()).filter((i) => ISIN_RE.test(i))))
+    // Por ISIN y, si no aparece o no tiene, por nombre
+    porClave.set(f.key, { nombre: f.nombre, claves: [...isins, claveNombreDavinci(f.nombre)] })
+  }
+  // Uno que ya se buscó y no se encontró hace menos de 15 días no se vuelve a buscar
+  const cache = await getLookupCaches(Array.from(porClave.values()).flatMap((f) => f.claves))
+  return Array.from(porClave.values()).filter((f) => !f.claves.every((i) => {
+    const c = cache.get(i)
+    return c && !c.data && vigente(c.fetched_at, hoy)
+  }))
 }
 
 export type SingleFundSyncStatus = 'ok' | 'no_source' | 'error' | 'unavailable'

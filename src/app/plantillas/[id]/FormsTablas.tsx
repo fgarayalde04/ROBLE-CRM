@@ -218,7 +218,7 @@ function FondoManual({ f, subcategorias, onChange, onQuitar }: {
         r_ytd: r.return_ytd, r_1y: r.return_1y, r_3y: r.return_3y, r_5y: r.return_5y,
         y_2025: r.return_2025, y_2024: r.return_2024, y_2023: r.return_2023,
       })
-      setAviso(data.source === 'monitor' ? 'Rendimientos del Monitor de fondos.' : 'Rendimientos de Davinci.')
+      setAviso(data.source === 'monitor' ? 'Rendimientos del Monitor de fondos.' : data.source === 'guardado' ? 'Rendimientos guardados (búsqueda en Davinci).' : 'Rendimientos de Davinci.')
     } catch (e: any) {
       setAviso(e.message)
     } finally {
