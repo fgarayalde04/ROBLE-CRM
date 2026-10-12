@@ -8,7 +8,7 @@ import { sendPushNotification } from '@/lib/push/server'
 
 const NOTIF_TYPE = 'recordatorio_planillas'
 // Por mail para no depender de ids; se cambia con PLANILLAS_REMINDER_EMAILS (separados por coma).
-const DEFAULT_EMAILS = ['fgarayaldearrillaga@roblecapital.net']
+const DEFAULT_EMAILS = ['fgarayaldearrillaga@roblecapital.net', 'maria.carrau@roblecapital.net']
 
 // notifications.entity_id es uuid: uno fijo por mes (los dígitos del mes son hex válido).
 export function recordatorioEntityId(mes: string) {
