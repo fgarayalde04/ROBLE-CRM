@@ -4,6 +4,7 @@ import { unstable_noStore as noStore } from 'next/cache'
 import { getSession } from '@/lib/auth'
 import { positionsStore } from '@/lib/icheAcciones/db'
 import AccionesWizard from '@/components/icheAcciones/AccionesWizard'
+import HistoryList from '@/components/icheAcciones/HistoryList'
 
 export const metadata: Metadata = { title: 'Análisis Albojer' }
 export const dynamic = 'force-dynamic'
@@ -14,7 +15,8 @@ export default async function AlbojerPage() {
   const session = await getSession()
   if (!session || session.role !== 'admin') redirect('/')
 
-  const latest = await positionsStore('albojer').getLatestGeneration()
+  const store = positionsStore('albojer')
+  const [latest, history] = await Promise.all([store.getLatestGeneration(), store.listGenerations()])
 
   return (
     <div className="p-4 md:p-6 bg-[#F4F6F8] min-h-screen">
@@ -28,6 +30,7 @@ export default async function AlbojerPage() {
         fileCount={2}
         dropzoneHint="Soltá acá los 2 archivos de Pershing (Unrealized Gain/Loss y Activity) — el sistema detecta cuál es cuál. Podés subirlos de a uno."
       />
+      <HistoryList rows={history} apiBase="/api/admin/planillas/albojer" />
     </div>
   )
 }

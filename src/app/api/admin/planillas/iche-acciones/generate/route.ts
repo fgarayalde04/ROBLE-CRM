@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
 
   // Se guarda el preview aunque falle la subida a OneDrive: los cambios en
   // la base ya se aplicaron, así que igual conviene poder verlo después.
-  await logGeneration(fileName, uploadedItem, session.id ?? null, fullPreview, warnings)
+  await logGeneration(fileName, uploadedItem, session.id ?? null, fullPreview, warnings, buffer)
 
   const response: GenerateResponse = {
     fileName,

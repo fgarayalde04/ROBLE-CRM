@@ -37,6 +37,17 @@ export async function getCusipTickerMap(): Promise<Map<string, string>> {
 
 export type PositionsBook = 'iche' | 'albojer'
 
+export interface GenerationHistoryRow {
+  id: string
+  fileName: string
+  createdAt: string
+  webUrl: string | null
+  downloadable: boolean
+  isSeed: boolean
+  generatedByName: string | null
+  newCloses: number
+}
+
 /**
  * Mismas operaciones para cada planilla de acciones (Iche, Albojer): cada una
  * tiene sus propias tablas `<book>_open_positions` / `<book>_closed_positions`
@@ -174,13 +185,46 @@ export function positionsStore(book: PositionsBook) {
     item: { id: string; webUrl: string | null },
     userId: string | null,
     preview: GenerateResponse['preview'],
-    warnings: string[]
+    warnings: string[],
+    fileData: Buffer | null = null
   ): Promise<void> {
     await pool.query(
-      `insert into ${t.log} (file_name, onedrive_item_id, onedrive_web_url, generated_by, preview, warnings)
-       values ($1, $2, $3, $4, $5, $6)`,
-      [fileName, item.id || null, item.webUrl, userId, JSON.stringify(preview), JSON.stringify(warnings)]
+      `insert into ${t.log} (file_name, onedrive_item_id, onedrive_web_url, generated_by, preview, warnings, file_data)
+       values ($1, $2, $3, $4, $5, $6, $7)`,
+      [fileName, item.id || null, item.webUrl, userId, JSON.stringify(preview), JSON.stringify(warnings), fileData]
     )
+  }
+
+  // Historial de corridas (sin el .xlsx), más nuevas primero. La carga inicial
+  // (seed) se marca con "(carga inicial)" en el nombre y no tiene archivo.
+  async function listGenerations(): Promise<GenerationHistoryRow[]> {
+    const { rows } = await pool.query(
+      `select g.id, g.file_name, g.created_at, g.onedrive_web_url,
+              (g.file_data is not null or g.onedrive_item_id is not null) as downloadable,
+              (g.file_name like '%(carga inicial)') as is_seed, u.name as generated_by_name,
+              coalesce(jsonb_array_length(g.preview->'nuevosCierres'), 0) as new_closes
+       from ${t.log} g left join crm_users u on u.id = g.generated_by
+       order by g.created_at desc`
+    )
+    return rows.map(r => ({
+      id: r.id,
+      fileName: r.file_name,
+      createdAt: new Date(r.created_at).toISOString(),
+      webUrl: r.onedrive_web_url,
+      downloadable: r.downloadable,
+      isSeed: r.is_seed,
+      generatedByName: r.generated_by_name,
+      newCloses: Number(r.new_closes),
+    }))
+  }
+
+  async function getGenerationFile(id: string): Promise<{ fileName: string; fileData: Buffer | null; onedriveItemId: string | null } | null> {
+    const { rows } = await pool.query(
+      `select file_name, file_data, onedrive_item_id from ${t.log} where id = $1`,
+      [id]
+    )
+    const r = rows[0]
+    return r ? { fileName: r.file_name, fileData: r.file_data, onedriveItemId: r.onedrive_item_id } : null
   }
 
   // Última planilla generada, para poder mostrar el preview de nuevo al
@@ -217,7 +261,7 @@ export function positionsStore(book: PositionsBook) {
     return d.toISOString().slice(0, 10)
   }
 
-  return { getOpenPositions, getClosedPositions, updateLastPrice, addLotToPosition, fixPosition, createOpenPosition, backfillCusip, closePosition, insertClosedPosition, logGeneration, getLatestGeneration, getPeriodStart }
+  return { getOpenPositions, getClosedPositions, updateLastPrice, addLotToPosition, fixPosition, createOpenPosition, backfillCusip, closePosition, insertClosedPosition, logGeneration, getLatestGeneration, getPeriodStart, listGenerations, getGenerationFile }
 }
 
 export type PositionsStore = ReturnType<typeof positionsStore>
@@ -235,4 +279,6 @@ export const {
   logGeneration,
   getLatestGeneration,
   getPeriodStart,
+  listGenerations,
+  getGenerationFile,
 } = positionsStore('iche')

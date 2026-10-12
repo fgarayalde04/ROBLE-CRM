@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import Dropzone4Files from '@/components/icheAcciones/Dropzone4Files'
 import QuestionsForm from '@/components/icheAcciones/QuestionsForm'
 import PreviewTables from '@/components/icheAcciones/PreviewTables'
@@ -28,6 +29,7 @@ export default function AccionesWizard({ initialResult, apiBase, fileCount, drop
   const [result, setResult] = useState<GenerateResponse | PersistedResult | null>(initialResult)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const router = useRouter()
 
   async function handleUpload(files: File[]) {
     setLoading(true)
@@ -69,6 +71,7 @@ export default function AccionesWizard({ initialResult, apiBase, fileCount, drop
       if (!res.ok) throw new Error(data.error ?? 'Error desconocido')
       setResult(data)
       setStep('preview')
+      router.refresh() // actualiza el historial de la página
     } catch (err: any) {
       setError(err.message)
     } finally {

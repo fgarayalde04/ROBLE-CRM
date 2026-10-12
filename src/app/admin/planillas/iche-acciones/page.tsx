@@ -2,7 +2,8 @@ import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
 import { unstable_noStore as noStore } from 'next/cache'
 import { getSession } from '@/lib/auth'
-import { getLatestGeneration } from '@/lib/icheAcciones/db'
+import { getLatestGeneration, listGenerations } from '@/lib/icheAcciones/db'
+import HistoryList from '@/components/icheAcciones/HistoryList'
 import AccionesWizard from '@/components/icheAcciones/AccionesWizard'
 
 export const metadata: Metadata = { title: 'Iche Acciones' }
@@ -14,7 +15,7 @@ export default async function IcheAccionesPage() {
   const session = await getSession()
   if (!session || session.role !== 'admin') redirect('/')
 
-  const latest = await getLatestGeneration()
+  const [latest, history] = await Promise.all([getLatestGeneration(), listGenerations()])
 
   return (
     <div className="p-4 md:p-6 bg-[#F4F6F8] min-h-screen">
@@ -28,6 +29,7 @@ export default async function IcheAccionesPage() {
         fileCount={4}
         dropzoneHint="Soltá acá los 4 archivos del mes (Unrealized Pershing, Activity Pershing, Holdings Morgan, Activity Morgan) — el sistema detecta cuál es cuál. Podés subirlos de a uno, cada archivo nuevo se suma a los anteriores."
       />
+      <HistoryList rows={history} apiBase="/api/admin/planillas/iche-acciones" />
     </div>
   )
 }

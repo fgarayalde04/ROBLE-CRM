@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
   }
 
   const fullPreview = { ...preview, nuevosCierres: newClosesPreview(body, closedAfter) }
-  await store.logGeneration(fileName, uploadedItem, session.id ?? null, fullPreview, warnings)
+  await store.logGeneration(fileName, uploadedItem, session.id ?? null, fullPreview, warnings, buffer)
 
   const response: GenerateResponse = { fileName, uploadedItem, fileBase64: buffer.toString('base64'), preview: fullPreview, warnings }
   return NextResponse.json(response)
