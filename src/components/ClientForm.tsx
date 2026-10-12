@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import AdvisorSelect from './AdvisorSelect'
 import type { Client, ClientStatus, RiskProfile, ClientType } from '@/types/platform'
 
 interface Props {
@@ -149,7 +150,7 @@ export default function ClientForm({ initial, mode }: Props) {
             </select>
           </Field>
           <Field label="Asesor responsable">
-            <input value={form.advisor} onChange={(e) => set('advisor', e.target.value)} className={inputClass} />
+            <AdvisorSelect value={form.advisor} onChange={(v) => set('advisor', v)} className={selectClass} />
           </Field>
         </div>
       </section>

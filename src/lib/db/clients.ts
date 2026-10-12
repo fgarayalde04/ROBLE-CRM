@@ -1,5 +1,6 @@
 import { pool } from './pool'
 import { registrarDescarteDeCliente } from './descartes'
+import { closeOpeningsForActiveClient } from './openings'
 import type { Client } from '@/types/platform'
 
 export async function getNewLocalClients() {
@@ -142,6 +143,8 @@ export async function updateClient(id: string, updates: Partial<Client>) {
   )
   if (rows.length === 0) throw new Error('Client not found')
   const data = rows[0] as Client
+  // Cliente pasado a activo a mano → su apertura en curso queda como cuenta abierta.
+  if (updates.status === 'activo') await closeOpeningsForActiveClient(id)
   await logActivity('client', id, 'actualizar', `Cliente actualizado`)
   return data
 }

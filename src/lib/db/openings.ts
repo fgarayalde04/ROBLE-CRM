@@ -117,10 +117,94 @@ export async function createOpening(opening: Record<string, any>) {
 
 export async function updateOpening(id: string, updates: Record<string, any>) {
   const { client, checklist_items, ...safe } = updates
+  if (safe.status === 'cuenta_abierta') {
+    const { status, ...rest } = safe
+    if (Object.values(rest).some((v) => v !== undefined)) {
+      const { sql, values } = dynUpdate('account_openings', id, rest)
+      await pool.query(sql, values)
+    }
+    return markOpeningAccountOpened(id)
+  }
   const { sql, values } = dynUpdate('account_openings', id, safe)
   const { rows } = await pool.query(sql, values)
   if (rows.length === 0) throw new Error('Opening not found')
   return rows[0] as AccountOpening
+}
+
+// ─── Cuenta abierta: apertura y cliente siempre juntos ──────────────────────
+// Apertura en "cuenta_abierta" ⇔ cliente "activo". Todo cambio a cuenta
+// abierta (botón, select de estado, checklist completo o pasar el cliente a
+// activo desde su ficha) pasa por acá para que la lista de Pendientes y el
+// panel de "Aperturas activas" no queden desfasados.
+
+const OPENING_IN_PROGRESS = `status not in ('cuenta_abierta', 'descartado')`
+
+export async function markOpeningAccountOpened(openingId: string) {
+  const { rows } = await pool.query(
+    `update account_openings
+        set status = 'cuenta_abierta',
+            opened_date = coalesce(opened_date, current_date),
+            account_opened_at = coalesce(account_opened_at, now()),
+            updated_at = now()
+      where id = $1
+      returning *`,
+    [openingId]
+  )
+  if (rows.length === 0) throw new Error('Opening not found')
+  const opening = rows[0] as AccountOpening
+  if (opening.client_id) {
+    await pool.query(
+      `update clients set status = 'activo', updated_at = now() where id = $1 and status <> 'activo'`,
+      [opening.client_id]
+    )
+  }
+  await logActivity('opening', openingId, 'cuenta_abierta', `Cuenta abierta: ${opening.folder_name ?? ''}`)
+  return opening
+}
+
+// Desde el cliente: lo deja activo y cierra como abiertas sus aperturas en curso.
+export async function markClientAccountOpened(clientId: string) {
+  const { rows } = await pool.query(
+    `update clients set status = 'activo', updated_at = now() where id = $1 returning id`,
+    [clientId]
+  )
+  if (rows.length === 0) throw new Error('Client not found')
+  await closeOpeningsForActiveClient(clientId)
+}
+
+export async function closeOpeningsForActiveClient(clientId: string) {
+  await pool.query(
+    `update account_openings
+        set status = 'cuenta_abierta',
+            opened_date = coalesce(opened_date, current_date),
+            account_opened_at = coalesce(account_opened_at, now()),
+            updated_at = now()
+      where client_id = $1 and ${OPENING_IN_PROGRESS}`,
+    [clientId]
+  )
+}
+
+// Corrige desfasajes que vienen de antes (o de cambios hechos por fuera del
+// CRM): apertura en curso con cliente ya activo → cuenta abierta; cliente
+// pendiente cuya última apertura ya figura abierta → activo. Idempotente.
+export async function reconcileOpeningsWithClients() {
+  await pool.query(
+    `update account_openings o
+        set status = 'cuenta_abierta',
+            opened_date = coalesce(o.opened_date, current_date),
+            account_opened_at = coalesce(o.account_opened_at, now()),
+            updated_at = now()
+       from clients c
+      where c.id = o.client_id and c.status = 'activo'
+        and o.status not in ('cuenta_abierta', 'descartado')`
+  )
+  await pool.query(
+    `update clients c
+        set status = 'activo', updated_at = now()
+      where c.status in ('pendiente', 'prospecto', 'en_apertura')
+        and exists (select 1 from account_openings o where o.client_id = c.id and o.status = 'cuenta_abierta')
+        and not exists (select 1 from account_openings o where o.client_id = c.id and o.status not in ('cuenta_abierta', 'descartado'))`
+  )
 }
 
 export async function listOpeningsWithStats(folderFilter?: string[] | null) {
@@ -207,15 +291,10 @@ async function openAccountIfChecklistDone(openingId: string) {
   )
   if (parseInt(pending.pending, 10) > 0) return
   const { rows } = await pool.query(
-    `update account_openings
-        set status = 'cuenta_abierta', opened_date = current_date, account_opened_at = now(), updated_at = now()
-      where id = $1 and status not in ('cuenta_abierta', 'descartado')
-      returning client_id`,
+    `select 1 from account_openings where id = $1 and ${OPENING_IN_PROGRESS}`,
     [openingId]
   )
-  if (rows[0]?.client_id) {
-    await pool.query(`update clients set status = 'activo', updated_at = now() where id = $1`, [rows[0].client_id])
-  }
+  if (rows.length > 0) await markOpeningAccountOpened(openingId)
 }
 
 // ─── Opening tasks ──────────────────────────────────────────────────────────

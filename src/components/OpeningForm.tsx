@@ -2,6 +2,8 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import AdvisorSelect from './AdvisorSelect'
+import { OPENING_STATUS_OPTIONS } from './openings/statusOptions'
 import type { AccountOpening, OpeningStatus, Client } from '@/types/platform'
 
 interface Props {
@@ -27,7 +29,7 @@ export default function OpeningForm({ mode, initial, clients }: Props) {
     advisor: initial?.advisor ?? '',
     start_date: initial?.start_date ?? new Date().toISOString().split('T')[0],
     opened_date: initial?.opened_date ?? '',
-    status: (initial?.status ?? 'nueva_carpeta') as OpeningStatus,
+    status: (initial?.status ?? 'carpeta_creada') as OpeningStatus,
     notes: initial?.notes ?? '',
   })
 
@@ -127,24 +129,14 @@ export default function OpeningForm({ mode, initial, clients }: Props) {
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Estado</label>
             <select value={form.status} onChange={(e) => set('status', e.target.value)} className={selectClass}>
-              <option value="nueva_carpeta">Nueva carpeta</option>
-              <option value="en_contacto">En contacto</option>
-              <option value="documentacion_solicitada">Documentacion solicitada</option>
-              <option value="documentacion_recibida">Documentacion recibida</option>
-              <option value="formularios_enviados">Formularios enviados</option>
-              <option value="formularios_firmados">Formularios firmados</option>
-              <option value="en_revision">En revision</option>
-              <option value="cuenta_abierta">Cuenta abierta</option>
-              <option value="descartada">Descartada</option>
+              {OPENING_STATUS_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
             </select>
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Asesor responsable</label>
-            <input
-              value={form.advisor}
-              onChange={(e) => set('advisor', e.target.value)}
-              className={inputClass}
-            />
+            <AdvisorSelect value={form.advisor} onChange={(v) => set('advisor', v)} className={selectClass} />
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Fecha de inicio</label>

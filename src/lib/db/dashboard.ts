@@ -1,4 +1,5 @@
 import { pool } from './pool'
+import { reconcileOpeningsWithClients } from './openings'
 
 const CLIENT_JOIN = `left join clients c on c.id = t.client_id`
 const CLIENT_SELECT = `c.id as "client__id", c.first_name as "client__first_name", c.last_name as "client__last_name"`
@@ -64,7 +65,12 @@ export async function getOpenTasksByIds(ids: string[], limit: number) {
   return attachTaskShares(rows.map(shapeClient))
 }
 
+// Aperturas en curso + clientes en Pendientes que todavía no tienen una
+// apertura en curso, para que el panel muestre lo mismo que la pestaña
+// Pendientes de Clientes. Antes se corrige cualquier desfasaje apertura/cliente.
 export async function getMyOpenings(isWideRole: boolean, userName: string, limit: number) {
+  await reconcileOpeningsWithClients().catch(() => {})
+
   const where = [`o.status not in ('cuenta_abierta','descartado')`]
   const params: any[] = []
   if (!isWideRole) { params.push(userName); where.push(`o.advisor = $${params.length}`) }
@@ -81,20 +87,62 @@ export async function getMyOpenings(isWideRole: boolean, userName: string, limit
     params
   )
 
-  const openings = rows.map(shapeClient)
-  if (openings.length === 0) return openings
-
-  const ids = openings.map((o) => o.id)
-  const { rows: checklistRows } = await pool.query(
-    `select opening_id, id, completed from opening_checklist_items where opening_id = ANY($1)`,
-    [ids]
-  )
-  const byOpening = new Map<string, { id: string; completed: boolean }[]>()
-  for (const c of checklistRows) {
-    if (!byOpening.has(c.opening_id)) byOpening.set(c.opening_id, [])
-    byOpening.get(c.opening_id)!.push({ id: c.id, completed: c.completed })
+  const openings: any[] = rows.map(shapeClient)
+  if (openings.length > 0) {
+    const ids = openings.map((o) => o.id)
+    const { rows: checklistRows } = await pool.query(
+      `select opening_id, id, completed from opening_checklist_items where opening_id = ANY($1)`,
+      [ids]
+    )
+    const byOpening = new Map<string, { id: string; completed: boolean }[]>()
+    for (const c of checklistRows) {
+      if (!byOpening.has(c.opening_id)) byOpening.set(c.opening_id, [])
+      byOpening.get(c.opening_id)!.push({ id: c.id, completed: c.completed })
+    }
+    for (const o of openings) o.checklist_items = byOpening.get(o.id) ?? []
   }
-  return openings.map((o) => ({ ...o, checklist_items: byOpening.get(o.id) ?? [] }))
+
+  const remaining = limit - openings.length
+  if (remaining <= 0) return openings
+
+  const cWhere = [
+    `c.status in ('pendiente','prospecto')`,
+    `not exists (select 1 from account_openings o where o.client_id = c.id and o.status not in ('cuenta_abierta','descartado'))`,
+  ]
+  const cParams: any[] = []
+  if (!isWideRole) { cParams.push(userName); cWhere.push(`c.advisor = $${cParams.length}`) }
+  cParams.push(remaining)
+  const { rows: pendingClients } = await pool.query(
+    `select c.id, c.first_name, c.last_name, c.advisor, c.created_at, c.updated_at
+     from clients c
+     where ${cWhere.join(' and ')}
+     order by c.created_at desc
+     limit $${cParams.length}`,
+    cParams
+  )
+  return [
+    ...openings,
+    ...pendingClients.map((c) => ({
+      id: `client-${c.id}`,
+      pending_client_id: c.id,
+      folder_name: `${c.first_name ?? ''} ${c.last_name ?? ''}`.trim(),
+      status: 'sin_apertura',
+      start_date: c.created_at,
+      updated_at: c.updated_at,
+      advisor: c.advisor,
+      client: null,
+      checklist_items: [],
+    })),
+  ]
+}
+
+// Cuántas cuentas siguen pendientes (mismo criterio que la pestaña Pendientes).
+export async function countPendingAccounts(isWideRole: boolean, userName: string) {
+  const params: any[] = []
+  let where = `status in ('pendiente','prospecto')`
+  if (!isWideRole) { params.push(userName); where += ` and advisor = $1` }
+  const { rows } = await pool.query(`select count(*) from clients where ${where}`, params)
+  return parseInt(rows[0].count, 10)
 }
 
 export async function getCompanyOverdueTasks(today: string, limit: number) {

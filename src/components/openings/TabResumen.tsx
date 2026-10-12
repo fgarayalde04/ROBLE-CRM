@@ -5,19 +5,10 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import type { AccountOpening, OpeningChecklistItem, OpeningStatus } from '@/types/platform'
 import { differenceInDays, parseISO } from 'date-fns'
+import AdvisorSelect from '@/components/AdvisorSelect'
+import { OPENING_STATUS_OPTIONS } from './statusOptions'
 
-const STATUS_OPTIONS: { value: OpeningStatus; label: string }[] = [
-  { value: 'carpeta_creada', label: 'Pendiente de apertura' },
-  { value: 'recolectando_informacion', label: 'Recolectando informacion' },
-  { value: 'documentacion_incompleta', label: 'Documentacion incompleta' },
-  { value: 'documentacion_completa', label: 'Documentacion completa' },
-  { value: 'formularios_enviados', label: 'Formularios enviados' },
-  { value: 'enviado_al_banco', label: 'Enviado al banco' },
-  { value: 'en_revision_banco', label: 'En revision banco' },
-  { value: 'cuenta_abierta', label: 'Cuenta abierta' },
-  { value: 'trabado', label: 'Trabado' },
-  { value: 'descartado', label: 'Descartado' },
-]
+const STATUS_OPTIONS = OPENING_STATUS_OPTIONS
 
 const STATUS_COLORS: Record<OpeningStatus, string> = {
   carpeta_creada: 'bg-gray-100 text-gray-600 border-gray-200',
@@ -95,14 +86,6 @@ export default function TabResumen({ opening }: Props) {
       if (!res.ok) {
         const d = await res.json()
         throw new Error(d.error ?? 'Error al guardar')
-      }
-
-      if (status === 'cuenta_abierta' && opening.client_id) {
-        await fetch('/api/clients', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: opening.client_id, status: 'activo' }),
-        })
       }
 
       setSaved(true)
@@ -233,12 +216,10 @@ export default function TabResumen({ opening }: Props) {
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">Asesor</label>
-            <input
-              type="text"
+            <AdvisorSelect
               value={advisor}
-              onChange={(e) => setAdvisor(e.target.value)}
-              placeholder="Nombre del asesor"
-              className="w-full text-sm border border-gray-200 rounded px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              onChange={setAdvisor}
+              className="w-full text-sm border border-gray-200 rounded px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
             />
           </div>
           <div>

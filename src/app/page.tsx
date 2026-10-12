@@ -6,11 +6,12 @@ import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import {
   getTaskIdsSharedWith, getOpenTasksByResponsible, getOpenTasksByCreator, getOpenTasksByIds,
-  getMyOpenings, getCompanyOverdueTasks, getTasksWithoutResponsible,
+  getMyOpenings, countPendingAccounts, getCompanyOverdueTasks, getTasksWithoutResponsible,
   getStuckOpenings, getStaleOpenings, getTodayEventsForDashboard, getUpcomingDeadlinesForDashboard,
   getRecentActivityForDashboard, getCompletedTaskIds, getUnreadNotifications, getPendingBcuComplianceCount,
 } from '@/lib/db/dashboard'
 import { getLatestMorningBrief } from '@/lib/db/research'
+import MarkAccountOpenedButton from '@/components/MarkAccountOpenedButton'
 import { getMyPendingSolicitudes } from '@/lib/db/solicitudes'
 
 export const metadata: Metadata = { title: 'Panel del día | Roble Capital CRM' }
@@ -27,6 +28,7 @@ const OPENING_STATUS_LABEL: Record<string, string> = {
   cuenta_abierta: 'Cuenta abierta',
   trabado: 'Trabado',
   descartado: 'Descartado',
+  sin_apertura: 'Sin apertura iniciada',
 }
 
 const OPENING_STATUS_COLOR: Record<string, string> = {
@@ -40,6 +42,7 @@ const OPENING_STATUS_COLOR: Record<string, string> = {
   cuenta_abierta: 'bg-emerald-50 text-emerald-700',
   trabado: 'bg-red-50 text-red-600',
   descartado: 'bg-gray-50 text-gray-400',
+  sin_apertura: 'bg-amber-50 text-amber-700',
 }
 
 const PRIORITY_COLOR: Record<string, string> = {
@@ -120,6 +123,7 @@ export default async function PanelDelDiaPage({ searchParams }: PageProps) {
     pendingBcuCount,
     latestMorningBrief,
     myPendingSolicitudes,
+    pendingAccountsCount,
   ] = await Promise.all([
     userName ? getOpenTasksByResponsible(userName, 20) : Promise.resolve([]),
     userName ? getOpenTasksByCreator(userName, 20) : Promise.resolve([]),
@@ -158,6 +162,7 @@ export default async function PanelDelDiaPage({ searchParams }: PageProps) {
 
     // Órdenes propias enviadas y todavía pendientes de ejecución
     userName ? getMyPendingSolicitudes(userName, 8) : Promise.resolve([]),
+    countPendingAccounts(isWideRole, userName).catch(() => 0),
   ])
 
   const allMyTasksCombined = uniqueById([
@@ -467,7 +472,14 @@ export default async function PanelDelDiaPage({ searchParams }: PageProps) {
                   <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
                     {isWideRole ? 'Aperturas activas' : 'Mis aperturas'}
                   </span>
-                  <Link href="/openings" className="text-[11px] text-blue-500 hover:underline">Ver todas</Link>
+                  <div className="flex items-center gap-3">
+                    {pendingAccountsCount > 0 && (
+                      <Link href="/clients?tab=pendientes" className="text-[11px] text-amber-600 hover:underline">
+                        {pendingAccountsCount} pendiente{pendingAccountsCount === 1 ? '' : 's'}
+                      </Link>
+                    )}
+                    <Link href="/openings" className="text-[11px] text-blue-500 hover:underline">Ver todas</Link>
+                  </div>
                 </div>
                 {myOpenings.length === 0 ? (
                   <p className="px-4 py-3 text-xs text-gray-400">Sin aperturas en proceso.</p>
@@ -481,7 +493,7 @@ export default async function PanelDelDiaPage({ searchParams }: PageProps) {
                       return (
                         <li key={o.id} className="px-4 py-2.5 flex items-start justify-between gap-2">
                           <div className="flex-1 min-w-0">
-                            <Link href={`/openings/${o.id}`} className="text-sm text-gray-800 hover:text-[#2D3F52] font-medium leading-snug truncate block">
+                            <Link href={o.pending_client_id ? `/clients/${o.pending_client_id}` : `/openings/${o.id}`} className="text-sm text-gray-800 hover:text-[#2D3F52] font-medium leading-snug truncate block">
                               {o.folder_name}
                             </Link>
                             <div className="flex items-center gap-2 mt-0.5">
@@ -500,7 +512,15 @@ export default async function PanelDelDiaPage({ searchParams }: PageProps) {
                             <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${OPENING_STATUS_COLOR[o.status] ?? 'bg-gray-100 text-gray-500'}`}>
                               {OPENING_STATUS_LABEL[o.status] ?? o.status}
                             </span>
-                            <span className="text-[10px] text-gray-400">{days}d</span>
+                            <div className="flex items-center gap-1.5">
+                              <MarkAccountOpenedButton
+                                openingId={o.pending_client_id ? null : o.id}
+                                clientId={o.pending_client_id ?? null}
+                                name={o.folder_name}
+                                size="xs"
+                              />
+                              <span className="text-[10px] text-gray-400">{days}d</span>
+                            </div>
                           </div>
                         </li>
                       )

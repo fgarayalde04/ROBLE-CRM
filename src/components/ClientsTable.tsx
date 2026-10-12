@@ -9,6 +9,7 @@ import ClientSidePanel from './ClientSidePanel'
 import OneDriveFolderButton from './OneDriveFolderButton'
 import ClientStatusToggle from './ClientStatusToggle'
 import DeleteClientButton from './DeleteClientButton'
+import MarkAccountOpenedButton from './MarkAccountOpenedButton'
 
 type SortKey = 'nombre' | 'created_at' | 'updated_at' | 'client_number'
 type SortDir = 'asc' | 'desc'
@@ -106,9 +107,12 @@ export default function ClientsTable({
                   </span>
                 )}
                 {c.status === 'pendiente' || c.status === 'prospecto' ? (
-                  <span className="inline-flex items-center text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded">
-                    {c.status === 'prospecto' ? 'Pendiente' : 'En apertura'}
-                  </span>
+                  <>
+                    <span className="inline-flex items-center text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded">
+                      {c.status === 'prospecto' ? 'Pendiente' : 'En apertura'}
+                    </span>
+                    <MarkAccountOpenedButton clientId={c.id} name={`${c.first_name} ${c.last_name}`.trim()} size="xs" />
+                  </>
                 ) : (
                   <ClientStatusToggle
                     clientId={c.id}
@@ -280,9 +284,12 @@ export default function ClientsTable({
                       </td>
                       <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                         {c.status === 'pendiente' || c.status === 'prospecto' ? (
-                          <span className="inline-flex items-center text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded">
-                            {c.status === 'prospecto' ? 'Pendiente' : 'En apertura'}
-                          </span>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="inline-flex items-center text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded">
+                              {c.status === 'prospecto' ? 'Pendiente' : 'En apertura'}
+                            </span>
+                            <MarkAccountOpenedButton clientId={c.id} name={`${c.first_name} ${c.last_name}`.trim()} size="xs" />
+                          </div>
                         ) : (
                           <ClientStatusToggle
                             clientId={c.id}
