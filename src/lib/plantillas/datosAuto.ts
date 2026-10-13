@@ -56,7 +56,7 @@ export async function buscarEnDavinci(i: InstrumentoOperado): Promise<Rendimient
   const intentos: [string, string | undefined][] = [...isins.map((x): [string, undefined] => [x, undefined]), [claveNombreDavinci(i.nombre), i.nombre]]
   for (const [isin, nombre] of intentos) {
     try {
-      const r = await lookupDavinciLive(isin, nombre)
+      const r = await lookupDavinciLive(isin, nombre, i.nombre)
       if (r.status === 'unavailable') return undefined   // sin credenciales o Davinci en pausa: no seguir probando
       if (r.status !== 'ok') continue
       const d = r.data

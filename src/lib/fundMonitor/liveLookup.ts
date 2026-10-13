@@ -3,6 +3,7 @@ import { getBrowser } from '@/lib/fondos/browser'
 import { loginDavinci, searchFundReturns, openDavinciPage, type DavinciFundReturns } from '@/lib/fundMonitor/davinciScraper'
 import { getLookupCache, setLookupCache } from '@/lib/db/fundMonitor'
 import { vigente } from '@/lib/fundMonitor/cortes'
+import { mismoFondo } from '@/lib/db/masOperado'
 
 // Búsqueda puntual en Davinci para fondos que no están en el Monitor. No
 // guarda nada en fund_monitor_*: el fondo no se da de alta en el Monitor por
@@ -60,20 +61,27 @@ async function getSession(email: string, password: string): Promise<Page | null>
   return s.page
 }
 
-async function readCache(key: string): Promise<LiveLookupResult | null> {
+// Con `esperado` (el nombre del fondo buscado), un resultado de otro fondo no
+// sirve: lo guardado se ignora y se vuelve a buscar, y lo traído se descarta.
+const deOtroFondo = (data: DavinciFundReturns | null, esperado?: string) =>
+  !!(data && esperado && data.nombreDavinci && !mismoFondo(esperado, data.nombreDavinci))
+
+async function readCache(key: string, esperado?: string): Promise<LiveLookupResult | null> {
   const hit = await getLookupCache(key).catch(() => null)
   if (!hit) return null
   if (!vigente(hit.fetched_at)) return null
-  return hit.data ? { status: 'ok', data: hit.data as DavinciFundReturns } : { status: 'not_found' }
+  const data = hit.data as DavinciFundReturns | null
+  if (deOtroFondo(data, esperado)) return null
+  return data ? { status: 'ok', data } : { status: 'not_found' }
 }
 
-async function run(isin: string, nombre?: string): Promise<LiveLookupResult> {
+async function run(isin: string, nombre?: string, esperado?: string): Promise<LiveLookupResult> {
   const email = process.env.DAVINCI_EMAIL
   const password = process.env.DAVINCI_PASSWORD
   if (!email || !password) return { status: 'unavailable' }
 
   const key = isin.toUpperCase()
-  const cached = await readCache(key)
+  const cached = await readCache(key, esperado)
   if (cached) return cached
 
   try {
@@ -82,7 +90,11 @@ async function run(isin: string, nombre?: string): Promise<LiveLookupResult> {
     if (idleTimer) clearTimeout(idleTimer)
     idleTimer = setTimeout(() => { queue = queue.then(closeSession, closeSession) }, SESSION_IDLE_MS)
 
-    const data = await searchFundReturns(page, isin, nombre)
+    let data = await searchFundReturns(page, isin, nombre)
+    if (deOtroFondo(data, esperado)) {
+      console.warn(`[fund-monitor] Davinci devolvió otro fondo para ${isin}: "${data!.nombreDavinci}" (se buscaba "${esperado}")`)
+      data = null
+    }
     await setLookupCache(key, data).catch(e => console.error('[fund-monitor] No se pudo guardar la búsqueda en vivo:', e.message))
     return data ? { status: 'ok', data } : { status: 'not_found' }
   } catch (e: any) {
@@ -95,12 +107,12 @@ async function run(isin: string, nombre?: string): Promise<LiveLookupResult> {
   }
 }
 
-export async function lookupDavinciLive(isin: string, nombre?: string): Promise<LiveLookupResult> {
+export async function lookupDavinciLive(isin: string, nombre?: string, esperado?: string): Promise<LiveLookupResult> {
   // Lo guardado se responde sin esperar la cola; run() vuelve a mirar por si
   // una búsqueda anterior en la cola ya trajo el mismo ISIN.
-  const cached = await readCache(isin.toUpperCase())
+  const cached = await readCache(isin.toUpperCase(), esperado)
   if (cached) return cached
-  const next = queue.then(() => run(isin, nombre), () => run(isin, nombre))
+  const next = queue.then(() => run(isin, nombre, esperado), () => run(isin, nombre, esperado))
   queue = next
   return next
 }

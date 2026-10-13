@@ -13,7 +13,7 @@ import {
   listActiveFunds, upsertFundReturns, markFundSyncIssue, getSyncState, markSyncAttempt, setLookupCache, getReturnsFetched, getLookupCaches,
 } from '@/lib/db/fundMonitor'
 import { fechaMontevideo, proximoCorte, ultimoCorte, vigente } from '@/lib/fundMonitor/cortes'
-import { claveNombreDavinci, getRankingMasOperado } from '@/lib/db/masOperado'
+import { claveNombreDavinci, getRankingMasOperado, mismoFondo } from '@/lib/db/masOperado'
 
 // vigente: no se bajó en esta corrida, se usó lo guardado (menos de 15 días)
 export interface FundSyncRowResult { isin: string; nombre: string; status: 'ok' | 'no_source' | 'error'; error?: string; vigente?: boolean }
@@ -157,7 +157,12 @@ export async function syncFundMonitor(opts?: { force?: boolean }): Promise<FundS
       for (const isin of f.claves) {
         try {
           const porNombre = isin.startsWith('NM:')
-          const data = await searchFundReturns(page, porNombre ? '' : isin, porNombre ? f.nombre : undefined)
+          let data = await searchFundReturns(page, porNombre ? '' : isin, porNombre ? f.nombre : undefined)
+          // Otro fondo (no el buscado) no se guarda como si fuera este
+          if (data && data.nombreDavinci && !mismoFondo(f.nombre, data.nombreDavinci)) {
+            console.warn(`[fund-monitor] Davinci devolvió otro fondo para ${isin}: "${data.nombreDavinci}" (se buscaba "${f.nombre}")`)
+            data = null
+          }
           await setLookupCache(isin, data)
           if (data) { op.encontrados++; break }
         } catch (e: any) {

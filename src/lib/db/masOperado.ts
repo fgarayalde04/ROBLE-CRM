@@ -290,6 +290,18 @@ export function familiaFondo(nombre: string) {
   return ALIAS_FAMILIA[clave] ?? clave
 }
 
+/**
+ * ¿El fondo que devolvió Davinci es el que se buscó? Comparte al menos dos
+ * palabras de la familia (gestora y estrategia), o todas si el nombre buscado
+ * tiene menos. Evita guardar los rendimientos de otro fondo.
+ */
+export function mismoFondo(buscado: string, davinci: string) {
+  const a = familiaFondo(buscado).split(' ').filter(Boolean)
+  const b = new Set(familiaFondo(davinci).split(' '))
+  if (!a.length) return true
+  return a.filter((t) => b.has(t)).length >= Math.min(2, a.length)
+}
+
 function agrupar(ops: Operacion[], clave: (o: Operacion) => string) {
   const grupos = new Map<string, Operacion[]>()
   for (const op of ops) {
@@ -441,7 +453,10 @@ async function completar(ranking: RankingMasOperado) {
           return [r.isin as string, { ...d, fetched_at: r.fetched_at }]
         }))
         for (const f of faltan) {
-          const d = clavesDe(f).map((i) => porIsin.get(i)).find(Boolean)
+          // Solo lo que es el mismo fondo: búsquedas viejas pudieron guardar los de otro
+          const nombres = [f.nombre, ...(f.variantes ?? []).map((v) => v.nombre)]
+          const d = clavesDe(f).map((i) => porIsin.get(i))
+            .find((x) => x && (!x.nombreDavinci || nombres.some((n) => mismoFondo(n, x.nombreDavinci))))
           if (!d) continue
           const n = (v: unknown) => (v == null || Number.isNaN(Number(v)) ? null : Number(v))
           f.rendimientos = {

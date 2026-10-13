@@ -122,9 +122,24 @@ async function searchExplorer(page: Page, query: string): Promise<string[][]> {
   }
 
   const input = page.locator('input[placeholder*="ISIN" i]')
-  await input.fill('')
+  const tabla = () => page.locator('table tbody').innerText().catch(() => '')
+  // La tabla se filtra en el servidor y tarda distinto en cada búsqueda: con
+  // una espera fija se leía a veces la tabla de la búsqueda anterior y cada
+  // fondo quedaba con los rendimientos de otro. Se espera a que cambie y deje
+  // de cambiar (si no cambia, es el mismo resultado que antes).
+  const antes = await tabla()
   await input.fill(query)
-  await page.waitForTimeout(1200)
+  const inicio = Date.now()
+  let ultima = antes
+  let cambio = false
+  while (Date.now() - inicio < 10000) {
+    await page.waitForTimeout(500)
+    const ahora = await tabla()
+    if (ahora !== antes) cambio = true
+    if (cambio && ahora === ultima) break
+    ultima = ahora
+  }
+  if (!cambio) await page.waitForTimeout(1000)
 
   const rows = page.locator('table tbody tr')
   const count = await rows.count()
@@ -216,7 +231,9 @@ async function searchAlternativesByName(page: Page, nombre: string): Promise<Dav
 export async function searchFundReturns(page: Page, isin: string, nombre?: string): Promise<DavinciFundReturns | null> {
   // Sin un ISIN válido (fondo cargado sin ISIN) se va directo al nombre
   const byIsin = /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/i.test(isin.trim()) ? await searchExplorer(page, isin) : []
-  const isinHit = byIsin.length > 0 ? parseRow(byIsin[0]) : null
+  // Un ISIN exacto da una sola fila; más filas es la tabla sin filtrar, no el fondo
+  const filasIsin = byIsin.filter(cells => cells.length >= 15)
+  const isinHit = filasIsin.length === 1 ? parseRow(filasIsin[0]) : null
   if (isinHit) return isinHit
 
   const target = nombre ? norm(nombre) : ''

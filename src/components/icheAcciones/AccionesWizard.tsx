@@ -103,12 +103,23 @@ export default function AccionesWizard({ initialResult, apiBase, fileCount, drop
                 ? `Última planilla generada el ${new Date(result.generatedAt).toLocaleString('es-UY')}`
                 : 'Recién generada'}
             </p>
-            <button
-              onClick={() => { setStep('upload'); setPlan(null); setError(null) }}
-              className="text-xs font-medium text-[#1B4332] underline"
-            >
-              Subir archivos de un mes nuevo
-            </button>
+            <div className="flex items-center gap-4">
+              {/* Plan vacío: no cambia posiciones, redibuja el Excel desde la base
+                  (p.ej. después de corregir a mano un analista) y lo sube a OneDrive. */}
+              <button
+                onClick={() => handleGenerate({ changes: [], pendingQuestions: [], warnings: [], inputsFolder: null }, {})}
+                disabled={loading}
+                className="text-xs font-medium text-[#1B4332] underline disabled:opacity-40"
+              >
+                {loading ? 'Actualizando…' : 'Actualizar con los datos actuales'}
+              </button>
+              <button
+                onClick={() => { setStep('upload'); setPlan(null); setError(null) }}
+                className="text-xs font-medium text-[#1B4332] underline"
+              >
+                Subir archivos de un mes nuevo
+              </button>
+            </div>
           </div>
           <PreviewTables {...result} downloadHref={`${apiBase}/download`} />
         </>

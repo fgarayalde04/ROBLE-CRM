@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { armarRanking, familiaFondo, nombreFondoMostrado, nombreSinClase, operacionesDeSolicitud } from './db/masOperado'
+import { armarRanking, familiaFondo, mismoFondo, nombreFondoMostrado, nombreSinClase, operacionesDeSolicitud } from './db/masOperado'
 import { labelRango, mesParaInforme, moverPeriodo, periodoMes, periodoSemana } from './masOperado/periodos'
 
 const fondo = (fondo: string, cusipIsin: string, operacion: 'compra' | 'venta', extra: Record<string, string> = {}) =>
@@ -184,5 +184,17 @@ describe('armado automático de fin de mes', () => {
     expect(mesDelInforme('2027-02-28')).toMatchObject({ desde: '2027-02-01', hasta: '2027-02-28' })
     expect(mesDelInforme('2026-10-01')).toMatchObject({ desde: '2026-09-01', hasta: '2026-09-30', label: 'Septiembre 2026' })
     expect(mesDelInforme('2027-01-01')).toMatchObject({ desde: '2026-12-01', hasta: '2026-12-31' })
+  })
+})
+
+describe('mismoFondo', () => {
+  it('mismo fondo con otra clase o como lo escribe Davinci', () => {
+    expect(mismoFondo('THORNBURG INVT INCOME BUILDER FD CL A USD', 'Thornburg Investment Income Builder A USD Acc')).toBe(true)
+    expect(mismoFondo('PIMCO GIS Income Fund E Acc USD', 'PIMCO GIS Income Fund Institutional USD Acc')).toBe(true)
+    expect(mismoFondo('AB FCP I AMERICAN INCOME FUND CLASS A2 (USD)(CAP)', 'AB American Income A2 USD')).toBe(true)
+  })
+  it('otro fondo, aunque sea de la misma gestora', () => {
+    expect(mismoFondo('THORNBURG INVT INCOME BUILDER FD CL A USD', 'PIMCO GIS Income Fund E Acc USD')).toBe(false)
+    expect(mismoFondo('PIMCO GIS Income Fund E Acc USD', 'PIMCO GIS Global Bond Fund E Acc USD')).toBe(false)
   })
 })
