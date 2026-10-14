@@ -30,6 +30,7 @@ export default function AssetDetailCard({ asset }: { asset: AnyAsset }) {
     tipo === 'acciones' ? (asset.nombre || asset.ticker || '—')
     : tipo === 'fondos'  ? (asset.fondo || '—')
     : tipo === 'bonos'   ? (asset.descripcion || '—')
+    : tipo === 'opciones' ? (asset.descripcion || asset.subyacente || '—')
     : (asset?.nombre || asset?.descripcion || '—')
 
   const isin = asset?.cusipIsin || asset?.cusip_isin || null
@@ -42,19 +43,24 @@ export default function AssetDetailCard({ asset }: { asset: AnyAsset }) {
 
   const tipoOrden = asset?.precio ? (TIPO_ORDEN_LABEL[asset.precio as string] ?? String(asset.precio)) : null
   const precioValor = asset?.precioLimite ?? asset?.precio_limite ?? null
+  const precioPrefijo = tipo === 'opciones' ? 'Prima' : 'Precio'
   const precioRow: [string, string] | null =
-    asset?.precio === 'stop'   ? ['Precio stop',   `${precioValor ?? '—'}${asset?.moneda ? ` ${asset.moneda}` : ''}`]
-    : asset?.precio === 'limite' ? ['Precio límite', `${precioValor ?? '—'}${asset?.moneda ? ` ${asset.moneda}` : ''}`]
+    asset?.precio === 'stop'   ? [`${precioPrefijo} stop`,   `${precioValor ?? '—'}${asset?.moneda ? ` ${asset.moneda}` : ''}`]
+    : asset?.precio === 'limite' ? [`${precioPrefijo} límite`, `${precioValor ?? '—'}${asset?.moneda ? ` ${asset.moneda}` : ''}`]
     : (asset?.precio == null && precioValor) ? ['Precio', String(precioValor)]
     : null
 
   const rows = ([
-    ['Operación', asset?.operacion === 'venta' ? 'Venta' : 'Compra'],
+    ['Operación', `${asset?.operacion === 'venta' ? 'Venta' : 'Compra'}${tipo === 'opciones' && asset?.posicion ? (asset.posicion === 'cierre' ? ' (cierre)' : ' (apertura)') : ''}`],
     tipoOrden ? ['Tipo de orden', tipoOrden] : null,
     precioRow,
     tipo === 'acciones' && asset?.ticker ? ['Ticker', asset.ticker] : null,
+    tipo === 'opciones' ? ['Tipo', asset?.tipoOpcion === 'put' ? 'Put' : 'Call'] : null,
+    tipo === 'opciones' && asset?.subyacente ? ['Subyacente', String(asset.subyacente).toUpperCase()] : null,
+    tipo === 'opciones' && asset?.strike ? ['Strike', `${asset.strike}${asset?.moneda ? ` ${asset.moneda}` : ''}`] : null,
+    tipo === 'opciones' && asset?.vencimiento ? ['Vencimiento', asset.vencimiento] : null,
     isin ? ['ISIN/CUSIP', isin] : null,
-    cantidadMonto ? [tipo === 'fondos' ? 'Monto' : 'Cantidad', cantidadMonto] : null,
+    cantidadMonto ? [tipo === 'fondos' ? 'Monto' : tipo === 'opciones' ? 'Contratos' : 'Cantidad', cantidadMonto] : null,
     asset?.moneda ? ['Moneda', asset.moneda] : null,
     tipo === 'fondos' && asset?.clase ? ['Clase', asset.clase] : null,
     tipo === 'bonos' && asset?.maturity ? ['Vencimiento', asset.maturity] : null,

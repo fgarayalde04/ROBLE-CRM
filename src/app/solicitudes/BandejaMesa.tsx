@@ -86,6 +86,7 @@ const TIPO_BADGE: Record<string, string> = {
   fondos:   'bg-emerald-50 text-emerald-700',
   bonos:    'bg-amber-50 text-amber-700',
   acciones: 'bg-blue-50 text-blue-700',
+  opciones: 'bg-violet-50 text-violet-700',
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -95,6 +96,7 @@ function assetDisplay(a: any) {
     tipo === 'acciones' ? (a.nombre || a.ticker || '—')
     : tipo === 'fondos'  ? (a.fondo || '—')
     : tipo === 'bonos'   ? (a.descripcion || '—')
+    : tipo === 'opciones' ? (a.descripcion || a.subyacente || '—')
     : '—'
   const cantidad = tipo !== 'fondos' && a?.cantidad ? Number(a.cantidad) : null
   const monto    = tipo === 'fondos' && a?.monto    ? Number(a.monto)    : null

@@ -10,7 +10,7 @@ interface TeamMember { name: string; email: string }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type OrderType = 'acciones' | 'fondos' | 'bonos'
+type OrderType = 'acciones' | 'fondos' | 'bonos' | 'opciones'
 
 interface AccionesBlock {
   type: 'acciones'; id: string; nombre: string; ticker: string
@@ -33,7 +33,18 @@ interface BonosBlock {
   moneda: string; operacion: 'compra' | 'venta'; fecha: string; observaciones: string
   vigencia: 'DIA' | 'GTC'; comision: string; maturity: string; cupon: string
 }
-type OrderBlock = AccionesBlock | FondosBlock | BonosBlock
+// Opciones listadas (contratos de 100 acciones del subyacente). `cantidad` son
+// contratos y `precioLimite` la prima por acción. `descripcion` se arma sola
+// (ej. "AAPL 200 Call 18/12/2026") y es lo que muestran Blotter y Trading Desk.
+interface OpcionesBlock {
+  type: 'opciones'; id: string; descripcion: string; subyacente: string
+  tipoOpcion: 'call' | 'put'; strike: string; vencimiento: string
+  posicion: 'apertura' | 'cierre'
+  cantidad: string; precio: 'mercado' | 'limite' | 'stop'; precioLimite: string
+  moneda: string; operacion: 'compra' | 'venta'; fecha: string; observaciones: string
+  vigencia: 'DIA' | 'GTC'; comision: string
+}
+type OrderBlock = AccionesBlock | FondosBlock | BonosBlock | OpcionesBlock
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -78,6 +89,19 @@ function newFondos(id: string): FondosBlock {
 function newBonos(id: string): BonosBlock {
   return { type: 'bonos', id, descripcion: '', cusipIsin: '', cantidad: '', precio: 'mercado', precioLimite: '', moneda: 'USD', operacion: 'compra', fecha: todayStr(), observaciones: '', vigencia: 'DIA', comision: '', maturity: '', cupon: '' }
 }
+function newOpciones(id: string): OpcionesBlock {
+  return { type: 'opciones', id, descripcion: '', subyacente: '', tipoOpcion: 'call', strike: '', vencimiento: '', posicion: 'apertura', cantidad: '', precio: 'limite', precioLimite: '', moneda: 'USD', operacion: 'compra', fecha: todayStr(), observaciones: '', vigencia: 'DIA', comision: '' }
+}
+function opcionDescripcion(b: OpcionesBlock): string {
+  return [b.subyacente.trim().toUpperCase(), b.strike.trim(), b.tipoOpcion === 'put' ? 'Put' : 'Call', b.vencimiento.trim()]
+    .filter(Boolean).join(' ')
+}
+function newBlock(type: OrderType, id: string): OrderBlock {
+  return type === 'acciones' ? newAcciones(id) : type === 'fondos' ? newFondos(id) : type === 'bonos' ? newBonos(id) : newOpciones(id)
+}
+function blockNombre(b: OrderBlock): string {
+  return b.type === 'acciones' ? b.nombre : b.type === 'fondos' ? b.fondo : b.descripcion
+}
 
 // ─── Email generation ─────────────────────────────────────────────────────────
 
@@ -97,7 +121,7 @@ function generateEmailText(blocks: OrderBlock[], clientName: string, clientNumbe
   blocks.forEach((block, idx) => {
     lines.push(`─────────────────────────────────────────`)
     lines.push(``)
-    lines.push(`ORDEN ${idx + 1} — ${block.type === 'acciones' ? 'RENTA VARIABLE (ACCIONES)' : block.type === 'fondos' ? 'FONDO DE INVERSIÓN' : 'RENTA FIJA (BONO)'}`)
+    lines.push(`ORDEN ${idx + 1} — ${block.type === 'acciones' ? 'RENTA VARIABLE (ACCIONES)' : block.type === 'fondos' ? 'FONDO DE INVERSIÓN' : block.type === 'opciones' ? 'OPCIONES' : 'RENTA FIJA (BONO)'}`)
     lines.push(``)
     if (block.type === 'acciones') {
       lines.push(`  Operación:   ${block.operacion === 'compra' ? 'Compra' : 'Venta'}`)
@@ -115,6 +139,17 @@ function generateEmailText(blocks: OrderBlock[], clientName: string, clientNumbe
       if (block.cusipIsin) lines.push(`  ISIN:        ${block.cusipIsin}`)
       lines.push(`  Monto:       ${block.monto || '—'} ${block.moneda}`)
       if (block.montoAclaracion) lines.push(`               (${block.montoAclaracion})`)
+      lines.push(`  Moneda:      ${block.moneda}`)
+      lines.push(`  Fecha:       ${block.fecha || '—'}`)
+      lines.push(`  Vigencia:    ${block.vigencia}`)
+    } else if (block.type === 'opciones') {
+      lines.push(`  Operación:   ${block.operacion === 'compra' ? 'Compra' : 'Venta'} (${block.posicion === 'apertura' ? 'apertura' : 'cierre'})`)
+      lines.push(`  Opción:      ${block.tipoOpcion === 'put' ? 'Put' : 'Call'}`)
+      lines.push(`  Subyacente:  ${block.subyacente.trim().toUpperCase() || '—'}`)
+      lines.push(`  Strike:      ${block.strike || '—'} ${block.moneda}`)
+      lines.push(`  Vencimiento: ${block.vencimiento || '—'}`)
+      lines.push(`  Contratos:   ${block.cantidad === 'TOTAL' ? 'TODA LA POSICIÓN' : `${block.cantidad || '—'} (1 contrato = 100 acciones)`}`)
+      lines.push(`  Prima:       ${block.precio === 'mercado' ? 'A mercado' : block.precio === 'stop' ? `Stop ${block.precioLimite} ${block.moneda}` : `Límite ${block.precioLimite} ${block.moneda}`} por acción`)
       lines.push(`  Moneda:      ${block.moneda}`)
       lines.push(`  Fecha:       ${block.fecha || '—'}`)
       lines.push(`  Vigencia:    ${block.vigencia}`)
@@ -153,6 +188,12 @@ function validateBlocks(blocks: OrderBlock[]): string[] {
     } else if (block.type === 'fondos') {
       if (!block.fondo.trim()) errs.push(`Orden ${n} (Fondo): falta nombre del fondo`)
       if (!block.monto.trim()) errs.push(`Orden ${n} (Fondo): falta monto`)
+    } else if (block.type === 'opciones') {
+      if (!block.subyacente.trim()) errs.push(`Orden ${n} (Opción): falta subyacente`)
+      if (!block.strike.trim()) errs.push(`Orden ${n} (Opción): falta strike`)
+      if (!block.vencimiento.trim()) errs.push(`Orden ${n} (Opción): falta vencimiento`)
+      if (!block.cantidad.trim()) errs.push(`Orden ${n} (Opción): falta cantidad de contratos`)
+      if (block.precio !== 'mercado' && !block.precioLimite.trim()) errs.push(`Orden ${n} (Opción): falta la prima`)
     } else {
       if (!block.descripcion.trim()) errs.push(`Orden ${n} (Bono): falta descripción del bono`)
       if (!block.cantidad.trim()) errs.push(`Orden ${n} (Bono): falta valor nominal`)
@@ -204,6 +245,7 @@ const COLOR_MAP = {
   blue:    { header: 'bg-blue-50 border-blue-200',       badge: 'bg-blue-100 text-blue-700' },
   emerald: { header: 'bg-emerald-50 border-emerald-200', badge: 'bg-emerald-100 text-emerald-700' },
   amber:   { header: 'bg-amber-50 border-amber-200',     badge: 'bg-amber-100 text-amber-700' },
+  violet:  { header: 'bg-violet-50 border-violet-200',   badge: 'bg-violet-100 text-violet-700' },
 }
 
 function BlockShell({ title, index, id, color, onRemove, children }: {
@@ -367,6 +409,56 @@ function BonosForm({ block, index, onChange, onRemove }: { block: BonosBlock; in
   )
 }
 
+function OpcionesForm({ block, index, onChange, onRemove }: { block: OpcionesBlock; index: number; onChange: (id: string, f: string, v: string) => void; onRemove: (id: string) => void }) {
+  const upd = (f: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => onChange(block.id, f, e.target.value)
+  return (
+    <BlockShell title={block.descripcion ? `Opción · ${block.descripcion}` : 'Opción'} index={index} id={block.id} color="violet" onRemove={onRemove}>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <Field label="Operación"><select className={selectCls} value={block.operacion} onChange={upd('operacion')}><option value="compra">Compra</option><option value="venta">Venta</option></select></Field>
+        <Field label="Apertura / cierre">
+          <select className={selectCls} value={block.posicion} onChange={(e) => { onChange(block.id, 'posicion', e.target.value); if (e.target.value === 'apertura' && block.cantidad === 'TOTAL') onChange(block.id, 'cantidad', '') }}>
+            <option value="apertura">Apertura (abre posición)</option>
+            <option value="cierre">Cierre (cierra posición)</option>
+          </select>
+        </Field>
+        <Field label="Tipo"><select className={selectCls} value={block.tipoOpcion} onChange={upd('tipoOpcion')}><option value="call">Call</option><option value="put">Put</option></select></Field>
+        <Field label="Subyacente (ticker) *"><input className={inputCls} placeholder="Ej: AAPL" value={block.subyacente} onChange={upd('subyacente')} /></Field>
+        <Field label="Strike *"><input className={inputCls} inputMode="decimal" placeholder="Ej: 200" value={block.strike} onChange={upd('strike')} /></Field>
+        <Field label="Vencimiento *"><input className={inputCls} placeholder="Ej: 18/12/2026" value={block.vencimiento} onChange={upd('vencimiento')} /></Field>
+        <Field label="Contratos *">
+          {block.cantidad === 'TOTAL' ? (
+            <div className={`${inputCls} text-gray-500 italic`}>Toda la posición</div>
+          ) : (
+            <MilesInput className={inputCls} placeholder="Ej: 5" value={block.cantidad} onChange={(v) => onChange(block.id, 'cantidad', v)} />
+          )}
+          <p className="text-[10px] text-gray-400 mt-1">1 contrato = 100 acciones del subyacente.</p>
+          {block.posicion === 'cierre' && (
+            <label className="flex items-center gap-1.5 mt-1.5 text-[11px] text-gray-500 cursor-pointer">
+              <input type="checkbox" checked={block.cantidad === 'TOTAL'}
+                onChange={(e) => onChange(block.id, 'cantidad', e.target.checked ? 'TOTAL' : '')} />
+              Cerrar toda la posición (sin especificar cantidad exacta)
+            </label>
+          )}
+        </Field>
+        <Field label="Tipo de precio"><select className={selectCls} value={block.precio} onChange={upd('precio')}><option value="limite">Prima límite</option><option value="mercado">A mercado</option><option value="stop">Stop</option></select></Field>
+        {block.precio !== 'mercado' && <Field label={block.precio === 'stop' ? 'Prima stop (por acción) *' : 'Prima límite (por acción) *'}><input className={inputCls} inputMode="decimal" placeholder="Ej: 3.50" value={block.precioLimite} onChange={upd('precioLimite')} /></Field>}
+        <Field label="Moneda"><select className={selectCls} value={block.moneda} onChange={upd('moneda')}><option value="USD">USD</option><option value="EUR">EUR</option></select></Field>
+        <Field label="Fecha">
+          <div className="flex gap-2">
+            <input className={`${inputCls} flex-1 min-w-0`} placeholder={todayStr()} value={block.fecha} onChange={upd('fecha')} />
+            <button type="button" onClick={() => onChange(block.id, 'fecha', todayStr())} className="px-3 py-2 text-xs text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 shrink-0 transition whitespace-nowrap">Hoy</button>
+          </div>
+        </Field>
+        <Field label="Vigencia"><select className={selectCls} value={block.vigencia} onChange={upd('vigencia')}><option value="DIA">DIA</option><option value="GTC">GTC</option></select></Field>
+      </div>
+      <InternalSection>
+        <Field label="Comisión"><input className={inputCls} placeholder="Ej: USD 2 por contrato" value={block.comision} onChange={upd('comision')} /></Field>
+        <Field label="Observaciones internas"><textarea className={inputCls + ' resize-none'} rows={2} placeholder="Notas internas…" value={block.observaciones} onChange={upd('observaciones')} /></Field>
+      </InternalSection>
+    </BlockShell>
+  )
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 interface Props { onBack: () => void; gmailConnected?: boolean; userEmail?: string }
@@ -431,13 +523,17 @@ export default function FormularioDirecto({ onBack, gmailConnected = false }: Pr
 
   const addBlock = (type: OrderType) => {
     const id = uid()
-    setBlocks(prev => [...prev, type === 'acciones' ? newAcciones(id) : type === 'fondos' ? newFondos(id) : newBonos(id)])
+    setBlocks(prev => [...prev, newBlock(type, id)])
     setPreview(null)
     setValidationErrors([])
   }
   const removeBlock = useCallback((id: string) => { setBlocks(prev => prev.filter(b => b.id !== id)); setPreview(null) }, [])
   const updateBlock = useCallback((id: string, field: string, value: string) => {
-    setBlocks(prev => prev.map(b => b.id === id ? { ...b, [field]: value } as OrderBlock : b))
+    setBlocks(prev => prev.map(b => {
+      if (b.id !== id) return b
+      const next = { ...b, [field]: value } as OrderBlock
+      return next.type === 'opciones' ? { ...next, descripcion: opcionDescripcion(next) } : next
+    }))
     setPreview(null)
   }, [])
 
@@ -470,9 +566,7 @@ export default function FormularioDirecto({ onBack, gmailConnected = false }: Pr
     try {
       const firstOp = blocks[0]
       const tipoOp = firstOp.operacion as 'compra' | 'venta'
-      const firstNombre = firstOp.type === 'acciones' ? firstOp.nombre
-        : firstOp.type === 'fondos' ? firstOp.fondo
-        : firstOp.descripcion
+      const firstNombre = blockNombre(firstOp)
       const res = await fetch('/api/solicitudes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -564,9 +658,7 @@ export default function FormularioDirecto({ onBack, gmailConnected = false }: Pr
 
       const firstOp = blocks[0]
       const tipoOp = firstOp.operacion as 'compra' | 'venta'
-      const firstNombre = firstOp.type === 'acciones' ? firstOp.nombre
-        : firstOp.type === 'fondos' ? firstOp.fondo
-        : firstOp.descripcion
+      const firstNombre = blockNombre(firstOp)
       const res = await fetch('/api/solicitudes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -871,6 +963,7 @@ export default function FormularioDirecto({ onBack, gmailConnected = false }: Pr
               {blocks.map((block, idx) =>
                 block.type === 'acciones' ? <AccionesForm key={block.id} block={block} index={idx} onChange={updateBlock} onRemove={removeBlock} />
                 : block.type === 'fondos' ? <FondosForm key={block.id} block={block} index={idx} onChange={updateBlock} onRemove={removeBlock} />
+                : block.type === 'opciones' ? <OpcionesForm key={block.id} block={block} index={idx} onChange={updateBlock} onRemove={removeBlock} />
                 : <BonosForm key={block.id} block={block} index={idx} onChange={updateBlock} onRemove={removeBlock} />
               )}
             </div>
@@ -879,7 +972,7 @@ export default function FormularioDirecto({ onBack, gmailConnected = false }: Pr
           {/* Agregar activo */}
           <div className="bg-white rounded-xl border border-dashed border-gray-300 p-4">
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2.5">Agregar activo</p>
-            <div className="flex gap-2.5">
+            <div className="grid grid-cols-2 sm:flex gap-2.5">
               <button type="button" onClick={() => addBlock('acciones')}
                 className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg border border-blue-200 bg-blue-50 text-blue-700 text-sm font-semibold hover:bg-blue-100 transition">
                 <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 015.814-5.519l2.74-1.22m0 0l-5.94-2.28m5.94 2.28l-2.28 5.941" /></svg>
@@ -895,6 +988,11 @@ export default function FormularioDirecto({ onBack, gmailConnected = false }: Pr
                 <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 14.25l6-6m4.5-3.493V21.75l-3.75-1.5-3.75 1.5-3.75-1.5-3.75 1.5V4.757c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0c1.1.128 1.907 1.077 1.907 2.185z" /></svg>
                 Bono
               </button>
+              <button type="button" onClick={() => addBlock('opciones')}
+                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg border border-violet-200 bg-violet-50 text-violet-700 text-sm font-semibold hover:bg-violet-100 transition">
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" /></svg>
+                Opción
+              </button>
             </div>
           </div>
 
@@ -907,9 +1005,10 @@ export default function FormularioDirecto({ onBack, gmailConnected = false }: Pr
                   <span key={b.id} className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${
                     b.type === 'acciones' ? 'bg-blue-100 text-blue-700' :
                     b.type === 'fondos'   ? 'bg-emerald-100 text-emerald-700' :
+                    b.type === 'opciones' ? 'bg-violet-100 text-violet-700' :
                     'bg-amber-100 text-amber-700'
                   }`}>
-                    #{i+1} {b.type === 'acciones' ? b.nombre || 'Acción' : b.type === 'fondos' ? b.fondo || 'Fondo' : b.descripcion || 'Bono'}
+                    #{i+1} {blockNombre(b) || (b.type === 'acciones' ? 'Acción' : b.type === 'fondos' ? 'Fondo' : b.type === 'opciones' ? 'Opción' : 'Bono')}
                   </span>
                 ))}
               </div>
