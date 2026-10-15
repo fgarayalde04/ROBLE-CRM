@@ -47,7 +47,8 @@ export default function NewReportModal({ onClose, onImported, initialMode, initi
 }) {
   const [step, setStep] = useState<'custodian' | 'upload' | 'preview' | 'importing' | 'done'>(initialMode ? 'upload' : 'custodian')
   const [mode, setMode] = useState<CustodianMode | null>(initialMode ?? null)
-  const [accountNumber, setAccountNumber] = useState(initialAccountNumber ?? '')
+  // Nombre del cliente (no se pide número de cuenta).
+  const [accountNumber, setAccountNumber] = useState('')
   const [error, setError] = useState('')
   const [uploading, setUploading] = useState(false)
 
@@ -65,12 +66,12 @@ export default function NewReportModal({ onClose, onImported, initialMode, initi
     try {
       const fd = new FormData()
       fd.append('file', file)
-      if (accountNumber) fd.append('accountNumber', accountNumber)
+      if (initialAccountNumber) fd.append('accountNumber', initialAccountNumber)
       const res = await fetch('/api/portfolio/parse', { method: 'POST', body: fd })
       const data = await res.json()
       if (!res.ok) { setError(data.error ?? 'Error al leer el archivo'); return }
       setPershingPreview(data)
-      if (!accountNumber && data.parsed.accountNumber) setAccountNumber(data.parsed.accountNumber)
+      if (!accountNumber && data.account?.clientName) setAccountNumber(data.account.clientName)
       if (mode === 'pershing') setStep('preview')
     } catch (e: any) {
       setError(e.message)
@@ -84,7 +85,7 @@ export default function NewReportModal({ onClose, onImported, initialMode, initi
     try {
       const fd = new FormData()
       fd.append('file', file)
-      if (accountNumber) fd.append('accountNumber', accountNumber)
+      if (initialAccountNumber) fd.append('accountNumber', initialAccountNumber)
       const res = await fetch('/api/portfolio/morgan/parse', { method: 'POST', body: fd })
       const data = await res.json()
       if (!res.ok) { setError(data.error ?? 'Error al leer el archivo'); return }
@@ -103,8 +104,10 @@ export default function NewReportModal({ onClose, onImported, initialMode, initi
   }
 
   async function handleConfirm() {
-    const finalAccountNumber = accountNumber.trim().toUpperCase()
-    if (!finalAccountNumber) { setError('Ingresá el número de cuenta'); return }
+    // Sin número de cuenta: la cuenta se guarda con el nombre del cliente.
+    const nombre = accountNumber.trim()
+    const finalAccountNumber = initialAccountNumber || nombre.toUpperCase()
+    if (!finalAccountNumber) { setError('Escribí el nombre del cliente'); return }
     setStep('importing'); setError('')
     const warnings: string[] = []
 
@@ -114,7 +117,7 @@ export default function NewReportModal({ onClose, onImported, initialMode, initi
         const parsed = { ...pershingPreview.parsed, accountNumber: finalAccountNumber }
         const res = await fetch('/api/portfolio/import', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ parsed, fileName: pershingPreview.fileName, replace: !!pershingPreview.existingImport }),
+          body: JSON.stringify({ parsed, fileName: pershingPreview.fileName, replace: true, clientName: nombre || null }),
         })
         const data = await res.json()
         if (!res.ok) throw new Error(data.error ?? 'Error al importar Pershing')
@@ -124,7 +127,7 @@ export default function NewReportModal({ onClose, onImported, initialMode, initi
         if (!morganPreview) throw new Error('Falta el archivo de Morgan Stanley')
         const res = await fetch('/api/portfolio/morgan/import', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ parsed: morganPreview.parsed, accountNumber: finalAccountNumber, fileName: morganPreview.fileName, replace: !!morganPreview.existingImport }),
+          body: JSON.stringify({ parsed: morganPreview.parsed, accountNumber: finalAccountNumber, fileName: morganPreview.fileName, replace: true, clientName: nombre || null }),
         })
         const data = await res.json()
         if (!res.ok) throw new Error(data.error ?? 'Error al importar Morgan Stanley')
@@ -179,16 +182,16 @@ export default function NewReportModal({ onClose, onImported, initialMode, initi
           {step === 'upload' && mode && (
             <div className="space-y-4">
               <div>
-                <p className="text-xs text-gray-400">Número de cuenta</p>
+                <p className="text-xs text-gray-400">Nombre del cliente</p>
                 <input
                   type="text"
                   value={accountNumber}
                   onChange={e => setAccountNumber(e.target.value)}
-                  placeholder="Ej: ROJ902303"
+                  placeholder="Ej: Three Diamonds"
                   className="w-full border border-gray-300 rounded-lg px-2.5 py-1.5 text-sm font-semibold text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#2E7D52]/30 mt-1"
                 />
                 {mode === 'consolidado' && (
-                  <p className="text-[11px] text-gray-400 mt-1">Se usa para las dos importaciones — así quedan ligadas al mismo cliente.</p>
+                  <p className="text-[11px] text-gray-400 mt-1">Las dos importaciones quedan bajo este cliente.</p>
                 )}
               </div>
 
@@ -251,14 +254,10 @@ export default function NewReportModal({ onClose, onImported, initialMode, initi
           {step === 'preview' && mode && (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3 text-sm">
-                <div><p className="text-xs text-gray-400">Cuenta</p><p className="font-semibold text-gray-800">{accountNumber}</p></div>
+                <div><p className="text-xs text-gray-400">Cliente</p><p className="font-semibold text-gray-800">{accountNumber || '—'}</p></div>
                 <div>
                   <p className="text-xs text-gray-400">Custodio(s)</p>
                   <p className="font-semibold text-gray-800">{mode === 'consolidado' ? 'Pershing + Morgan Stanley' : mode === 'morgan' ? 'Morgan Stanley' : 'Pershing'}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-400">Cliente</p>
-                  <p className="font-semibold text-gray-800">{pershingPreview?.account?.clientName ?? morganPreview?.account?.clientName ?? '—'}</p>
                 </div>
                 <div>
                   <p className="text-xs text-gray-400">Portfolio Value</p>
@@ -360,7 +359,7 @@ export default function NewReportModal({ onClose, onImported, initialMode, initi
             </button>
             <button
               onClick={handleConfirm}
-              disabled={!accountNumber.trim()}
+              disabled={!initialAccountNumber && !accountNumber.trim()}
               className="flex-1 py-2.5 rounded-lg text-sm font-bold text-white bg-[#2E7D52] hover:bg-[#256841] disabled:opacity-40 disabled:cursor-not-allowed transition"
             >
               Generar Reporte

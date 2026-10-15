@@ -33,6 +33,9 @@ export async function POST(req: NextRequest) {
     parsed.accountNumber = accountNumberHint
   }
 
+  // El número de cuenta no se pide: el asesor escribe el nombre del cliente.
+  parsed.warnings = parsed.warnings.filter(w => !/número de cuenta/i.test(w))
+
   const account = parsed.accountNumber ? await resolveAccount(parsed.accountNumber) : null
   const existing = parsed.accountNumber && parsed.snapshotDate
     ? await findImportByAccountAndDate(parsed.accountNumber, parsed.snapshotDate)

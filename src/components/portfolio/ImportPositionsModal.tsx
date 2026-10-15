@@ -34,7 +34,9 @@ export default function ImportPositionsModal({ accountNumber, onClose, onImporte
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState('')
   const [preview, setPreview] = useState<ParseResponse | null>(null)
-  const [manualAccount, setManualAccount] = useState('')
+  // Sin número de cuenta: el asesor escribe el nombre del cliente y la cuenta
+  // queda guardada con ese nombre (dentro de una cuenta ya abierta se usa esa).
+  const [clientName, setClientName] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
 
   // Cuenta nueva desde cero: los otros dos documentos (opcionales) se suben
@@ -55,7 +57,7 @@ export default function ImportPositionsModal({ accountNumber, onClose, onImporte
       const data = await res.json()
       if (!res.ok) { setError(data.error ?? 'Error al leer el archivo'); return }
       setPreview(data)
-      setManualAccount(data.parsed.accountNumber ?? accountNumber ?? '')
+      setClientName(data.account?.clientName ?? '')
       setStep('preview')
     } catch (e: any) {
       setError(e.message)
@@ -66,23 +68,21 @@ export default function ImportPositionsModal({ accountNumber, onClose, onImporte
 
   async function handleConfirm(replace = false) {
     if (!preview) return
-    const finalAccountNumber = manualAccount.trim().toUpperCase()
-    if (!finalAccountNumber) { setError('Ingresá el número de cuenta'); return }
+    const nombre = clientName.trim()
+    const finalAccountNumber = accountNumber || nombre.toUpperCase()
+    if (!finalAccountNumber) { setError('Escribí el nombre del cliente'); return }
     const parsed = { ...preview.parsed, accountNumber: finalAccountNumber }
     setStep('importing'); setError('')
     try {
       const res = await fetch('/api/portfolio/import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ parsed, fileName: preview.fileName, replace }),
+        body: JSON.stringify({ parsed, fileName: preview.fileName, replace, clientName: nombre || null }),
       })
       const data = await res.json()
       if (!res.ok) {
-        if (res.status === 409) {
-          setError('Ya existe un snapshot para esa cuenta y fecha.')
-          setStep('preview')
-          return
-        }
+        // Mismo cliente y fecha: se reemplaza lo anterior.
+        if (res.status === 409 && !replace) return handleConfirm(true)
         setError(data.error ?? 'Error al importar')
         setStep('preview')
         return
@@ -151,21 +151,16 @@ export default function ImportPositionsModal({ accountNumber, onClose, onImporte
           {step === 'preview' && preview && (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3 text-sm">
-                <div>
-                  <p className="text-xs text-gray-400">Número de cuenta</p>
-                  {preview.parsed.accountNumber ? (
-                    <p className="font-semibold text-gray-800">{preview.parsed.accountNumber}</p>
-                  ) : (
-                    <input
-                      type="text"
-                      value={manualAccount}
-                      onChange={e => setManualAccount(e.target.value)}
-                      placeholder="Ej: ROJ902303"
-                      className="w-full border border-amber-300 rounded-lg px-2 py-1 text-sm font-semibold text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#2E7D52]/30"
-                    />
-                  )}
+                <div className="col-span-2">
+                  <p className="text-xs text-gray-400">Nombre del cliente</p>
+                  <input
+                    type="text"
+                    value={clientName}
+                    onChange={e => setClientName(e.target.value)}
+                    placeholder="Ej: Three Diamonds"
+                    className="w-full border border-gray-300 rounded-lg px-2 py-1 text-sm font-semibold text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#2E7D52]/30"
+                  />
                 </div>
-                <div><p className="text-xs text-gray-400">Cliente</p><p className="font-semibold text-gray-800">{preview.account?.clientName ?? '—'}</p></div>
                 <div><p className="text-xs text-gray-400">Fecha</p><p className="font-semibold text-gray-800">{preview.parsed.snapshotDate ?? '—'}</p></div>
                 <div><p className="text-xs text-gray-400">Moneda</p><p className="font-semibold text-gray-800">{preview.parsed.baseCurrency}</p></div>
                 <div><p className="text-xs text-gray-400">Cantidad de posiciones</p><p className="font-semibold text-gray-800">{preview.parsed.positions.length}</p></div>
@@ -177,10 +172,6 @@ export default function ImportPositionsModal({ accountNumber, onClose, onImporte
                   <div><p className="text-xs text-gray-400">Cupón corrido (incluido)</p><p className="font-semibold text-gray-800">{fmtUSD(preview.parsed.totalAccruedInterest)}</p></div>
                 )}
               </div>
-              {!preview.parsed.accountNumber && (
-                <p className="text-[11px] text-amber-600 -mt-2">No se pudo detectar el número de cuenta en el archivo — completalo a mano para poder importar.</p>
-              )}
-
               {preview.existingImport && (
                 <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5 text-xs text-amber-800">
                   Ya existe un snapshot de esta cuenta para esta fecha ({preview.existingImport.positionCount} posiciones, {fmtUSD(preview.existingImport.totalMarketValue)}).
@@ -281,7 +272,7 @@ export default function ImportPositionsModal({ accountNumber, onClose, onImporte
             {step === 'preview' && (
               <button
                 onClick={() => handleConfirm(!!preview?.existingImport)}
-                disabled={!manualAccount.trim()}
+                disabled={!accountNumber && !clientName.trim()}
                 className="flex-1 py-2.5 rounded-lg text-sm font-bold text-white bg-[#2E7D52] hover:bg-[#256841] disabled:opacity-40 disabled:cursor-not-allowed transition"
               >
                 {preview?.existingImport ? 'Reemplazar e importar' : 'Confirmar importación'}

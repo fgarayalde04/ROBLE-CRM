@@ -4,14 +4,14 @@ import type { ParsedPortfolioConGL } from '@/lib/portfolio/unrealizedCompleto'
 import { resolveAccount, findImportByAccountAndDate, deleteImport, createImport, createUnrealizedGainLossImport } from '@/lib/db/portfolio'
 
 // POST /api/portfolio/import — confirm an import previewed via /api/portfolio/parse.
-// Body: { parsed: ParsedPortfolioImport, fileName: string, replace?: boolean }
+// Body: { parsed: ParsedPortfolioImport, fileName: string, replace?: boolean, clientName?: string }
 // Si el archivo era el Unrealized de Pershing, parsed.unrealizedGL trae el
 // costo y las fechas de compra y se guardan en el mismo paso.
 export async function POST(req: NextRequest) {
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
-  const body = await req.json() as { parsed: ParsedPortfolioConGL; fileName?: string; replace?: boolean }
+  const body = await req.json() as { parsed: ParsedPortfolioConGL; fileName?: string; replace?: boolean; clientName?: string | null }
   const parsed = body.parsed
   if (!parsed?.accountNumber || !parsed?.snapshotDate) {
     return NextResponse.json({ error: 'Datos de importación incompletos' }, { status: 400 })
@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
       parsed,
       accountNumber: parsed.accountNumber,
       clientNumber:  account.clientNumber,
-      clientName:    account.clientName,
+      clientName:    body.clientName?.trim() || account.clientName,
       advisor:       account.advisor,
       fileName:      body.fileName ?? 'positions.xlsx',
       importedBy:    session.name,

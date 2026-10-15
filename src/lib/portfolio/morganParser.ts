@@ -159,7 +159,6 @@ function parseMorganCostBasisExcel(raw: unknown[][]): ParsedMorganHoldings {
   // This export never carries a full account number — only a nickname/suffix
   // — so accountNumber stays null and the advisor types it in manually, the
   // same fallback already used when Pershing's own account-detection fails.
-  warnings.push('Morgan Stanley no incluye el número de cuenta completo en este archivo — ingresalo manualmente.')
 
   const headers = (raw[headerIdx] as unknown[]).map(h => String(h))
   const colMap: Record<number, string> = {}
@@ -351,7 +350,7 @@ function parseMorganHoldingsUngrouped(raw: unknown[][]): ParsedMorganHoldings {
   }
   const totals = extractLabeledTotals(raw.slice(0, headerIdx) as unknown[][])
 
-  const warnings: string[] = ['Morgan Stanley no incluye el número de cuenta completo en este archivo — ingresalo manualmente.']
+  const warnings: string[] = []
 
   const positions: PortfolioPositionParsed[] = []
   const glRows: UnrealizedGainLossRow[] = []
