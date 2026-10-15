@@ -322,6 +322,9 @@ function VistaReporte({ r, cliente, cuentas, manuales, setManual }: {
   const bancosTexto = r.bancos.join(' + ')
   const fuentes = new Set(r.posiciones.map((p) => p.fuenteCorrido).filter(Boolean))
   const columnas = 10
+  // Los barridos automáticos al money market llenan la lista: van solo en el resumen.
+  const detalle = r.movimientos.filter((m) => categoriaMovimiento(m) !== 'Money market')
+  const ocultos = r.movimientos.length - detalle.length
 
   return (
     <div id="reporte-consolidado" className="bg-white border border-gray-200 rounded-lg p-6 text-sm text-gray-800">
@@ -526,7 +529,7 @@ function VistaReporte({ r, cliente, cuentas, manuales, setManual }: {
                 <th className={`${th} text-right`}>Cantidad</th><th className={`${th} text-right`}>Precio</th><th className={`${th} text-right`}>Monto</th>
               </tr></thead>
               <tbody>
-                {r.movimientos.map((m, i) => (
+                {detalle.map((m, i) => (
                   <tr key={i} className="border-b border-gray-50">
                     <td className={`${td} whitespace-nowrap`}>{ddmmyyyy(m.fecha)}</td>
                     <td className={td}><EtiquetaBanco banco={m.banco} /></td>
@@ -540,6 +543,11 @@ function VistaReporte({ r, cliente, cuentas, manuales, setManual }: {
               </tbody>
             </table>
           </div>
+          {ocultos > 0 && (
+            <p className="mt-2 text-[10px] text-gray-400">
+              No se muestran en el detalle {ocultos} movimientos de money market (compras y rescates automáticos del fondo de liquidez); están sumados en el resumen y en el Excel.
+            </p>
+          )}
         </Seccion>
       )}
 

@@ -473,11 +473,14 @@ function leerMovimientos(g: Grilla, nombre: string, banco: Banco): ArchivoMovimi
   for (let r = h + 1; r < g.length; r++) {
     const row = g[r] ?? []
     const fecha = toIsoDate(row[c.fecha])
-    const tipo = texto(row[c.tipo])
-    if (!fecha || !tipo) continue
+    const tipoCompleto = texto(row[c.tipo])
+    if (!fecha || !tipoCompleto) continue
+    // Pershing: "Buy 100000.00000 parValue of AGVR5977436 at 105.949" → cantidad y precio a sus columnas.
+    const trade = tipoCompleto.match(/^(Buy|Sell)\s+(-?[\d.]+)\s.*?\bat\s+([\d.]+)$/i)
+    const tipo = trade ? trade[1] : tipoCompleto
     const desc = String(row[c.desc] ?? '').trim()
     const cusip = c.cusip >= 0 && !blanco(row[c.cusip]) ? texto(row[c.cusip]) : null
-    let cantidad = c.qty >= 0 ? num(row[c.qty]) : null
+    let cantidad = c.qty >= 0 ? num(row[c.qty]) : trade ? Math.abs(Number(trade[2])) : null
     // Pershing pone la cantidad al principio de la descripción ("45000 FEDERATIVE REPUBLIC…").
     if (cantidad == null && banco === 'Pershing') {
       const m = texto(desc).match(/^(\d[\d,]*(?:\.\d+)?)\s+[A-Z]/)
@@ -497,7 +500,7 @@ function leerMovimientos(g: Grilla, nombre: string, banco: Banco): ArchivoMovimi
       simbolo: c.simbolo >= 0 && !blanco(row[c.simbolo]) ? texto(row[c.simbolo]) : null,
       cusip,
       cantidad: cantidad === 0 ? null : cantidad,
-      precio: c.precio >= 0 && num(row[c.precio]) ? num(row[c.precio]) : null,
+      precio: c.precio >= 0 && num(row[c.precio]) ? num(row[c.precio]) : trade ? Number(trade[3]) : null,
       monto: c.monto >= 0 ? num(row[c.monto]) : null,
     })
   }
