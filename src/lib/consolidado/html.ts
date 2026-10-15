@@ -7,6 +7,7 @@
 
 import { ROBLE_LOGO_BASE64 } from '@/lib/icheAcciones/logoBase64'
 import { ROBLE_DISCLAIMER } from '@/lib/disclaimers'
+import { BNY_LOGO_BASE64 } from './logosBase64'
 import { categoriaMovimiento, ddmmyyyy, mesCorto, type LineaPosicion, type Reporte } from './calc'
 import { CLASES, type Banco, type Movimiento } from './types'
 
@@ -191,11 +192,7 @@ export function htmlEstadoCuenta(r: Reporte, o: OpcionesDocumento): string {
   // ── Resumen ──
   const resumen = `
   <section class="primera">
-    <div class="portada">
-      <div class="eyebrow">Posición consolidada</div>
-      <h1>${esc(cliente)}</h1>
-      <div class="fecha">Valuación al ${esc(fechaLarga(r.fecha))} · Custodios: ${esc(r.bancos.map(custodio).join(' y '))}</div>
-    </div>
+    <h2>Resumen de la cuenta <span class="h2-sub">· Valuación al ${esc(fechaLarga(r.fecha))} · Custodios: ${esc(r.bancos.map(custodio).join(' y '))}</span></h2>
     <div class="kpis">
       ${kpi('Valor total de la cuenta', usd(t.total), 'Valor de mercado + cupón corrido', true)}
       ${kpi('Valor de mercado', usd(t.valorMercado))}
@@ -336,6 +333,7 @@ export function htmlEstadoCuenta(r: Reporte, o: OpcionesDocumento): string {
   section.nueva { break-before: page; }
   h1 { font-size: 24pt; margin: 1mm 0 1mm; color: ${NAVY}; letter-spacing: 0.2px; }
   h2 { font-size: 12.5pt; color: ${NAVY}; margin: 0 0 3mm; padding-bottom: 1.5mm; border-bottom: 1.5px solid ${NAVY}; break-after: avoid; }
+  .h2-sub { font-size: 9pt; font-weight: 400; color: ${GRIS}; }
   h3 { font-size: 9pt; color: ${NAVY}; margin: 0 0 2mm; text-transform: uppercase; letter-spacing: 0.5px; break-after: avoid; }
   .portada { margin-bottom: 4mm; }
   .eyebrow { font-size: 9pt; color: #2E7D52; text-transform: uppercase; letter-spacing: 3px; font-weight: 700; }
@@ -386,6 +384,49 @@ export function htmlEstadoCuenta(r: Reporte, o: OpcionesDocumento): string {
   </style></head><body>
   ${resumen}${posiciones}${renta}${mov}${cierre}
   </body></html>`
+}
+
+/**
+ * Portada: se imprime aparte, sin el encabezado ni el pie de las demás hojas,
+ * y se une adelante del documento (pdf.ts).
+ */
+export function htmlPortada(r: Reporte, cliente: string) {
+  const nombre = cliente.trim() || 'Posición Consolidada'
+  const pershing = r.bancos.includes('Pershing')
+  const morgan = r.bancos.includes('Morgan Stanley')
+  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><style>
+  @page { size: A4 landscape; margin: 0; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { font-family: Arial, Helvetica, 'Liberation Sans', sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .hoja { width: 297mm; height: 210mm; padding: 14mm 16mm; display: flex; flex-direction: column; justify-content: space-between; overflow: hidden; }
+  .arriba { display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid ${NAVY}; padding-bottom: 3mm; }
+  .custodios { display: flex; align-items: center; gap: 6mm; }
+  .sep { width: 1px; height: 11mm; background: ${BORDE}; }
+  .ms { font-family: Georgia, 'Times New Roman', serif; font-size: 19pt; font-weight: 700; color: #002B51; letter-spacing: 0.3px; white-space: nowrap; }
+  .centro { text-align: center; }
+  .eyebrow { font-size: 13pt; color: #2E7D52; text-transform: uppercase; letter-spacing: 8px; font-weight: 700; }
+  .linea { width: 42mm; height: 2.5px; background: ${VERDE}; margin: 7mm auto; }
+  h1 { font-size: 38pt; font-weight: 800; color: #111827; margin: 0; letter-spacing: 0.3px; }
+  .fecha { font-size: 13pt; color: ${GRIS}; margin-top: 4mm; letter-spacing: 0.5px; }
+  .abajo { text-align: center; border-top: 1px solid ${BORDE}; padding-top: 5mm; font-size: 9pt; color: ${GRIS_CLARO}; text-transform: uppercase; letter-spacing: 1.5px; }
+  </style></head><body><div class="hoja">
+    <div class="arriba">
+      <img src="data:image/png;base64,${ROBLE_LOGO_BASE64}" style="height:22mm">
+      <div class="custodios">
+        ${pershing ? `<img src="data:image/png;base64,${BNY_LOGO_BASE64}" style="height:8mm">` : ''}
+        ${pershing && morgan ? '<span class="sep"></span>' : ''}
+        ${morgan ? '<span class="ms">Morgan Stanley</span>' : ''}
+      </div>
+    </div>
+    <div class="centro">
+      <div class="eyebrow">Posición consolidada</div>
+      <div class="linea"></div>
+      <h1>${esc(nombre)}</h1>
+      <div class="fecha">Valuación al ${esc(fechaLarga(r.fecha))}</div>
+    </div>
+    <div class="abajo">Documento confidencial · Preparado exclusivamente para ${esc(nombre)}</div>
+  </div></body></html>`
 }
 
 /** Encabezado de cada hoja (plantilla de Chromium: márgenes propios y estilos en línea). */
