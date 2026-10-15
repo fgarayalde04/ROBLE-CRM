@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { parsePortfolioExcel } from '@/lib/portfolio/parser'
 import { resolveAccount, findImportByAccountAndDate } from '@/lib/db/portfolio'
+import { completarDesdeUnrealized, esUnrealizedPershing } from '@/lib/portfolio/unrealizedCompleto'
 
 // POST /api/portfolio/parse — upload an Excel, parse it, return a preview.
 // Does NOT write to the database — that only happens on /api/portfolio/import.
@@ -18,6 +19,9 @@ export async function POST(req: NextRequest) {
   let parsed
   try {
     parsed = parsePortfolioExcel(buffer)
+    // El Unrealized de Pershing alcanza solo: costo, fechas de compra, cupón,
+    // vencimiento y cupón corrido salen del mismo archivo.
+    if (esUnrealizedPershing(buffer)) parsed = completarDesdeUnrealized(buffer, parsed)
   } catch (err: any) {
     return NextResponse.json({ error: 'No se pudo leer el archivo: ' + err.message }, { status: 400 })
   }

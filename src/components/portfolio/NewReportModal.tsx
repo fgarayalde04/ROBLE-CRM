@@ -1,6 +1,6 @@
 'use client'
 import { useState, useRef } from 'react'
-import type { ParsedPortfolioImport } from '@/lib/portfolio/parser'
+import type { ParsedPortfolioConGL } from '@/lib/portfolio/unrealizedCompleto'
 import type { ParsedMorganHoldings } from '@/lib/portfolio/morganParser'
 
 type CustodianMode = 'pershing' | 'morgan' | 'consolidado'
@@ -14,7 +14,7 @@ interface ResolvedAccount {
 }
 
 interface PershingParseResponse {
-  parsed: ParsedPortfolioImport
+  parsed: ParsedPortfolioConGL
   account: ResolvedAccount | null
   existingImport: { id: string; createdAt: string; positionCount: number; totalMarketValue: number } | null
   fileName: string
@@ -163,7 +163,7 @@ export default function NewReportModal({ onClose, onImported, initialMode, initi
             <div className="space-y-2.5">
               <p className="text-xs text-gray-500 mb-3">Elegí el custodio del reporte que querés generar.</p>
               {([
-                ['pershing', 'Pershing', 'Reporte con el flujo de siempre'],
+                ['pershing', 'Pershing', 'Sube el "Unrealized Gain Loss"'],
                 ['morgan', 'Morgan Stanley', 'Sube el export "Holdings - Cost Basis"'],
                 ['consolidado', 'Consolidado Pershing + Morgan', 'Combina ambos custodios en un solo reporte'],
               ] as [CustodianMode, string, string][]).map(([key, label, hint]) => (
@@ -206,7 +206,7 @@ export default function NewReportModal({ onClose, onImported, initialMode, initi
                     ) : uploading ? (
                       <span className="text-xs text-gray-500">Procesando…</span>
                     ) : (
-                      <p className="text-xs text-gray-500">Subí el Excel de posiciones (.xlsx)</p>
+                      <p className="text-xs text-gray-500">Subí "Unrealized Gain Loss" (.xlsx)</p>
                     )}
                   </div>
                   <input ref={pershingFileRef} type="file" accept=".xlsx,.xls" className="hidden"
@@ -283,7 +283,7 @@ export default function NewReportModal({ onClose, onImported, initialMode, initi
                 <div>
                   <p className="text-xs text-gray-400">Unrealized G/L</p>
                   <p className="font-semibold text-gray-800">
-                    {fmtUSD((morganPreview?.parsed.unrealizedGL.netGainLoss ?? 0))}
+                    {fmtUSD((morganPreview?.parsed.unrealizedGL.netGainLoss ?? 0) + (pershingPreview?.parsed.unrealizedGL?.netGainLoss ?? 0))}
                   </p>
                 </div>
                 {pershingPreview && <div><p className="text-xs text-gray-400">Fecha valuación Pershing</p><p className="font-semibold text-gray-800">{pershingPreview.parsed.snapshotDate ?? '—'}</p></div>}

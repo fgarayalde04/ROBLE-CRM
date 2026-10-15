@@ -263,7 +263,12 @@ function corridoMorgan(p: Posicion, grupo: GrupoMorgan | undefined, cantidadTota
 function corridoPorTasa(p: Posicion, t: Terminos | undefined, fecha: string): number | null {
   const tasa = p.tasa ?? t?.tasa ?? null
   const vto = p.vencimiento ?? t?.vencimiento ?? null
-  if (tasa == null || !p.cantidad) return null
+  return corridoEstimado(p.cantidad, tasa, vto, fecha)
+}
+
+/** Cupón corrido con tasa y vencimiento, suponiendo cupón semestral (30/360). */
+export function corridoEstimado(cantidad: number | null, tasa: number | null, vto: string | null, fecha: string): number | null {
+  if (tasa == null || !cantidad) return null
   if (tasa === 0) return 0
   if (!vto || vto <= fecha) return null
   let proximo = vto
@@ -272,7 +277,7 @@ function corridoPorTasa(p: Posicion, t: Terminos | undefined, fecha: string): nu
     if (anterior <= fecha) break
     proximo = anterior
   }
-  return corrido((p.cantidad * tasa) / 2, proximo, 2, fecha)
+  return corrido((cantidad * tasa) / 2, proximo, 2, fecha)
 }
 
 // ─── Movimientos ────────────────────────────────────────────────────────────

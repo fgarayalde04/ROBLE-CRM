@@ -8,7 +8,7 @@ import type { ParsedFactsheet, FactsheetPosition } from '@/types/factsheet'
 // ── Asset class mapping ───────────────────────────────────────────────────────
 
 // For funds: classify by what they hold, not just "Mutual Fund"
-function mapFundByName(name: string): string {
+export function mapFundByName(name: string): string {
   const n = name.toLowerCase()
 
   // Private credit / alternative credit / BDC → Alternatives

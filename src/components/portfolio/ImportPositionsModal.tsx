@@ -1,6 +1,6 @@
 'use client'
 import { useState, useRef } from 'react'
-import type { ParsedPortfolioImport } from '@/lib/portfolio/parser'
+import type { ParsedPortfolioConGL } from '@/lib/portfolio/unrealizedCompleto'
 
 interface ResolvedAccount {
   accountNumber: string
@@ -11,7 +11,7 @@ interface ResolvedAccount {
 }
 
 interface ParseResponse {
-  parsed: ParsedPortfolioImport
+  parsed: ParsedPortfolioConGL
   account: ResolvedAccount | null
   existingImport: { id: string; createdAt: string; positionCount: number; totalMarketValue: number } | null
   fileName: string
@@ -41,10 +41,8 @@ export default function ImportPositionsModal({ accountNumber, onClose, onImporte
   // junto con las posiciones para no forzar 3 pasos separados.
   const [cashFile, setCashFile] = useState<File | null>(null)
   const [perfFile, setPerfFile] = useState<File | null>(null)
-  const [glFile, setGlFile] = useState<File | null>(null)
   const cashFileRef = useRef<HTMLInputElement>(null)
   const perfFileRef = useRef<HTMLInputElement>(null)
-  const glFileRef = useRef<HTMLInputElement>(null)
   const [extraWarnings, setExtraWarnings] = useState<string[]>([])
 
   async function handleFile(file: File) {
@@ -106,13 +104,6 @@ export default function ImportPositionsModal({ accountNumber, onClose, onImporte
           if (!r.ok) warnings.push('No se pudo importar el PDF de Performance: ' + ((await r.json().catch(() => ({}))).error ?? 'error desconocido'))
         })())
       }
-      if (glFile) {
-        uploads.push((async () => {
-          const fd = new FormData(); fd.append('file', glFile)
-          const r = await fetch(`/api/portfolio/${encodeURIComponent(finalAccountNumber)}/unrealizedgl`, { method: 'POST', body: fd })
-          if (!r.ok) warnings.push('No se pudo importar el Excel de Unrealized Gain/Loss: ' + ((await r.json().catch(() => ({}))).error ?? 'error desconocido'))
-        })())
-      }
       if (uploads.length) await Promise.all(uploads)
 
       setExtraWarnings(warnings)
@@ -146,8 +137,8 @@ export default function ImportPositionsModal({ accountNumber, onClose, onImporte
                 ) : (
                   <>
                     <div className="text-3xl mb-2">📊</div>
-                    <p className="text-sm font-medium text-gray-700">Subí el Excel de posiciones</p>
-                    <p className="text-xs text-gray-400 mt-1">.xlsx · .xls</p>
+                    <p className="text-sm font-medium text-gray-700">Subí el Unrealized Gain Loss de Pershing</p>
+                    <p className="text-xs text-gray-400 mt-1">Trae posiciones, costo y fechas de compra · .xlsx · .xls</p>
                   </>
                 )}
               </div>
@@ -179,6 +170,9 @@ export default function ImportPositionsModal({ accountNumber, onClose, onImporte
                 <div><p className="text-xs text-gray-400">Moneda</p><p className="font-semibold text-gray-800">{preview.parsed.baseCurrency}</p></div>
                 <div><p className="text-xs text-gray-400">Cantidad de posiciones</p><p className="font-semibold text-gray-800">{preview.parsed.positions.length}</p></div>
                 <div><p className="text-xs text-gray-400">Valor total</p><p className="font-semibold text-gray-800">{fmtUSD(preview.parsed.totalMarketValue)}</p></div>
+                {preview.parsed.unrealizedGL && (
+                  <div><p className="text-xs text-gray-400">Costo y fechas de compra</p><p className="font-semibold text-emerald-700">Incluidos ({preview.parsed.unrealizedGL.rows.length})</p></div>
+                )}
                 {!!preview.parsed.totalAccruedInterest && (
                   <div><p className="text-xs text-gray-400">Cupón corrido (incluido)</p><p className="font-semibold text-gray-800">{fmtUSD(preview.parsed.totalAccruedInterest)}</p></div>
                 )}
@@ -251,14 +245,6 @@ export default function ImportPositionsModal({ accountNumber, onClose, onImporte
                   </button>
                   <input ref={perfFileRef} type="file" accept=".pdf" className="hidden"
                     onChange={e => setPerfFile(e.target.files?.[0] ?? null)} />
-
-                  <button onClick={() => glFileRef.current?.click()}
-                    className="w-full flex items-center justify-between px-3 py-2 border border-gray-200 rounded-lg text-xs hover:border-[#2E7D52] transition">
-                    <span className="text-gray-600">{glFile ? glFile.name : 'Unrealized Gain Loss (Excel)'}</span>
-                    <span className="font-semibold text-[#2E7D52] shrink-0 ml-2">{glFile ? 'Cambiar' : 'Elegir archivo'}</span>
-                  </button>
-                  <input ref={glFileRef} type="file" accept=".xlsx,.xls" className="hidden"
-                    onChange={e => setGlFile(e.target.files?.[0] ?? null)} />
                 </div>
               </div>
 
