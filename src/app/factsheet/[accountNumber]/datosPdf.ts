@@ -37,6 +37,14 @@ function sumarMeses(fecha: string, n: number) {
   return d.toISOString().slice(0, 7)
 }
 
+/** Nombre del cliente para mostrar: ficha de la cuenta, o el que se escribió al
+ *  importar; nunca el número de cuenta (las cuentas sin número se guardan con
+ *  el nombre del cliente como clave, y esa sí sirve). */
+export function nombreCliente(account: PortfolioAccountInfo | null, importRow: { client_name?: string | null } | null, accountNumber: string) {
+  return account?.clientName || account?.accountName || importRow?.client_name?.trim()
+    || (/\d{4,}/.test(accountNumber) ? '' : accountNumber)
+}
+
 export function armarDatosPdf(a: {
   account: PortfolioAccountInfo | null
   accountNumber: string
@@ -155,7 +163,7 @@ export function armarDatosPdf(a: {
     : [a.account?.custodian || 'Pershing']
 
   return {
-    cliente: a.account?.clientName || a.account?.accountName || '',
+    cliente: nombreCliente(a.account, a.importRow, a.accountNumber),
     fecha,
     custodios,
     consolidado: a.isConsolidated,

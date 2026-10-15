@@ -10,7 +10,7 @@ import MovimientosTab from './MovimientosTab'
 import ResumenTab from './ResumenTab'
 import DividendosTab from './DividendosTab'
 import ImportHistoryModal from '@/components/portfolio/ImportHistoryModal'
-import { armarDatosPdf } from './datosPdf'
+import { armarDatosPdf, nombreCliente } from './datosPdf'
 import PdfOptionsModal, { type PdfSections, DEFAULT_PDF_SECTIONS } from '@/components/portfolio/PdfOptionsModal'
 import { cleanDisplayName } from '@/lib/portfolio/theme'
 import { computeFundDividends, looksLikeBond, bondCouponRatePct, fundGroupKey, findFundPositionValue, fuzzyNameMatch, type DividendTxn } from '@/lib/portfolio/dividendEngine'
@@ -329,7 +329,7 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
       const url = URL.createObjectURL(await res.blob())
       const a = document.createElement('a')
       a.href = url
-      const clientName = (account?.clientName || account?.accountName || accountNumber).replace(/\s+/g, '_')
+      const clientName = (nombreCliente(account, importRow, accountNumber) || 'Cliente').replace(/\s+/g, '_')
       a.download = `Portfolio_${clientName}_${importRow.snapshot_date}.pdf`
       a.click()
       setTimeout(() => URL.revokeObjectURL(url), 10000)
@@ -514,7 +514,7 @@ function Header({ router, account, accountNumber, importRow, onImport, onHistory
               className={`text-lg font-bold truncate ${account ? 'text-gray-900 cursor-pointer hover:underline decoration-dashed underline-offset-4' : 'text-gray-900'}`}
               title={account ? 'Click para completar el nombre del cliente' : undefined}
             >
-              {account?.accountName || accountNumber}
+              {nombreCliente(account, importRow, accountNumber) || accountNumber}
             </h1>
           )}
           <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-gray-400 mt-0.5">
