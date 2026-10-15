@@ -9,8 +9,6 @@ import {
 } from '@/lib/consolidado/calc'
 import { BANCOS, CLASES, TIPOS_ARCHIVO, type ArchivoLeido, type Banco, type Terminos } from '@/lib/consolidado/types'
 import type { ConsolidadoRow, DatosConsolidado } from '@/lib/db/consolidados'
-import { generarPdfDePaginas } from '@/lib/portfolio/pdfPaginas'
-import ConsolidadoPdf from './ConsolidadoPdf'
 
 const hoyIso = () => {
   const d = new Date()
@@ -121,9 +119,22 @@ export default function ConsolidadoClient({ guardado, historial }: {
     setExportando('pdf')
     setAviso(null)
     try {
-      const paginas = Array.from(document.querySelectorAll('#consolidado-pdf .pdf-page')) as HTMLElement[]
-      const nombre = (cliente || 'Consolidado').replace(/\s+/g, '_')
-      await generarPdfDePaginas(paginas, `Posicion_consolidada_${nombre}_${reporte.fecha}.pdf`)
+      const res = await fetch('/api/consolidado/pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientName: cliente.trim(), fecha, datos: { archivos, fechaManual, manuales, externos, incluirMovimientos } }),
+      })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        setAviso(d.error ?? 'No se pudo generar el PDF.')
+        return
+      }
+      const url = URL.createObjectURL(await res.blob())
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `Posicion consolidada${cliente.trim() ? ` - ${cliente.trim()}` : ''} ${reporte.fecha}.pdf`
+      a.click()
+      setTimeout(() => URL.revokeObjectURL(url), 10000)
       if (cliente.trim()) await guardar(true)
     } finally {
       setExportando(null)
@@ -339,8 +350,6 @@ export default function ConsolidadoClient({ guardado, historial }: {
           })}
         />
       )}
-
-      {reporte && <ConsolidadoPdf r={reporte} cliente={cliente} cuentas={cuentasTexto} incluirMovimientos={incluirMovimientos} />}
 
       <Historial historial={historial} actual={savedId} />
     </div>
