@@ -59,6 +59,14 @@ export function completarDesdeUnrealized(buffer: ArrayBuffer, parsed: ParsedPort
     // Se queda la clasificación por nombre.
   }
 
+  // El Unrealized no trae precio: valor de mercado ÷ cantidad (los bonos
+  // cotizan cada 100 nominales), igual que en la Posición Consolidada.
+  for (const p of parsed.positions) {
+    if (p.price == null && p.quantity && p.assetClass !== 'Cash') {
+      p.price = Math.round((p.assetClass === 'Fixed Income' ? (p.marketValue / p.quantity) * 100 : p.marketValue / p.quantity) * 1e4) / 1e4
+    }
+  }
+
   const fecha = parsed.snapshotDate
   let estimados = 0
   for (const p of parsed.positions) {

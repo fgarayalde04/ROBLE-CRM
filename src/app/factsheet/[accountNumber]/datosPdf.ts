@@ -160,7 +160,9 @@ export function armarDatosPdf(a: {
 
   const custodios = a.isConsolidated
     ? ['Pershing', 'Morgan Stanley']
-    : [a.account?.custodian || 'Pershing']
+    // El custodio del reporte que se está viendo (el import lo guarda); el de la
+    // ficha de la cuenta puede no estar cargado.
+    : [(a.importRow as { custodian?: string | null }).custodian || a.account?.custodian || 'Pershing']
 
   return {
     cliente: nombreCliente(a.account, a.importRow, a.accountNumber),

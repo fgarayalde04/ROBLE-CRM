@@ -31,8 +31,16 @@ export const fmtDate = (iso: string) => new Date(iso + 'T00:00:00').toLocaleDate
 
 type Tab = 'resumen' | 'posiciones' | 'rendimiento' | 'movimientos' | 'dividendos'
 
-// Los ETF van en renta variable (también los importados antes de este cambio).
-const sinEtf = (ps: PortfolioPositionRow[]) => ps.map(p => (p.asset_class === 'ETF' ? { ...p, asset_class: 'Equity' } : p))
+// Los ETF van en renta variable, y si el reporte no traía precio (Unrealized
+// de Pershing) se calcula: valor de mercado ÷ cantidad, cada 100 nominales en
+// los bonos. Vale también para lo importado antes de estos cambios.
+const sinEtf = (ps: PortfolioPositionRow[]) => ps.map(p => {
+  const q = p.asset_class === 'ETF' ? { ...p, asset_class: 'Equity' } : p
+  const qty = Number(q.quantity)
+  if (q.price != null || !qty || q.asset_class === 'Cash') return q
+  const precio = q.asset_class === 'Fixed Income' ? (Number(q.market_value) / qty) * 100 : Number(q.market_value) / qty
+  return { ...q, price: String(Math.round(precio * 1e4) / 1e4) }
+})
 
 export default function PortfolioAccountClient({ accountNumber }: { accountNumber: string }) {
   const router = useRouter()
