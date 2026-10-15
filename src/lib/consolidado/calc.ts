@@ -1,0 +1,582 @@
+// Armado de la Posición Consolidada a partir de los archivos ya leídos de cada
+// banco: posiciones con su cupón corrido, totales por banco y por clase,
+// renta de los próximos 12 meses y movimientos. Puro: lo usan la pantalla, la
+// impresión y el Excel, así los tres muestran los mismos números.
+
+import { inferFrequency } from '@/lib/cupones/parse'
+import {
+  BANCOS, CLASES,
+  type ArchivoCupones, type ArchivoLeido, type ArchivoMovimientos, type ArchivoPosiciones, type Banco, type Clase, type ClasePago,
+  type Movimiento, type Pago, type Posicion, type Terminos, type TipoArchivo,
+} from './types'
+
+export type Archivos = Partial<Record<`${Banco}|${TipoArchivo}`, ArchivoLeido>>
+export const claveArchivo = (banco: Banco, tipo: TipoArchivo) => `${banco}|${tipo}` as const
+
+export type FuenteCorrido = 'archivo' | 'manual' | 'calendario' | 'tasa' | 'sin datos'
+
+export interface LineaPosicion extends Posicion {
+  cuponCorrido: number
+  fuenteCorrido: FuenteCorrido | null
+  /** Valor de mercado + cupón corrido. */
+  total: number
+  /** Sobre el total consolidado (con cupón corrido). */
+  peso: number
+}
+
+export interface Subtotal {
+  valorMercado: number
+  cuponCorrido: number
+  total: number
+  costo: number
+  resultado: number
+  peso: number
+  cantidad: number
+}
+
+export interface FilaRenta {
+  banco: Banco
+  cuenta: string | null
+  cusip: string | null
+  descripcion: string
+  clase: ClasePago
+  montos: number[]
+  total: number
+}
+
+export interface CategoriaMovimiento {
+  categoria: string
+  cantidad: number
+  monto: number
+}
+
+export interface Reporte {
+  fecha: string
+  bancos: Banco[]
+  posiciones: LineaPosicion[]
+  totales: Subtotal
+  porBanco: (Subtotal & { banco: Banco })[]
+  porClase: (Subtotal & { clase: Clase })[]
+  renta: {
+    meses: string[] // YYYY-MM
+    filas: FilaRenta[]
+    porBanco: { banco: Banco; montos: number[]; total: number }[]
+    montos: number[]
+    total: number
+    cupones: number
+    dividendos: number
+  }
+  movimientos: Movimiento[]
+  resumenMovimientos: CategoriaMovimiento[]
+  periodoMovimientos: { desde: string | null; hasta: string | null }
+  avisos: string[]
+}
+
+// ─── Fechas ─────────────────────────────────────────────────────────────────
+
+function sumarMeses(iso: string, n: number) {
+  const y = Number(iso.slice(0, 4))
+  const m = Number(iso.slice(5, 7)) - 1 + n
+  const yy = y + Math.floor(m / 12)
+  const mm = ((m % 12) + 12) % 12
+  const dias = new Date(Date.UTC(yy, mm + 1, 0)).getUTCDate()
+  const d = Math.min(Number(iso.slice(8, 10)), dias)
+  return `${yy}-${String(mm + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+}
+
+/** Días entre dos fechas en base 30/360 (la de los bonos corporativos y soberanos en USD). */
+function dias30360(a: string, b: string) {
+  const [y1, m1, d1] = [Number(a.slice(0, 4)), Number(a.slice(5, 7)), Number(a.slice(8, 10))]
+  const [y2, m2, d2] = [Number(b.slice(0, 4)), Number(b.slice(5, 7)), Number(b.slice(8, 10))]
+  const D1 = Math.min(d1, 30)
+  const D2 = d2 === 31 && D1 === 30 ? 30 : d2
+  return 360 * (y2 - y1) + 30 * (m2 - m1) + (D2 - D1)
+}
+
+/** Cupón corrido = cupón del período × fracción transcurrida desde el último pago. */
+function corrido(cuponPeriodo: number, proximo: string, frecuencia: number, fecha: string) {
+  const ultimo = sumarMeses(proximo, -12 / frecuencia)
+  const periodo = dias30360(ultimo, proximo)
+  if (periodo <= 0) return 0
+  const frac = Math.min(1, Math.max(0, dias30360(ultimo, fecha) / periodo))
+  return cuponPeriodo * frac
+}
+
+const r2 = (n: number) => Math.round(n * 100) / 100
+const normNombre = (s: string) => s.toUpperCase().replace(/\s*[|·]\s*.*$/, '').replace(/[^A-Z0-9%.]+/g, ' ').trim()
+
+// ─── Cupón corrido ──────────────────────────────────────────────────────────
+
+/** Pershing: pagos del Incoming Cash por CUSIP (y cuenta). */
+function corridoPershing(p: Posicion, pagos: Pago[], fecha: string): number | null {
+  const propios = pagos
+    .filter((x) => x.clase === 'Cupón' && x.cusip === p.cusip && (!x.cuenta || !p.cuenta || x.cuenta === p.cuenta))
+    .sort((a, b) => a.fecha.localeCompare(b.fecha))
+  const proximo = propios.find((x) => x.fecha > fecha)
+  if (!proximo) return null
+  let frecuencia: number | null = inferFrequency(propios.map((x) => x.fecha))
+  if (frecuencia == null) {
+    // Un solo pago en el año: anual, salvo que el bono venza dentro de ese año.
+    frecuencia = p.vencimiento && p.vencimiento <= sumarMeses(fecha, 12) ? 2 : 1
+  }
+  const escala = proximo.cantidad && p.cantidad ? p.cantidad / proximo.cantidad : 1
+  return corrido(proximo.monto * escala, proximo.fecha, frecuencia, fecha)
+}
+
+interface GrupoMorgan {
+  id: string
+  nombre: string
+  pagos: Pago[]
+  frecuencia: number
+}
+
+/**
+ * Morgan: el Projected Income viene por nombre de título (sin CUSIP) y con
+ * todas las cuentas sumadas. Cada fila se asigna a un CUSIP de las posiciones
+ * con el mismo nombre; si hay varios (dos bonos de YPF), se desempata por el
+ * día de pago contra el vencimiento y por la tasa implícita.
+ */
+function asignarGruposMorgan(
+  pagos: Pago[], posiciones: Posicion[], terminos: Record<string, Terminos>,
+): { porCusip: Map<string, GrupoMorgan>; sinAsignar: GrupoMorgan[]; cantidadTotal: Map<string, number> } {
+  const grupos = new Map<string, GrupoMorgan>()
+  for (const x of pagos) {
+    const id = x.grupo ?? x.descripcion
+    const g = grupos.get(id) ?? { id, nombre: normNombre(x.descripcion), pagos: [], frecuencia: 0 }
+    g.pagos.push(x)
+    grupos.set(id, g)
+  }
+  for (const g of Array.from(grupos.values())) {
+    g.pagos.sort((a, b) => a.fecha.localeCompare(b.fecha))
+    const limite = sumarMeses(g.pagos[0].fecha.slice(0, 8) + '01', 12)
+    g.frecuencia = g.pagos.filter((x) => x.fecha < limite).length
+  }
+
+  // Cantidad total por CUSIP en el archivo (todas las cuentas), para repartir.
+  const cantidadTotal = new Map<string, number>()
+  const cusipsPorNombre = new Map<string, Set<string>>()
+  for (const p of posiciones) {
+    if (!p.cusip) continue
+    cantidadTotal.set(p.cusip, (cantidadTotal.get(p.cusip) ?? 0) + (p.cantidad ?? 0))
+    const n = normNombre(p.descripcion)
+    const set = cusipsPorNombre.get(n) ?? new Set<string>()
+    set.add(p.cusip)
+    cusipsPorNombre.set(n, set)
+  }
+
+  const tasaDe = (cusip: string) => terminos[cusip]?.tasa ?? posiciones.find((p) => p.cusip === cusip)?.tasa ?? null
+  const vtoDe = (cusip: string) => terminos[cusip]?.vencimiento ?? posiciones.find((p) => p.cusip === cusip)?.vencimiento ?? null
+
+  const porCusip = new Map<string, GrupoMorgan>()
+  const sinAsignar: GrupoMorgan[] = []
+  const porNombre = new Map<string, GrupoMorgan[]>()
+  for (const g of Array.from(grupos.values())) porNombre.set(g.nombre, [...(porNombre.get(g.nombre) ?? []), g])
+
+  for (const [nombre, gs] of Array.from(porNombre.entries())) {
+    const cusips = Array.from(cusipsPorNombre.get(nombre) ?? [])
+    if (!cusips.length) { sinAsignar.push(...gs); continue }
+    if (gs.length === 1 && cusips.length === 1) { porCusip.set(cusips[0], gs[0]); continue }
+
+    const pares: { g: GrupoMorgan; c: string; score: number }[] = []
+    for (const g of gs) {
+      const primero = g.pagos[0]
+      for (const c of cusips) {
+        let score = 0
+        const vto = vtoDe(c)
+        if (vto && Number(vto.slice(8, 10)) === Number(primero.fecha.slice(8, 10))) {
+          const paso = 12 / Math.max(1, g.frecuencia)
+          const dif = (Number(vto.slice(5, 7)) - Number(primero.fecha.slice(5, 7)) + 12) % 12
+          if (dif % paso === 0) score += 3
+        }
+        const qty = cantidadTotal.get(c) ?? 0
+        const implicita = qty > 0 ? (primero.monto * g.frecuencia) / qty : null
+        const tasa = tasaDe(c)
+        if (implicita != null && tasa != null && Math.abs(implicita - tasa) < 0.0015) score += 2
+        if (score > 0) pares.push({ g, c, score })
+      }
+    }
+    pares.sort((a, b) => b.score - a.score)
+    const usados = new Set<string>()
+    for (const { g, c, score } of pares) {
+      if (score < 2 || usados.has(g.id) || porCusip.has(c)) continue
+      porCusip.set(c, g)
+      usados.add(g.id)
+    }
+
+    // Lo que queda: se asigna solo si hay una única combinación con una tasa
+    // implícita creíble (múltiplo de 1/8 % y entre 0,5 % y 20 %). Si dos bonos
+    // del mismo nombre y misma cantidad pueden ir con cualquiera de los pagos,
+    // quedan sin asignar antes que adivinar.
+    const creible = (g: GrupoMorgan, c: string) => {
+      const qty = cantidadTotal.get(c) ?? 0
+      if (!qty || g.frecuencia < 1) return false
+      const tasa = (g.pagos[0].monto * g.frecuencia) / qty
+      if (tasa < 0.005 || tasa > 0.2) return false
+      const octavos = tasa * 800
+      // Los montos del Projected Income vienen redondeados al dólar.
+      const tolerancia = (g.frecuencia * 800) / qty + 0.02
+      return Math.abs(octavos - Math.round(octavos)) <= tolerancia
+    }
+    for (let cambio = true; cambio; ) {
+      cambio = false
+      const libresG = gs.filter((g) => !usados.has(g.id))
+      const libresC = cusips.filter((c) => !porCusip.has(c))
+      for (const g of libresG) {
+        const cands = libresC.filter((c) => creible(g, c))
+        if (cands.length !== 1) continue
+        const c = cands[0]
+        if (libresG.filter((o) => creible(o, c)).length !== 1) continue
+        porCusip.set(c, g)
+        usados.add(g.id)
+        cambio = true
+        break
+      }
+    }
+    // Un solo pago y un solo bono sin asignar: van juntos si la tasa es razonable.
+    const restoG = gs.filter((g) => !usados.has(g.id))
+    const restoC = cusips.filter((c) => !porCusip.has(c))
+    if (restoG.length === 1 && restoC.length === 1) {
+      const qty = cantidadTotal.get(restoC[0]) ?? 0
+      const tasa = qty ? (restoG[0].pagos[0].monto * restoG[0].frecuencia) / qty : 0
+      if (tasa >= 0.01 && tasa <= 0.2) {
+        porCusip.set(restoC[0], restoG[0])
+        usados.add(restoG[0].id)
+      }
+    }
+    for (const g of gs) if (!usados.has(g.id)) sinAsignar.push(g)
+  }
+  return { porCusip, sinAsignar, cantidadTotal }
+}
+
+function corridoMorgan(p: Posicion, grupo: GrupoMorgan | undefined, cantidadTotal: number, fecha: string): number | null {
+  if (!grupo || !p.cantidad || !cantidadTotal || grupo.frecuencia < 1) return null
+  const proximo = grupo.pagos.find((x) => x.fecha > fecha)
+  if (!proximo) return null
+  return corrido(proximo.monto * (p.cantidad / cantidadTotal), proximo.fecha, grupo.frecuencia, fecha)
+}
+
+/** Sin calendario: cupón semestral con fechas de pago tomadas del vencimiento. */
+function corridoPorTasa(p: Posicion, t: Terminos | undefined, fecha: string): number | null {
+  const tasa = p.tasa ?? t?.tasa ?? null
+  const vto = p.vencimiento ?? t?.vencimiento ?? null
+  if (tasa == null || !p.cantidad) return null
+  if (tasa === 0) return 0
+  if (!vto || vto <= fecha) return null
+  let proximo = vto
+  for (let i = 0; i < 400; i++) {
+    const anterior = sumarMeses(vto, -6 * (i + 1))
+    if (anterior <= fecha) break
+    proximo = anterior
+  }
+  return corrido((p.cantidad * tasa) / 2, proximo, 2, fecha)
+}
+
+// ─── Movimientos ────────────────────────────────────────────────────────────
+
+export function categoriaMovimiento(m: Movimiento): string {
+  const t = `${m.tipo} ${m.descripcion}`.toUpperCase()
+  if (/CANCEL/.test(m.tipo.toUpperCase())) return 'Cancelaciones'
+  if (/MONEY (MARKET )?FUND|MMF|SWEEP|BANK DEPOSIT/.test(t) && !/INTEREST INCOME|DIVIDEND/.test(m.tipo.toUpperCase())) return 'Money market'
+  if (/WITHHOLD|\bTAX\b/.test(t)) return 'Impuestos'
+  if (/\bFEE\b|COMMISSION|PERFORMANCE|ADVISORY|MAINTENANCE/.test(t)) return 'Comisiones y gastos'
+  if (/^(BOUGHT|BUY|PURCHASE)|BOUGHT|PURCHASE/.test(m.tipo.toUpperCase())) return 'Compras'
+  if (/^(SOLD|SELL)|SOLD|REDEMPTION|REDEEMED|MATURITY|CALLED/.test(m.tipo.toUpperCase())) return 'Ventas y vencimientos'
+  if (/INTEREST|BOND INT/.test(m.tipo.toUpperCase())) return 'Cupones e intereses'
+  if (/DIVIDEND|DIV\b/.test(m.tipo.toUpperCase())) return 'Dividendos'
+  if (/FUNDS|WIRE|TRANSFER|DEPOSIT|PAYMENT|JOURNAL|CHECK|DISBURSE|RECEIVED/.test(t)) return 'Transferencias'
+  return 'Otros'
+}
+
+const ORDEN_CATEGORIAS = [
+  'Compras', 'Ventas y vencimientos', 'Cupones e intereses', 'Dividendos', 'Transferencias', 'Comisiones y gastos', 'Impuestos', 'Money market', 'Cancelaciones', 'Otros',
+]
+
+// ─── Reporte ────────────────────────────────────────────────────────────────
+
+function vacio(): Subtotal {
+  return { valorMercado: 0, cuponCorrido: 0, total: 0, costo: 0, resultado: 0, peso: 0, cantidad: 0 }
+}
+function acumular(s: Subtotal, l: LineaPosicion) {
+  s.valorMercado += l.valorMercado
+  s.cuponCorrido += l.cuponCorrido
+  s.total += l.total
+  s.costo += l.costo ?? 0
+  s.resultado += l.resultado ?? 0
+  s.cantidad += 1
+}
+
+const ORDEN_CLASE = Object.fromEntries(CLASES.map((c, i) => [c, i])) as Record<Clase, number>
+
+/** Todas las cuentas que aparecen en los archivos, por banco. */
+export function cuentasDe(archivos: Archivos): { banco: Banco; cuenta: string }[] {
+  const out: { banco: Banco; cuenta: string }[] = []
+  for (const banco of BANCOS) {
+    const set = new Set<string>()
+    for (const tipo of ['posiciones', 'movimientos', 'cupones'] as TipoArchivo[]) {
+      for (const c of archivos[claveArchivo(banco, tipo)]?.cuentas ?? []) set.add(c)
+    }
+    for (const cuenta of Array.from(set).sort()) out.push({ banco, cuenta })
+  }
+  return out
+}
+
+/** Fecha de valuación sugerida: la más reciente de los reportes de posiciones. */
+export function fechaSugerida(archivos: Archivos): string | null {
+  const fechas = BANCOS.map((b) => archivos[claveArchivo(b, 'posiciones')]?.fecha).filter((x): x is string => !!x)
+  return fechas.sort().pop() ?? null
+}
+
+/** Clave de una posición para cargarle el cupón corrido a mano. */
+export const clavePosicion = (p: Pick<Posicion, 'banco' | 'cuenta' | 'cusip' | 'descripcion'>) =>
+  `${p.banco}|${p.cuenta ?? ''}|${p.cusip ?? p.descripcion}`
+
+/**
+ * `excluidas`: claves "banco|cuenta" que no entran al reporte (por si un
+ * export trae más cuentas de las del cliente). Vacío = todas.
+ * `manuales`: cupón corrido cargado a mano por posición (clavePosicion).
+ */
+export function armarReporte(
+  archivos: Archivos, fecha: string, excluidas: Set<string> = new Set(), manuales: Record<string, number> = {},
+): Reporte {
+  const avisos: string[] = []
+  const incluida = (banco: Banco, cuenta: string | null) => !cuenta || !excluidas.has(`${banco}|${cuenta}`)
+  const hayFiltro = excluidas.size > 0
+
+  const pos = (b: Banco) => archivos[claveArchivo(b, 'posiciones')] as ArchivoPosiciones | undefined
+  const cup = (b: Banco) => archivos[claveArchivo(b, 'cupones')] as ArchivoCupones | undefined
+  const mov = (b: Banco) => archivos[claveArchivo(b, 'movimientos')] as ArchivoMovimientos | undefined
+
+  const lineas: LineaPosicion[] = []
+  const filasRenta: FilaRenta[] = []
+  const meses = Array.from({ length: 12 }, (_, i) => sumarMeses(fecha.slice(0, 8) + '01', i).slice(0, 7))
+  const mesIdx = (iso: string) => meses.indexOf(iso.slice(0, 7))
+
+  // Tasa y vencimiento por CUSIP de todo lo que se subió, de los dos bancos:
+  // si un bono está en ambos, la descripción de Pershing sirve para Morgan.
+  const terminos: Record<string, Terminos> = {}
+  const sumarTerminos = (cusip: string | null, t: Terminos | null) => {
+    if (!cusip || !t || t.tasa == null) return
+    const prev = terminos[cusip]
+    if (!prev) terminos[cusip] = { ...t }
+    else prev.vencimiento ??= t.vencimiento
+  }
+  for (const b of BANCOS) {
+    for (const [c, t] of Object.entries(mov(b)?.terminos ?? {})) sumarTerminos(c, t)
+    for (const p of pos(b)?.posiciones ?? []) if (p.clase === 'Renta fija') sumarTerminos(p.cusip, { tasa: p.tasa, vencimiento: p.vencimiento })
+  }
+
+  for (const banco of BANCOS) {
+    const ap = pos(banco)
+    const ac = cup(banco)
+    const todas = ap?.posiciones ?? []
+
+    // Morgan: asignación de las filas del Projected Income a CUSIPs.
+    const morgan = banco === 'Morgan Stanley' && ac ? asignarGruposMorgan(ac.pagos, todas, terminos) : null
+
+    const sinCorrido: string[] = []
+    for (const p of todas) {
+      if (!incluida(banco, p.cuenta)) continue
+      let valor: number | null = null
+      let fuente: FuenteCorrido | null = null
+      const manual = manuales[clavePosicion(p)]
+      if (manual != null && isFinite(manual)) {
+        valor = manual
+        fuente = 'manual'
+      } else if (p.cuponCorridoArchivo != null) {
+        valor = p.cuponCorridoArchivo
+        fuente = 'archivo'
+      } else if (p.clase === 'Renta fija' && /TREASURY BILL|\bT-?BILL\b/i.test(p.descripcion)) {
+        valor = 0 // letras a descuento: no devengan cupón
+      } else if (p.clase === 'Renta fija') {
+        if (ac && banco === 'Pershing') valor = corridoPershing(p, ac.pagos, fecha)
+        if (morgan && p.cusip) valor = corridoMorgan(p, morgan.porCusip.get(p.cusip), morgan.cantidadTotal.get(p.cusip) ?? 0, fecha)
+        if (valor != null) fuente = 'calendario'
+        else {
+          valor = corridoPorTasa(p, p.cusip ? terminos[p.cusip] : undefined, fecha)
+          fuente = valor != null ? 'tasa' : 'sin datos'
+          if (valor == null) sinCorrido.push(p.descripcion)
+        }
+      }
+      const cc = r2(valor ?? 0)
+      lineas.push({ ...p, cuponCorrido: cc, fuenteCorrido: fuente, total: r2(p.valorMercado + cc), peso: 0 })
+    }
+    if (sinCorrido.length) {
+      avisos.push(`${banco}: sin datos para calcular el cupón corrido de ${sinCorrido.length} bono(s) (${sinCorrido.slice(0, 6).join('; ')}${sinCorrido.length > 6 ? '…' : ''}). ${ac ? '' : 'Subí el calendario de cupones de este banco para calcularlo.'}`.trim())
+    }
+
+    // Control del total del archivo (solo si entran todas las cuentas).
+    if (ap?.totalArchivo != null && !ap.cuentas.some((c) => !incluida(banco, c))) {
+      const suma = ap.posiciones.reduce((s, p) => s + p.valorMercado, 0)
+      if (Math.abs(suma - ap.totalArchivo) > 1) {
+        avisos.push(`${banco}: la suma de las posiciones (${fmt(suma)}) no coincide con el total del archivo (${fmt(ap.totalArchivo)}).`)
+      }
+    }
+
+    // ── Renta próximos 12 meses ──
+    if (ac && banco === 'Pershing') {
+      const porTitulo = new Map<string, FilaRenta>()
+      for (const x of ac.pagos) {
+        if (!incluida(banco, x.cuenta) || x.fecha <= fecha) continue
+        const i = mesIdx(x.fecha)
+        if (i < 0) continue
+        const k = `${x.cuenta}|${x.cusip}|${x.clase}`
+        const f = porTitulo.get(k) ?? { banco, cuenta: x.cuenta, cusip: x.cusip, descripcion: x.descripcion, clase: x.clase, montos: Array(12).fill(0), total: 0 }
+        f.montos[i] += x.monto
+        porTitulo.set(k, f)
+      }
+      filasRenta.push(...Array.from(porTitulo.values()))
+    }
+    if (ac && morgan) {
+      const asignados = new Map<string, string>() // grupo → cusip
+      for (const [c, g] of Array.from(morgan.porCusip.entries())) asignados.set(g.id, c)
+      const grupos = new Map<string, Pago[]>()
+      for (const x of ac.pagos) grupos.set(x.grupo ?? x.descripcion, [...(grupos.get(x.grupo ?? x.descripcion) ?? []), x])
+      const huerfanos: string[] = []
+      for (const [id, ps] of Array.from(grupos.entries())) {
+        const cusip = asignados.get(id) ?? null
+        let factor = 1
+        let clase: ClasePago = ps[0].clase
+        let descripcion = ps[0].descripcion
+        if (cusip) {
+          const propias = todas.filter((p) => p.cusip === cusip)
+          const total = morgan.cantidadTotal.get(cusip) ?? 0
+          const elegidas = propias.filter((p) => incluida(banco, p.cuenta)).reduce((s, p) => s + (p.cantidad ?? 0), 0)
+          factor = total ? elegidas / total : 0
+          const ref = propias[0]
+          if (ref) {
+            descripcion = ref.descripcion
+            clase = ref.clase === 'Renta fija' ? (ps[0].clase === 'Otro' ? 'Otro' : 'Cupón') : 'Dividendo'
+          }
+        } else if (hayFiltro) {
+          // Solo se avisa si el nombre coincide con una posición de las cuentas elegidas.
+          const n = normNombre(ps[0].descripcion)
+          if (todas.some((p) => incluida(banco, p.cuenta) && normNombre(p.descripcion) === n)) huerfanos.push(ps[0].descripcion)
+          continue
+        } else {
+          clase = ps[0].clase === 'Otro' ? 'Otro' : 'Cupón'
+          huerfanos.push(ps[0].descripcion)
+        }
+        if (factor <= 0) continue
+        const f: FilaRenta = { banco, cuenta: null, cusip, descripcion, clase, montos: Array(12).fill(0), total: 0 }
+        for (const x of ps) {
+          if (x.fecha <= fecha) continue
+          const i = mesIdx(x.fecha)
+          if (i >= 0) f.montos[i] += x.monto * factor
+        }
+        filasRenta.push(f)
+      }
+      if (huerfanos.length) {
+        avisos.push(
+          hayFiltro
+            ? `Morgan Stanley: ${huerfanos.length} título(s) del Projected Income no se pudieron asociar a una posición y quedaron fuera de la renta (${huerfanos.slice(0, 5).join('; ')}${huerfanos.length > 5 ? '…' : ''}).`
+            : `Morgan Stanley: ${huerfanos.length} título(s) del Projected Income no se pudieron asociar a una posición; se incluyen en la renta tal cual vienen (${huerfanos.slice(0, 5).join('; ')}${huerfanos.length > 5 ? '…' : ''}).`,
+        )
+      }
+    }
+  }
+
+  // ── Totales y pesos ──
+  const totales = vacio()
+  for (const l of lineas) acumular(totales, l)
+  for (const l of lineas) l.peso = totales.total ? l.total / totales.total : 0
+  lineas.sort((a, b) => ORDEN_CLASE[a.clase] - ORDEN_CLASE[b.clase] || b.total - a.total)
+
+  const porBanco = BANCOS.filter((b) => lineas.some((l) => l.banco === b)).map((banco) => {
+    const s = vacio()
+    for (const l of lineas) if (l.banco === banco) acumular(s, l)
+    s.peso = totales.total ? s.total / totales.total : 0
+    return { banco, ...s }
+  })
+  const porClase = CLASES.filter((c) => lineas.some((l) => l.clase === c)).map((clase) => {
+    const s = vacio()
+    for (const l of lineas) if (l.clase === clase) acumular(s, l)
+    s.peso = totales.total ? s.total / totales.total : 0
+    return { clase, ...s }
+  })
+
+  // ── Renta ──
+  for (const f of filasRenta) {
+    f.montos = f.montos.map(r2)
+    f.total = r2(f.montos.reduce((s, v) => s + v, 0))
+  }
+  const filas = filasRenta.filter((f) => f.total !== 0).sort((a, b) => {
+    const pa = a.montos.findIndex((v) => v !== 0)
+    const pb = b.montos.findIndex((v) => v !== 0)
+    return pa - pb || a.descripcion.localeCompare(b.descripcion)
+  })
+  const sumaMeses = (fs: FilaRenta[]) => meses.map((_, i) => r2(fs.reduce((s, f) => s + f.montos[i], 0)))
+  const rentaPorBanco = BANCOS.filter((b) => filas.some((f) => f.banco === b)).map((banco) => {
+    const montos = sumaMeses(filas.filter((f) => f.banco === banco))
+    return { banco, montos, total: r2(montos.reduce((s, v) => s + v, 0)) }
+  })
+  const montosRenta = sumaMeses(filas)
+
+  // ── Movimientos ──
+  const movimientos = BANCOS.flatMap((b) => mov(b)?.movimientos ?? [])
+    .filter((m) => incluida(m.banco, m.cuenta))
+    .sort((a, b) => (b.fecha ?? '').localeCompare(a.fecha ?? '') || a.banco.localeCompare(b.banco))
+  const porCategoria = new Map<string, CategoriaMovimiento>()
+  for (const m of movimientos) {
+    const categoria = categoriaMovimiento(m)
+    const c = porCategoria.get(categoria) ?? { categoria, cantidad: 0, monto: 0 }
+    c.cantidad += 1
+    c.monto = r2(c.monto + (m.monto ?? 0))
+    porCategoria.set(categoria, c)
+  }
+  const resumenMovimientos = ORDEN_CATEGORIAS.map((c) => porCategoria.get(c)).filter((c): c is CategoriaMovimiento => !!c)
+  const fechasMov = movimientos.map((m) => m.fecha).filter((x): x is string => !!x).sort()
+
+  // ── Avisos generales ──
+  const fechasPos = BANCOS.map((b) => pos(b)?.fecha ? { b, f: pos(b)!.fecha! } : null).filter((x): x is { b: Banco; f: string } => !!x)
+  if (fechasPos.length === 2 && fechasPos[0].f !== fechasPos[1].f) {
+    avisos.push(`Las posiciones son de fechas distintas: Pershing al ${ddmmyyyy(fechasPos[0].f)} y Morgan Stanley al ${ddmmyyyy(fechasPos[1].f)}.`)
+  }
+  for (const b of BANCOS) if (pos(b) && !cup(b) && lineas.some((l) => l.banco === b && l.clase === 'Renta fija')) {
+    avisos.push(`${b}: no se subió el calendario de cupones; el cupón corrido de sus bonos se estimó con la tasa y el vencimiento (pago semestral).`)
+  }
+
+  return {
+    fecha,
+    bancos: BANCOS.filter((b) => lineas.some((l) => l.banco === b) || filas.some((f) => f.banco === b) || movimientos.some((m) => m.banco === b)),
+    posiciones: lineas,
+    totales: { ...totales, peso: 1 },
+    porBanco,
+    porClase,
+    renta: {
+      meses,
+      filas,
+      porBanco: rentaPorBanco,
+      montos: montosRenta,
+      total: r2(montosRenta.reduce((s, v) => s + v, 0)),
+      cupones: r2(filas.filter((f) => f.clase === 'Cupón').reduce((s, f) => s + f.total, 0)),
+      dividendos: r2(filas.filter((f) => f.clase === 'Dividendo').reduce((s, f) => s + f.total, 0)),
+    },
+    movimientos,
+    resumenMovimientos,
+    periodoMovimientos: { desde: fechasMov[0] ?? null, hasta: fechasMov[fechasMov.length - 1] ?? null },
+    avisos,
+  }
+}
+
+// ─── Formatos ───────────────────────────────────────────────────────────────
+
+export function fmt(n: number | null | undefined, decimales = 2) {
+  if (n == null) return '—'
+  const s = Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: decimales, maximumFractionDigits: decimales })
+  return n < 0 ? `(${s})` : s
+}
+
+export const fmtPct = (n: number | null | undefined, decimales = 1) => (n == null ? '—' : `${(n * 100).toFixed(decimales)}%`)
+
+export const ddmmyyyy = (iso: string | null) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : '—')
+
+const MESES_CORTOS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
+export const mesCorto = (ym: string) => `${MESES_CORTOS[Number(ym.slice(5, 7)) - 1]} ${ym.slice(2, 4)}`
+
+export const ETIQUETA_FUENTE: Record<FuenteCorrido, string> = {
+  archivo: 'informado por el banco',
+  manual: 'cargado a mano',
+  calendario: 'calculado con el calendario de cupones',
+  tasa: 'estimado con tasa y vencimiento',
+  'sin datos': 'sin datos para calcularlo',
+}
