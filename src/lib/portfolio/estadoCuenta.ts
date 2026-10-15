@@ -116,8 +116,8 @@ export function htmlPortafolio(d: DatosPdfPortafolio): string {
     </div>
     <div class="tres">
       ${tablaBarras('Por clase de activo', d.composicion.clases)}
-      ${d.composicion.rentaFija.length ? tablaBarras('Renta fija', d.composicion.rentaFija) : tablaBarras('Por moneda', d.composicion.monedas)}
-      ${d.composicion.custodios.length > 1 ? tablaBarras('Por custodio', d.composicion.custodios) : d.composicion.rentaFija.length ? tablaBarras('Por moneda', d.composicion.monedas) : '<div></div>'}
+      ${tablaBarras('Por moneda', d.composicion.monedas)}
+      ${d.composicion.custodios.length > 1 ? tablaBarras('Por custodio', d.composicion.custodios) : '<div></div>'}
     </div>
     <div class="bloque">
       <h3>Principales inversiones</h3>
