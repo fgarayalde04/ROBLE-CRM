@@ -91,6 +91,8 @@ export interface Movimiento {
 export interface Terminos {
   tasa: number | null
   vencimiento: string | null
+  /** Sin vencimiento (perpetuo, típico de los CoCos y algunos híbridos). */
+  perpetuo?: boolean
 }
 
 export interface ArchivoMovimientos {

@@ -1,11 +1,16 @@
 'use client'
 
-import { Fragment, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import {
-  ETIQUETA_FUENTE, armarReporte, categoriaMovimiento, claveArchivo, clavePosicion, cuentasDe, ddmmyyyy, fechaSugerida, fmt, fmtPct, mesCorto,
+  ETIQUETA_FUENTE, armarReporte, bonosIncompletos, categoriaMovimiento, claveArchivo, clavePosicion, cuentasDe, ddmmyyyy, fechaSugerida, fmt, fmtPct, mesCorto,
   type Archivos, type LineaPosicion, type Reporte,
 } from '@/lib/consolidado/calc'
-import { BANCOS, CLASES, TIPOS_ARCHIVO, type ArchivoLeido, type Banco } from '@/lib/consolidado/types'
+import { BANCOS, CLASES, TIPOS_ARCHIVO, type ArchivoLeido, type Banco, type Terminos } from '@/lib/consolidado/types'
+import type { ConsolidadoRow, DatosConsolidado } from '@/lib/db/consolidados'
+import { generarPdfDePaginas } from '@/lib/portfolio/pdfPaginas'
+import ConsolidadoPdf from './ConsolidadoPdf'
 
 const hoyIso = () => {
   const d = new Date()
@@ -27,23 +32,103 @@ function EtiquetaBanco({ banco }: { banco: Banco }) {
 
 const MARCA_FUENTE: Record<string, string> = { tasa: '≈', 'sin datos': '!', manual: '✎' }
 
-export default function ConsolidadoClient() {
-  const [archivos, setArchivos] = useState<Archivos>({})
+export default function ConsolidadoClient({ guardado, historial }: {
+  guardado: { id: string; cliente: string; datos: DatosConsolidado } | null
+  historial: ConsolidadoRow[]
+}) {
+  const router = useRouter()
+  const [archivos, setArchivos] = useState<Archivos>(guardado?.datos.archivos ?? {})
   const [errores, setErrores] = useState<string[]>([])
   const [cargando, setCargando] = useState(0)
   const [arrastrando, setArrastrando] = useState(false)
-  const [cliente, setCliente] = useState('')
-  const [fechaManual, setFechaManual] = useState<string | null>(null)
-  const [manuales, setManuales] = useState<Record<string, number>>({})
-  const [exportando, setExportando] = useState(false)
+  const [cliente, setCliente] = useState(guardado?.cliente ?? '')
+  const [fechaManual, setFechaManual] = useState<string | null>(guardado?.datos.fechaManual ?? null)
+  const [manuales, setManuales] = useState<Record<string, number>>(guardado?.datos.manuales ?? {})
+  const [externos, setExternos] = useState<Record<string, Terminos>>(guardado?.datos.externos ?? {})
+  const [incluirMovimientos, setIncluirMovimientos] = useState(guardado?.datos.incluirMovimientos ?? true)
+  const [savedId, setSavedId] = useState<string | null>(guardado?.id ?? null)
+  const [exportando, setExportando] = useState<'excel' | 'pdf' | 'guardar' | null>(null)
+  const [aviso, setAviso] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
   const fecha = fechaManual ?? fechaSugerida(archivos) ?? hoyIso()
   const cuentas = useMemo(() => cuentasDe(archivos), [archivos])
+  const cuentasTexto = cuentas.map((c) => `${c.banco} ${c.cuenta}`).join(' · ')
   const reporte = useMemo(
-    () => (Object.keys(archivos).length ? armarReporte(archivos, fecha, new Set(), manuales) : null),
-    [archivos, fecha, manuales],
+    () => (Object.keys(archivos).length ? armarReporte(archivos, fecha, new Set(), manuales, externos) : null),
+    [archivos, fecha, manuales, externos],
   )
+
+  // "Abrir" otro consolidado del historial (cambia ?id=) lo carga en pantalla.
+  useEffect(() => {
+    if (!guardado || guardado.id === savedId) return
+    setArchivos(guardado.datos.archivos)
+    setCliente(guardado.cliente)
+    setFechaManual(guardado.datos.fechaManual ?? null)
+    setManuales(guardado.datos.manuales ?? {})
+    setExternos(guardado.datos.externos ?? {})
+    setIncluirMovimientos(guardado.datos.incluirMovimientos ?? true)
+    setSavedId(guardado.id)
+    setErrores([])
+    setAviso(null)
+    window.scrollTo({ top: 0 })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [guardado?.id])
+
+  // Bonos sin cupón o vencimiento en ningún archivo: se completan con OpenFIGI.
+  const faltantes = useMemo(() => bonosIncompletos(archivos).filter((c) => !(c in externos)), [archivos, externos])
+  useEffect(() => {
+    if (!faltantes.length) return
+    let vivo = true
+    fetch('/api/consolidado/bonos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cusips: faltantes }) })
+      .then((r) => (r.ok ? r.json() : { terminos: {} }))
+      .then((d) => {
+        if (!vivo) return
+        // Los que no aparecen quedan marcados para no volver a pedirlos.
+        const vacios = Object.fromEntries(faltantes.map((c) => [c, { tasa: null, vencimiento: null } as Terminos]))
+        setExternos((prev) => ({ ...vacios, ...prev, ...(d.terminos ?? {}) }))
+      })
+      .catch(() => {})
+    return () => { vivo = false }
+  }, [faltantes])
+
+  async function guardar(silencioso = false): Promise<string | null> {
+    if (!reporte) return null
+    if (!cliente.trim()) {
+      setAviso('Poné el nombre del cliente para guardarlo.')
+      return null
+    }
+    const datos: DatosConsolidado = { archivos, fechaManual, manuales, externos, incluirMovimientos }
+    const res = await fetch('/api/consolidado/guardados', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: savedId, clientName: cliente.trim(), cuentas: cuentasTexto, fecha, datos }),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      setAviso(data.error ?? 'No se pudo guardar.')
+      return null
+    }
+    setSavedId(data.id)
+    if (!silencioso) setAviso('Guardado. Lo encontrás abajo, en Consolidados guardados.')
+    router.replace(`/factsheet/consolidado?id=${data.id}`, { scroll: false })
+    router.refresh()
+    return data.id
+  }
+
+  async function descargarPdf() {
+    if (!reporte) return
+    setExportando('pdf')
+    setAviso(null)
+    try {
+      const paginas = Array.from(document.querySelectorAll('#consolidado-pdf .pdf-page')) as HTMLElement[]
+      const nombre = (cliente || 'Consolidado').replace(/\s+/g, '_')
+      await generarPdfDePaginas(paginas, `Posicion_consolidada_${nombre}_${reporte.fecha}.pdf`)
+      if (cliente.trim()) await guardar(true)
+    } finally {
+      setExportando(null)
+    }
+  }
 
   async function subir(files: FileList | File[]) {
     const lista = Array.from(files)
@@ -81,7 +166,7 @@ export default function ConsolidadoClient() {
 
   async function descargarExcel() {
     if (!reporte) return
-    setExportando(true)
+    setExportando('excel')
     try {
       const XLSX = await import('xlsx')
       const wb = XLSX.utils.book_new()
@@ -120,8 +205,9 @@ export default function ConsolidadoClient() {
         ]), 'Movimientos')
       }
       XLSX.writeFile(wb, `Posicion consolidada${cliente ? ` - ${cliente}` : ''} ${reporte.fecha}.xlsx`)
+      if (cliente.trim()) await guardar(true)
     } finally {
-      setExportando(false)
+      setExportando(null)
     }
   }
 
@@ -209,17 +295,32 @@ export default function ConsolidadoClient() {
               <input type="date" value={fecha} onChange={(e) => setFechaManual(e.target.value || null)}
                 className="mt-1 block rounded border border-gray-200 px-2 py-1.5 text-sm focus:border-[#2D3F52] focus:outline-none" />
             </label>
+            <label className="flex items-center gap-1.5 pb-1.5 text-xs text-gray-600">
+              <input type="checkbox" checked={incluirMovimientos} onChange={(e) => setIncluirMovimientos(e.target.checked)} />
+              Incluir movimientos en el PDF
+            </label>
             <div className="ml-auto flex gap-2">
-              <button onClick={descargarExcel} disabled={!reporte || exportando}
+              <button onClick={async () => { setExportando('guardar'); setAviso(null); try { await guardar() } finally { setExportando(null) } }} disabled={!reporte || !!exportando}
                 className="rounded border border-gray-200 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50">
-                {exportando ? 'Generando…' : 'Descargar Excel'}
+                {exportando === 'guardar' ? 'Guardando…' : savedId ? 'Guardar cambios' : 'Guardar'}
               </button>
-              <button onClick={() => window.print()} disabled={!reporte}
+              <button onClick={descargarExcel} disabled={!reporte || !!exportando}
+                className="rounded border border-gray-200 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+                {exportando === 'excel' ? 'Generando…' : 'Descargar Excel'}
+              </button>
+              <button onClick={descargarPdf} disabled={!reporte || !!exportando}
                 className="rounded bg-[#2D3F52] px-3 py-1.5 text-sm text-white hover:bg-[#23323f] disabled:opacity-50">
-                Imprimir / PDF
+                {exportando === 'pdf' ? 'Generando PDF…' : 'Descargar PDF'}
               </button>
             </div>
           </div>
+          {aviso && <p className="mt-3 text-xs text-[#2D3F52]">{aviso}</p>}
+          {savedId && (
+            <p className="mt-2 text-[11px] text-gray-400">
+              Consolidado guardado: los cambios se guardan con “Guardar cambios” o al descargar.{' '}
+              <a href="/factsheet/consolidado" className="underline hover:text-gray-600">Empezar uno nuevo</a>
+            </p>
+          )}
 
         </div>
       )}
@@ -228,7 +329,7 @@ export default function ConsolidadoClient() {
         <VistaReporte
           r={reporte}
           cliente={cliente}
-          cuentas={cuentas.map((c) => `${c.banco} ${c.cuenta}`).join(' · ')}
+          cuentas={cuentasTexto}
           manuales={manuales}
           setManual={(clave, v) => setManuales((prev) => {
             const next = { ...prev }
@@ -238,6 +339,67 @@ export default function ConsolidadoClient() {
           })}
         />
       )}
+
+      {reporte && <ConsolidadoPdf r={reporte} cliente={cliente} cuentas={cuentasTexto} incluirMovimientos={incluirMovimientos} />}
+
+      <Historial historial={historial} actual={savedId} />
+    </div>
+  )
+}
+
+function Historial({ historial, actual }: { historial: ConsolidadoRow[]; actual: string | null }) {
+  const router = useRouter()
+  const [borrando, setBorrando] = useState<string | null>(null)
+  if (!historial.length) return null
+
+  async function borrar(h: ConsolidadoRow) {
+    if (!confirm(`¿Borrar el consolidado de ${h.client_name} al ${ddmmyyyy(h.valuation_date)}?`)) return
+    setBorrando(h.id)
+    try {
+      const res = await fetch(`/api/consolidado/guardados/${h.id}`, { method: 'DELETE' })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) alert(d.error ?? 'No se pudo borrar')
+      if (h.id === actual) window.location.href = '/factsheet/consolidado'
+      else router.refresh()
+    } finally {
+      setBorrando(null)
+    }
+  }
+
+  return (
+    <div className="bg-white border border-gray-200 rounded-lg p-5 print:hidden">
+      <h2 className="text-sm font-semibold text-gray-800">Consolidados guardados</h2>
+      <div className="mt-3 overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-gray-200 text-left text-[11px] uppercase tracking-wide text-gray-500">
+              <th className="px-2 py-1.5">Cliente</th><th className="px-2 py-1.5">Cuentas</th><th className="px-2 py-1.5">Valuación</th>
+              <th className="px-2 py-1.5 text-right">Total</th><th className="px-2 py-1.5 text-right">Cupón corrido</th>
+              <th className="px-2 py-1.5">Guardado por</th><th className="px-2 py-1.5" />
+            </tr>
+          </thead>
+          <tbody>
+            {historial.map((h) => (
+              <tr key={h.id} className={`border-b border-gray-50 ${h.id === actual ? 'bg-slate-50' : ''}`}>
+                <td className="px-2 py-1.5 font-medium text-gray-800">{h.client_name}</td>
+                <td className="px-2 py-1.5 text-xs text-gray-500">{h.cuentas || '—'}</td>
+                <td className="px-2 py-1.5 whitespace-nowrap">{ddmmyyyy(h.valuation_date)}</td>
+                <td className="px-2 py-1.5 text-right tabular-nums">{fmt(h.total_value)}</td>
+                <td className="px-2 py-1.5 text-right tabular-nums">{fmt(h.accrued_interest)}</td>
+                <td className="px-2 py-1.5 text-xs text-gray-500 whitespace-nowrap">{h.created_by ?? '—'} · {new Date(h.updated_at).toLocaleDateString('es-UY')}</td>
+                <td className="px-2 py-1.5 whitespace-nowrap text-right">
+                  {h.id === actual ? <span className="text-xs text-gray-400">abierto</span> : (
+                    <Link href={`/factsheet/consolidado?id=${h.id}`} className="text-xs text-[#2D3F52] underline">Abrir</Link>
+                  )}
+                  <button onClick={() => borrar(h)} disabled={borrando === h.id} className="ml-3 text-xs text-gray-400 hover:text-red-600 disabled:opacity-50">
+                    {borrando === h.id ? 'Borrando…' : 'Borrar'}
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }
@@ -424,10 +586,8 @@ function VistaReporte({ r, cliente, cuentas, manuales, setManual }: {
                         <tr key={clavePosicion(l)} className="border-b border-gray-50">
                           <td className={td}><EtiquetaBanco banco={l.banco} /></td>
                           <td className={td}>
-                            <p className="font-medium text-gray-800">{l.descripcion}</p>
-                            <p className="text-[10px] text-gray-400">
-                              {[l.cusip, l.simbolo, l.categoria, l.tasa != null ? `cupón ${(l.tasa * 100).toFixed(3)}%` : null, l.vencimiento ? `vto. ${ddmmyyyy(l.vencimiento)}` : null].filter(Boolean).join(' · ')}
-                            </p>
+                            <p className="font-medium text-gray-800" title={l.descripcion}>{l.nombre}</p>
+                            <p className="text-[10px] text-gray-400">{[l.detalle, l.categoria].filter(Boolean).join(' · ')}</p>
                           </td>
                           <td className={num}>{l.clase === 'Efectivo' ? '' : fmt(l.cantidad, l.cantidad != null && !Number.isInteger(l.cantidad) ? 3 : 0)}</td>
                           <td className={num}>{l.precio == null ? '' : fmt(l.precio, 3)}</td>

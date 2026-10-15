@@ -3,7 +3,7 @@
 // renta de los próximos 12 meses y movimientos. Puro: lo usan la pantalla, la
 // impresión y el Excel, así los tres muestran los mismos números.
 
-import { inferFrequency } from '@/lib/cupones/parse'
+import { inferFrequency, parseDescription } from '@/lib/cupones/parse'
 import {
   BANCOS, CLASES,
   type ArchivoCupones, type ArchivoLeido, type ArchivoMovimientos, type ArchivoPosiciones, type Banco, type Clase, type ClasePago,
@@ -16,6 +16,10 @@ export const claveArchivo = (banco: Banco, tipo: TipoArchivo) => `${banco}|${tip
 export type FuenteCorrido = 'archivo' | 'manual' | 'calendario' | 'tasa' | 'sin datos'
 
 export interface LineaPosicion extends Posicion {
+  /** Nombre legible para el cliente ("YPF 8.25% 2034") y línea de detalle (CUSIP · cupón · vencimiento). */
+  nombre: string
+  detalle: string
+  perpetuo: boolean
   cuponCorrido: number
   fuenteCorrido: FuenteCorrido | null
   /** Valor de mercado + cupón corrido. */
@@ -334,9 +338,12 @@ export const clavePosicion = (p: Pick<Posicion, 'banco' | 'cuenta' | 'cusip' | '
  * `excluidas`: claves "banco|cuenta" que no entran al reporte (por si un
  * export trae más cuentas de las del cliente). Vacío = todas.
  * `manuales`: cupón corrido cargado a mano por posición (clavePosicion).
+ * `externos`: tasa y vencimiento por CUSIP de OpenFIGI, para los bonos que no
+ * los traen en ningún archivo (se usan solo para completar lo que falta).
  */
 export function armarReporte(
   archivos: Archivos, fecha: string, excluidas: Set<string> = new Set(), manuales: Record<string, number> = {},
+  externos: Record<string, Terminos> = {},
 ): Reporte {
   const avisos: string[] = []
   const incluida = (banco: Banco, cuenta: string | null) => !cuenta || !excluidas.has(`${banco}|${cuenta}`)
@@ -362,6 +369,21 @@ export function armarReporte(
   for (const b of BANCOS) {
     for (const [c, t] of Object.entries(mov(b)?.terminos ?? {})) sumarTerminos(c, t)
     for (const p of pos(b)?.posiciones ?? []) if (p.clase === 'Renta fija') sumarTerminos(p.cusip, { tasa: p.tasa, vencimiento: p.vencimiento })
+    for (const x of cup(b)?.pagos ?? []) {
+      if (x.cusip && x.clase === 'Cupón') {
+        const info = parseDescription(x.descripcion)
+        sumarTerminos(x.cusip, { tasa: info.rate, vencimiento: info.maturity })
+      }
+    }
+  }
+  for (const [c, t] of Object.entries(externos)) {
+    const prev = terminos[c]
+    if (!prev) terminos[c] = { ...t }
+    else {
+      prev.tasa ??= t.tasa
+      prev.vencimiento ??= t.vencimiento
+      prev.perpetuo ||= t.perpetuo
+    }
   }
 
   for (const banco of BANCOS) {
@@ -397,7 +419,27 @@ export function armarReporte(
         }
       }
       const cc = r2(valor ?? 0)
-      lineas.push({ ...p, cuponCorrido: cc, fuenteCorrido: fuente, total: r2(p.valorMercado + cc), peso: 0 })
+      // Cupón y vencimiento: del propio archivo, si no de los otros archivos u
+      // OpenFIGI, y el cupón en último caso del calendario (pago × frecuencia ÷ nominal).
+      const t = p.cusip ? terminos[p.cusip] : undefined
+      let tasa = p.tasa ?? t?.tasa ?? null
+      if (tasa == null && p.clase === 'Renta fija' && morgan && p.cusip) {
+        const g = morgan.porCusip.get(p.cusip)
+        const qty = morgan.cantidadTotal.get(p.cusip) ?? 0
+        if (g && qty) {
+          // Los montos vienen redondeados al dólar: si queda a un pelo de un octavo, va el octavo.
+          const implicita = (g.pagos[0].monto * g.frecuencia) / qty
+          const octavo = Math.round(implicita * 800) / 800
+          tasa = Math.abs(implicita - octavo) < 0.0001 ? octavo : Math.round(implicita * 1e5) / 1e5
+        }
+      }
+      const linea = {
+        ...p,
+        tasa: p.clase === 'Renta fija' ? tasa : null,
+        vencimiento: p.clase === 'Renta fija' ? p.vencimiento ?? t?.vencimiento ?? null : null,
+        perpetuo: p.clase === 'Renta fija' && !(p.vencimiento ?? t?.vencimiento) && !!t?.perpetuo,
+      }
+      lineas.push({ ...linea, ...nombreParaCliente(linea), cuponCorrido: cc, fuenteCorrido: fuente, total: r2(p.valorMercado + cc), peso: 0 })
     }
     if (sinCorrido.length) {
       avisos.push(`${banco}: sin datos para calcular el cupón corrido de ${sinCorrido.length} bono(s) (${sinCorrido.slice(0, 6).join('; ')}${sinCorrido.length > 6 ? '…' : ''}). ${ac ? '' : 'Subí el calendario de cupones de este banco para calcularlo.'}`.trim())
@@ -552,6 +594,61 @@ export function armarReporte(
     periodoMovimientos: { desde: fechasMov[0] ?? null, hasta: fechasMov[fechasMov.length - 1] ?? null },
     avisos,
   }
+}
+
+// ─── Nombres para el cliente ────────────────────────────────────────────────
+
+const SIGLAS = /^(SA|SAU|BV|NV|LLC|PLC|USD|EUR|ETF|ETN|YPF|HSBC|BBVA|JPM|MSCI|QQQ|DNCA|IBM|HP|GM|UK|US|NA|AG|DAC|II|III|IV|GIS|ACC|DIST|HDG|BDP)$/
+const MINUSCULAS = /^(of|de|del|y|and|the)$/
+
+function titulo(s: string) {
+  return s
+    .toLowerCase()
+    .replace(/[a-z0-9.&']+/g, (w, off: number, todo: string) => {
+      const base = w.replace(/\./g, '').toUpperCase()
+      if (SIGLAS.test(base) || todo[off - 1] === '(') return w.toUpperCase()
+      if (off > 0 && MINUSCULAS.test(w)) return w
+      return w.charAt(0).toUpperCase() + w.slice(1)
+    })
+    .replace(/\bJpmorgan\b/g, 'JPMorgan')
+}
+
+const CORTES_EMISOR = [
+  /\s+ISIN#?/, /\s+FXD\b/, /\s+VAR\b/, /\s+FIXED\b/, /\s+REG\s?S\b/, /\s+B\/E\b/, /\s+SR\s+NTS?\b/, /\s+MEDIUM TERM\b/,
+  /\s+\d{1,2}(\.\d+)?%/, /\s+\d{2}\/\d{2}\/\d{2}\b/, /\s+(BOND|NOTES?)\b/, /\s+COCO\b/,
+]
+
+/** "YPF SA BOND ISIN#USP989MJBY67 8.250% 01/17/34…" → "YPF SA 8.25% 2034", con detalle "CUSIP … · Cupón 8.250% · Vto. 17/01/2034". */
+function nombreParaCliente(p: Pick<Posicion, 'descripcion' | 'clase' | 'cusip' | 'simbolo' | 'tasa' | 'vencimiento'> & { perpetuo: boolean }) {
+  const desc = p.descripcion.replace(/\s+/g, ' ').trim()
+  const id = [p.cusip ? `CUSIP ${p.cusip}` : null, p.simbolo].filter(Boolean).join(' · ')
+  if (p.clase !== 'Renta fija') {
+    const limpio = desc.replace(/\s*ISIN[#\s]*[A-Z]{2}[A-Z0-9]{9}\d\s*/i, ' ').replace(/\s+COM$/i, '').replace(/\s+/g, ' ').trim()
+    return { nombre: titulo(limpio), detalle: id }
+  }
+  let corte = desc.length
+  for (const re of CORTES_EMISOR) {
+    const m = re.exec(desc)
+    if (m && m.index > 0 && m.index < corte) corte = m.index
+  }
+  const emisor = titulo(desc.slice(0, corte).trim() || desc)
+  const tasa = p.tasa != null ? `${Number((p.tasa * 100).toFixed(3))}%` : null
+  const anio = p.vencimiento ? p.vencimiento.slice(0, 4) : p.perpetuo ? 'Perp.' : null
+  const nombre = [emisor, tasa, anio].filter(Boolean).join(' ')
+  const detalle = [
+    id,
+    p.tasa != null ? `Cupón ${(p.tasa * 100).toFixed(3)}%` : 'Cupón s/d',
+    p.vencimiento ? `Vto. ${ddmmyyyy(p.vencimiento)}` : p.perpetuo ? 'Perpetuo' : 'Vto. s/d',
+  ].filter(Boolean).join(' · ')
+  return { nombre, detalle }
+}
+
+/** CUSIPs de bonos a los que les falta cupón o vencimiento en todos los archivos (para buscarlos en OpenFIGI). */
+export function bonosIncompletos(archivos: Archivos): string[] {
+  const r = armarReporte(archivos, '2000-01-01')
+  return Array.from(new Set(
+    r.posiciones.filter((l) => l.clase === 'Renta fija' && l.cusip && (l.tasa == null || (!l.vencimiento && !l.perpetuo))).map((l) => l.cusip!),
+  )).sort()
 }
 
 // ─── Formatos ───────────────────────────────────────────────────────────────

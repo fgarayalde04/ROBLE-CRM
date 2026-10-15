@@ -14,8 +14,8 @@ import { ROBLE_DISCLAIMER } from '@/lib/disclaimers'
 
 // A4 apaisado. El paginado (PortfolioAccountClient.handleDownloadPDF) usa
 // orientation: 'landscape' — este ancho/alto tiene que coincidir.
-const PAGE_PAD_MM = 14
-const PAGE_STYLE: React.CSSProperties = { width: '297mm', minHeight: '210mm', background: '#fff', padding: `${PAGE_PAD_MM}mm`, fontFamily: 'Arial, sans-serif', boxSizing: 'border-box', position: 'relative' }
+export const PAGE_PAD_MM = 14
+export const PAGE_STYLE: React.CSSProperties = { width: '297mm', minHeight: '210mm', background: '#fff', padding: `${PAGE_PAD_MM}mm`, fontFamily: 'Arial, sans-serif', boxSizing: 'border-box', position: 'relative' }
 
 // Logo del custodio para la carátula. Si existe public/bny-logo.png, poner
 // BNY_LOGO_READY = true para usar la imagen; si no, se dibuja un lockup de
@@ -28,7 +28,7 @@ const BNY_LOGO_SRC = '/bny-logo-crop.png'
 const BNY_GREY = '#585858'
 const BNY_GOLD = '#A9861F'
 
-function BnyLogo({ height = 10 }: { height?: number }) {
+export function BnyLogo({ height = 10 }: { height?: number }) {
   if (BNY_LOGO_READY) {
     // eslint-disable-next-line @next/next/no-img-element
     return <img src={BNY_LOGO_SRC} alt="BNY Mellon | Pershing" style={{ height: `${height}mm`, objectFit: 'contain' }} />
@@ -46,7 +46,7 @@ function BnyLogo({ height = 10 }: { height?: number }) {
 // (overflow:hidden + text-overflow:ellipsis) — html2canvas doesn't always
 // size a flex item's cross-axis to its text content correctly, which can
 // clip the bottom of the glyphs instead of just cutting the string short.
-function truncateName(s: string, maxChars: number): string {
+export function truncateName(s: string, maxChars: number): string {
   return s.length > maxChars ? s.slice(0, maxChars - 1).trimEnd() + '…' : s
 }
 
@@ -54,7 +54,7 @@ function truncateName(s: string, maxChars: number): string {
 // la derecha, línea azul institucional abajo (mismo tratamiento que el PDF
 // de Propuestas — COLORS.charcoal). Todas las hojas del reporte lo llevan,
 // portada incluida (ver PdfCoverHeader).
-function PdfHeader({ title }: { title: string }) {
+export function PdfHeader({ title }: { title: string }) {
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', borderBottom: `3px solid ${COLORS.charcoal}`, paddingBottom: '2.5mm', marginBottom: '5mm' }}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -66,7 +66,7 @@ function PdfHeader({ title }: { title: string }) {
 
 // Portada: mismo logo + línea azul de PdfHeader, pero con el logo del
 // custodio a la derecha en vez de un título de sección.
-function PdfCoverHeader({ children }: { children: React.ReactNode }) {
+export function PdfCoverHeader({ children }: { children: React.ReactNode }) {
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `3px solid ${COLORS.charcoal}`, paddingBottom: '2.5mm' }}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -77,7 +77,7 @@ function PdfCoverHeader({ children }: { children: React.ReactNode }) {
 }
 
 // Tarjeta de estadística reutilizable (institucional, prolija).
-function StatTile({ label, value, sub, color, big }: { label: string; value: string; sub?: string | null; color?: string; big?: boolean }) {
+export function StatTile({ label, value, sub, color, big }: { label: string; value: string; sub?: string | null; color?: string; big?: boolean }) {
   return (
     <div style={{ flex: 1, border: `1px solid ${COLORS.border}`, borderRadius: 8, padding: big ? '4mm 5mm' : '2.8mm 3.2mm' }}>
       <div style={{ fontSize: big ? 10.8 : 9.2, color: COLORS.mutedSlate, textTransform: 'uppercase', letterSpacing: 0.6 }}>{label}</div>
@@ -87,7 +87,7 @@ function StatTile({ label, value, sub, color, big }: { label: string; value: str
   )
 }
 
-function PdfFooter({ clientName }: { clientName: string }) {
+export function PdfFooter({ clientName }: { clientName: string }) {
   return (
     <div style={{ position: 'absolute', bottom: `${PAGE_PAD_MM - 4}mm`, left: `${PAGE_PAD_MM}mm`, right: `${PAGE_PAD_MM}mm`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: `1px solid ${COLORS.border}`, paddingTop: '2mm' }}>
       <span style={{ fontSize: 9.5, fontWeight: 700, color: COLORS.darkGreen }}>ROBLE CAPITAL WEALTH MANAGEMENT</span>
@@ -96,7 +96,7 @@ function PdfFooter({ clientName }: { clientName: string }) {
   )
 }
 
-function PdfDonut({ title, data }: { title: string; data: { label: string; value: number; pct: number }[] }) {
+export function PdfDonut({ title, data }: { title: string; data: { label: string; value: number; pct: number }[] }) {
   if (data.length === 0) return null
   const total = data.reduce((s, d) => s + d.value, 0)
   const segments = data.map((d, i) => ({ label: d.label, value: d.value, color: DONUT_COLORS[i % DONUT_COLORS.length] }))
@@ -121,7 +121,7 @@ function PdfDonut({ title, data }: { title: string; data: { label: string; value
   )
 }
 
-function CssBarChart({ data, color }: { data: { label: string; value: number }[]; color: string }) {
+export function CssBarChart({ data, color }: { data: { label: string; value: number }[]; color: string }) {
   const max = Math.max(...data.map(d => d.value), 1)
   return (
     <div style={{ display: 'flex', alignItems: 'flex-end', gap: '2mm', height: '36mm', paddingTop: '4mm' }}>
@@ -224,7 +224,7 @@ function PdfAreaChart({ points, widthMm, heightMm }: { points: { date: string; v
 // Disclosure fijado al pie de la hoja (arriba del footer institucional).
 // Va en el flujo normal, al final del contenido de la hoja (arriba del
 // footer). data-pdf-keep-together evita que el paginado lo parta al medio.
-function PdfDisclosure() {
+export function PdfDisclosure() {
   return (
     <div data-pdf-keep-together style={{ marginTop: '6mm', marginBottom: '8mm', paddingTop: '3mm', borderTop: `1px solid ${COLORS.border}` }}>
       <div style={{ fontSize: 9.5, fontWeight: 700, color: COLORS.mutedSlate, textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: '1.5mm' }}>Disclosures</div>
