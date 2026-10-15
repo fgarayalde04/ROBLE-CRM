@@ -34,7 +34,6 @@ export default function ConsolidadoClient() {
   const [arrastrando, setArrastrando] = useState(false)
   const [cliente, setCliente] = useState('')
   const [fechaManual, setFechaManual] = useState<string | null>(null)
-  const [excluidas, setExcluidas] = useState<Set<string>>(new Set())
   const [manuales, setManuales] = useState<Record<string, number>>({})
   const [exportando, setExportando] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -42,8 +41,8 @@ export default function ConsolidadoClient() {
   const fecha = fechaManual ?? fechaSugerida(archivos) ?? hoyIso()
   const cuentas = useMemo(() => cuentasDe(archivos), [archivos])
   const reporte = useMemo(
-    () => (Object.keys(archivos).length ? armarReporte(archivos, fecha, excluidas, manuales) : null),
-    [archivos, fecha, excluidas, manuales],
+    () => (Object.keys(archivos).length ? armarReporte(archivos, fecha, new Set(), manuales) : null),
+    [archivos, fecha, manuales],
   )
 
   async function subir(files: FileList | File[]) {
@@ -78,19 +77,6 @@ export default function ConsolidadoClient() {
       delete next[`${banco}|${tipo}` as keyof Archivos]
       return next
     })
-  }
-
-  function alternarCuenta(clave: string) {
-    setExcluidas((prev) => {
-      const next = new Set(prev)
-      if (next.has(clave)) next.delete(clave)
-      else next.add(clave)
-      return next
-    })
-  }
-
-  function soloCuenta(banco: Banco, cuenta: string) {
-    setExcluidas(new Set(cuentas.filter((c) => c.banco === banco && c.cuenta !== cuenta).map((c) => `${c.banco}|${c.cuenta}`)))
   }
 
   async function descargarExcel() {
@@ -235,28 +221,6 @@ export default function ConsolidadoClient() {
             </div>
           </div>
 
-          {cuentas.length > 1 && (
-            <div className="mt-4">
-              <p className="text-xs text-gray-500">Cuentas incluidas <span className="text-gray-400">(si un export trae cuentas de otros clientes, destildalas o usá “solo esta”)</span></p>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {cuentas.map(({ banco, cuenta }) => {
-                  const clave = `${banco}|${cuenta}`
-                  const activa = !excluidas.has(clave)
-                  return (
-                    <span key={clave} className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs ${activa ? 'border-[#2D3F52] bg-slate-50 text-gray-800' : 'border-gray-200 text-gray-400'}`}>
-                      <input type="checkbox" checked={activa} onChange={() => alternarCuenta(clave)} className="h-3 w-3" />
-                      <EtiquetaBanco banco={banco} />
-                      {cuenta}
-                      {cuentas.filter((c) => c.banco === banco).length > 1 && (
-                        <button onClick={() => soloCuenta(banco, cuenta)} className="ml-1 text-[10px] text-gray-400 underline hover:text-[#2D3F52]">solo esta</button>
-                      )}
-                    </span>
-                  )
-                })}
-                {excluidas.size > 0 && <button onClick={() => setExcluidas(new Set())} className="text-xs text-gray-500 underline">incluir todas</button>}
-              </div>
-            </div>
-          )}
         </div>
       )}
 
@@ -264,7 +228,7 @@ export default function ConsolidadoClient() {
         <VistaReporte
           r={reporte}
           cliente={cliente}
-          variasCuentas={new Set(reporte.posiciones.map((p) => `${p.banco}|${p.cuenta}`)).size > 1}
+          cuentas={cuentas.map((c) => `${c.banco} ${c.cuenta}`).join(' · ')}
           manuales={manuales}
           setManual={(clave, v) => setManuales((prev) => {
             const next = { ...prev }
@@ -347,17 +311,17 @@ function CeldaCorrido({ l, manual, setManual }: { l: LineaPosicion; manual: numb
   )
 }
 
-function VistaReporte({ r, cliente, variasCuentas, manuales, setManual }: {
+function VistaReporte({ r, cliente, cuentas, manuales, setManual }: {
   r: Reporte
   cliente: string
-  variasCuentas: boolean
+  cuentas: string
   manuales: Record<string, number>
   setManual: (clave: string, v: number | null) => void
 }) {
   const t = r.totales
   const bancosTexto = r.bancos.join(' + ')
   const fuentes = new Set(r.posiciones.map((p) => p.fuenteCorrido).filter(Boolean))
-  const columnas = variasCuentas ? 11 : 10
+  const columnas = 10
 
   return (
     <div id="reporte-consolidado" className="bg-white border border-gray-200 rounded-lg p-6 text-sm text-gray-800">
@@ -366,7 +330,7 @@ function VistaReporte({ r, cliente, variasCuentas, manuales, setManual }: {
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-400">Roble Capital · Posición Consolidada</p>
           <h2 className="mt-1 text-2xl font-semibold text-[#2D3F52]">{cliente || 'Posición Consolidada'}</h2>
-          <p className="mt-0.5 text-sm text-gray-500">{bancosTexto || '—'}</p>
+          <p className="mt-0.5 text-sm text-gray-500">{cuentas || bancosTexto || '—'}</p>
         </div>
         <div className="text-right">
           <p className="text-[11px] uppercase tracking-wide text-gray-400">Valuación al</p>
@@ -437,7 +401,6 @@ function VistaReporte({ r, cliente, variasCuentas, manuales, setManual }: {
             <table className="w-full text-xs">
               <thead><tr className="border-b border-gray-200">
                 <th className={`${th} text-left`}>Banco</th>
-                {variasCuentas && <th className={`${th} text-left`}>Cuenta</th>}
                 <th className={`${th} text-left`}>Instrumento</th>
                 <th className={`${th} text-right`}>Cantidad</th><th className={`${th} text-right`}>Precio</th>
                 <th className={`${th} text-right`}>Costo</th><th className={`${th} text-right`}>Valor mercado</th>
@@ -457,7 +420,6 @@ function VistaReporte({ r, cliente, variasCuentas, manuales, setManual }: {
                       {ls.map((l) => (
                         <tr key={clavePosicion(l)} className="border-b border-gray-50">
                           <td className={td}><EtiquetaBanco banco={l.banco} /></td>
-                          {variasCuentas && <td className={`${td} whitespace-nowrap text-gray-500`}>{l.cuenta ?? '—'}</td>}
                           <td className={td}>
                             <p className="font-medium text-gray-800">{l.descripcion}</p>
                             <p className="text-[10px] text-gray-400">
@@ -478,7 +440,7 @@ function VistaReporte({ r, cliente, variasCuentas, manuales, setManual }: {
                         </tr>
                       ))}
                       <tr className="border-b border-gray-200 font-semibold">
-                        <td colSpan={variasCuentas ? 5 : 4} className={`${td} text-right text-gray-500`}>Subtotal {clase.toLowerCase()}</td>
+                        <td colSpan={4} className={`${td} text-right text-gray-500`}>Subtotal {clase.toLowerCase()}</td>
                         <td className={num}>{fmt(s.costo)}</td><td className={num}>{fmt(s.valorMercado)}</td><td className={num}>{fmt(s.cuponCorrido)}</td>
                         <td className={num}>{fmt(s.total)}</td><td className={`${num} ${colorResultado(s.resultado)}`}>{fmt(s.resultado)}</td><td className={num}>{fmtPct(s.peso)}</td>
                       </tr>
@@ -486,7 +448,7 @@ function VistaReporte({ r, cliente, variasCuentas, manuales, setManual }: {
                   )
                 })}
                 <tr className="border-t-2 border-gray-400 text-sm font-semibold">
-                  <td colSpan={variasCuentas ? 5 : 4} className={`${td} text-right`}>Total</td>
+                  <td colSpan={4} className={`${td} text-right`}>Total</td>
                   <td className={num}>{fmt(t.costo)}</td><td className={num}>{fmt(t.valorMercado)}</td><td className={num}>{fmt(t.cuponCorrido)}</td>
                   <td className={num}>{fmt(t.total)}</td><td className={`${num} ${colorResultado(t.resultado)}`}>{fmt(t.resultado)}</td><td className={num}>100.0%</td>
                 </tr>
@@ -560,7 +522,6 @@ function VistaReporte({ r, cliente, variasCuentas, manuales, setManual }: {
             <table className="w-full text-xs">
               <thead><tr className="border-b border-gray-200">
                 <th className={`${th} text-left`}>Fecha</th><th className={`${th} text-left`}>Banco</th>
-                {variasCuentas && <th className={`${th} text-left`}>Cuenta</th>}
                 <th className={`${th} text-left`}>Tipo</th><th className={`${th} text-left`}>Descripción</th>
                 <th className={`${th} text-right`}>Cantidad</th><th className={`${th} text-right`}>Precio</th><th className={`${th} text-right`}>Monto</th>
               </tr></thead>
@@ -569,7 +530,6 @@ function VistaReporte({ r, cliente, variasCuentas, manuales, setManual }: {
                   <tr key={i} className="border-b border-gray-50">
                     <td className={`${td} whitespace-nowrap`}>{ddmmyyyy(m.fecha)}</td>
                     <td className={td}><EtiquetaBanco banco={m.banco} /></td>
-                    {variasCuentas && <td className={`${td} whitespace-nowrap text-gray-500`}>{m.cuenta ?? '—'}</td>}
                     <td className={td}>{m.tipo}</td>
                     <td className={td}><p className="max-w-[420px]">{m.descripcion}</p></td>
                     <td className={num}>{m.cantidad == null ? '' : fmt(m.cantidad, Number.isInteger(m.cantidad) ? 0 : 3)}</td>

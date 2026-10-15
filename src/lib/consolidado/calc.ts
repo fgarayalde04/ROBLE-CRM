@@ -340,7 +340,6 @@ export function armarReporte(
 ): Reporte {
   const avisos: string[] = []
   const incluida = (banco: Banco, cuenta: string | null) => !cuenta || !excluidas.has(`${banco}|${cuenta}`)
-  const hayFiltro = excluidas.size > 0
 
   const pos = (b: Banco) => archivos[claveArchivo(b, 'posiciones')] as ArchivoPosiciones | undefined
   const cup = (b: Banco) => archivos[claveArchivo(b, 'cupones')] as ArchivoCupones | undefined
@@ -447,14 +446,11 @@ export function armarReporte(
             descripcion = ref.descripcion
             clase = ref.clase === 'Renta fija' ? (ps[0].clase === 'Otro' ? 'Otro' : 'Cupón') : 'Dividendo'
           }
-        } else if (hayFiltro) {
-          // Solo se avisa si el nombre coincide con una posición de las cuentas elegidas.
-          const n = normNombre(ps[0].descripcion)
-          if (todas.some((p) => incluida(banco, p.cuenta) && normNombre(p.descripcion) === n)) huerfanos.push(ps[0].descripcion)
-          continue
         } else {
-          clase = ps[0].clase === 'Otro' ? 'Otro' : 'Cupón'
+          // Sin posición asociada (dos bonos con el mismo nombre): queda fuera de
+          // la renta antes que sumar un pago que quizá no es de esta cuenta.
           huerfanos.push(ps[0].descripcion)
+          continue
         }
         if (factor <= 0) continue
         const f: FilaRenta = { banco, cuenta: null, cusip, descripcion, clase, montos: Array(12).fill(0), total: 0 }
@@ -466,11 +462,7 @@ export function armarReporte(
         filasRenta.push(f)
       }
       if (huerfanos.length) {
-        avisos.push(
-          hayFiltro
-            ? `Morgan Stanley: ${huerfanos.length} título(s) del Projected Income no se pudieron asociar a una posición y quedaron fuera de la renta (${huerfanos.slice(0, 5).join('; ')}${huerfanos.length > 5 ? '…' : ''}).`
-            : `Morgan Stanley: ${huerfanos.length} título(s) del Projected Income no se pudieron asociar a una posición; se incluyen en la renta tal cual vienen (${huerfanos.slice(0, 5).join('; ')}${huerfanos.length > 5 ? '…' : ''}).`,
-        )
+        avisos.push(`Morgan Stanley: ${huerfanos.length} título(s) del Projected Income no se pudieron asociar a una posición y quedaron fuera de la renta (${huerfanos.slice(0, 5).join('; ')}${huerfanos.length > 5 ? '…' : ''}).`)
       }
     }
   }
@@ -527,6 +519,10 @@ export function armarReporte(
   const fechasMov = movimientos.map((m) => m.fecha).filter((x): x is string => !!x).sort()
 
   // ── Avisos generales ──
+  for (const b of BANCOS) {
+    const cs = cuentasDe(archivos).filter((c) => c.banco === b).map((c) => c.cuenta)
+    if (cs.length > 1) avisos.push(`Los archivos de ${b} son de cuentas distintas (${cs.join(', ')}): revisá que sean todos del mismo cliente.`)
+  }
   const fechasPos = BANCOS.map((b) => pos(b)?.fecha ? { b, f: pos(b)!.fecha! } : null).filter((x): x is { b: Banco; f: string } => !!x)
   if (fechasPos.length === 2 && fechasPos[0].f !== fechasPos[1].f) {
     avisos.push(`Las posiciones son de fechas distintas: Pershing al ${ddmmyyyy(fechasPos[0].f)} y Morgan Stanley al ${ddmmyyyy(fechasPos[1].f)}.`)

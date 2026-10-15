@@ -227,7 +227,7 @@ function leerPershingPosiciones(g: Grilla, nombre: string): ArchivoPosiciones {
 
   return {
     tipo: 'posiciones', banco: 'Pershing', nombre, fecha,
-    cuentas: uniq(posiciones.map((p) => p.cuenta)),
+    cuentas: unaCuenta(uniq(posiciones.map((p) => p.cuenta))),
     posiciones, totalArchivo, avisos: fecha ? [] : ['No se encontró la fecha ("As Of") del reporte.'],
   }
 }
@@ -330,7 +330,7 @@ function leerMorganPosiciones(g: Grilla, nombre: string): ArchivoPosiciones {
 
   return {
     tipo: 'posiciones', banco: 'Morgan Stanley', nombre, fecha,
-    cuentas: uniq(posiciones.map((p) => p.cuenta)),
+    cuentas: unaCuenta(uniq(posiciones.map((p) => p.cuenta))),
     posiciones, totalArchivo, avisos: fecha ? [] : ['No se encontró la fecha ("as of") del reporte.'],
   }
 }
@@ -416,12 +416,13 @@ function leerMorganCupones(g: Grilla, nombre: string): ArchivoCupones {
     }
   }
   if (!pagos.length) throw new ArchivoError('El reporte no tiene pagos proyectados.')
-  let titulo = ''
-  for (const l of filasMeta(g, h)) if (/projected income for/i.test(l)) titulo = l
-  const avisos = /all accounts/i.test(titulo)
-    ? ['El Projected Income viene de todas las cuentas juntas y sin CUSIP: cada pago se asigna a las posiciones por nombre y en proporción a la cantidad.']
-    : []
-  return { tipo: 'cupones', banco: 'Morgan Stanley', nombre, fecha: null, cuentas: [], pagos, avisos }
+  // No trae columna de cuenta: el único indicio es el título del reporte.
+  for (const l of filasMeta(g, h)) {
+    if (/projected income for all accounts/i.test(l)) {
+      throw new ArchivoError('es de todas las cuentas ("Projected Income for All Accounts"). Exportalo solo para la cuenta del cliente.')
+    }
+  }
+  return { tipo: 'cupones', banco: 'Morgan Stanley', nombre, fecha: null, cuentas: [], pagos, avisos: [] }
 }
 
 // ─── Activity ───────────────────────────────────────────────────────────────
@@ -505,12 +506,22 @@ function leerMovimientos(g: Grilla, nombre: string, banco: Banco): ArchivoMovimi
   return {
     tipo: 'movimientos', banco, nombre,
     fecha: movimientos[0].fecha,
-    cuentas: uniq(movimientos.map((m) => m.cuenta)),
+    cuentas: unaCuenta(uniq(movimientos.map((m) => m.cuenta))),
     movimientos, terminos, avisos: [],
   }
 }
 
 // ─── Detección ──────────────────────────────────────────────────────────────
+
+/** El consolidado es de una sola cuenta: un export con varias se rechaza. */
+function unaCuenta(cuentas: string[]): string[] {
+  if (cuentas.length > 1) {
+    throw new ArchivoError(
+      `trae ${cuentas.length} cuentas (${cuentas.join(', ')}). Exportalo solo para la cuenta del cliente.`,
+    )
+  }
+  return cuentas
+}
 
 function uniq(xs: (string | null)[]): string[] {
   return Array.from(new Set(xs.filter((x): x is string => !!x))).sort()
