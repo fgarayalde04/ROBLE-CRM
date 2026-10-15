@@ -9,6 +9,8 @@ export interface DatosConsolidado {
   manuales: Record<string, number>
   externos: Record<string, Terminos>
   incluirMovimientos: boolean
+  /** Nombre que se le puso a cada cuenta (clave "banco|n"), si hay varias en un banco. */
+  nombresCuentas?: Record<string, string>
 }
 
 export interface ConsolidadoRow {

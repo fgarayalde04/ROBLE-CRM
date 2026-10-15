@@ -109,6 +109,9 @@ export interface OpcionesDocumento {
   incluirMovimientos: boolean
 }
 
+/** Custodio de una línea; con varias cuentas en el mismo banco, "Pershing 1", "Pershing 2" o el nombre que se le puso. */
+const cuentaTxt = (x: { banco: Banco; etiquetaCuenta: string }) => (x.etiquetaCuenta === x.banco ? custodio(x.banco) : x.etiquetaCuenta)
+
 export function htmlEstadoCuenta(r: Reporte, o: OpcionesDocumento): string {
   const t = r.totales
   const cliente = o.cliente.trim() || 'Posición Consolidada'
@@ -131,14 +134,14 @@ export function htmlEstadoCuenta(r: Reporte, o: OpcionesDocumento): string {
     </div>
     <div class="tres">
       ${tablaBarras('Por clase de activo', r.porClase.map((c) => ({ label: c.clase, valor: c.total, peso: c.peso })))}
-      ${tablaBarras('Por custodio', r.porBanco.map((b) => ({ label: custodio(b.banco), valor: b.total, peso: b.peso })))}
+      ${tablaBarras(r.porCuenta.length > r.porBanco.length ? 'Por cuenta' : 'Por custodio', r.porCuenta.map((b) => ({ label: cuentaTxt({ banco: b.banco, etiquetaCuenta: b.etiqueta }), valor: b.total, peso: b.peso })))}
       ${plazos(r).length ? tablaBarras('Renta fija por plazo', plazos(r).map((p) => ({ ...p, label: p.label.replace(' / sin vencimiento', '') }))) : '<div></div>'}
     </div>
     <div class="bloque">
       <h3>Principales inversiones</h3>
       <table class="top"><colgroup><col style="width:46%"><col style="width:16%"><col><col style="width:13%"><col style="width:7%"></colgroup>
         <tbody>${[...r.posiciones].sort((a, b) => b.total - a.total).slice(0, 6).map((l) => `<tr>
-          <td><b>${esc(l.nombre)}</b></td><td class="gris">${esc(custodio(l.banco))}</td>
+          <td><b>${esc(l.nombre)}</b></td><td class="gris">${esc(cuentaTxt(l))}</td>
           <td><div class="barra"><div style="width:${Math.max(1, l.peso * 100 / Math.max(...r.posiciones.map((x) => x.peso))).toFixed(1)}%"></div></div></td>
           <td class="n">${esc(num(l.total))}</td><td class="n b">${esc(pct(l.peso))}</td></tr>`).join('')}</tbody>
       </table>
@@ -152,7 +155,7 @@ export function htmlEstadoCuenta(r: Reporte, o: OpcionesDocumento): string {
     const det = detalleBono(l)
     return `<tr>
       <td class="inst"><div class="nom">${esc(l.nombre)}</div>${det ? `<div class="sub">${esc(det)}</div>` : ''}</td>
-      <td>${esc(custodio(l.banco))}</td>
+      <td>${esc(cuentaTxt(l))}</td>
       <td class="n">${l.clase === 'Efectivo' || l.cantidad == null ? '—' : esc(num(l.cantidad, Number.isInteger(l.cantidad) ? 0 : 3))}</td>
       <td class="n">${l.precio == null || l.clase === 'Efectivo' ? '—' : esc(num(l.precio, 3))}</td>
       <td class="n">${esc(num(l.valorMercado))}</td>
@@ -212,7 +215,7 @@ export function htmlEstadoCuenta(r: Reporte, o: OpcionesDocumento): string {
       ${bloquesSinHuerfanos(
         `<tr class="subtotal primero"><td>Total por mes</td>${r.renta.montos.map((v) => `<td class="n">${v ? esc(num(v, 0)) : ''}</td>`).join('')}<td class="n">${esc(num(r.renta.total, 0))}</td></tr>`,
         r.renta.filas.map((f) => `<tr>
-          <td class="inst"><div class="nom">${esc(nombrePorCusip.get(`${f.banco}|${f.cusip}`) ?? titulo(f.descripcion))}</div><div class="sub">${esc(f.clase)} · ${esc(custodio(f.banco))}</div></td>
+          <td class="inst"><div class="nom">${esc(nombrePorCusip.get(`${f.banco}|${f.cusip}`) ?? titulo(f.descripcion))}</div><div class="sub">${esc(f.clase)} · ${esc(cuentaTxt(f))}</div></td>
           ${f.montos.map((v) => `<td class="n">${v ? esc(num(v, 0)) : ''}</td>`).join('')}
           <td class="n b">${esc(num(f.total, 0))}</td></tr>`),
         '',
@@ -235,7 +238,7 @@ export function htmlEstadoCuenta(r: Reporte, o: OpcionesDocumento): string {
       <colgroup><col style="width:9%"><col style="width:11%"><col style="width:13%"><col style="width:39%"><col style="width:10%"><col style="width:7%"><col style="width:11%"></colgroup>
       <thead><tr><th>Fecha</th><th>Custodio</th><th>Tipo</th><th>Descripción</th><th class="n">Cantidad</th><th class="n">Precio</th><th class="n">Monto (USD)</th></tr></thead>
       <tbody>${movimientos.map((m) => `<tr>
-        <td>${esc(ddmmyyyy(m.fecha))}</td><td>${esc(custodio(m.banco))}</td><td>${esc(TIPO_MOVIMIENTO[categoriaMovimiento(m)])}</td>
+        <td>${esc(ddmmyyyy(m.fecha))}</td><td>${esc(cuentaTxt(m))}</td><td>${esc(TIPO_MOVIMIENTO[categoriaMovimiento(m)])}</td>
         <td>${esc(descripcionMovimiento(m))}</td>
         <td class="n">${m.cantidad == null ? '' : esc(num(m.cantidad, Number.isInteger(m.cantidad) ? 0 : 3))}</td>
         <td class="n">${m.precio == null ? '' : esc(num(m.precio, 3))}</td>

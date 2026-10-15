@@ -10,12 +10,50 @@ import {
   type Movimiento, type Pago, type Posicion, type Terminos, type TipoArchivo,
 } from './types'
 
-export type Archivos = Partial<Record<`${Banco}|${TipoArchivo}`, ArchivoLeido>>
-export const claveArchivo = (banco: Banco, tipo: TipoArchivo) => `${banco}|${tipo}` as const
+/**
+ * Archivos por cuenta: clave "banco|tipo" para la primera cuenta de cada banco
+ * (así siguen valiendo los consolidados guardados antes) y "banco|tipo|n" para
+ * la segunda en adelante (n = 1, 2…). Un cliente puede tener varias cuentas en
+ * el mismo custodio: cada una con su reporte de posiciones, su calendario de
+ * cupones y su Activity.
+ */
+export type Archivos = Partial<Record<string, ArchivoLeido>>
+export const claveArchivo = (banco: Banco, tipo: TipoArchivo, n = 0) => (n ? `${banco}|${tipo}|${n}` : `${banco}|${tipo}`)
+
+/** Una cuenta del consolidado: banco + número de orden dentro del banco. */
+export interface Ranura { banco: Banco; n: number; clave: string }
+export const claveRanura = (banco: Banco, n: number) => `${banco}|${n}`
+
+export function leerClave(k: string): { banco: Banco; tipo: TipoArchivo; n: number } | null {
+  const [banco, tipo, n] = k.split('|')
+  if (!BANCOS.includes(banco as Banco)) return null
+  return { banco: banco as Banco, tipo: tipo as TipoArchivo, n: n ? Number(n) : 0 }
+}
+
+/** Cuentas con al menos un archivo, ordenadas por banco y número. */
+export function ranurasDe(archivos: Archivos): Ranura[] {
+  const vistas = new Map<string, Ranura>()
+  for (const k of Object.keys(archivos)) {
+    const c = leerClave(k)
+    if (!c || !archivos[k]) continue
+    vistas.set(claveRanura(c.banco, c.n), { banco: c.banco, n: c.n, clave: claveRanura(c.banco, c.n) })
+  }
+  return Array.from(vistas.values()).sort((a, b) => BANCOS.indexOf(a.banco) - BANCOS.indexOf(b.banco) || a.n - b.n)
+}
+
+/** "Pershing" si es la única cuenta del banco; si no "Pershing 1", "Pershing 2"… o el nombre que se le puso. */
+export function etiquetaRanura(r: Pick<Ranura, 'banco' | 'n' | 'clave'>, ranuras: Pick<Ranura, 'banco'>[], nombres: Record<string, string> = {}) {
+  const propio = nombres[r.clave]?.trim()
+  if (propio) return propio
+  return ranuras.filter((x) => x.banco === r.banco).length > 1 ? `${r.banco} ${r.n + 1}` : r.banco
+}
 
 export type FuenteCorrido = 'archivo' | 'manual' | 'calendario' | 'tasa' | 'sin datos'
 
 export interface LineaPosicion extends Posicion {
+  /** Cuenta del consolidado a la que pertenece (claveRanura) y cómo se la muestra. */
+  ranura: string
+  etiquetaCuenta: string
   /** Nombre legible para el cliente ("YPF 8.25% 2034") y línea de detalle (CUSIP · cupón · vencimiento). */
   nombre: string
   detalle: string
@@ -40,6 +78,7 @@ export interface Subtotal {
 
 export interface FilaRenta {
   banco: Banco
+  etiquetaCuenta: string
   cuenta: string | null
   cusip: string | null
   descripcion: string
@@ -60,6 +99,8 @@ export interface Reporte {
   posiciones: LineaPosicion[]
   totales: Subtotal
   porBanco: (Subtotal & { banco: Banco })[]
+  /** Una entrada por cuenta (si hay una sola por banco, es igual a porBanco). */
+  porCuenta: (Subtotal & { ranura: string; banco: Banco; etiqueta: string })[]
   porClase: (Subtotal & { clase: Clase })[]
   renta: {
     meses: string[] // YYYY-MM
@@ -70,7 +111,7 @@ export interface Reporte {
     cupones: number
     dividendos: number
   }
-  movimientos: Movimiento[]
+  movimientos: (Movimiento & { etiquetaCuenta: string })[]
   resumenMovimientos: CategoriaMovimiento[]
   periodoMovimientos: { desde: string | null; hasta: string | null }
   avisos: string[]
@@ -321,9 +362,7 @@ export function cuentasDe(archivos: Archivos): { banco: Banco; cuenta: string }[
   const out: { banco: Banco; cuenta: string }[] = []
   for (const banco of BANCOS) {
     const set = new Set<string>()
-    for (const tipo of ['posiciones', 'movimientos', 'cupones'] as TipoArchivo[]) {
-      for (const c of archivos[claveArchivo(banco, tipo)]?.cuentas ?? []) set.add(c)
-    }
+    for (const [k, a] of Object.entries(archivos)) if (a && leerClave(k)?.banco === banco) for (const c of a.cuentas) set.add(c)
     for (const cuenta of Array.from(set).sort()) out.push({ banco, cuenta })
   }
   return out
@@ -331,7 +370,7 @@ export function cuentasDe(archivos: Archivos): { banco: Banco; cuenta: string }[
 
 /** Fecha de valuación sugerida: la más reciente de los reportes de posiciones. */
 export function fechaSugerida(archivos: Archivos): string | null {
-  const fechas = BANCOS.map((b) => archivos[claveArchivo(b, 'posiciones')]?.fecha).filter((x): x is string => !!x)
+  const fechas = Object.values(archivos).filter((a) => a?.tipo === 'posiciones').map((a) => a!.fecha).filter((x): x is string => !!x)
   return fechas.sort().pop() ?? null
 }
 
@@ -348,14 +387,16 @@ export const clavePosicion = (p: Pick<Posicion, 'banco' | 'cuenta' | 'cusip' | '
  */
 export function armarReporte(
   archivos: Archivos, fecha: string, excluidas: Set<string> = new Set(), manuales: Record<string, number> = {},
-  externos: Record<string, Terminos> = {},
+  externos: Record<string, Terminos> = {}, nombresCuentas: Record<string, string> = {},
 ): Reporte {
   const avisos: string[] = []
+  const ranuras = ranurasDe(archivos)
+  const etiqueta = (r: Ranura) => etiquetaRanura(r, ranuras, nombresCuentas)
   // Consolidados guardados antes de renombrar las clases: "Fondos" pasó a
   // "Fondos de inversión" y los ETF van en renta variable (Acciones).
-  for (const b of BANCOS) {
-    const a = archivos[claveArchivo(b, 'posiciones')] as ArchivoPosiciones | undefined
-    for (const p of a?.posiciones ?? []) {
+  for (const a of Object.values(archivos)) {
+    if (a?.tipo !== 'posiciones') continue
+    for (const p of a.posiciones) {
       const c = p.clase as string
       if (c === 'Fondos') p.clase = 'Fondos de inversión'
       else if (c === 'ETF') p.clase = 'Acciones'
@@ -363,9 +404,9 @@ export function armarReporte(
   }
   const incluida = (banco: Banco, cuenta: string | null) => !cuenta || !excluidas.has(`${banco}|${cuenta}`)
 
-  const pos = (b: Banco) => archivos[claveArchivo(b, 'posiciones')] as ArchivoPosiciones | undefined
-  const cup = (b: Banco) => archivos[claveArchivo(b, 'cupones')] as ArchivoCupones | undefined
-  const mov = (b: Banco) => archivos[claveArchivo(b, 'movimientos')] as ArchivoMovimientos | undefined
+  const pos = (r: Ranura) => archivos[claveArchivo(r.banco, 'posiciones', r.n)] as ArchivoPosiciones | undefined
+  const cup = (r: Ranura) => archivos[claveArchivo(r.banco, 'cupones', r.n)] as ArchivoCupones | undefined
+  const mov = (r: Ranura) => archivos[claveArchivo(r.banco, 'movimientos', r.n)] as ArchivoMovimientos | undefined
 
   const lineas: LineaPosicion[] = []
   const filasRenta: FilaRenta[] = []
@@ -381,7 +422,7 @@ export function armarReporte(
     if (!prev) terminos[cusip] = { ...t }
     else prev.vencimiento ??= t.vencimiento
   }
-  for (const b of BANCOS) {
+  for (const b of ranuras) {
     for (const [c, t] of Object.entries(mov(b)?.terminos ?? {})) sumarTerminos(c, t)
     for (const p of pos(b)?.posiciones ?? []) if (p.clase === 'Renta fija') sumarTerminos(p.cusip, { tasa: p.tasa, vencimiento: p.vencimiento })
     for (const x of cup(b)?.pagos ?? []) {
@@ -401,10 +442,14 @@ export function armarReporte(
     }
   }
 
-  for (const banco of BANCOS) {
-    const ap = pos(banco)
-    const ac = cup(banco)
-    const todas = ap?.posiciones ?? []
+  for (const rn of ranuras) {
+    const banco = rn.banco
+    const ap = pos(rn)
+    const ac = cup(rn)
+    const nombreCuenta = etiqueta(rn)
+    // Sin número de cuenta en el archivo (Morgan), la segunda cuenta en adelante
+    // se distingue por su orden, para que no se mezclen sus posiciones.
+    const todas = (ap?.posiciones ?? []).map((p) => (p.cuenta || !rn.n ? p : { ...p, cuenta: `#${rn.n + 1}` }))
 
     // Morgan: asignación de las filas del Projected Income a CUSIPs.
     const morgan = banco === 'Morgan Stanley' && ac ? asignarGruposMorgan(ac.pagos, todas, terminos) : null
@@ -454,17 +499,17 @@ export function armarReporte(
         vencimiento: p.clase === 'Renta fija' ? p.vencimiento ?? t?.vencimiento ?? null : null,
         perpetuo: p.clase === 'Renta fija' && !(p.vencimiento ?? t?.vencimiento) && !!t?.perpetuo,
       }
-      lineas.push({ ...linea, ...nombreParaCliente(linea), cuponCorrido: cc, fuenteCorrido: fuente, total: r2(p.valorMercado + cc), peso: 0 })
+      lineas.push({ ...linea, ...nombreParaCliente(linea), ranura: rn.clave, etiquetaCuenta: nombreCuenta, cuponCorrido: cc, fuenteCorrido: fuente, total: r2(p.valorMercado + cc), peso: 0 })
     }
     if (sinCorrido.length) {
-      avisos.push(`${banco}: sin datos para calcular el cupón corrido de ${sinCorrido.length} bono(s) (${sinCorrido.slice(0, 6).join('; ')}${sinCorrido.length > 6 ? '…' : ''}). ${ac ? '' : 'Subí el calendario de cupones de este banco para calcularlo.'}`.trim())
+      avisos.push(`${nombreCuenta}: sin datos para calcular el cupón corrido de ${sinCorrido.length} bono(s) (${sinCorrido.slice(0, 6).join('; ')}${sinCorrido.length > 6 ? '…' : ''}). ${ac ? '' : 'Subí el calendario de cupones de este banco para calcularlo.'}`.trim())
     }
 
     // Control del total del archivo (solo si entran todas las cuentas).
     if (ap?.totalArchivo != null && !ap.cuentas.some((c) => !incluida(banco, c))) {
       const suma = ap.posiciones.reduce((s, p) => s + p.valorMercado, 0)
       if (Math.abs(suma - ap.totalArchivo) > 1) {
-        avisos.push(`${banco}: la suma de las posiciones (${fmt(suma)}) no coincide con el total del archivo (${fmt(ap.totalArchivo)}).`)
+        avisos.push(`${nombreCuenta}: la suma de las posiciones (${fmt(suma)}) no coincide con el total del archivo (${fmt(ap.totalArchivo)}).`)
       }
     }
 
@@ -476,7 +521,7 @@ export function armarReporte(
         const i = mesIdx(x.fecha)
         if (i < 0) continue
         const k = `${x.cuenta}|${x.cusip}|${x.clase}`
-        const f = porTitulo.get(k) ?? { banco, cuenta: x.cuenta, cusip: x.cusip, descripcion: x.descripcion, clase: x.clase, montos: Array(12).fill(0), total: 0 }
+        const f = porTitulo.get(k) ?? { banco, etiquetaCuenta: nombreCuenta, cuenta: x.cuenta, cusip: x.cusip, descripcion: x.descripcion, clase: x.clase, montos: Array(12).fill(0), total: 0 }
         f.montos[i] += x.monto
         porTitulo.set(k, f)
       }
@@ -510,7 +555,7 @@ export function armarReporte(
           continue
         }
         if (factor <= 0) continue
-        const f: FilaRenta = { banco, cuenta: null, cusip, descripcion, clase, montos: Array(12).fill(0), total: 0 }
+        const f: FilaRenta = { banco, etiquetaCuenta: nombreCuenta, cuenta: null, cusip, descripcion, clase, montos: Array(12).fill(0), total: 0 }
         for (const x of ps) {
           if (x.fecha <= fecha) continue
           const i = mesIdx(x.fecha)
@@ -519,7 +564,7 @@ export function armarReporte(
         filasRenta.push(f)
       }
       if (huerfanos.length) {
-        avisos.push(`Morgan Stanley: ${huerfanos.length} título(s) del Projected Income no se pudieron asociar a una posición y quedaron fuera de la renta (${huerfanos.slice(0, 5).join('; ')}${huerfanos.length > 5 ? '…' : ''}).`)
+        avisos.push(`${nombreCuenta}: ${huerfanos.length} título(s) del Projected Income no se pudieron asociar a una posición y quedaron fuera de la renta (${huerfanos.slice(0, 5).join('; ')}${huerfanos.length > 5 ? '…' : ''}).`)
       }
     }
   }
@@ -535,6 +580,12 @@ export function armarReporte(
     for (const l of lineas) if (l.banco === banco) acumular(s, l)
     s.peso = totales.total ? s.total / totales.total : 0
     return { banco, ...s }
+  })
+  const porCuenta = ranuras.filter((rn) => lineas.some((l) => l.ranura === rn.clave)).map((rn) => {
+    const s = vacio()
+    for (const l of lineas) if (l.ranura === rn.clave) acumular(s, l)
+    s.peso = totales.total ? s.total / totales.total : 0
+    return { ranura: rn.clave, banco: rn.banco, etiqueta: etiqueta(rn), ...s }
   })
   const porClase = CLASES.filter((c) => lineas.some((l) => l.clase === c)).map((clase) => {
     const s = vacio()
@@ -561,7 +612,7 @@ export function armarReporte(
   const montosRenta = sumaMeses(filas)
 
   // ── Movimientos ──
-  const movimientos = BANCOS.flatMap((b) => mov(b)?.movimientos ?? [])
+  const movimientos = ranuras.flatMap((rn) => (mov(rn)?.movimientos ?? []).map((m) => ({ ...m, etiquetaCuenta: etiqueta(rn) })))
     .filter((m) => incluida(m.banco, m.cuenta))
     .sort((a, b) => (b.fecha ?? '').localeCompare(a.fecha ?? '') || a.banco.localeCompare(b.banco))
   const porCategoria = new Map<string, CategoriaMovimiento>()
@@ -576,16 +627,23 @@ export function armarReporte(
   const fechasMov = movimientos.map((m) => m.fecha).filter((x): x is string => !!x).sort()
 
   // ── Avisos generales ──
-  for (const b of BANCOS) {
-    const cs = cuentasDe(archivos).filter((c) => c.banco === b).map((c) => c.cuenta)
-    if (cs.length > 1) avisos.push(`Los archivos de ${b} son de cuentas distintas (${cs.join(', ')}): revisá que sean todos del mismo cliente.`)
+  const numerosPorRanura = new Map<string, string[]>()
+  for (const rn of ranuras) {
+    const set = new Set<string>()
+    for (const tipo of ['posiciones', 'movimientos', 'cupones'] as TipoArchivo[]) for (const c of archivos[claveArchivo(rn.banco, tipo, rn.n)]?.cuentas ?? []) set.add(c)
+    numerosPorRanura.set(rn.clave, Array.from(set))
+    if (set.size > 1) avisos.push(`${etiqueta(rn)}: los archivos son de cuentas distintas; revisá que estén en la cuenta correcta.`)
   }
-  const fechasPos = BANCOS.map((b) => pos(b)?.fecha ? { b, f: pos(b)!.fecha! } : null).filter((x): x is { b: Banco; f: string } => !!x)
-  if (fechasPos.length === 2 && fechasPos[0].f !== fechasPos[1].f) {
-    avisos.push(`Las posiciones son de fechas distintas: Pershing al ${ddmmyyyy(fechasPos[0].f)} y Morgan Stanley al ${ddmmyyyy(fechasPos[1].f)}.`)
+  for (let i = 0; i < ranuras.length; i++) for (let j = i + 1; j < ranuras.length; j++) {
+    const a = numerosPorRanura.get(ranuras[i].clave) ?? [], b = numerosPorRanura.get(ranuras[j].clave) ?? []
+    if (ranuras[i].banco === ranuras[j].banco && a.some((x) => b.includes(x))) avisos.push(`${etiqueta(ranuras[i])} y ${etiqueta(ranuras[j])} parecen ser la misma cuenta: revisá que no esté sumada dos veces.`)
   }
-  for (const b of BANCOS) if (pos(b) && !cup(b) && lineas.some((l) => l.banco === b && l.clase === 'Renta fija')) {
-    avisos.push(`${b}: no se subió el calendario de cupones; el cupón corrido de sus bonos se estimó con la tasa y el vencimiento (pago semestral).`)
+  const fechasPos = ranuras.map((rn) => pos(rn)?.fecha ? { e: etiqueta(rn), f: pos(rn)!.fecha! } : null).filter((x): x is { e: string; f: string } => !!x)
+  if (new Set(fechasPos.map((x) => x.f)).size > 1) {
+    avisos.push(`Las posiciones son de fechas distintas: ${fechasPos.map((x) => `${x.e} al ${ddmmyyyy(x.f)}`).join(', ')}.`)
+  }
+  for (const rn of ranuras) if (pos(rn) && !cup(rn) && lineas.some((l) => l.ranura === rn.clave && l.clase === 'Renta fija')) {
+    avisos.push(`${etiqueta(rn)}: no se subió el calendario de cupones; el cupón corrido de sus bonos se estimó con la tasa y el vencimiento (pago semestral).`)
   }
 
   return {
@@ -594,6 +652,7 @@ export function armarReporte(
     posiciones: lineas,
     totales: { ...totales, peso: 1 },
     porBanco,
+    porCuenta,
     porClase,
     renta: {
       meses,

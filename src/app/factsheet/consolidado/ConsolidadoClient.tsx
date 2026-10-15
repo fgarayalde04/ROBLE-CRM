@@ -4,8 +4,9 @@ import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from '
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
-  ETIQUETA_FUENTE, armarReporte, bonosIncompletos, categoriaMovimiento, claveArchivo, clavePosicion, cuentasDe, ddmmyyyy, fechaSugerida, fmt, fmtPct, mesCorto, textoCompras,
-  type Archivos, type LineaPosicion, type Reporte,
+  ETIQUETA_FUENTE, armarReporte, bonosIncompletos, categoriaMovimiento, claveArchivo, clavePosicion, claveRanura, ddmmyyyy, etiquetaRanura, fechaSugerida, fmt, fmtPct,
+  leerClave, mesCorto, ranurasDe, textoCompras,
+  type Archivos, type LineaPosicion, type Ranura, type Reporte,
 } from '@/lib/consolidado/calc'
 import { BANCOS, CLASES, TIPOS_ARCHIVO, type ArchivoLeido, type Banco, type Terminos } from '@/lib/consolidado/types'
 import type { ConsolidadoRow, DatosConsolidado } from '@/lib/db/consolidados'
@@ -20,12 +21,35 @@ const COLOR_BANCO: Record<Banco, string> = {
   'Morgan Stanley': 'bg-teal-50 text-teal-800 border-teal-200',
 }
 
-function EtiquetaBanco({ banco }: { banco: Banco }) {
+function EtiquetaBanco({ banco, etiqueta }: { banco: Banco; etiqueta?: string }) {
+  const texto = !etiqueta || etiqueta === banco ? (banco === 'Pershing' ? 'Pershing' : 'Morgan') : etiqueta
   return (
     <span className={`inline-block whitespace-nowrap rounded border px-1.5 py-px text-[10px] font-semibold ${COLOR_BANCO[banco]}`}>
-      {banco === 'Pershing' ? 'Pershing' : 'Morgan'}
+      {texto}
     </span>
   )
+}
+
+/**
+ * Dónde va un archivo: a la cuenta del mismo banco que ya tenga ese número de
+ * cuenta; si no, a la primera cuenta del banco a la que le falte ese reporte
+ * (y no sea de otro número); si no, a una cuenta nueva.
+ */
+function ubicar(prev: Archivos, a: ArchivoLeido, extras: Ranura[]): string {
+  const ns = Array.from(new Set([
+    0,
+    ...Object.keys(prev).map(leerClave).filter((c) => c?.banco === a.banco).map((c) => c!.n),
+    ...extras.filter((x) => x.banco === a.banco).map((x) => x.n),
+  ])).sort((x, y) => x - y)
+  const de = (n: number) => TIPOS_ARCHIVO.map((t) => prev[claveArchivo(a.banco, t.tipo, n)]).filter((x): x is ArchivoLeido => !!x)
+  const num = a.cuentas[0]
+  if (num) for (const n of ns) if (de(n).some((x) => x.cuentas.includes(num))) return claveArchivo(a.banco, a.tipo, n)
+  for (const n of ns) {
+    if (prev[claveArchivo(a.banco, a.tipo, n)]) continue
+    if (num && de(n).some((x) => x.cuentas.length && !x.cuentas.includes(num))) continue
+    return claveArchivo(a.banco, a.tipo, n)
+  }
+  return claveArchivo(a.banco, a.tipo, Math.max(...ns) + 1)
 }
 
 const MARCA_FUENTE: Record<string, string> = { tasa: '≈', 'sin datos': '!', manual: '✎' }
@@ -44,17 +68,23 @@ export default function ConsolidadoClient({ guardado, historial }: {
   const [manuales, setManuales] = useState<Record<string, number>>(guardado?.datos.manuales ?? {})
   const [externos, setExternos] = useState<Record<string, Terminos>>(guardado?.datos.externos ?? {})
   const [incluirMovimientos, setIncluirMovimientos] = useState(guardado?.datos.incluirMovimientos ?? true)
+  const [nombresCuentas, setNombresCuentas] = useState<Record<string, string>>(guardado?.datos.nombresCuentas ?? {})
+  // Cuentas agregadas a mano que todavía no tienen archivos.
+  const [extras, setExtras] = useState<Ranura[]>([])
   const [savedId, setSavedId] = useState<string | null>(guardado?.id ?? null)
   const [exportando, setExportando] = useState<'excel' | 'pdf' | 'guardar' | null>(null)
   const [aviso, setAviso] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
   const fecha = fechaManual ?? fechaSugerida(archivos) ?? hoyIso()
-  const cuentas = useMemo(() => cuentasDe(archivos), [archivos])
-  const cuentasTexto = cuentas.map((c) => `${c.banco} ${c.cuenta}`).join(' · ')
+  // Sin números de cuenta: "Pershing · Morgan Stanley" o "2 cuentas Pershing · Morgan Stanley".
+  const cuentasTexto = BANCOS.map((b) => {
+    const k = ranurasDe(archivos).filter((x) => x.banco === b).length
+    return k === 0 ? null : k === 1 ? b : `${k} cuentas ${b}`
+  }).filter(Boolean).join(' · ')
   const reporte = useMemo(
-    () => (Object.keys(archivos).length ? armarReporte(archivos, fecha, new Set(), manuales, externos) : null),
-    [archivos, fecha, manuales, externos],
+    () => (Object.keys(archivos).length ? armarReporte(archivos, fecha, new Set(), manuales, externos, nombresCuentas) : null),
+    [archivos, fecha, manuales, externos, nombresCuentas],
   )
 
   // "Abrir" otro consolidado del historial (cambia ?id=) lo carga en pantalla.
@@ -66,6 +96,8 @@ export default function ConsolidadoClient({ guardado, historial }: {
     setManuales(guardado.datos.manuales ?? {})
     setExternos(guardado.datos.externos ?? {})
     setIncluirMovimientos(guardado.datos.incluirMovimientos ?? true)
+    setNombresCuentas(guardado.datos.nombresCuentas ?? {})
+    setExtras([])
     setSavedId(guardado.id)
     setErrores([])
     setAviso(null)
@@ -96,7 +128,7 @@ export default function ConsolidadoClient({ guardado, historial }: {
       setAviso('Poné el nombre del cliente para guardarlo.')
       return null
     }
-    const datos: DatosConsolidado = { archivos, fechaManual, manuales, externos, incluirMovimientos }
+    const datos: DatosConsolidado = { archivos, fechaManual, manuales, externos, incluirMovimientos, nombresCuentas }
     const res = await fetch('/api/consolidado/guardados', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -122,7 +154,7 @@ export default function ConsolidadoClient({ guardado, historial }: {
       const res = await fetch('/api/consolidado/pdf', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clientName: cliente.trim(), fecha, datos: { archivos, fechaManual, manuales, externos, incluirMovimientos } }),
+        body: JSON.stringify({ clientName: cliente.trim(), fecha, datos: { archivos, fechaManual, manuales, externos, incluirMovimientos, nombresCuentas } }),
       })
       if (!res.ok) {
         const d = await res.json().catch(() => ({}))
@@ -141,7 +173,7 @@ export default function ConsolidadoClient({ guardado, historial }: {
     }
   }
 
-  async function subir(files: FileList | File[]) {
+  async function subir(files: FileList | File[], destino?: Ranura) {
     const lista = Array.from(files)
     if (!lista.length) return
     setErrores([])
@@ -156,7 +188,8 @@ export default function ConsolidadoClient({ guardado, historial }: {
           const data = await res.json().catch(() => ({}))
           if (!res.ok) throw new Error(data.error ?? `${file.name}: no se pudo leer`)
           const a = data.archivo as ArchivoLeido
-          setArchivos((prev) => ({ ...prev, [claveArchivo(a.banco, a.tipo)]: a }))
+          if (destino && destino.banco !== a.banco) throw new Error(`${file.name} es un reporte de ${a.banco}, no de ${destino.banco}.`)
+          setArchivos((prev) => ({ ...prev, [destino ? claveArchivo(a.banco, a.tipo, destino.n) : ubicar(prev, a, extras)]: a }))
         } catch (e: any) {
           nuevos.push(e.message)
         } finally {
@@ -167,13 +200,38 @@ export default function ConsolidadoClient({ guardado, historial }: {
     if (nuevos.length) setErrores(nuevos)
   }
 
-  function quitar(banco: Banco, tipo: string) {
+  function quitar(clave: string) {
     setArchivos((prev) => {
       const next = { ...prev }
-      delete next[`${banco}|${tipo}` as keyof Archivos]
+      delete next[clave]
       return next
     })
   }
+
+  function quitarCuenta(r: Ranura) {
+    setArchivos((prev) => {
+      const next = { ...prev }
+      for (const t of TIPOS_ARCHIVO) delete next[claveArchivo(r.banco, t.tipo, r.n)]
+      return next
+    })
+    setExtras((prev) => prev.filter((x) => x.clave !== r.clave))
+  }
+
+  function agregarCuenta(banco: Banco) {
+    const ns = [...ranurasDe(archivos), ...extras].filter((x) => x.banco === banco).map((x) => x.n)
+    // La primera de cada banco siempre se muestra; la nueva va después de la última.
+    const n = Math.max(0, ...ns) + 1
+    setExtras((prev) => [...prev, { banco, n, clave: claveRanura(banco, n) }])
+  }
+
+  // Cuentas en pantalla: las que tienen archivos, las agregadas a mano y, como
+  // mínimo, una de cada banco para empezar.
+  const ranurasPantalla: Ranura[] = (() => {
+    const m = new Map<string, Ranura>()
+    for (const b of BANCOS) m.set(claveRanura(b, 0), { banco: b, n: 0, clave: claveRanura(b, 0) })
+    for (const r of [...ranurasDe(archivos), ...extras]) m.set(r.clave, r)
+    return Array.from(m.values()).sort((a, b) => BANCOS.indexOf(a.banco) - BANCOS.indexOf(b.banco) || a.n - b.n)
+  })()
 
   async function descargarExcel() {
     if (!reporte) return
@@ -185,8 +243,8 @@ export default function ConsolidadoClient({ guardado, historial }: {
 
       const resumen: (string | number)[][] = [
         ['Posición Consolidada'], ['Cliente', cliente || '—'], ['Valuación al', ddmmyyyy(reporte.fecha)], [],
-        ['Banco', 'Valor de mercado', 'Cupón corrido', 'Total', '% del total'],
-        ...reporte.porBanco.map((b) => [b.banco, n(b.valorMercado), n(b.cuponCorrido), n(b.total), n(b.peso * 100)]),
+        ['Cuenta', 'Valor de mercado', 'Cupón corrido', 'Total', '% del total'],
+        ...reporte.porCuenta.map((b) => [b.etiqueta, n(b.valorMercado), n(b.cuponCorrido), n(b.total), n(b.peso * 100)]),
         ['Total', n(reporte.totales.valorMercado), n(reporte.totales.cuponCorrido), n(reporte.totales.total), 100], [],
         ['Clase de activo', 'Valor de mercado', 'Cupón corrido', 'Total', '% del total'],
         ...reporte.porClase.map((c) => [c.clase, n(c.valorMercado), n(c.cuponCorrido), n(c.total), n(c.peso * 100)]),
@@ -196,7 +254,7 @@ export default function ConsolidadoClient({ guardado, historial }: {
       XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
         ['Banco', 'Cuenta', 'Clase', 'Instrumento', 'CUSIP', 'Cupón %', 'Vencimiento', 'Fechas de compra', 'Cantidad', 'Precio', 'Costo', 'Valor de mercado', 'Cupón corrido', 'Origen cupón corrido', 'Total', 'Resultado', '% del total'],
         ...reporte.posiciones.map((l) => [
-          l.banco, l.cuenta ?? '', l.clase, l.nombre, l.cusip ?? '', l.tasa != null ? n(l.tasa * 100) : '',
+          l.etiquetaCuenta, l.cuenta ?? '', l.clase, l.nombre, l.cusip ?? '', l.tasa != null ? n(l.tasa * 100) : '',
           l.vencimiento ? ddmmyyyy(l.vencimiento) : l.perpetuo ? 'Perpetuo' : '', (l.fechasCompra ?? []).map(ddmmyyyy).join(', '),
           n(l.cantidad), n(l.precio), n(l.costo), n(l.valorMercado),
           n(l.cuponCorrido), l.fuenteCorrido ? ETIQUETA_FUENTE[l.fuenteCorrido] : '', n(l.total), n(l.resultado), n(l.peso * 100),
@@ -205,7 +263,7 @@ export default function ConsolidadoClient({ guardado, historial }: {
 
       XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
         ['Banco', 'Tipo', 'Instrumento', 'CUSIP', ...reporte.renta.meses.map(mesCorto), 'Total'],
-        ...reporte.renta.filas.map((f) => [f.banco, f.clase, f.descripcion, f.cusip ?? '', ...f.montos.map(n), n(f.total)]),
+        ...reporte.renta.filas.map((f) => [f.etiquetaCuenta, f.clase, f.descripcion, f.cusip ?? '', ...f.montos.map(n), n(f.total)]),
         ['Total', '', '', '', ...reporte.renta.montos.map(n), n(reporte.renta.total)],
       ]), 'Renta 12 meses')
 
@@ -213,7 +271,7 @@ export default function ConsolidadoClient({ guardado, historial }: {
         XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
           ['Fecha', 'Banco', 'Cuenta', 'Categoría', 'Tipo', 'Descripción', 'CUSIP', 'Cantidad', 'Precio', 'Monto'],
           ...reporte.movimientos.map((m) => [
-            ddmmyyyy(m.fecha), m.banco, m.cuenta ?? '', categoriaMovimiento(m), m.tipo, m.descripcion, m.cusip ?? '', n(m.cantidad), n(m.precio), n(m.monto),
+            ddmmyyyy(m.fecha), m.etiquetaCuenta, m.cuenta ?? '', categoriaMovimiento(m), m.tipo, m.descripcion, m.cusip ?? '', n(m.cantidad), n(m.precio), n(m.monto),
           ]),
         ]), 'Movimientos')
       }
@@ -239,39 +297,31 @@ export default function ConsolidadoClient({ guardado, historial }: {
           className={`cursor-pointer rounded-lg border-2 border-dashed px-4 py-6 text-center transition ${arrastrando ? 'border-[#2D3F52] bg-slate-50' : 'border-gray-200 hover:border-gray-300'}`}
         >
           <p className="text-sm font-medium text-gray-700">{cargando ? `Leyendo ${cargando} archivo(s)…` : 'Arrastrá acá los Excel de los bancos, o hacé clic para elegirlos'}</p>
-          <p className="mt-1 text-xs text-gray-400">Podés soltar todos juntos: cada archivo se reconoce solo (banco y tipo de reporte).</p>
+          <p className="mt-1 text-xs text-gray-400">Podés soltar todos juntos: cada archivo se reconoce solo (banco, tipo de reporte y cuenta). Con varias cuentas de Morgan, subí los de cada una en su tarjeta.</p>
           <input ref={inputRef} type="file" accept=".xlsx,.xls" multiple className="hidden" onChange={(e) => { if (e.target.files) subir(e.target.files); e.target.value = '' }} />
         </div>
 
         <div className="mt-4 grid gap-4 md:grid-cols-2">
-          {BANCOS.map((banco) => (
-            <div key={banco} className="rounded-lg border border-gray-100">
-              <div className="flex items-center gap-2 border-b border-gray-100 px-3 py-2">
-                <EtiquetaBanco banco={banco} />
-                <span className="text-sm font-semibold text-gray-800">{banco}</span>
-              </div>
-              <ul className="divide-y divide-gray-50">
-                {TIPOS_ARCHIVO.map((t) => {
-                  const a = archivos[claveArchivo(banco, t.tipo)]
-                  return (
-                    <li key={t.tipo} className="flex items-center gap-3 px-3 py-2 text-sm">
-                      <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] ${a ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-400'}`}>{a ? '✓' : ''}</span>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-gray-800">{t.label} <span className="text-xs text-gray-400">({banco === 'Pershing' ? t.pershing : t.morgan})</span></p>
-                        {a ? (
-                          <p className="truncate text-xs text-gray-500">
-                            {a.nombre}
-                            {a.fecha ? ` · al ${ddmmyyyy(a.fecha)}` : ''}
-                            {a.tipo === 'posiciones' ? ` · ${a.posiciones.length} posiciones` : a.tipo === 'movimientos' ? ` · ${a.movimientos.length} movimientos` : ` · ${a.pagos.length} pagos`}
-                          </p>
-                        ) : <p className="text-xs text-gray-400">Opcional</p>}
-                      </div>
-                      {a && <button onClick={() => quitar(banco, t.tipo)} className="text-xs text-gray-400 hover:text-red-600">Quitar</button>}
-                    </li>
-                  )
-                })}
-              </ul>
-            </div>
+          {ranurasPantalla.map((r) => (
+            <TarjetaCuenta
+              key={r.clave}
+              r={r}
+              archivos={archivos}
+              etiqueta={etiquetaRanura(r, ranurasPantalla)}
+              nombre={nombresCuentas[r.clave] ?? ''}
+              setNombre={(v) => setNombresCuentas((prev) => ({ ...prev, [r.clave]: v }))}
+              subir={(fs) => subir(fs, r)}
+              quitar={quitar}
+              quitarCuenta={r.n > 0 ? () => quitarCuenta(r) : undefined}
+            />
+          ))}
+        </div>
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+          <span className="text-gray-500">¿El cliente tiene más cuentas?</span>
+          {BANCOS.map((b) => (
+            <button key={b} onClick={() => agregarCuenta(b)} className="rounded border border-gray-200 px-2.5 py-1 font-medium text-gray-700 hover:bg-gray-50">
+              + Cuenta {b}
+            </button>
           ))}
         </div>
 
@@ -346,6 +396,64 @@ export default function ConsolidadoClient({ guardado, historial }: {
   )
 }
 
+function TarjetaCuenta({ r, archivos, etiqueta, nombre, setNombre, subir, quitar, quitarCuenta }: {
+  r: Ranura
+  archivos: Archivos
+  etiqueta: string
+  nombre: string
+  setNombre: (v: string) => void
+  subir: (files: FileList) => void
+  quitar: (clave: string) => void
+  quitarCuenta?: () => void
+}) {
+  const ref = useRef<HTMLInputElement>(null)
+  const [arrastrando, setArrastrando] = useState(false)
+  return (
+    <div
+      className={`rounded-lg border ${arrastrando ? 'border-[#2D3F52] bg-slate-50' : 'border-gray-100'}`}
+      onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setArrastrando(true) }}
+      onDragLeave={() => setArrastrando(false)}
+      onDrop={(e) => { e.preventDefault(); e.stopPropagation(); setArrastrando(false); subir(e.dataTransfer.files) }}
+    >
+      <div className="flex items-center gap-2 border-b border-gray-100 px-3 py-2">
+        <EtiquetaBanco banco={r.banco} />
+        <input
+          value={nombre}
+          onChange={(e) => setNombre(e.target.value)}
+          placeholder={etiqueta}
+          title="Nombre de la cuenta (opcional), por ejemplo Personal o Sociedad"
+          className="min-w-0 flex-1 rounded border border-transparent px-1 py-0.5 text-sm font-semibold text-gray-800 placeholder:text-gray-800 hover:border-gray-200 focus:border-gray-300 focus:outline-none"
+        />
+        <button onClick={() => ref.current?.click()} className="text-xs font-medium text-[#2D3F52] hover:underline">Subir</button>
+        {quitarCuenta && <button onClick={quitarCuenta} className="text-xs text-gray-400 hover:text-red-600">Quitar cuenta</button>}
+        <input ref={ref} type="file" accept=".xlsx,.xls" multiple className="hidden" onChange={(e) => { if (e.target.files) subir(e.target.files); e.target.value = '' }} />
+      </div>
+      <ul className="divide-y divide-gray-50">
+        {TIPOS_ARCHIVO.map((t) => {
+          const clave = claveArchivo(r.banco, t.tipo, r.n)
+          const a = archivos[clave]
+          return (
+            <li key={t.tipo} className="flex items-center gap-3 px-3 py-2 text-sm">
+              <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] ${a ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-400'}`}>{a ? '✓' : ''}</span>
+              <div className="min-w-0 flex-1">
+                <p className="text-gray-800">{t.label} <span className="text-xs text-gray-400">({r.banco === 'Pershing' ? t.pershing : t.morgan})</span></p>
+                {a ? (
+                  <p className="truncate text-xs text-gray-500">
+                    {a.nombre}
+                    {a.fecha ? ` · al ${ddmmyyyy(a.fecha)}` : ''}
+                    {a.tipo === 'posiciones' ? ` · ${a.posiciones.length} posiciones` : a.tipo === 'movimientos' ? ` · ${a.movimientos.length} movimientos` : ` · ${a.pagos.length} pagos`}
+                  </p>
+                ) : <p className="text-xs text-gray-400">Opcional</p>}
+              </div>
+              {a && <button onClick={() => quitar(clave)} className="text-xs text-gray-400 hover:text-red-600">Quitar</button>}
+            </li>
+          )
+        })}
+      </ul>
+    </div>
+  )
+}
+
 function Historial({ historial, actual }: { historial: ConsolidadoRow[]; actual: string | null }) {
   const router = useRouter()
   const [borrando, setBorrando] = useState<string | null>(null)
@@ -381,7 +489,7 @@ function Historial({ historial, actual }: { historial: ConsolidadoRow[]; actual:
             {historial.map((h) => (
               <tr key={h.id} className={`border-b border-gray-50 ${h.id === actual ? 'bg-slate-50' : ''}`}>
                 <td className="px-2 py-1.5 font-medium text-gray-800">{h.client_name}</td>
-                <td className="px-2 py-1.5 text-xs text-gray-500">{h.cuentas || '—'}</td>
+                <td className="px-2 py-1.5 text-xs text-gray-500">{(h.cuentas ?? '').replace(/\s+[A-Z]*\d[A-Z0-9-]*/g, '') || '—'}</td>
                 <td className="px-2 py-1.5 whitespace-nowrap">{ddmmyyyy(h.valuation_date)}</td>
                 <td className="px-2 py-1.5 text-right tabular-nums">{fmt(h.total_value)}</td>
                 <td className="px-2 py-1.5 text-right tabular-nums">{fmt(h.accrued_interest)}</td>
@@ -614,12 +722,12 @@ function VistaReporte({ r, cliente, cuentas, manuales, setManual }: {
                 </ul>
               </div>
             </Tarjeta>
-            <Tarjeta titulo="Por custodio">
+            <Tarjeta titulo={r.porCuenta.length > r.porBanco.length ? 'Por cuenta' : 'Por custodio'}>
               <div className="space-y-4">
-                {r.porBanco.map((b) => (
-                  <div key={b.banco}>
+                {r.porCuenta.map((b) => (
+                  <div key={b.ranura}>
                     <div className="mb-1 flex items-baseline justify-between text-xs">
-                      <span className="font-medium text-gray-700">{b.banco}</span>
+                      <span className="font-medium text-gray-700">{b.etiqueta}</span>
                       <span className="tabular-nums"><b>{fmtPct(b.peso)}</b> · USD {fmt(b.total, 0)}</span>
                     </div>
                     <Barra peso={b.peso} color={COLOR_CUSTODIO[b.banco]} />
@@ -685,7 +793,7 @@ function VistaReporte({ r, cliente, cuentas, manuales, setManual }: {
                                 {det && <p className="text-[11px] text-gray-500">{det}</p>}
                                 {cant && <p className="text-[11px] text-gray-400">{cant}</p>}
                               </td>
-                              <td className="px-2 py-2.5"><EtiquetaBanco banco={l.banco} /></td>
+                              <td className="px-2 py-2.5"><EtiquetaBanco banco={l.banco} etiqueta={l.etiquetaCuenta} /></td>
                               <td className="px-2 py-2.5 text-right tabular-nums">{fmt(l.valorMercado)}</td>
                               <td className="px-2 py-2.5 text-right"><CorridoEditable l={l} manual={manuales[clavePosicion(l)]} setManual={setManual} /></td>
                               <td className="px-2 py-2.5 text-right font-semibold tabular-nums">{fmt(l.total)}</td>
@@ -746,7 +854,7 @@ function VistaReporte({ r, cliente, cuentas, manuales, setManual }: {
                 <tbody>
                   {r.renta.filas.map((f, i) => (
                     <tr key={i} className="border-b border-gray-50">
-                      <td className="px-2 py-1.5"><EtiquetaBanco banco={f.banco} /> <span className="ml-1">{r.posiciones.find((l) => l.banco === f.banco && l.cusip === f.cusip)?.nombre ?? f.descripcion}</span></td>
+                      <td className="px-2 py-1.5"><EtiquetaBanco banco={f.banco} etiqueta={f.etiquetaCuenta} /> <span className="ml-1">{r.posiciones.find((l) => l.etiquetaCuenta === f.etiquetaCuenta && l.cusip === f.cusip)?.nombre ?? f.descripcion}</span></td>
                       {f.montos.map((v, j) => <td key={j} className="px-1.5 py-1.5 text-right tabular-nums">{v ? fmt(v, 0) : ''}</td>)}
                       <td className="px-2 py-1.5 text-right font-semibold tabular-nums">{fmt(f.total, 0)}</td>
                     </tr>
@@ -784,7 +892,7 @@ function VistaReporte({ r, cliente, cuentas, manuales, setManual }: {
                 {(verTodosMov ? movimientos : movimientos.slice(0, 15)).map((m, i) => (
                   <tr key={i} className="border-b border-gray-50">
                     <td className="whitespace-nowrap px-2 py-1.5">{ddmmyyyy(m.fecha)}</td>
-                    <td className="px-2 py-1.5"><EtiquetaBanco banco={m.banco} /></td>
+                    <td className="px-2 py-1.5"><EtiquetaBanco banco={m.banco} etiqueta={m.etiquetaCuenta} /></td>
                     <td className="px-2 py-1.5"><span className={`rounded px-1.5 py-0.5 text-[10px] ${COLOR_CATEGORIA[categoriaMovimiento(m)] ?? ''}`}>{categoriaMovimiento(m)}</span></td>
                     <td className="px-2 py-1.5 text-gray-600">
                       {m.descripcion}

@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
   const cliente = String(body?.clientName ?? '').trim()
 
   try {
-    const r = armarReporte(datos.archivos, fecha, new Set(), datos.manuales ?? {}, datos.externos ?? {})
+    const r = armarReporte(datos.archivos, fecha, new Set(), datos.manuales ?? {}, datos.externos ?? {}, datos.nombresCuentas ?? {})
     const pdf = await generarPdfConsolidado(r, { cliente, incluirMovimientos: datos.incluirMovimientos !== false })
     const nombre = `Posicion consolidada${cliente ? ` - ${cliente}` : ''} ${fecha}.pdf`.replace(/[^\w .,-]/g, '')
     return new NextResponse(new Uint8Array(pdf), {

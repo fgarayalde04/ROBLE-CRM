@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
   }
   try {
     const fecha = typeof body?.fecha === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(body.fecha) ? body.fecha : new Date().toISOString().slice(0, 10)
-    const r = armarReporte(datos.archivos, fecha, new Set(), datos.manuales ?? {}, datos.externos ?? {})
+    const r = armarReporte(datos.archivos, fecha, new Set(), datos.manuales ?? {}, datos.externos ?? {}, datos.nombresCuentas ?? {})
     const nuevoId = await saveConsolidado(
       { clientName, cuentas: String(body?.cuentas ?? ''), fecha, total: r.totales.total, cuponCorrido: r.totales.cuponCorrido, datos },
       { id, userName: session.name, userId: session.id ?? null },
