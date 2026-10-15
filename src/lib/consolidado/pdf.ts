@@ -4,7 +4,7 @@ import { imprimirEstadoCuenta, type PartesPdf } from '@/lib/estadoCuenta/imprimi
 import type { Reporte } from './calc'
 import { htmlEstadoCuenta, type OpcionesDocumento } from './html'
 
-const TITULO = 'Posición consolidada'
+const TITULO = 'Reporte de portafolio'
 
 export function partesConsolidado(r: Reporte, o: OpcionesDocumento): PartesPdf {
   return {

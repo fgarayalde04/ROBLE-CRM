@@ -1,7 +1,6 @@
 'use client'
 
-import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import Link from 'next/link'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   ETIQUETA_FUENTE, armarReporte, bonosIncompletos, categoriaMovimiento, claveArchivo, clavePosicion, claveRanura, ddmmyyyy, etiquetaRanura, fechaSugerida, fmt, fmtPct,
@@ -9,7 +8,7 @@ import {
   type Archivos, type LineaPosicion, type Ranura, type Reporte,
 } from '@/lib/consolidado/calc'
 import { BANCOS, CLASES, TIPOS_ARCHIVO, type ArchivoLeido, type Banco, type Terminos } from '@/lib/consolidado/types'
-import type { ConsolidadoRow, DatosConsolidado } from '@/lib/db/consolidados'
+import type { DatosConsolidado } from '@/lib/db/consolidados'
 
 const hoyIso = () => {
   const d = new Date()
@@ -54,9 +53,8 @@ function ubicar(prev: Archivos, a: ArchivoLeido, extras: Ranura[]): string {
 
 const MARCA_FUENTE: Record<string, string> = { tasa: '≈', 'sin datos': '!', manual: '✎' }
 
-export default function ConsolidadoClient({ guardado, historial }: {
+export default function ConsolidadoClient({ guardado }: {
   guardado: { id: string; cliente: string; datos: DatosConsolidado } | null
-  historial: ConsolidadoRow[]
 }) {
   const router = useRouter()
   const [archivos, setArchivos] = useState<Archivos>(guardado?.datos.archivos ?? {})
@@ -140,7 +138,7 @@ export default function ConsolidadoClient({ guardado, historial }: {
       return null
     }
     setSavedId(data.id)
-    if (!silencioso) setAviso('Guardado. Lo encontrás abajo, en Consolidados guardados.')
+    if (!silencioso) setAviso('Guardado. Lo encontrás en Portafolio, en la lista de portafolios armados.')
     router.replace(`/factsheet/consolidado?id=${data.id}`, { scroll: false })
     router.refresh()
     return data.id
@@ -164,7 +162,7 @@ export default function ConsolidadoClient({ guardado, historial }: {
       const url = URL.createObjectURL(await res.blob())
       const a = document.createElement('a')
       a.href = url
-      a.download = `Posicion consolidada${cliente.trim() ? ` - ${cliente.trim()}` : ''} ${reporte.fecha}.pdf`
+      a.download = `Portafolio${cliente.trim() ? ` - ${cliente.trim()}` : ''} ${reporte.fecha}.pdf`
       a.click()
       setTimeout(() => URL.revokeObjectURL(url), 10000)
       if (cliente.trim()) await guardar(true)
@@ -242,7 +240,7 @@ export default function ConsolidadoClient({ guardado, historial }: {
       const n = (v: number | null | undefined) => (v == null ? '' : Math.round(v * 100) / 100)
 
       const resumen: (string | number)[][] = [
-        ['Posición Consolidada'], ['Cliente', cliente || '—'], ['Valuación al', ddmmyyyy(reporte.fecha)], [],
+        ['Reporte de portafolio'], ['Cliente', cliente || '—'], ['Valuación al', ddmmyyyy(reporte.fecha)], [],
         ['Cuenta', 'Valor de mercado', 'Cupón corrido', 'Total', '% del total'],
         ...reporte.porCuenta.map((b) => [b.etiqueta, n(b.valorMercado), n(b.cuponCorrido), n(b.total), n(b.peso * 100)]),
         ['Total', n(reporte.totales.valorMercado), n(reporte.totales.cuponCorrido), n(reporte.totales.total), 100], [],
@@ -275,7 +273,7 @@ export default function ConsolidadoClient({ guardado, historial }: {
           ]),
         ]), 'Movimientos')
       }
-      XLSX.writeFile(wb, `Posicion consolidada${cliente ? ` - ${cliente}` : ''} ${reporte.fecha}.xlsx`)
+      XLSX.writeFile(wb, `Portafolio${cliente ? ` - ${cliente}` : ''} ${reporte.fecha}.xlsx`)
       if (cliente.trim()) await guardar(true)
     } finally {
       setExportando(null)
@@ -368,8 +366,8 @@ export default function ConsolidadoClient({ guardado, historial }: {
           {aviso && <p className="mt-3 text-xs text-[#2D3F52]">{aviso}</p>}
           {savedId && (
             <p className="mt-2 text-[11px] text-gray-400">
-              Consolidado guardado: los cambios se guardan con “Guardar cambios” o al descargar.{' '}
-              <a href="/factsheet/consolidado" className="underline hover:text-gray-600">Empezar uno nuevo</a>
+              Portafolio guardado: los cambios se guardan con “Guardar cambios” o al descargar.{' '}
+              <a href="/factsheet/consolidado" className="underline hover:text-gray-600">Armar uno nuevo</a>
             </p>
           )}
 
@@ -391,7 +389,6 @@ export default function ConsolidadoClient({ guardado, historial }: {
         />
       )}
 
-      <Historial historial={historial} actual={savedId} />
     </div>
   )
 }
@@ -450,63 +447,6 @@ function TarjetaCuenta({ r, archivos, etiqueta, nombre, setNombre, subir, quitar
           )
         })}
       </ul>
-    </div>
-  )
-}
-
-function Historial({ historial, actual }: { historial: ConsolidadoRow[]; actual: string | null }) {
-  const router = useRouter()
-  const [borrando, setBorrando] = useState<string | null>(null)
-  if (!historial.length) return null
-
-  async function borrar(h: ConsolidadoRow) {
-    if (!confirm(`¿Borrar el consolidado de ${h.client_name} al ${ddmmyyyy(h.valuation_date)}?`)) return
-    setBorrando(h.id)
-    try {
-      const res = await fetch(`/api/consolidado/guardados/${h.id}`, { method: 'DELETE' })
-      const d = await res.json().catch(() => ({}))
-      if (!res.ok) alert(d.error ?? 'No se pudo borrar')
-      if (h.id === actual) window.location.href = '/factsheet/consolidado'
-      else router.refresh()
-    } finally {
-      setBorrando(null)
-    }
-  }
-
-  return (
-    <div className="bg-white border border-gray-200 rounded-lg p-5 print:hidden">
-      <h2 className="text-sm font-semibold text-gray-800">Consolidados guardados</h2>
-      <div className="mt-3 overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-gray-200 text-left text-[11px] uppercase tracking-wide text-gray-500">
-              <th className="px-2 py-1.5">Cliente</th><th className="px-2 py-1.5">Cuentas</th><th className="px-2 py-1.5">Valuación</th>
-              <th className="px-2 py-1.5 text-right">Total</th><th className="px-2 py-1.5 text-right">Cupón corrido</th>
-              <th className="px-2 py-1.5">Guardado por</th><th className="px-2 py-1.5" />
-            </tr>
-          </thead>
-          <tbody>
-            {historial.map((h) => (
-              <tr key={h.id} className={`border-b border-gray-50 ${h.id === actual ? 'bg-slate-50' : ''}`}>
-                <td className="px-2 py-1.5 font-medium text-gray-800">{h.client_name}</td>
-                <td className="px-2 py-1.5 text-xs text-gray-500">{(h.cuentas ?? '').replace(/\s+[A-Z]*\d[A-Z0-9-]*/g, '') || '—'}</td>
-                <td className="px-2 py-1.5 whitespace-nowrap">{ddmmyyyy(h.valuation_date)}</td>
-                <td className="px-2 py-1.5 text-right tabular-nums">{fmt(h.total_value)}</td>
-                <td className="px-2 py-1.5 text-right tabular-nums">{fmt(h.accrued_interest)}</td>
-                <td className="px-2 py-1.5 text-xs text-gray-500 whitespace-nowrap">{h.created_by ?? '—'} · {new Date(h.updated_at).toLocaleDateString('es-UY')}</td>
-                <td className="px-2 py-1.5 whitespace-nowrap text-right">
-                  {h.id === actual ? <span className="text-xs text-gray-400">abierto</span> : (
-                    <Link href={`/factsheet/consolidado?id=${h.id}`} className="text-xs text-[#2D3F52] underline">Abrir</Link>
-                  )}
-                  <button onClick={() => borrar(h)} disabled={borrando === h.id} className="ml-3 text-xs text-gray-400 hover:text-red-600 disabled:opacity-50">
-                    {borrando === h.id ? 'Borrando…' : 'Borrar'}
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
     </div>
   )
 }
@@ -685,7 +625,7 @@ function VistaReporte({ r, cliente, cuentas, manuales, setManual }: {
       <div className="rounded-xl bg-gradient-to-br from-[#1B2A38] to-[#1B3A2B] p-6 text-white">
         <div className="flex flex-wrap items-end justify-between gap-6">
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.25em] text-emerald-200/80">Posición consolidada</p>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.25em] text-emerald-200/80">Reporte de portafolio</p>
             <h2 className="mt-1 text-3xl font-semibold">{cliente || 'Sin nombre de cliente'}</h2>
             <p className="mt-1 text-sm text-slate-300">Valuación al {ddmmyyyy(r.fecha)}{cuentas ? ` · ${cuentas}` : ''}</p>
           </div>

@@ -114,7 +114,7 @@ const cuentaTxt = (x: { banco: Banco; etiquetaCuenta: string }) => (x.etiquetaCu
 
 export function htmlEstadoCuenta(r: Reporte, o: OpcionesDocumento): string {
   const t = r.totales
-  const cliente = o.cliente.trim() || 'Posición Consolidada'
+  const cliente = o.cliente.trim() || 'Reporte de portafolio'
   const efectivo = r.porClase.find((c) => c.clase === 'Efectivo')
   const hayRenta = r.renta.filas.length > 0
   const movimientos = r.movimientos.filter((m) => categoriaMovimiento(m) !== 'Money market')
