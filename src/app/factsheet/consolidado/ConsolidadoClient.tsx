@@ -7,7 +7,7 @@ import {
   leerClave, mesCorto, ranurasDe, textoCompras,
   type Archivos, type LineaPosicion, type Ranura, type Reporte,
 } from '@/lib/consolidado/calc'
-import { BANCOS, CLASES, TIPOS_ARCHIVO, type ArchivoLeido, type Banco, type Terminos } from '@/lib/consolidado/types'
+import { BANCOS, CLASES, TIPOS_ARCHIVO, type ArchivoLeido, type Banco, type Periodos, type Terminos } from '@/lib/consolidado/types'
 import type { DatosConsolidado } from '@/lib/db/consolidados'
 
 const hoyIso = () => {
@@ -294,9 +294,9 @@ export default function ConsolidadoClient({ guardado }: {
           onClick={() => inputRef.current?.click()}
           className={`cursor-pointer rounded-lg border-2 border-dashed px-4 py-6 text-center transition ${arrastrando ? 'border-[#2D3F52] bg-slate-50' : 'border-gray-200 hover:border-gray-300'}`}
         >
-          <p className="text-sm font-medium text-gray-700">{cargando ? `Leyendo ${cargando} archivo(s)…` : 'Arrastrá acá los Excel de los bancos, o hacé clic para elegirlos'}</p>
+          <p className="text-sm font-medium text-gray-700">{cargando ? `Leyendo ${cargando} archivo(s)…` : 'Arrastrá acá los Excel y PDF de los bancos, o hacé clic para elegirlos'}</p>
           <p className="mt-1 text-xs text-gray-400">Podés soltar todos juntos: cada archivo se reconoce solo (banco, tipo de reporte y cuenta). Con varias cuentas de Morgan, subí los de cada una en su tarjeta.</p>
-          <input ref={inputRef} type="file" accept=".xlsx,.xls" multiple className="hidden" onChange={(e) => { if (e.target.files) subir(e.target.files); e.target.value = '' }} />
+          <input ref={inputRef} type="file" accept=".xlsx,.xls,.pdf" multiple className="hidden" onChange={(e) => { if (e.target.files) subir(e.target.files); e.target.value = '' }} />
         </div>
 
         <div className="mt-4 grid gap-4 md:grid-cols-2">
@@ -423,7 +423,7 @@ function TarjetaCuenta({ r, archivos, etiqueta, nombre, setNombre, subir, quitar
         />
         <button onClick={() => ref.current?.click()} className="text-xs font-medium text-[#2D3F52] hover:underline">Subir</button>
         {quitarCuenta && <button onClick={quitarCuenta} className="text-xs text-gray-400 hover:text-red-600">Quitar cuenta</button>}
-        <input ref={ref} type="file" accept=".xlsx,.xls" multiple className="hidden" onChange={(e) => { if (e.target.files) subir(e.target.files); e.target.value = '' }} />
+        <input ref={ref} type="file" accept=".xlsx,.xls,.pdf" multiple className="hidden" onChange={(e) => { if (e.target.files) subir(e.target.files); e.target.value = '' }} />
       </div>
       <ul className="divide-y divide-gray-50">
         {TIPOS_ARCHIVO.map((t) => {
@@ -438,7 +438,7 @@ function TarjetaCuenta({ r, archivos, etiqueta, nombre, setNombre, subir, quitar
                   <p className="truncate text-xs text-gray-500">
                     {a.nombre}
                     {a.fecha ? ` · al ${ddmmyyyy(a.fecha)}` : ''}
-                    {a.tipo === 'posiciones' ? ` · ${a.posiciones.length} posiciones` : a.tipo === 'movimientos' ? ` · ${a.movimientos.length} movimientos` : ` · ${a.pagos.length} pagos`}
+                    {a.tipo === 'posiciones' ? ` · ${a.posiciones.length} posiciones` : a.tipo === 'movimientos' ? ` · ${a.movimientos.length} movimientos` : a.tipo === 'cupones' ? ` · ${a.pagos.length} pagos` : a.rentabilidad.ytd != null ? ` · YTD ${a.rentabilidad.ytd.toFixed(2)}%` : ''}
                   </p>
                 ) : <p className="text-xs text-gray-400">Opcional</p>}
               </div>
@@ -598,6 +598,8 @@ function plazosRentaFija(r: Reporte) {
     return { label, valor, peso: total ? valor / total : 0 }
   }).filter((t) => t.valor > 0)
 }
+
+const PERIODOS: [keyof Periodos, string][] = [['ytd', 'Año en curso'], ['unAnio', '1 año'], ['tresAnios', '3 años'], ['cincoAnios', '5 años'], ['desdeInicio', 'Desde inicio']]
 
 const COLOR_CATEGORIA: Record<string, string> = {
   Compras: 'bg-sky-50 text-sky-800', 'Ventas y vencimientos': 'bg-violet-50 text-violet-800', 'Cupones e intereses': 'bg-emerald-50 text-emerald-800',
@@ -803,6 +805,72 @@ function VistaReporte({ r, cliente, cuentas, manuales, setManual }: {
               </table>
             </div>
           </details>
+        </Tarjeta>
+      )}
+
+      {/* Rendimiento informado por el banco */}
+      {r.rendimiento.length > 0 && (
+        <Tarjeta>
+          <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Rendimiento informado por el banco (TWRR)</h3>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[640px] text-xs">
+              <thead><tr className="border-b border-gray-200 text-[10px] uppercase tracking-wide text-gray-400">
+                <th className="px-2 py-1.5 text-left font-medium">Cuenta</th>
+                {PERIODOS.map(([, label]) => <th key={label} className="px-2 py-1.5 text-right font-medium">{label}</th>)}
+                <th className="px-2 py-1.5 text-right font-medium">Al</th>
+              </tr></thead>
+              <tbody>
+                {r.rendimiento.map((x) => (
+                  <tr key={x.etiquetaCuenta} className="border-b border-gray-50 align-top">
+                    <td className="px-2 py-2"><EtiquetaBanco banco={x.banco} etiqueta={x.etiquetaCuenta} />{x.inicio && <p className="mt-0.5 text-[10px] text-gray-400">Inicio {ddmmyyyy(x.inicio)}</p>}</td>
+                    {PERIODOS.map(([k, label]) => {
+                      const v = x.rentabilidad[k], c = x.cambioValor?.[k]
+                      return (
+                        <td key={label} className="px-2 py-2 text-right tabular-nums">
+                          <span className={`font-semibold ${v == null ? 'text-gray-300' : v < 0 ? 'text-red-600' : 'text-emerald-700'}`}>{v == null ? '—' : `${v > 0 ? '+' : ''}${v.toFixed(2)}%`}</span>
+                          {c != null && <p className="text-[10px] text-gray-400">{c > 0 ? '+' : ''}{fmt(c, 0)}</p>}
+                        </td>
+                      )
+                    })}
+                    <td className="px-2 py-2 text-right text-gray-500">{ddmmyyyy(x.periodoHasta ?? x.fecha)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="mt-2 text-[11px] text-gray-400">Rentabilidad ponderada en el tiempo informada por cada custodio; debajo, el cambio de valor en USD sin aportes ni retiros. Cada cuenta tiene la suya: no se suman.</p>
+        </Tarjeta>
+      )}
+
+      {/* Cobrado */}
+      {r.cobrados.filas.length > 0 && (
+        <Tarjeta>
+          <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Cupones y dividendos cobrados</h3>
+            <p className="text-xs text-gray-500">
+              {r.periodoMovimientos.desde ? `Del ${ddmmyyyy(r.periodoMovimientos.desde)} al ${ddmmyyyy(r.periodoMovimientos.hasta)} · ` : ''}
+              Total <b className="text-gray-900">USD {fmt(r.cobrados.total)}</b> · Cupones {fmt(r.cobrados.cupones)} · Dividendos {fmt(r.cobrados.dividendos)}
+            </p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead><tr className="border-b border-gray-200 text-[10px] uppercase tracking-wide text-gray-400">
+                <th className="px-2 py-1.5 text-left font-medium">Instrumento</th><th className="px-2 py-1.5 text-left font-medium">Cuenta</th>
+                <th className="px-2 py-1.5 text-right font-medium">Cupones</th><th className="px-2 py-1.5 text-right font-medium">Dividendos</th><th className="px-2 py-1.5 text-right font-medium">Total</th>
+              </tr></thead>
+              <tbody>
+                {r.cobrados.filas.map((f, i) => (
+                  <tr key={i} className="border-b border-gray-50">
+                    <td className="px-2 py-1.5 font-medium text-gray-800">{f.nombre}</td>
+                    <td className="px-2 py-1.5"><EtiquetaBanco banco={f.banco} etiqueta={f.etiquetaCuenta} /></td>
+                    <td className="px-2 py-1.5 text-right tabular-nums">{f.cupones ? fmt(f.cupones) : ''}</td>
+                    <td className="px-2 py-1.5 text-right tabular-nums">{f.dividendos ? fmt(f.dividendos) : ''}</td>
+                    <td className="px-2 py-1.5 text-right font-semibold tabular-nums">{fmt(f.total)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </Tarjeta>
       )}
 

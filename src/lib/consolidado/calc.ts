@@ -6,7 +6,7 @@
 import { inferFrequency, parseDescription } from '@/lib/cupones/parse'
 import {
   BANCOS, CLASES,
-  type ArchivoCupones, type ArchivoLeido, type ArchivoMovimientos, type ArchivoPosiciones, type Banco, type Clase, type ClasePago,
+  type ArchivoCupones, type ArchivoLeido, type ArchivoMovimientos, type ArchivoPosiciones, type ArchivoRendimiento, type Banco, type Clase, type ClasePago,
   type Movimiento, type Pago, type Posicion, type Terminos, type TipoArchivo,
 } from './types'
 
@@ -114,6 +114,15 @@ export interface Reporte {
   movimientos: (Movimiento & { etiquetaCuenta: string })[]
   resumenMovimientos: CategoriaMovimiento[]
   periodoMovimientos: { desde: string | null; hasta: string | null }
+  /** Rendimiento informado por el banco, por cuenta (no se suman: cada cuenta tiene el suyo). */
+  rendimiento: (ArchivoRendimiento & { etiquetaCuenta: string })[]
+  /** Cupones y dividendos cobrados en el período del Activity, por instrumento. */
+  cobrados: {
+    filas: { nombre: string; banco: Banco; etiquetaCuenta: string; cupones: number; dividendos: number; total: number }[]
+    cupones: number
+    dividendos: number
+    total: number
+  }
   avisos: string[]
 }
 
@@ -340,6 +349,20 @@ export function categoriaMovimiento(m: Movimiento): string {
 const ORDEN_CATEGORIAS = [
   'Compras', 'Ventas y vencimientos', 'Cupones e intereses', 'Dividendos', 'Transferencias', 'Comisiones y gastos', 'Impuestos', 'Money market', 'Cancelaciones', 'Otros',
 ]
+
+/** Nombre legible de un cobro del Activity, sin códigos, cantidades ni fechas de registro/pago. */
+function nombreCobro(desc: string) {
+  const d = desc.replace(/\s+/g, ' ').trim()
+  if (/CURRENCY ?CASH|U\.?S\.? ?DOLLARS.*INTEREST/i.test(d)) return 'Intereses sobre saldo en USD'
+  const limpio = d
+    .replace(/^\d[\d,.]*\s+SHRS?\s+/i, '')
+    .replace(/\s*\(PERIOD[^)]*\)/i, '')
+    .replace(/\s+(ISIN|CUSIP|ACCOUNT|RD|PD|REC|DUE|RATE|DTD|B\/E|CPN)\b.*$/i, '')
+    .replace(/\s+\d{1,2}\/\d{1,2}(\/\d{2,4})?\b.*$/, '')
+    .replace(/\s+\S*\d\S*[A-Z]\S*|\s+\S*[A-Z]\S*\d\S*/gi, (t) => (/\d{4,}|\d.*[A-Z].*\d/i.test(t) ? '' : t))
+    .trim()
+  return titulo(limpio || d)
+}
 
 // ─── Reporte ────────────────────────────────────────────────────────────────
 
@@ -626,6 +649,37 @@ export function armarReporte(
   const resumenMovimientos = ORDEN_CATEGORIAS.map((c) => porCategoria.get(c)).filter((c): c is CategoriaMovimiento => !!c)
   const fechasMov = movimientos.map((m) => m.fecha).filter((x): x is string => !!x).sort()
 
+  // ── Cobrado: cupones y dividendos del Activity, por instrumento ──
+  const nombrePorCusip = new Map(lineas.filter((l) => l.cusip).map((l) => [l.cusip!, l.nombre]))
+  const porInstrumento = new Map<string, Reporte['cobrados']['filas'][number]>()
+  for (const m of movimientos) {
+    const cat = categoriaMovimiento(m)
+    if ((cat !== 'Cupones e intereses' && cat !== 'Dividendos') || !m.monto) continue
+    const nombre = (m.cusip && nombrePorCusip.get(m.cusip)) || nombreCobro(m.descripcion)
+    const k = `${m.etiquetaCuenta}|${m.cusip ?? nombre}`
+    const f = porInstrumento.get(k) ?? {
+      nombre,
+      banco: m.banco, etiquetaCuenta: m.etiquetaCuenta, cupones: 0, dividendos: 0, total: 0,
+    }
+    if (cat === 'Dividendos') f.dividendos = r2(f.dividendos + m.monto)
+    else f.cupones = r2(f.cupones + m.monto)
+    f.total = r2(f.cupones + f.dividendos)
+    porInstrumento.set(k, f)
+  }
+  const filasCobradas = Array.from(porInstrumento.values()).filter((f) => f.total !== 0).sort((a, b) => b.total - a.total)
+  const cobrados = {
+    filas: filasCobradas,
+    cupones: r2(filasCobradas.reduce((x, f) => x + f.cupones, 0)),
+    dividendos: r2(filasCobradas.reduce((x, f) => x + f.dividendos, 0)),
+    total: r2(filasCobradas.reduce((x, f) => x + f.total, 0)),
+  }
+
+  // ── Rendimiento informado por el banco ──
+  const rendimiento = ranuras
+    .map((rn) => archivos[claveArchivo(rn.banco, 'rendimiento', rn.n)] as ArchivoRendimiento | undefined)
+    .map((a, i) => (a ? { ...a, etiquetaCuenta: etiqueta(ranuras[i]) } : null))
+    .filter((x): x is ArchivoRendimiento & { etiquetaCuenta: string } => !!x)
+
   // ── Avisos generales ──
   const numerosPorRanura = new Map<string, string[]>()
   for (const rn of ranuras) {
@@ -666,6 +720,8 @@ export function armarReporte(
     movimientos,
     resumenMovimientos,
     periodoMovimientos: { desde: fechasMov[0] ?? null, hasta: fechasMov[fechasMov.length - 1] ?? null },
+    rendimiento,
+    cobrados,
     avisos,
   }
 }

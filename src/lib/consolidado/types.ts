@@ -4,11 +4,12 @@
 export type Banco = 'Pershing' | 'Morgan Stanley'
 export const BANCOS: Banco[] = ['Pershing', 'Morgan Stanley']
 
-export type TipoArchivo = 'posiciones' | 'movimientos' | 'cupones'
+export type TipoArchivo = 'posiciones' | 'movimientos' | 'cupones' | 'rendimiento'
 export const TIPOS_ARCHIVO: { tipo: TipoArchivo; label: string; pershing: string; morgan: string }[] = [
   { tipo: 'posiciones', label: 'Posiciones', pershing: 'Unrealized Gain Loss', morgan: 'Holdings - Cost Basis' },
   { tipo: 'movimientos', label: 'Movimientos', pershing: 'Activity', morgan: 'Activity' },
   { tipo: 'cupones', label: 'Calendario de cupones', pershing: 'Incoming Cash', morgan: 'Projected Income' },
+  { tipo: 'rendimiento', label: 'Rendimiento', pershing: 'Portfolio Performance, PDF', morgan: 'Performance, PDF' },
 ]
 
 export const CLASES = ['Efectivo', 'Renta fija', 'Fondos de inversión', 'ETF', 'Acciones', 'Otros'] as const
@@ -109,4 +110,31 @@ export interface ArchivoMovimientos {
   avisos: string[]
 }
 
-export type ArchivoLeido = ArchivoPosiciones | ArchivoCupones | ArchivoMovimientos
+/** Rendimiento por período (TWRR) del reporte de performance del banco. Nulos = el banco no lo informa. */
+export interface Periodos {
+  ytd: number | null
+  unAnio: number | null
+  tresAnios: number | null
+  cincoAnios: number | null
+  desdeInicio: number | null
+}
+
+export interface ArchivoRendimiento {
+  tipo: 'rendimiento'
+  banco: Banco
+  nombre: string
+  fecha: string | null
+  cuentas: string[]
+  periodoDesde: string | null
+  periodoHasta: string | null
+  inicio: string | null
+  valorFinal: number | null
+  /** Rentabilidad en % (ej. 5.32). */
+  rentabilidad: Periodos
+  /** Cambio de valor en USD por mercado, sin aportes ni retiros. */
+  cambioValor: Periodos | null
+  aportesNetos: Periodos | null
+  avisos: string[]
+}
+
+export type ArchivoLeido = ArchivoPosiciones | ArchivoCupones | ArchivoMovimientos | ArchivoRendimiento

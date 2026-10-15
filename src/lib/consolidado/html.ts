@@ -10,7 +10,7 @@ import {
   BORDE, GRIS, NAVY, bloquesSinHuerfanos, colorRes, documento, esc, fechaLarga, graficoBarras, kpi, num, pct, signo, tablaBarras, usd,
 } from '@/lib/estadoCuenta/base'
 import { categoriaMovimiento, ddmmyyyy, mesCorto, textoCompras, type LineaPosicion, type Reporte } from './calc'
-import { CLASES, type Banco, type Movimiento } from './types'
+import { CLASES, type Banco, type Movimiento, type Periodos } from './types'
 
 const custodio = (b: Banco) => (b === 'Pershing' ? 'Pershing' : 'Morgan Stanley')
 
@@ -248,6 +248,46 @@ export function htmlEstadoCuenta(r: Reporte, o: OpcionesDocumento): string {
     <p class="nota">No se detallan los movimientos automáticos del fondo de liquidez (money market).</p>
   </section>` : ''
 
+  // ── Rendimiento informado por el banco (por cuenta) ──
+  const PER: [keyof Periodos, string][] = [['ytd', 'Año en curso'], ['unAnio', '1 año'], ['tresAnios', '3 años'], ['cincoAnios', '5 años'], ['desdeInicio', 'Desde inicio']]
+  const rendimiento = r.rendimiento.length ? `
+  <section class="nueva">
+    <h2>Rendimiento</h2>
+    ${r.rendimiento.length === 1 ? `<div class="kpis">${PER.filter(([k]) => r.rendimiento[0].rentabilidad[k] != null).map(([k, label]) => {
+      const v = r.rendimiento[0].rentabilidad[k]!, c = r.rendimiento[0].cambioValor?.[k]
+      return kpi(label, `${signo(v)}${v.toFixed(2)}%`, c != null ? `${signo(c)}${usd(c)}` : 'TWRR')
+    }).join('')}</div>` : ''}
+    <table class="datos">
+      <colgroup><col style="width:22%">${PER.map(() => '<col style="width:13%">').join('')}<col style="width:13%"></colgroup>
+      <thead><tr><th>Cuenta</th>${PER.map(([, l]) => `<th class="n">${esc(l)}</th>`).join('')}<th class="n">Al</th></tr></thead>
+      <tbody>${r.rendimiento.map((x) => `<tr><td class="inst"><div class="nom">${esc(cuentaTxt(x))}</div>${x.inicio ? `<div class="sub">Inicio ${esc(ddmmyyyy(x.inicio))}</div>` : ''}</td>
+        ${PER.map(([k]) => {
+          const v = x.rentabilidad[k], c = x.cambioValor?.[k]
+          return `<td class="n"><b style="color:${v == null ? GRIS : colorRes(v)}">${v == null ? '—' : `${signo(v)}${v.toFixed(2)}%`}</b>${c != null ? `<div class="sub">${signo(c)}${esc(num(c, 0))}</div>` : ''}</td>`
+        }).join('')}
+        <td class="n">${esc(ddmmyyyy(x.periodoHasta ?? x.fecha))}</td></tr>`).join('')}</tbody>
+    </table>
+    <p class="nota">Rentabilidad ponderada en el tiempo (TWRR) informada por cada custodio, neta de aportes y retiros; debajo, el cambio de valor en USD. Rentabilidades pasadas no garantizan resultados futuros.</p>
+  </section>` : ''
+
+  // ── Cupones y dividendos cobrados ──
+  const cobrados = r.cobrados.filas.length ? `
+  <section class="nueva">
+    <h2>Cupones y dividendos cobrados <span class="h2-sub">${r.periodoMovimientos.desde ? `· Del ${esc(ddmmyyyy(r.periodoMovimientos.desde))} al ${esc(ddmmyyyy(r.periodoMovimientos.hasta))}` : ''}</span></h2>
+    <div class="kpis">
+      ${kpi('Total cobrado', usd(r.cobrados.total), '', true)}
+      ${kpi('Cupones e intereses', usd(r.cobrados.cupones))}
+      ${kpi('Dividendos', usd(r.cobrados.dividendos))}
+    </div>
+    <table class="datos">
+      <colgroup><col style="width:46%"><col style="width:18%"><col style="width:12%"><col style="width:12%"><col style="width:12%"></colgroup>
+      <thead><tr><th>Instrumento</th><th>Custodio</th><th class="n">Cupones</th><th class="n">Dividendos</th><th class="n">Total (USD)</th></tr></thead>
+      ${bloquesSinHuerfanos('', r.cobrados.filas.map((f) => `<tr><td class="inst"><div class="nom">${esc(f.nombre)}</div></td><td>${esc(cuentaTxt(f))}</td>
+        <td class="n">${f.cupones ? esc(num(f.cupones)) : ''}</td><td class="n">${f.dividendos ? esc(num(f.dividendos)) : ''}</td><td class="n b">${esc(num(f.total))}</td></tr>`), '')}
+    </table>
+    <p class="nota">Montos brutos acreditados según el Activity de cada custodio.</p>
+  </section>` : ''
+
   const cierre = `
   <section class="cierre">
     <h3>Notas</h3>
@@ -257,6 +297,6 @@ export function htmlEstadoCuenta(r: Reporte, o: OpcionesDocumento): string {
   </section>`
 
   return documento(cliente, `
-  ${resumen}${posiciones}${renta}${mov}${cierre}
+  ${resumen}${rendimiento}${posiciones}${renta}${cobrados}${mov}${cierre}
 `)
 }
