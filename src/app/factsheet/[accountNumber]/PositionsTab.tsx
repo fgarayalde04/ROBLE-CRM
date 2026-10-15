@@ -57,7 +57,7 @@ function lineaCantidad(p: PortfolioPositionRow, gl: PortfolioUnrealizedGainLossR
   const bono = p.asset_class === 'Fixed Income'
   const unidad = bono ? 'nominales' : ['Fund', 'Fixed Income Fund'].includes(p.asset_class) ? (q === 1 ? 'cuotaparte' : 'cuotapartes') : 'acciones'
   return [
-    `${fmt(q, Number.isInteger(q) ? 0 : 3)} ${unidad}${p.price != null ? ` a ${fmt(Number(p.price), bono ? 3 : 2)}` : ''}`,
+    `${fmt(q, Number.isInteger(q) ? 0 : 3)} ${unidad}`,
     gl ? `Costo ${fmt(Number(gl.cost_basis))}` : null,
   ].filter(Boolean).join(' · ')
 }
@@ -222,15 +222,16 @@ export default function PositionsTab({ positions, totalValue, glByCusip, custodi
             <div className="overflow-x-auto">
               <table className="w-full min-w-[820px] table-fixed text-xs">
                 <colgroup>
-                  <col style={{ width: conCustodio ? '36%' : '45%' }} />
+                  <col style={{ width: conCustodio ? '31%' : '39%' }} />
                   {conCustodio && <col style={{ width: '9%' }} />}
-                  <col style={{ width: '12%' }} /><col style={{ width: '11%' }} />
+                  <col style={{ width: '8%' }} /><col style={{ width: '11%' }} /><col style={{ width: '10%' }} />
                   <col style={{ width: '12%' }} /><col style={{ width: '10%' }} /><col style={{ width: '10%' }} />
                 </colgroup>
                 <thead>
                   <tr className="text-[10px] uppercase tracking-wide text-gray-400">
                     <th className="px-4 py-2 text-left font-medium">Instrumento</th>
                     {conCustodio && <th className="px-2 py-2 text-left font-medium">Custodio</th>}
+                    <th className="px-2 py-2 text-right font-medium">Precio</th>
                     <th className="px-2 py-2 text-right font-medium">Valor de mercado</th>
                     <th className="px-2 py-2 text-right font-medium">Cupón corrido</th>
                     <th className="px-2 py-2 text-right font-medium">Total</th>
@@ -257,6 +258,7 @@ export default function PositionsTab({ positions, totalValue, glByCusip, custodi
                             {custodio && <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold text-white" style={{ background: COLOR_CUSTODIO[custodio] ?? '#64748B' }}>{custodio}</span>}
                           </td>
                         )}
+                        <td className="px-2 py-2.5 text-right tabular-nums text-gray-700">{p.price == null || p.asset_class === 'Cash' ? <span className="text-gray-300">—</span> : fmt(Number(p.price), p.asset_class === 'Fixed Income' ? 3 : 2)}</td>
                         <td className="px-2 py-2.5 text-right tabular-nums">{fmt(Number(p.market_value))}</td>
                         <td className="px-2 py-2.5 text-right tabular-nums text-amber-700">{corrido ? fmt(corrido) : <span className="text-gray-300">—</span>}</td>
                         <td className="px-2 py-2.5 text-right font-semibold tabular-nums">{fmt(total)}</td>

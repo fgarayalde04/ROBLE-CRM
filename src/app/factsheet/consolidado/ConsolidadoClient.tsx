@@ -567,7 +567,7 @@ function lineaCantidad(l: LineaPosicion) {
   if (l.clase === 'Efectivo' || l.cantidad == null) return ''
   const cant = fmt(l.cantidad, Number.isInteger(l.cantidad) ? 0 : 3)
   const unidad = l.clase === 'Renta fija' ? 'nominales' : l.cantidad === 1 ? 'cuotaparte' : l.clase === 'Fondos de inversión' ? 'cuotapartes' : 'acciones'
-  return [`${cant} ${unidad}${l.precio != null ? ` a ${fmt(l.precio, l.clase === 'Renta fija' ? 3 : 2)}` : ''}`, l.costo != null ? `Costo ${fmt(l.costo)}` : null].filter(Boolean).join(' · ')
+  return [`${cant} ${unidad}`, l.costo != null ? `Costo ${fmt(l.costo)}` : null].filter(Boolean).join(' · ')
 }
 
 function detalleTitulo(l: LineaPosicion) {
@@ -710,13 +710,14 @@ function VistaReporte({ r, cliente, cuentas, manuales, setManual }: {
                   <div className="overflow-x-auto">
                     <table className="w-full min-w-[820px] table-fixed text-xs">
                       <colgroup>
-                        <col style={{ width: '36%' }} /><col style={{ width: '9%' }} /><col style={{ width: '12%' }} /><col style={{ width: '11%' }} />
-                        <col style={{ width: '12%' }} /><col style={{ width: '10%' }} /><col style={{ width: '10%' }} />
+                        <col style={{ width: '31%' }} /><col style={{ width: '9%' }} /><col style={{ width: '8%' }} /><col style={{ width: '11%' }} /><col style={{ width: '10%' }} />
+                        <col style={{ width: '11%' }} /><col style={{ width: '10%' }} /><col style={{ width: '10%' }} />
                       </colgroup>
                       <thead>
                         <tr className="text-[10px] uppercase tracking-wide text-gray-400">
                           <th className="px-4 py-2 text-left font-medium">Instrumento</th>
                           <th className="px-2 py-2 text-left font-medium">Custodio</th>
+                          <th className="px-2 py-2 text-right font-medium">Precio</th>
                           <th className="px-2 py-2 text-right font-medium">Valor de mercado</th>
                           <th className="px-2 py-2 text-right font-medium">Cupón corrido</th>
                           <th className="px-2 py-2 text-right font-medium">Total</th>
@@ -736,6 +737,7 @@ function VistaReporte({ r, cliente, cuentas, manuales, setManual }: {
                                 {cant && <p className="text-[11px] text-gray-400">{cant}</p>}
                               </td>
                               <td className="px-2 py-2.5"><EtiquetaBanco banco={l.banco} etiqueta={l.etiquetaCuenta} /></td>
+                              <td className="px-2 py-2.5 text-right tabular-nums text-gray-700">{l.precio == null || l.clase === 'Efectivo' ? <span className="text-gray-300">—</span> : fmt(l.precio, l.clase === 'Renta fija' ? 3 : 2)}</td>
                               <td className="px-2 py-2.5 text-right tabular-nums">{fmt(l.valorMercado)}</td>
                               <td className="px-2 py-2.5 text-right"><CorridoEditable l={l} manual={manuales[clavePosicion(l)]} setManual={setManual} /></td>
                               <td className="px-2 py-2.5 text-right font-semibold tabular-nums">{fmt(l.total)}</td>
