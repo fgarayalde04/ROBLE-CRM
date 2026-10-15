@@ -351,6 +351,16 @@ export function armarReporte(
   externos: Record<string, Terminos> = {},
 ): Reporte {
   const avisos: string[] = []
+  // Consolidados guardados antes de renombrar las clases: "Fondos" pasó a
+  // "Fondos de inversión" y los ETF van en renta variable (Acciones).
+  for (const b of BANCOS) {
+    const a = archivos[claveArchivo(b, 'posiciones')] as ArchivoPosiciones | undefined
+    for (const p of a?.posiciones ?? []) {
+      const c = p.clase as string
+      if (c === 'Fondos') p.clase = 'Fondos de inversión'
+      else if (c === 'ETF') p.clase = 'Acciones'
+    }
+  }
   const incluida = (banco: Banco, cuenta: string | null) => !cuenta || !excluidas.has(`${banco}|${cuenta}`)
 
   const pos = (b: Banco) => archivos[claveArchivo(b, 'posiciones')] as ArchivoPosiciones | undefined

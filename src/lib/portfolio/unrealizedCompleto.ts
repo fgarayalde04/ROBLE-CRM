@@ -21,8 +21,8 @@ import type { Clase } from '@/lib/consolidado/types'
 const CLASE_PORTAFOLIO: Record<Clase, ((nombre: string) => string) | null> = {
   Efectivo: () => 'Cash',
   'Renta fija': () => 'Fixed Income',
-  Fondos: () => 'Fund',
-  ETF: () => 'ETF',
+  'Fondos de inversión': () => 'Fund',
+  ETF: () => 'Equity',
   Acciones: () => 'Equity',
   Otros: () => 'Alternatives',
 }

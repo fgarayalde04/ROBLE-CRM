@@ -21,6 +21,8 @@ export async function POST(req: NextRequest) {
   let parsed
   try {
     parsed = parseMorganHoldingsExcel(buffer)
+    // Los ETF van en renta variable.
+    for (const p of parsed.portfolio.positions) if (p.assetClass === 'ETF') p.assetClass = 'Equity'
   } catch (err: any) {
     return NextResponse.json({ error: 'No se pudo leer el archivo: ' + err.message }, { status: 400 })
   }

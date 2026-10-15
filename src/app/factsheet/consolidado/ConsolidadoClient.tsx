@@ -406,7 +406,7 @@ function Historial({ historial, actual }: { historial: ConsolidadoRow[]; actual:
 // ─── Reporte ────────────────────────────────────────────────────────────────
 
 const COLOR_CLASE: Record<string, string> = {
-  Efectivo: '#94A3B8', 'Renta fija': '#1B3A2B', Fondos: '#2E7D52', ETF: '#4CAF72', Acciones: '#1E40AF', Otros: '#9CA3AF',
+  Efectivo: '#94A3B8', 'Renta fija': '#1B3A2B', 'Fondos de inversión': '#2E7D52', ETF: '#4CAF72', Acciones: '#1E40AF', Otros: '#9CA3AF',
 }
 const COLOR_CUSTODIO: Record<Banco, string> = { Pershing: '#0369A1', 'Morgan Stanley': '#0F766E' }
 
@@ -518,7 +518,7 @@ function CorridoEditable({ l, manual, setManual }: { l: LineaPosicion; manual: n
 function lineaCantidad(l: LineaPosicion) {
   if (l.clase === 'Efectivo' || l.cantidad == null) return ''
   const cant = fmt(l.cantidad, Number.isInteger(l.cantidad) ? 0 : 3)
-  const unidad = l.clase === 'Renta fija' ? 'nominales' : l.cantidad === 1 ? 'cuotaparte' : l.clase === 'Fondos' ? 'cuotapartes' : 'acciones'
+  const unidad = l.clase === 'Renta fija' ? 'nominales' : l.cantidad === 1 ? 'cuotaparte' : l.clase === 'Fondos de inversión' ? 'cuotapartes' : 'acciones'
   return [`${cant} ${unidad}${l.precio != null ? ` a ${fmt(l.precio, l.clase === 'Renta fija' ? 3 : 2)}` : ''}`, l.costo != null ? `Costo ${fmt(l.costo)}` : null].filter(Boolean).join(' · ')
 }
 

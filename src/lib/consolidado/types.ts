@@ -11,7 +11,7 @@ export const TIPOS_ARCHIVO: { tipo: TipoArchivo; label: string; pershing: string
   { tipo: 'cupones', label: 'Calendario de cupones', pershing: 'Incoming Cash', morgan: 'Projected Income' },
 ]
 
-export const CLASES = ['Efectivo', 'Renta fija', 'Fondos', 'ETF', 'Acciones', 'Otros'] as const
+export const CLASES = ['Efectivo', 'Renta fija', 'Fondos de inversión', 'ETF', 'Acciones', 'Otros'] as const
 export type Clase = (typeof CLASES)[number]
 
 /** Una posición de una cuenta en un banco (los lotes ya vienen sumados). */

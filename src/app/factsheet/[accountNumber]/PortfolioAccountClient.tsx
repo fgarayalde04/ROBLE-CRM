@@ -31,6 +31,9 @@ export const fmtDate = (iso: string) => new Date(iso + 'T00:00:00').toLocaleDate
 
 type Tab = 'resumen' | 'posiciones' | 'rendimiento' | 'movimientos' | 'dividendos'
 
+// Los ETF van en renta variable (también los importados antes de este cambio).
+const sinEtf = (ps: PortfolioPositionRow[]) => ps.map(p => (p.asset_class === 'ETF' ? { ...p, asset_class: 'Equity' } : p))
+
 export default function PortfolioAccountClient({ accountNumber }: { accountNumber: string }) {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -75,7 +78,7 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
       if (res.ok) {
         const d = await res.json()
         setAccount(d.account)
-        setPositions(d.positions as PortfolioPositionRow[])
+        setPositions(sinEtf(d.positions as PortfolioPositionRow[]))
         setConsolidatedPositions(d.positions)
         setConsolidatedGLByCusip(new Map(d.glByCusip))
         setCashProjRows(d.cashProjRows ?? [])
@@ -111,7 +114,7 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
     ])
     if (detailRes.ok) {
       const d = await detailRes.json()
-      setAccount(d.account); setImportRow(d.import); setPositions(d.positions)
+      setAccount(d.account); setImportRow(d.import); setPositions(sinEtf(d.positions))
     }
     if (historyRes.ok) setHistory(await historyRes.json())
     if (perfRes.ok) setPerformance((await perfRes.json()).performance)

@@ -72,17 +72,17 @@ const filasMeta = (g: Grilla, hasta: number) =>
  *  grupo, decide. */
 function clasePershing(categoria: string, grupo: string): Clase {
   const g = grupo.toLowerCase(), cat = categoria.toLowerCase()
-  if (/exchange.?traded|\betfs?\b/.test(cat) || /exchange.?traded|\betfs?\b/.test(g)) return 'ETF'
+  if (/exchange.?traded|\betfs?\b/.test(cat) || /exchange.?traded|\betfs?\b/.test(g)) return 'Acciones' // ETF va en renta variable
   if (/^cash|money fund|bank deposit/.test(g)) return 'Efectivo'
   if (/^equit|stock/.test(g)) return 'Acciones'
   if (/^fixed income|bond|debt/.test(g)) return 'Renta fija'
-  if (/fund|unit investment trust/.test(g)) return 'Fondos'
+  if (/fund|unit investment trust/.test(g)) return 'Fondos de inversión'
   if (g && /^(alternative|other|options|annuit)/.test(g)) return 'Otros'
   for (const t of [cat, g]) {
     if (!t || t === 'unclassified') continue
     if (/money market|money fund|cash|deposit/.test(t)) return 'Efectivo'
-    if (/exchange traded|\betf\b/.test(t)) return 'ETF'
-    if (/fund|unit investment trust/.test(t)) return 'Fondos'
+    if (/exchange traded|\betf\b/.test(t)) return 'Acciones' // ETF va en renta variable
+    if (/fund|unit investment trust/.test(t)) return 'Fondos de inversión'
     if (/bond|debt|fixed income|treasur|note|certificate|government|municipal|agency/.test(t)) return 'Renta fija'
     if (/stock|equit|adr|preferred|share/.test(t)) return 'Acciones'
   }
@@ -94,8 +94,8 @@ function claseMorgan(productType: string, simbolo: string | null, nombre: string
   const pt = productType.toLowerCase()
   if (pt && pt !== '-') {
     if (/cash|deposit|money market|bdp/.test(pt)) return 'Efectivo'
-    if (/etf|exchange[- ]traded/.test(pt)) return 'ETF'
-    if (/fund/.test(pt)) return 'Fondos'
+    if (/etf|exchange[- ]traded/.test(pt)) return 'Acciones' // ETF va en renta variable
+    if (/fund/.test(pt)) return 'Fondos de inversión'
     if (/bond|fixed income|treasur|govt|government|municipal|note|cd\b|certificate/.test(pt)) return 'Renta fija'
     if (/equit|stock|adr|share/.test(pt)) return 'Acciones'
   }
@@ -103,9 +103,9 @@ function claseMorgan(productType: string, simbolo: string | null, nombre: string
   if (simbolo === 'BDPS' || /^CASH\b|BANK DEPOSIT PROGRAM|MONEY MARKET/.test(n)) return 'Efectivo'
   // Los bonos en Morgan vienen sin símbolo.
   if (!simbolo) return 'Renta fija'
-  if (/\bETF\b|ISHARES|SPDR|VANECK|INVESCO QQQ|\bTRUST\b/.test(n)) return 'ETF'
-  if (cantidad != null && !Number.isInteger(cantidad)) return 'Fondos'
-  if (/\b(FUND|ACC|DIST|SICAV|UCITS)\b/.test(n)) return 'Fondos'
+  if (/\bETF\b|ISHARES|SPDR|VANECK|INVESCO QQQ|\bTRUST\b/.test(n)) return 'Acciones' // ETF va en renta variable
+  if (cantidad != null && !Number.isInteger(cantidad)) return 'Fondos de inversión'
+  if (/\b(FUND|ACC|DIST|SICAV|UCITS)\b/.test(n)) return 'Fondos de inversión'
   return 'Acciones'
 }
 

@@ -22,6 +22,8 @@ export async function POST(req: NextRequest) {
     // El Unrealized de Pershing alcanza solo: costo, fechas de compra, cupón,
     // vencimiento y cupón corrido salen del mismo archivo.
     if (esUnrealizedPershing(buffer)) parsed = completarDesdeUnrealized(buffer, parsed)
+    // Los ETF van en renta variable.
+    for (const p of parsed.positions) if (p.assetClass === 'ETF') p.assetClass = 'Equity'
   } catch (err: any) {
     return NextResponse.json({ error: 'No se pudo leer el archivo: ' + err.message }, { status: 400 })
   }
