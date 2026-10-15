@@ -13,6 +13,7 @@ export const ASSET_CLASS_ES: Record<string, string> = {
   'ETF': 'Renta Variable (ETF)',
   'Fixed Income': 'Bonos',
   'Fixed Income Fund': 'Fondos de Renta Fija',
+  'Fund': 'Fondos',
   'Alternatives': 'Otros',
   'Real Estate': 'Otros',
   'Cash': 'Liquidez',

@@ -66,9 +66,19 @@ const filasMeta = (g: Grilla, hasta: number) =>
 
 // ─── Clase de activo ────────────────────────────────────────────────────────
 
-/** A partir de la categoría que usa Pershing (fila o grupo del reporte). */
+/** La clase la da el propio reporte: el grupo principal de Pershing ("Cash,
+ *  Money Funds and Bank Deposits", "Equities", "Fixed Income", "Investment
+ *  Funds"…). La categoría de la fila solo distingue los ETF y, si no hay
+ *  grupo, decide. */
 function clasePershing(categoria: string, grupo: string): Clase {
-  for (const t of [categoria.toLowerCase(), grupo.toLowerCase()]) {
+  const g = grupo.toLowerCase(), cat = categoria.toLowerCase()
+  if (/exchange.?traded|\betfs?\b/.test(cat) || /exchange.?traded|\betfs?\b/.test(g)) return 'ETF'
+  if (/^cash|money fund|bank deposit/.test(g)) return 'Efectivo'
+  if (/^equit|stock/.test(g)) return 'Acciones'
+  if (/^fixed income|bond|debt/.test(g)) return 'Renta fija'
+  if (/fund|unit investment trust/.test(g)) return 'Fondos'
+  if (g && /^(alternative|other|options|annuit)/.test(g)) return 'Otros'
+  for (const t of [cat, g]) {
     if (!t || t === 'unclassified') continue
     if (/money market|money fund|cash|deposit/.test(t)) return 'Efectivo'
     if (/exchange traded|\betf\b/.test(t)) return 'ETF'
@@ -178,6 +188,7 @@ function leerPershingPosiciones(g: Grilla, nombre: string): ArchivoPosiciones {
   interface Acum { cuenta: string | null; cusip: string; desc: string; categoria: string; grupo: string; lotes: Lote[]; subtotal: Lote | null; precio: number | null }
   const porClave = new Map<string, Acum>()
   let grupo = ''
+  let encabezados: string[] = []
   let totalArchivo: number | null = null
 
   for (let r = h + 1; r < g.length; r++) {
@@ -187,9 +198,18 @@ function leerPershingPosiciones(g: Grilla, nombre: string): ArchivoPosiciones {
     if (/^disclaimers?$|^disclosures?$/i.test(texto(row[0]))) break
     if (!cusip || blanco(cusip)) {
       // Encabezado de grupo ("Fixed Income", "Corporate Bonds"…) o fila de totales.
-      if (desc) grupo = /^(cash|equities|fixed income|investment funds|alternative|other|options|annuit)/i.test(desc) ? desc : grupo || desc
+      // Pershing pone el grupo principal y debajo el subgrupo (que se repite
+      // en "Asset Category" de cada fila); se guardan los encabezados hasta
+      // la próxima posición para saber cuál es cuál.
+      if (desc) encabezados.push(desc)
       else if (num(row[c.mv]) != null) totalArchivo = num(row[c.mv])
       continue
+    }
+    if (encabezados.length) {
+      const cat = c.cat >= 0 ? texto(row[c.cat]) : ''
+      if (encabezados.length >= 2) grupo = encabezados[encabezados.length - 2]
+      else if (!grupo || encabezados[0].toLowerCase() !== cat.toLowerCase()) grupo = encabezados[0]
+      encabezados = []
     }
     const cuenta = c.account >= 0 && !blanco(row[c.account]) ? texto(row[c.account]) : cuentaArchivo
     const clave = `${cuenta ?? ''}|${cusip}`
@@ -218,10 +238,7 @@ function leerPershingPosiciones(g: Grilla, nombre: string): ArchivoPosiciones {
     const t = sumarLotes(a.subtotal ? [a.subtotal] : a.lotes)
     const fechasCompra = fechasDe(a.lotes)
     const info = parseDescription(a.desc)
-    let clase = clasePershing(a.categoria, a.grupo)
-    // ADR/ADS y acciones que el archivo deja bajo un grupo de renta fija: un
-    // bono siempre trae tasa en la descripción.
-    if (clase === 'Renta fija' && info.rate == null && /\b(ADRS?|ADS|SPONS(ORED)?|SHS|SHARES|COM|CL [A-Z])\b/.test(a.desc.toUpperCase())) clase = 'Acciones'
+    const clase = clasePershing(a.categoria, a.grupo)
     posiciones.push({
       banco: 'Pershing',
       cuenta: a.cuenta,

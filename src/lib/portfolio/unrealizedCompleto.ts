@@ -14,17 +14,17 @@ import { corridoEstimado } from '@/lib/consolidado/calc'
 import { grillaDeExcel } from '@/lib/consolidado/grilla'
 import { leerArchivo } from '@/lib/consolidado/leer'
 import type { Clase } from '@/lib/consolidado/types'
-import { mapFundByName } from '@/lib/factsheet-parser'
 
-// El Unrealized no trae "Security Type": la clase sale de los grupos y la
-// categoría del archivo, igual que en la Posición Consolidada.
+// La clase es la que da el propio Unrealized (su grupo principal: Cash,
+// Equities, Fixed Income, Investment Funds…), igual que en la Posición
+// Consolidada. No se deduce nada del nombre.
 const CLASE_PORTAFOLIO: Record<Clase, ((nombre: string) => string) | null> = {
   Efectivo: () => 'Cash',
   'Renta fija': () => 'Fixed Income',
-  Fondos: mapFundByName,
+  Fondos: () => 'Fund',
   ETF: () => 'ETF',
   Acciones: () => 'Equity',
-  Otros: null,
+  Otros: () => 'Alternatives',
 }
 
 export type ParsedPortfolioConGL = ParsedPortfolioImport & { unrealizedGL?: ParsedUnrealizedGainLoss }
