@@ -643,6 +643,14 @@ function nombreParaCliente(p: Pick<Posicion, 'descripcion' | 'clase' | 'cusip' |
   return { nombre, detalle }
 }
 
+/** "Compra 31/07/2026" o "Compras 24/11/2025, 27/02/2026 y 31/07/2026". */
+export function textoCompras(fechas: string[] | undefined) {
+  const fs = (fechas ?? []).map(ddmmyyyy)
+  if (!fs.length) return ''
+  if (fs.length === 1) return `Compra ${fs[0]}`
+  return `Compras ${fs.slice(0, -1).join(', ')} y ${fs[fs.length - 1]}`
+}
+
 /** CUSIPs de bonos a los que les falta cupón o vencimiento en todos los archivos (para buscarlos en OpenFIGI). */
 export function bonosIncompletos(archivos: Archivos): string[] {
   const r = armarReporte(archivos, '2000-01-01')

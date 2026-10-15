@@ -8,7 +8,7 @@
 import { ROBLE_LOGO_BASE64 } from '@/lib/icheAcciones/logoBase64'
 import { ROBLE_DISCLAIMER } from '@/lib/disclaimers'
 import { BNY_LOGO_BASE64 } from './logosBase64'
-import { categoriaMovimiento, ddmmyyyy, mesCorto, type LineaPosicion, type Reporte } from './calc'
+import { categoriaMovimiento, ddmmyyyy, mesCorto, textoCompras, type LineaPosicion, type Reporte } from './calc'
 import { CLASES, type Banco, type Movimiento } from './types'
 
 const NAVY = '#1B2A38'
@@ -38,12 +38,16 @@ const custodio = (b: Banco) => (b === 'Pershing' ? 'Pershing' : 'Morgan Stanley'
 
 // ─── Textos ─────────────────────────────────────────────────────────────────
 
-/** Línea de detalle de un bono: "Cupón 6.125% · Vto. 21/01/2031" (sin CUSIP ni cuenta). */
+/** Línea de detalle: "Cupón 6.125% · Vto. 21/01/2031 · Compra 13/10/2026" (sin CUSIP ni cuenta). */
 function detalleBono(l: LineaPosicion) {
-  if (l.clase !== 'Renta fija') return ''
-  const cupon = l.tasa != null ? `Cupón ${(l.tasa * 100).toFixed(3)}%` : 'Cupón s/d'
-  const vto = l.vencimiento ? `Vto. ${ddmmyyyy(l.vencimiento)}` : l.perpetuo ? 'Perpetuo' : 'Vto. s/d'
-  return `${cupon} · ${vto}`
+  const partes: string[] = []
+  if (l.clase === 'Renta fija') {
+    partes.push(l.tasa != null ? `Cupón ${(l.tasa * 100).toFixed(3)}%` : 'Cupón s/d')
+    partes.push(l.vencimiento ? `Vto. ${ddmmyyyy(l.vencimiento)}` : l.perpetuo ? 'Perpetuo' : 'Vto. s/d')
+  }
+  const compras = textoCompras(l.fechasCompra)
+  if (compras) partes.push(compras)
+  return partes.join(' · ')
 }
 
 const TIPO_MOVIMIENTO: Record<string, string> = {

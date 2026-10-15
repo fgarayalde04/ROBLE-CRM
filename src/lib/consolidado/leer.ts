@@ -106,7 +106,19 @@ const tasaDelNombre = (s: string): number | null => {
 
 // ─── Lotes → posición ───────────────────────────────────────────────────────
 
+/** Fecha de compra de un lote; descarta los placeholders (Morgan pone 12/31/1899 cuando no la tiene). */
+function fechaCompra(v: unknown): string | null {
+  const f = toIsoDate(v)
+  return f && f >= '1950-01-01' ? f : null
+}
+
+/** Fechas de compra distintas de los lotes, ordenadas. */
+const fechasDe = (lotes: Lote[]) =>
+  Array.from(new Set(lotes.map((l) => l.fecha).filter((f): f is string => !!f))).sort()
+
 interface Lote {
+  /** Fecha de compra del lote (YYYY-MM-DD), si el archivo la trae. */
+  fecha?: string | null
   cantidad: number
   valorMercado: number
   costo: number | null
@@ -182,6 +194,7 @@ function leerPershingPosiciones(g: Grilla, nombre: string): ArchivoPosiciones {
     const cuenta = c.account >= 0 && !blanco(row[c.account]) ? texto(row[c.account]) : cuentaArchivo
     const clave = `${cuenta ?? ''}|${cusip}`
     const lote: Lote = {
+      fecha: fechaCompra(row[c.trade]),
       cantidad: num(row[c.qty]) ?? 0,
       valorMercado: num(row[c.mv]) ?? 0,
       costo: c.cost >= 0 ? num(row[c.cost]) : null,
@@ -203,6 +216,7 @@ function leerPershingPosiciones(g: Grilla, nombre: string): ArchivoPosiciones {
   const posiciones: Posicion[] = []
   for (const a of Array.from(porClave.values())) {
     const t = sumarLotes(a.subtotal ? [a.subtotal] : a.lotes)
+    const fechasCompra = fechasDe(a.lotes)
     const clase = clasePershing(a.categoria, a.grupo)
     const info = parseDescription(a.desc)
     posiciones.push({
@@ -221,6 +235,7 @@ function leerPershingPosiciones(g: Grilla, nombre: string): ArchivoPosiciones {
       cuponCorridoArchivo: r2(t.corrido),
       tasa: clase === 'Renta fija' ? info.rate : null,
       vencimiento: clase === 'Renta fija' ? info.maturity : null,
+      fechasCompra,
     })
   }
   if (!posiciones.length) throw new ArchivoError('El archivo no tiene posiciones (filas con Cusip).')
@@ -252,6 +267,7 @@ function leerMorganPosiciones(g: Grilla, nombre: string): ArchivoPosiciones {
     accrued: columna(headers, 'accrued interest ($)', 'accrued interest'),
     coupon: columna(headers, 'coupon rate (%)', 'coupon rate'),
     maturity: columna(headers, 'maturity date', 'maturity'),
+    acquired: columna(headers, 'acquired', 'trade date', 'purchase date'),
   }
 
   const meta = filasMeta(g, h)
@@ -293,6 +309,7 @@ function leerMorganPosiciones(g: Grilla, nombre: string): ArchivoPosiciones {
       lotes: [],
     }
     acum.lotes.push({
+      fecha: c.acquired >= 0 ? fechaCompra(row[c.acquired]) : null,
       cantidad: num(row[c.qty]) ?? 0,
       valorMercado: num(row[c.mv]) ?? 0,
       costo: c.cost >= 0 ? num(row[c.cost]) : null,
@@ -324,6 +341,7 @@ function leerMorganPosiciones(g: Grilla, nombre: string): ArchivoPosiciones {
       cuponCorridoArchivo: r2(t.corrido),
       tasa: clase === 'Renta fija' ? a.tasa : null,
       vencimiento: clase === 'Renta fija' ? a.vencimiento : null,
+      fechasCompra: fechasDe(a.lotes),
     })
   }
   if (!posiciones.length) throw new ArchivoError('El archivo no tiene posiciones.')

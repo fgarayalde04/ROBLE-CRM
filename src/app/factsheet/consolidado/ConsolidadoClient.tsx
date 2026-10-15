@@ -4,7 +4,7 @@ import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from '
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
-  ETIQUETA_FUENTE, armarReporte, bonosIncompletos, categoriaMovimiento, claveArchivo, clavePosicion, cuentasDe, ddmmyyyy, fechaSugerida, fmt, fmtPct, mesCorto,
+  ETIQUETA_FUENTE, armarReporte, bonosIncompletos, categoriaMovimiento, claveArchivo, clavePosicion, cuentasDe, ddmmyyyy, fechaSugerida, fmt, fmtPct, mesCorto, textoCompras,
   type Archivos, type LineaPosicion, type Reporte,
 } from '@/lib/consolidado/calc'
 import { BANCOS, CLASES, TIPOS_ARCHIVO, type ArchivoLeido, type Banco, type Terminos } from '@/lib/consolidado/types'
@@ -194,9 +194,11 @@ export default function ConsolidadoClient({ guardado, historial }: {
       XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(resumen), 'Resumen')
 
       XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
-        ['Banco', 'Cuenta', 'Clase', 'Instrumento', 'CUSIP', 'Cantidad', 'Precio', 'Costo', 'Valor de mercado', 'Cupón corrido', 'Origen cupón corrido', 'Total', 'Resultado', '% del total'],
+        ['Banco', 'Cuenta', 'Clase', 'Instrumento', 'CUSIP', 'Cupón %', 'Vencimiento', 'Fechas de compra', 'Cantidad', 'Precio', 'Costo', 'Valor de mercado', 'Cupón corrido', 'Origen cupón corrido', 'Total', 'Resultado', '% del total'],
         ...reporte.posiciones.map((l) => [
-          l.banco, l.cuenta ?? '', l.clase, l.descripcion, l.cusip ?? '', n(l.cantidad), n(l.precio), n(l.costo), n(l.valorMercado),
+          l.banco, l.cuenta ?? '', l.clase, l.nombre, l.cusip ?? '', l.tasa != null ? n(l.tasa * 100) : '',
+          l.vencimiento ? ddmmyyyy(l.vencimiento) : l.perpetuo ? 'Perpetuo' : '', (l.fechasCompra ?? []).map(ddmmyyyy).join(', '),
+          n(l.cantidad), n(l.precio), n(l.costo), n(l.valorMercado),
           n(l.cuponCorrido), l.fuenteCorrido ? ETIQUETA_FUENTE[l.fuenteCorrido] : '', n(l.total), n(l.resultado), n(l.peso * 100),
         ]),
       ]), 'Posiciones')
@@ -226,18 +228,6 @@ export default function ConsolidadoClient({ guardado, historial }: {
 
   return (
     <div className="space-y-6">
-      <style>{`
-        @media print {
-          @page { size: A4 landscape; margin: 10mm; }
-          body * { visibility: hidden; }
-          #reporte-consolidado, #reporte-consolidado * { visibility: visible; }
-          #reporte-consolidado { position: absolute; left: 0; top: 0; width: 100%; border: 0 !important; box-shadow: none !important; padding: 0 !important; }
-          #reporte-consolidado section { break-inside: auto; }
-          #reporte-consolidado tr { break-inside: avoid; }
-          #reporte-consolidado thead { display: table-header-group; }
-          #reporte-consolidado * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-        }
-      `}</style>
 
       {/* ── Carga ─────────────────────────────────────────────────────── */}
       <div className="bg-white border border-gray-200 rounded-lg p-5 print:hidden">
@@ -415,71 +405,156 @@ function Historial({ historial, actual }: { historial: ConsolidadoRow[]; actual:
 
 // ─── Reporte ────────────────────────────────────────────────────────────────
 
-const th = 'px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500'
-const td = 'px-2 py-1.5 align-top'
-const num = `${td} text-right tabular-nums whitespace-nowrap`
-
-function Seccion({ titulo, children, nota }: { titulo: string; children: ReactNode; nota?: string }) {
-  return (
-    <section className="mt-8">
-      <div className="mb-2 flex items-baseline justify-between gap-4 border-b-2 border-[#2D3F52] pb-1">
-        <h3 className="text-sm font-semibold uppercase tracking-wide text-[#2D3F52]">{titulo}</h3>
-        {nota && <span className="text-[11px] text-gray-400">{nota}</span>}
-      </div>
-      {children}
-    </section>
-  )
+const COLOR_CLASE: Record<string, string> = {
+  Efectivo: '#94A3B8', 'Renta fija': '#1B3A2B', Fondos: '#2E7D52', ETF: '#4CAF72', Acciones: '#1E40AF', Otros: '#9CA3AF',
 }
+const COLOR_CUSTODIO: Record<Banco, string> = { Pershing: '#0369A1', 'Morgan Stanley': '#0F766E' }
 
-function Kpi({ label, valor, sub }: { label: string; valor: string; sub?: string }) {
+const colorResultado = (v: number | null) => (v == null ? 'text-gray-400' : v < 0 ? 'text-red-600' : v > 0 ? 'text-emerald-700' : 'text-gray-500')
+const signo = (v: number) => (v > 0 ? '+' : '')
+
+function Tarjeta({ titulo, children, className = '' }: { titulo?: string; children: ReactNode; className?: string }) {
   return (
-    <div className="rounded-lg border border-gray-200 px-4 py-3">
-      <p className="text-[11px] uppercase tracking-wide text-gray-500">{label}</p>
-      <p className="mt-1 text-lg font-semibold tabular-nums text-gray-900">{valor}</p>
-      {sub && <p className="text-[11px] text-gray-400">{sub}</p>}
+    <div className={`rounded-xl border border-gray-200 bg-white p-4 ${className}`}>
+      {titulo && <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-500">{titulo}</h3>}
+      {children}
     </div>
   )
 }
 
-const colorResultado = (v: number | null) => (v == null ? '' : v < 0 ? 'text-red-700' : v > 0 ? 'text-emerald-700' : '')
+function Kpi({ label, valor, sub, acento }: { label: string; valor: string; sub?: string; acento: string }) {
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white px-4 py-3" style={{ borderTop: `3px solid ${acento}` }}>
+      <p className="text-[11px] uppercase tracking-wide text-gray-500">{label}</p>
+      <p className="mt-1 text-xl font-semibold tabular-nums text-gray-900">{valor}</p>
+      {sub && <p className="mt-0.5 text-[11px] text-gray-400">{sub}</p>}
+    </div>
+  )
+}
 
-function CeldaCorrido({ l, manual, setManual }: { l: LineaPosicion; manual: number | undefined; setManual: (clave: string, v: number | null) => void }) {
+function Dona({ datos, centro }: { datos: { label: string; valor: number; color: string }[]; centro: string }) {
+  const total = datos.reduce((s, d) => s + d.valor, 0) || 1
+  const R = 42, C = 2 * Math.PI * R
+  let acumulado = 0
+  return (
+    <svg viewBox="0 0 120 120" className="h-36 w-36 shrink-0">
+      <circle cx="60" cy="60" r={R} fill="none" stroke="#F1F5F9" strokeWidth="16" />
+      {datos.map((d) => {
+        const largo = (d.valor / total) * C
+        const el = (
+          <circle key={d.label} cx="60" cy="60" r={R} fill="none" stroke={d.color} strokeWidth="16"
+            strokeDasharray={`${largo} ${C - largo}`} strokeDashoffset={-acumulado} transform="rotate(-90 60 60)" />
+        )
+        acumulado += largo
+        return el
+      })}
+      <text x="60" y="57" textAnchor="middle" fontSize="8" fill="#6B7280">Total</text>
+      <text x="60" y="69" textAnchor="middle" fontSize="10" fontWeight="700" fill="#111827">{centro}</text>
+    </svg>
+  )
+}
+
+function Barra({ peso, color }: { peso: number; color: string }) {
+  return (
+    <div className="h-2 w-full rounded-full bg-gray-100">
+      <div className="h-2 rounded-full" style={{ width: `${Math.max(1.5, Math.min(100, peso * 100))}%`, background: color }} />
+    </div>
+  )
+}
+
+const compacto = (n: number) =>
+  Math.abs(n) >= 1e6 ? `${(n / 1e6).toFixed(2)}M` : Math.abs(n) >= 1e3 ? `${(n / 1e3).toFixed(0)}K` : n.toFixed(0)
+
+function GraficoRenta({ meses, montos }: { meses: string[]; montos: number[] }) {
+  const max = Math.max(...montos, 1)
+  return (
+    <div className="flex h-44 items-end gap-1.5">
+      {montos.map((v, i) => (
+        <div key={meses[i]} className="flex h-full flex-1 flex-col items-center justify-end">
+          <span className="mb-1 text-[10px] font-semibold tabular-nums text-gray-700">{v ? compacto(v) : ''}</span>
+          <div className="w-full max-w-[42px] rounded-t-md bg-gradient-to-t from-[#1B3A2B] to-[#2E7D52]" style={{ height: `${v ? Math.max(3, (v / max) * 100) : 0}%` }} />
+          <span className="mt-1 text-[10px] text-gray-500">{mesCorto(meses[i])}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function CorridoEditable({ l, manual, setManual }: { l: LineaPosicion; manual: number | undefined; setManual: (clave: string, v: number | null) => void }) {
   const [editando, setEditando] = useState(false)
   const [valor, setValor] = useState('')
   const clave = clavePosicion(l)
-  if (l.clase !== 'Renta fija' && !l.cuponCorrido) return <td className={num}>—</td>
-
+  if (l.clase !== 'Renta fija' && !l.cuponCorrido) return <span className="text-gray-300">—</span>
   if (editando) {
     return (
-      <td className={num}>
-        <input
-          autoFocus value={valor} onChange={(e) => setValor(e.target.value)}
-          onBlur={() => {
-            const v = Number(valor.replace(/,/g, ''))
-            setManual(clave, valor.trim() === '' ? null : isFinite(v) ? v : manual ?? null)
-            setEditando(false)
-          }}
-          onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); if (e.key === 'Escape') setEditando(false) }}
-          className="w-24 rounded border border-gray-300 px-1 py-0.5 text-right text-xs"
-          placeholder="vacío = calcular"
-        />
-      </td>
+      <input
+        autoFocus value={valor} onChange={(e) => setValor(e.target.value)}
+        onBlur={() => {
+          const v = Number(valor.replace(/,/g, ''))
+          setManual(clave, valor.trim() === '' ? null : isFinite(v) ? v : manual ?? null)
+          setEditando(false)
+        }}
+        onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); if (e.key === 'Escape') setEditando(false) }}
+        className="w-24 rounded border border-gray-300 px-1 py-0.5 text-right text-xs"
+        placeholder="vacío = calcular"
+      />
     )
   }
   const marca = l.fuenteCorrido ? MARCA_FUENTE[l.fuenteCorrido] : undefined
   return (
-    <td className={num}>
-      <button
-        type="button"
-        title={`${l.fuenteCorrido ? ETIQUETA_FUENTE[l.fuenteCorrido] : ''} — clic para cargarlo a mano`}
-        onClick={() => { setValor(manual != null ? String(manual) : ''); setEditando(true) }}
-        className={`tabular-nums hover:underline ${l.fuenteCorrido === 'sin datos' ? 'text-amber-700' : ''}`}
-      >
-        {fmt(l.cuponCorrido)}
-        {marca && <sup className="ml-0.5 text-[9px] text-gray-400">{marca}</sup>}
-      </button>
-    </td>
+    <button
+      type="button"
+      title={`${l.fuenteCorrido ? ETIQUETA_FUENTE[l.fuenteCorrido] : ''} — clic para cargarlo a mano`}
+      onClick={() => { setValor(manual != null ? String(manual) : ''); setEditando(true) }}
+      className={`tabular-nums hover:underline ${l.fuenteCorrido === 'sin datos' ? 'text-amber-600' : 'text-amber-700'}`}
+    >
+      {fmt(l.cuponCorrido)}
+      {marca && <sup className="ml-0.5 text-[9px] text-gray-400">{marca}</sup>}
+    </button>
   )
+}
+
+/** "100,000 nominales a 101.288 · Costo 105,867.73" */
+function lineaCantidad(l: LineaPosicion) {
+  if (l.clase === 'Efectivo' || l.cantidad == null) return ''
+  const cant = fmt(l.cantidad, Number.isInteger(l.cantidad) ? 0 : 3)
+  const unidad = l.clase === 'Renta fija' ? 'nominales' : l.cantidad === 1 ? 'cuotaparte' : l.clase === 'Fondos' ? 'cuotapartes' : 'acciones'
+  return [`${cant} ${unidad}${l.precio != null ? ` a ${fmt(l.precio, l.clase === 'Renta fija' ? 3 : 2)}` : ''}`, l.costo != null ? `Costo ${fmt(l.costo)}` : null].filter(Boolean).join(' · ')
+}
+
+function detalleTitulo(l: LineaPosicion) {
+  const partes: string[] = []
+  if (l.clase === 'Renta fija') {
+    partes.push(l.tasa != null ? `Cupón ${(l.tasa * 100).toFixed(3)}%` : 'Cupón s/d')
+    partes.push(l.vencimiento ? `Vto. ${ddmmyyyy(l.vencimiento)}` : l.perpetuo ? 'Perpetuo' : 'Vto. s/d')
+  }
+  const compras = textoCompras(l.fechasCompra)
+  if (compras) partes.push(compras)
+  return partes.join(' · ')
+}
+
+function plazosRentaFija(r: Reporte) {
+  const anios = (vto: string) => (Date.parse(vto) - Date.parse(r.fecha)) / (365.25 * 864e5)
+  const rf = r.posiciones.filter((l) => l.clase === 'Renta fija')
+  const total = rf.reduce((s, l) => s + l.total, 0)
+  const tramos: [string, (l: LineaPosicion) => boolean][] = [
+    ['Hasta 1 año', (l) => !!l.vencimiento && anios(l.vencimiento) <= 1],
+    ['1 a 3 años', (l) => !!l.vencimiento && anios(l.vencimiento) > 1 && anios(l.vencimiento) <= 3],
+    ['3 a 5 años', (l) => !!l.vencimiento && anios(l.vencimiento) > 3 && anios(l.vencimiento) <= 5],
+    ['5 a 10 años', (l) => !!l.vencimiento && anios(l.vencimiento) > 5 && anios(l.vencimiento) <= 10],
+    ['Más de 10 años', (l) => !!l.vencimiento && anios(l.vencimiento) > 10],
+    ['Perpetuos', (l) => !l.vencimiento],
+  ]
+  return tramos.map(([label, f]) => {
+    const valor = rf.filter(f).reduce((s, l) => s + l.total, 0)
+    return { label, valor, peso: total ? valor / total : 0 }
+  }).filter((t) => t.valor > 0)
+}
+
+const COLOR_CATEGORIA: Record<string, string> = {
+  Compras: 'bg-sky-50 text-sky-800', 'Ventas y vencimientos': 'bg-violet-50 text-violet-800', 'Cupones e intereses': 'bg-emerald-50 text-emerald-800',
+  Dividendos: 'bg-emerald-50 text-emerald-800', Transferencias: 'bg-slate-100 text-slate-700', 'Comisiones y gastos': 'bg-amber-50 text-amber-800',
+  Impuestos: 'bg-red-50 text-red-700', 'Money market': 'bg-gray-50 text-gray-500', Cancelaciones: 'bg-gray-50 text-gray-600', Otros: 'bg-gray-50 text-gray-600',
 }
 
 function VistaReporte({ r, cliente, cuentas, manuales, setManual }: {
@@ -490,247 +565,254 @@ function VistaReporte({ r, cliente, cuentas, manuales, setManual }: {
   setManual: (clave: string, v: number | null) => void
 }) {
   const t = r.totales
-  const bancosTexto = r.bancos.join(' + ')
+  const [verTodosMov, setVerTodosMov] = useState(false)
+  const movimientos = r.movimientos.filter((m) => categoriaMovimiento(m) !== 'Money market')
+  const ocultos = r.movimientos.length - movimientos.length
+  const plazos = plazosRentaFija(r)
   const fuentes = new Set(r.posiciones.map((p) => p.fuenteCorrido).filter(Boolean))
-  const columnas = 10
-  // Los barridos automáticos al money market llenan la lista: van solo en el resumen.
-  const detalle = r.movimientos.filter((m) => categoriaMovimiento(m) !== 'Money market')
-  const ocultos = r.movimientos.length - detalle.length
 
   return (
-    <div id="reporte-consolidado" className="bg-white border border-gray-200 rounded-lg p-6 text-sm text-gray-800">
+    <div id="reporte-consolidado" className="space-y-5 text-sm text-gray-800">
       {/* Encabezado */}
-      <div className="flex flex-wrap items-end justify-between gap-4 border-b border-gray-200 pb-4">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-400">Roble Capital · Posición Consolidada</p>
-          <h2 className="mt-1 text-2xl font-semibold text-[#2D3F52]">{cliente || 'Posición Consolidada'}</h2>
-          <p className="mt-0.5 text-sm text-gray-500">{cuentas || bancosTexto || '—'}</p>
-        </div>
-        <div className="text-right">
-          <p className="text-[11px] uppercase tracking-wide text-gray-400">Valuación al</p>
-          <p className="text-lg font-semibold text-gray-900">{ddmmyyyy(r.fecha)}</p>
+      <div className="rounded-xl bg-gradient-to-br from-[#1B2A38] to-[#1B3A2B] p-6 text-white">
+        <div className="flex flex-wrap items-end justify-between gap-6">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.25em] text-emerald-200/80">Posición consolidada</p>
+            <h2 className="mt-1 text-3xl font-semibold">{cliente || 'Sin nombre de cliente'}</h2>
+            <p className="mt-1 text-sm text-slate-300">Valuación al {ddmmyyyy(r.fecha)}{cuentas ? ` · ${cuentas}` : ''}</p>
+          </div>
+          {r.posiciones.length > 0 && (
+            <div className="text-right">
+              <p className="text-[11px] uppercase tracking-wide text-slate-300">Valor total de la cuenta</p>
+              <p className="text-4xl font-semibold tabular-nums">USD {fmt(t.total)}</p>
+              <p className="text-xs text-slate-300">incluye USD {fmt(t.cuponCorrido)} de cupón corrido</p>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* KPIs */}
       {r.posiciones.length > 0 && (
-        <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-5">
-          <Kpi label="Valor de mercado" valor={`USD ${fmt(t.valorMercado)}`} />
-          <Kpi label="Cupón corrido" valor={`USD ${fmt(t.cuponCorrido)}`} sub="intereses devengados no cobrados" />
-          <Kpi label="Total de la cuenta" valor={`USD ${fmt(t.total)}`} sub="valor de mercado + cupón corrido" />
-          <Kpi label="Resultado no realizado" valor={`USD ${fmt(t.resultado)}`} sub={t.costo ? `${fmtPct(t.resultado / t.costo, 2)} sobre costo` : undefined} />
-          <Kpi label="Renta próximos 12 meses" valor={r.renta.filas.length ? `USD ${fmt(r.renta.total)}` : '—'} sub={r.renta.filas.length ? 'cupones y dividendos proyectados' : 'sin calendario de cupones'} />
-        </div>
-      )}
-
-      {/* Por banco y por clase */}
-      {r.posiciones.length > 0 && (
-        <div className="grid gap-8 md:grid-cols-2">
-          <Seccion titulo="Por banco">
-            <table className="w-full">
-              <thead><tr className="border-b border-gray-200">
-                <th className={`${th} text-left`}>Banco</th><th className={`${th} text-right`}>Valor mercado</th>
-                <th className={`${th} text-right`}>Cupón corrido</th><th className={`${th} text-right`}>Total</th><th className={`${th} text-right`}>%</th>
-              </tr></thead>
-              <tbody>
-                {r.porBanco.map((b) => (
-                  <tr key={b.banco} className="border-b border-gray-50">
-                    <td className={td}><EtiquetaBanco banco={b.banco} /> <span className="ml-1">{b.banco}</span></td>
-                    <td className={num}>{fmt(b.valorMercado)}</td><td className={num}>{fmt(b.cuponCorrido)}</td>
-                    <td className={`${num} font-medium`}>{fmt(b.total)}</td><td className={num}>{fmtPct(b.peso)}</td>
-                  </tr>
-                ))}
-                <tr className="border-t-2 border-gray-300 font-semibold">
-                  <td className={td}>Total</td><td className={num}>{fmt(t.valorMercado)}</td><td className={num}>{fmt(t.cuponCorrido)}</td>
-                  <td className={num}>{fmt(t.total)}</td><td className={num}>100.0%</td>
-                </tr>
-              </tbody>
-            </table>
-          </Seccion>
-          <Seccion titulo="Por clase de activo">
-            <table className="w-full">
-              <tbody>
-                {r.porClase.map((c) => (
-                  <tr key={c.clase} className="border-b border-gray-50">
-                    <td className={`${td} w-28`}>{c.clase}</td>
-                    <td className={td}>
-                      <div className="mt-1 h-2.5 rounded bg-gray-100">
-                        <div className="h-2.5 rounded bg-[#2D3F52]" style={{ width: `${Math.max(1, c.peso * 100)}%` }} />
-                      </div>
-                    </td>
-                    <td className={num}>{fmt(c.total)}</td>
-                    <td className={`${num} w-16`}>{fmtPct(c.peso)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </Seccion>
-        </div>
-      )}
-
-      {/* Posiciones */}
-      {r.posiciones.length > 0 && (
-        <Seccion titulo="Posiciones" nota="Importes en USD · el total incluye el cupón corrido">
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead><tr className="border-b border-gray-200">
-                <th className={`${th} text-left`}>Banco</th>
-                <th className={`${th} text-left`}>Instrumento</th>
-                <th className={`${th} text-right`}>Cantidad</th><th className={`${th} text-right`}>Precio</th>
-                <th className={`${th} text-right`}>Costo</th><th className={`${th} text-right`}>Valor mercado</th>
-                <th className={`${th} text-right`}>Cupón corrido</th><th className={`${th} text-right`}>Total</th>
-                <th className={`${th} text-right`}>Resultado</th><th className={`${th} text-right`}>%</th>
-              </tr></thead>
-              <tbody>
-                {CLASES.map((clase) => {
-                  const ls = r.posiciones.filter((l) => l.clase === clase)
-                  if (!ls.length) return null
-                  const s = r.porClase.find((c) => c.clase === clase)!
-                  return (
-                    <Fragment key={clase}>
-                      <tr className="bg-slate-50">
-                        <td colSpan={columnas} className="px-2 py-1.5 text-xs font-semibold text-[#2D3F52]">{clase}</td>
-                      </tr>
-                      {ls.map((l) => (
-                        <tr key={clavePosicion(l)} className="border-b border-gray-50">
-                          <td className={td}><EtiquetaBanco banco={l.banco} /></td>
-                          <td className={td}>
-                            <p className="font-medium text-gray-800" title={l.descripcion}>{l.nombre}</p>
-                            <p className="text-[10px] text-gray-400">{[l.detalle, l.categoria].filter(Boolean).join(' · ')}</p>
-                          </td>
-                          <td className={num}>{l.clase === 'Efectivo' ? '' : fmt(l.cantidad, l.cantidad != null && !Number.isInteger(l.cantidad) ? 3 : 0)}</td>
-                          <td className={num}>{l.precio == null ? '' : fmt(l.precio, 3)}</td>
-                          <td className={num}>{fmt(l.costo)}</td>
-                          <td className={num}>{fmt(l.valorMercado)}</td>
-                          <CeldaCorrido l={l} manual={manuales[clavePosicion(l)]} setManual={setManual} />
-                          <td className={`${num} font-medium`}>{fmt(l.total)}</td>
-                          <td className={`${num} ${colorResultado(l.resultado)}`}>
-                            {fmt(l.resultado)}
-                            {l.resultado != null && l.costo ? <p className="text-[10px]">{fmtPct(l.resultado / l.costo, 2)}</p> : null}
-                          </td>
-                          <td className={num}>{fmtPct(l.peso)}</td>
-                        </tr>
-                      ))}
-                      <tr className="border-b border-gray-200 font-semibold">
-                        <td colSpan={4} className={`${td} text-right text-gray-500`}>Subtotal {clase.toLowerCase()}</td>
-                        <td className={num}>{fmt(s.costo)}</td><td className={num}>{fmt(s.valorMercado)}</td><td className={num}>{fmt(s.cuponCorrido)}</td>
-                        <td className={num}>{fmt(s.total)}</td><td className={`${num} ${colorResultado(s.resultado)}`}>{fmt(s.resultado)}</td><td className={num}>{fmtPct(s.peso)}</td>
-                      </tr>
-                    </Fragment>
-                  )
-                })}
-                <tr className="border-t-2 border-gray-400 text-sm font-semibold">
-                  <td colSpan={4} className={`${td} text-right`}>Total</td>
-                  <td className={num}>{fmt(t.costo)}</td><td className={num}>{fmt(t.valorMercado)}</td><td className={num}>{fmt(t.cuponCorrido)}</td>
-                  <td className={num}>{fmt(t.total)}</td><td className={`${num} ${colorResultado(t.resultado)}`}>{fmt(t.resultado)}</td><td className={num}>100.0%</td>
-                </tr>
-              </tbody>
-            </table>
+        <>
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+            <Kpi label="Valor de mercado" valor={`USD ${fmt(t.valorMercado)}`} acento="#1B2A38" />
+            <Kpi label="Cupón corrido" valor={`USD ${fmt(t.cuponCorrido)}`} sub="Intereses devengados no cobrados" acento="#B45309" />
+            <Kpi label="Resultado no realizado" valor={`${signo(t.resultado)}USD ${fmt(t.resultado)}`} sub={t.costo ? `${signo(t.resultado)}${fmtPct(t.resultado / t.costo, 2)} sobre el costo` : undefined} acento={t.resultado >= 0 ? '#15803D' : '#B91C1C'} />
+            <Kpi label="Renta estimada 12 meses" valor={r.renta.filas.length ? `USD ${fmt(r.renta.total)}` : '—'} sub={r.renta.filas.length ? 'Cupones y dividendos' : 'Subí el calendario de cupones'} acento="#2E7D52" />
           </div>
-          {fuentes.size > 0 && (
-            <p className="mt-2 text-[10px] text-gray-400">
-              Cupón corrido: calculado al {ddmmyyyy(r.fecha)} con el cupón del próximo pago × días transcurridos desde el último (base 30/360).
-              {fuentes.has('tasa') && ' ≈ estimado con tasa y vencimiento (pago semestral).'}
-              {fuentes.has('sin datos') && ' ! sin datos para calcularlo.'}
-              {fuentes.has('manual') && ' ✎ cargado a mano.'}
-              <span className="print:hidden"> Hacé clic en un importe para corregirlo.</span>
-            </p>
-          )}
-        </Seccion>
+
+          <div className="grid gap-3 lg:grid-cols-3">
+            <Tarjeta titulo="Por clase de activo">
+              <div className="flex items-center gap-4">
+                <Dona datos={r.porClase.map((c) => ({ label: c.clase, valor: c.total, color: COLOR_CLASE[c.clase] }))} centro={compacto(t.total)} />
+                <ul className="flex-1 space-y-1.5">
+                  {r.porClase.map((c) => (
+                    <li key={c.clase} className="flex items-center justify-between gap-2 text-xs">
+                      <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm" style={{ background: COLOR_CLASE[c.clase] }} />{c.clase}</span>
+                      <span className="font-semibold tabular-nums">{fmtPct(c.peso)}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </Tarjeta>
+            <Tarjeta titulo="Por custodio">
+              <div className="space-y-4">
+                {r.porBanco.map((b) => (
+                  <div key={b.banco}>
+                    <div className="mb-1 flex items-baseline justify-between text-xs">
+                      <span className="font-medium text-gray-700">{b.banco}</span>
+                      <span className="tabular-nums"><b>{fmtPct(b.peso)}</b> · USD {fmt(b.total, 0)}</span>
+                    </div>
+                    <Barra peso={b.peso} color={COLOR_CUSTODIO[b.banco]} />
+                    <p className="mt-1 text-[11px] text-gray-400">{b.cantidad} posiciones · cupón corrido USD {fmt(b.cuponCorrido)}</p>
+                  </div>
+                ))}
+              </div>
+            </Tarjeta>
+            <Tarjeta titulo="Renta fija por plazo">
+              {plazos.length ? (
+                <div className="space-y-2.5">
+                  {plazos.map((p) => (
+                    <div key={p.label}>
+                      <div className="mb-1 flex justify-between text-xs"><span className="text-gray-600">{p.label}</span><span className="font-semibold tabular-nums">{fmtPct(p.peso)}</span></div>
+                      <Barra peso={p.peso} color="#1B3A2B" />
+                    </div>
+                  ))}
+                </div>
+              ) : <p className="text-xs text-gray-400">Sin renta fija.</p>}
+            </Tarjeta>
+          </div>
+
+          {/* Posiciones */}
+          <div className="space-y-3">
+            {CLASES.map((clase) => {
+              const ls = r.posiciones.filter((l) => l.clase === clase)
+              if (!ls.length) return null
+              const s = r.porClase.find((c) => c.clase === clase)!
+              return (
+                <div key={clase} className="overflow-hidden rounded-xl border border-gray-200 bg-white" style={{ borderLeft: `4px solid ${COLOR_CLASE[clase]}` }}>
+                  <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-gray-100 bg-gray-50/60 px-4 py-2.5">
+                    <h3 className="text-sm font-semibold text-gray-800">{clase} <span className="font-normal text-gray-400">· {ls.length} {ls.length === 1 ? 'posición' : 'posiciones'}</span></h3>
+                    <p className="text-xs tabular-nums text-gray-500">
+                      USD <b className="text-gray-800">{fmt(s.total)}</b> · {fmtPct(s.peso)}
+                      {s.costo ? <span className={`ml-2 ${colorResultado(s.resultado)}`}>{signo(s.resultado)}{fmt(s.resultado)}</span> : null}
+                    </p>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[820px] table-fixed text-xs">
+                      <colgroup>
+                        <col style={{ width: '36%' }} /><col style={{ width: '9%' }} /><col style={{ width: '12%' }} /><col style={{ width: '11%' }} />
+                        <col style={{ width: '12%' }} /><col style={{ width: '10%' }} /><col style={{ width: '10%' }} />
+                      </colgroup>
+                      <thead>
+                        <tr className="text-[10px] uppercase tracking-wide text-gray-400">
+                          <th className="px-4 py-2 text-left font-medium">Instrumento</th>
+                          <th className="px-2 py-2 text-left font-medium">Custodio</th>
+                          <th className="px-2 py-2 text-right font-medium">Valor de mercado</th>
+                          <th className="px-2 py-2 text-right font-medium">Cupón corrido</th>
+                          <th className="px-2 py-2 text-right font-medium">Total</th>
+                          <th className="px-2 py-2 text-right font-medium">Resultado</th>
+                          <th className="w-28 px-4 py-2 text-right font-medium">% cuenta</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {ls.map((l) => {
+                          const det = detalleTitulo(l)
+                          const cant = lineaCantidad(l)
+                          return (
+                            <tr key={clavePosicion(l)} className="border-t border-gray-50 align-top hover:bg-gray-50/60">
+                              <td className="px-4 py-2.5">
+                                <p className="font-semibold text-gray-900" title={l.descripcion}>{l.nombre}</p>
+                                {det && <p className="text-[11px] text-gray-500">{det}</p>}
+                                {cant && <p className="text-[11px] text-gray-400">{cant}</p>}
+                              </td>
+                              <td className="px-2 py-2.5"><EtiquetaBanco banco={l.banco} /></td>
+                              <td className="px-2 py-2.5 text-right tabular-nums">{fmt(l.valorMercado)}</td>
+                              <td className="px-2 py-2.5 text-right"><CorridoEditable l={l} manual={manuales[clavePosicion(l)]} setManual={setManual} /></td>
+                              <td className="px-2 py-2.5 text-right font-semibold tabular-nums">{fmt(l.total)}</td>
+                              <td className={`px-2 py-2.5 text-right tabular-nums ${colorResultado(l.resultado)}`}>
+                                {l.resultado == null ? '—' : `${signo(l.resultado)}${fmt(l.resultado)}`}
+                                {l.resultado != null && l.costo ? <p className="text-[10px]">{signo(l.resultado)}{fmtPct(l.resultado / l.costo, 2)}</p> : null}
+                              </td>
+                              <td className="px-4 py-2.5">
+                                <p className="mb-1 text-right tabular-nums text-gray-600">{fmtPct(l.peso)}</p>
+                                <Barra peso={l.peso / Math.max(...r.posiciones.map((x) => x.peso))} color={COLOR_CLASE[clase]} />
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )
+            })}
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-[#1B2A38] px-4 py-3 text-white">
+              <span className="text-sm font-semibold">Total de la cuenta</span>
+              <span className="text-xs tabular-nums text-slate-300">
+                Valor de mercado <b className="text-white">{fmt(t.valorMercado)}</b> · Cupón corrido <b className="text-white">{fmt(t.cuponCorrido)}</b> · Total <b className="text-base text-white">USD {fmt(t.total)}</b>
+              </span>
+            </div>
+            {fuentes.size > 0 && (
+              <p className="text-[11px] text-gray-400">
+                Cupón corrido al {ddmmyyyy(r.fecha)}: cupón del próximo pago × días desde el último (30/360).
+                {fuentes.has('tasa') && ' ≈ estimado con tasa y vencimiento.'}
+                {fuentes.has('sin datos') && ' ! sin datos para calcularlo.'}
+                {fuentes.has('manual') && ' ✎ cargado a mano.'} Hacé clic en un importe para corregirlo.
+              </p>
+            )}
+          </div>
+        </>
       )}
 
       {/* Renta */}
       {r.renta.filas.length > 0 && (
-        <Seccion titulo="Renta proyectada · próximos 12 meses" nota={`Cupones USD ${fmt(r.renta.cupones)} · Dividendos USD ${fmt(r.renta.dividendos)}`}>
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead><tr className="border-b border-gray-200">
-                <th className={`${th} text-left`}>Banco</th><th className={`${th} text-left`}>Instrumento</th>
-                {r.renta.meses.map((m) => <th key={m} className={`${th} text-right`}>{mesCorto(m)}</th>)}
-                <th className={`${th} text-right`}>Total</th>
-              </tr></thead>
-              <tbody>
-                {r.renta.filas.map((f, i) => (
-                  <tr key={i} className="border-b border-gray-50">
-                    <td className={td}><EtiquetaBanco banco={f.banco} /></td>
-                    <td className={td}>
-                      <p className="max-w-[260px] truncate" title={f.descripcion}>{f.descripcion}</p>
-                      <p className="text-[10px] text-gray-400">{f.clase}{f.cusip ? ` · ${f.cusip}` : ''}</p>
-                    </td>
-                    {f.montos.map((v, j) => <td key={j} className={num}>{v ? fmt(v, 0) : ''}</td>)}
-                    <td className={`${num} font-medium`}>{fmt(f.total, 0)}</td>
-                  </tr>
-                ))}
-                {r.renta.porBanco.length > 1 && r.renta.porBanco.map((b) => (
-                  <tr key={b.banco} className="text-gray-600">
-                    <td className={td}><EtiquetaBanco banco={b.banco} /></td><td className={td}>Subtotal {b.banco}</td>
-                    {b.montos.map((v, j) => <td key={j} className={num}>{v ? fmt(v, 0) : ''}</td>)}
-                    <td className={num}>{fmt(b.total, 0)}</td>
-                  </tr>
-                ))}
-                <tr className="border-t-2 border-gray-400 font-semibold">
-                  <td className={td} colSpan={2}>Total</td>
-                  {r.renta.montos.map((v, j) => <td key={j} className={num}>{v ? fmt(v, 0) : ''}</td>)}
-                  <td className={num}>{fmt(r.renta.total, 0)}</td>
-                </tr>
-              </tbody>
-            </table>
+        <Tarjeta>
+          <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Renta estimada · próximos 12 meses</h3>
+            <p className="text-xs text-gray-500">
+              Total <b className="text-gray-900">USD {fmt(r.renta.total)}</b> · Cupones {fmt(r.renta.cupones)} · Dividendos {fmt(r.renta.dividendos)}
+            </p>
           </div>
-        </Seccion>
+          <GraficoRenta meses={r.renta.meses} montos={r.renta.montos} />
+          <details className="mt-3">
+            <summary className="cursor-pointer text-xs font-medium text-[#2D3F52]">Ver detalle por instrumento</summary>
+            <div className="mt-2 overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead><tr className="border-b border-gray-200 text-[10px] uppercase tracking-wide text-gray-400">
+                  <th className="px-2 py-1.5 text-left font-medium">Instrumento</th>
+                  {r.renta.meses.map((m) => <th key={m} className="px-1.5 py-1.5 text-right font-medium">{mesCorto(m)}</th>)}
+                  <th className="px-2 py-1.5 text-right font-medium">Total</th>
+                </tr></thead>
+                <tbody>
+                  {r.renta.filas.map((f, i) => (
+                    <tr key={i} className="border-b border-gray-50">
+                      <td className="px-2 py-1.5"><EtiquetaBanco banco={f.banco} /> <span className="ml-1">{r.posiciones.find((l) => l.banco === f.banco && l.cusip === f.cusip)?.nombre ?? f.descripcion}</span></td>
+                      {f.montos.map((v, j) => <td key={j} className="px-1.5 py-1.5 text-right tabular-nums">{v ? fmt(v, 0) : ''}</td>)}
+                      <td className="px-2 py-1.5 text-right font-semibold tabular-nums">{fmt(f.total, 0)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </details>
+        </Tarjeta>
       )}
 
       {/* Movimientos */}
       {r.movimientos.length > 0 && (
-        <Seccion titulo="Movimientos" nota={`Del ${ddmmyyyy(r.periodoMovimientos.desde)} al ${ddmmyyyy(r.periodoMovimientos.hasta)}`}>
+        <Tarjeta>
+          <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Movimientos</h3>
+            <p className="text-xs text-gray-400">Del {ddmmyyyy(r.periodoMovimientos.desde)} al {ddmmyyyy(r.periodoMovimientos.hasta)}</p>
+          </div>
           <div className="mb-4 flex flex-wrap gap-2">
             {r.resumenMovimientos.map((c) => (
-              <div key={c.categoria} className="rounded border border-gray-200 px-3 py-1.5">
-                <p className="text-[10px] uppercase tracking-wide text-gray-500">{c.categoria} · {c.cantidad}</p>
-                <p className={`text-sm font-semibold tabular-nums ${colorResultado(c.monto)}`}>{fmt(c.monto)}</p>
+              <div key={c.categoria} className={`rounded-lg px-3 py-2 ${COLOR_CATEGORIA[c.categoria] ?? 'bg-gray-50 text-gray-700'}`}>
+                <p className="text-[10px] uppercase tracking-wide opacity-80">{c.categoria} · {c.cantidad}</p>
+                <p className="text-sm font-semibold tabular-nums">{fmt(c.monto)}</p>
               </div>
             ))}
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
-              <thead><tr className="border-b border-gray-200">
-                <th className={`${th} text-left`}>Fecha</th><th className={`${th} text-left`}>Banco</th>
-                <th className={`${th} text-left`}>Tipo</th><th className={`${th} text-left`}>Descripción</th>
-                <th className={`${th} text-right`}>Cantidad</th><th className={`${th} text-right`}>Precio</th><th className={`${th} text-right`}>Monto</th>
+              <thead><tr className="border-b border-gray-200 text-[10px] uppercase tracking-wide text-gray-400">
+                <th className="px-2 py-1.5 text-left font-medium">Fecha</th><th className="px-2 py-1.5 text-left font-medium">Custodio</th>
+                <th className="px-2 py-1.5 text-left font-medium">Tipo</th><th className="px-2 py-1.5 text-left font-medium">Descripción</th>
+                <th className="px-2 py-1.5 text-right font-medium">Monto</th>
               </tr></thead>
               <tbody>
-                {detalle.map((m, i) => (
+                {(verTodosMov ? movimientos : movimientos.slice(0, 15)).map((m, i) => (
                   <tr key={i} className="border-b border-gray-50">
-                    <td className={`${td} whitespace-nowrap`}>{ddmmyyyy(m.fecha)}</td>
-                    <td className={td}><EtiquetaBanco banco={m.banco} /></td>
-                    <td className={td}>{m.tipo}</td>
-                    <td className={td}><p className="max-w-[420px]">{m.descripcion}</p></td>
-                    <td className={num}>{m.cantidad == null ? '' : fmt(m.cantidad, Number.isInteger(m.cantidad) ? 0 : 3)}</td>
-                    <td className={num}>{m.precio == null ? '' : fmt(m.precio, 3)}</td>
-                    <td className={`${num} ${colorResultado(m.monto)}`}>{fmt(m.monto)}</td>
+                    <td className="whitespace-nowrap px-2 py-1.5">{ddmmyyyy(m.fecha)}</td>
+                    <td className="px-2 py-1.5"><EtiquetaBanco banco={m.banco} /></td>
+                    <td className="px-2 py-1.5"><span className={`rounded px-1.5 py-0.5 text-[10px] ${COLOR_CATEGORIA[categoriaMovimiento(m)] ?? ''}`}>{categoriaMovimiento(m)}</span></td>
+                    <td className="px-2 py-1.5 text-gray-600">
+                      {m.descripcion}
+                      {m.cantidad != null && <span className="text-gray-400"> · {fmt(m.cantidad, Number.isInteger(m.cantidad) ? 0 : 3)}{m.precio != null ? ` a ${fmt(m.precio, 3)}` : ''}</span>}
+                    </td>
+                    <td className={`whitespace-nowrap px-2 py-1.5 text-right font-medium tabular-nums ${colorResultado(m.monto)}`}>{fmt(m.monto)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          {ocultos > 0 && (
-            <p className="mt-2 text-[10px] text-gray-400">
-              No se muestran en el detalle {ocultos} movimientos de money market (compras y rescates automáticos del fondo de liquidez); están sumados en el resumen y en el Excel.
-            </p>
-          )}
-        </Seccion>
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px] text-gray-400">
+            <span>{ocultos > 0 ? `${ocultos} movimientos de money market no se detallan (están en el resumen y en el Excel).` : ''}</span>
+            {movimientos.length > 15 && (
+              <button onClick={() => setVerTodosMov((v) => !v)} className="font-medium text-[#2D3F52] underline">
+                {verTodosMov ? 'Ver menos' : `Ver los ${movimientos.length} movimientos`}
+              </button>
+            )}
+          </div>
+        </Tarjeta>
       )}
 
       {r.avisos.length > 0 && (
-        <div className="mt-8 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900 print:hidden">
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900">
           <p className="mb-1 font-semibold">Revisar</p>
           <ul className="list-disc space-y-0.5 pl-4">{r.avisos.map((a, i) => <li key={i}>{a}</li>)}</ul>
         </div>
       )}
-
-      <p className="mt-8 border-t border-gray-200 pt-3 text-[10px] leading-relaxed text-gray-400">
-        Información preparada por Roble Capital a partir de los reportes de {bancosTexto || 'los custodios'}. No es un estado de cuenta oficial: ante diferencias, valen los estados de cuenta de cada banco.
-        El cupón corrido es una estimación de los intereses devengados y no cobrados a la fecha de valuación. La renta proyectada es bruta, antes de impuestos, y no incluye amortizaciones ni rescates anticipados.
-      </p>
     </div>
   )
 }

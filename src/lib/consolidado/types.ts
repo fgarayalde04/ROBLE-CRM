@@ -34,6 +34,8 @@ export interface Posicion {
   /** Cupón anual en decimal (0.07625), si se pudo leer. */
   tasa: number | null
   vencimiento: string | null // YYYY-MM-DD
+  /** Fechas de compra de los lotes (YYYY-MM-DD). Los consolidados guardados antes no la tienen. */
+  fechasCompra?: string[]
 }
 
 export interface ArchivoPosiciones {
