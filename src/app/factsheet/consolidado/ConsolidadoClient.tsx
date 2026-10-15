@@ -576,7 +576,7 @@ function detalleTitulo(l: LineaPosicion) {
     partes.push(l.tasa != null ? `Cupón ${(l.tasa * 100).toFixed(3)}%` : 'Cupón s/d')
     partes.push(l.vencimiento ? `Vto. ${ddmmyyyy(l.vencimiento)}` : l.perpetuo ? 'Perpetuo' : 'Vto. s/d')
   }
-  if (l.clase === 'Acciones') {
+  if (l.clase !== 'Efectivo') {
     const id = identificador(l.simbolo, l.cusip, l.descripcion)
     if (id) partes.push(id)
   }

@@ -84,7 +84,7 @@ export function armarDatosPdf(a: {
       detalle.push(cupon != null && isFinite(cupon) ? `Cupón ${cupon.toFixed(3)}%` : 'Cupón s/d')
       detalle.push(p.maturity_date ? `Vto. ${ddmmyyyy(p.maturity_date)}` : 'Vto. s/d')
     }
-    if (p.asset_class === 'Equity' || p.asset_class === 'ETF') {
+    if (p.asset_class !== 'Cash') {
       const id = identificador(p.symbol, p.cusip, p.name, p.isin)
       if (id) detalle.push(id)
     }

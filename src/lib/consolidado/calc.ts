@@ -773,7 +773,7 @@ function nombreParaCliente(p: Pick<Posicion, 'descripcion' | 'clase' | 'cusip' |
   return { nombre, detalle }
 }
 
-/** Identificador de una acción para reconocerla: símbolo si el banco lo da, si no ISIN (de la descripción) o CUSIP. */
+/** Identificador de un instrumento para reconocerlo: símbolo si el banco lo da, si no ISIN (de la descripción) o CUSIP. */
 export function identificador(simbolo: string | null | undefined, cusip: string | null | undefined, descripcion = '', isin?: string | null) {
   const s = simbolo?.trim()
   if (s && s !== '-') return `Símbolo ${s.toUpperCase()}`

@@ -3,7 +3,7 @@
 // a PDF. La paginación la hace el navegador: las filas nunca se parten entre
 // hojas, el encabezado de cada tabla se repite y cada hoja lleva el mismo
 // encabezado y pie (ver encabezadoPdf / piePdf). No incluye números de cuenta;
-// de los títulos, solo el símbolo, ISIN o CUSIP de las acciones.
+// de los títulos, solo el símbolo, ISIN o CUSIP de cada instrumento.
 
 import { ROBLE_DISCLAIMER } from '@/lib/disclaimers'
 import {
@@ -16,14 +16,14 @@ const custodio = (b: Banco) => (b === 'Pershing' ? 'Pershing' : 'Morgan Stanley'
 
 // ─── Textos ─────────────────────────────────────────────────────────────────
 
-/** Línea de detalle: "Cupón 6.125% · Vto. 21/01/2031 · Compra 13/10/2026"; en acciones, símbolo, ISIN o CUSIP. Nunca la cuenta. */
+/** Línea de detalle: "Cupón 6.125% · Vto. 21/01/2031 · Compra 13/10/2026"; salvo en efectivo, símbolo, ISIN o CUSIP. Nunca la cuenta. */
 function detalleBono(l: LineaPosicion) {
   const partes: string[] = []
   if (l.clase === 'Renta fija') {
     partes.push(l.tasa != null ? `Cupón ${(l.tasa * 100).toFixed(3)}%` : 'Cupón s/d')
     partes.push(l.vencimiento ? `Vto. ${ddmmyyyy(l.vencimiento)}` : l.perpetuo ? 'Perpetuo' : 'Vto. s/d')
   }
-  if (l.clase === 'Acciones') {
+  if (l.clase !== 'Efectivo') {
     const id = identificador(l.simbolo, l.cusip, l.descripcion)
     if (id) partes.push(id)
   }
