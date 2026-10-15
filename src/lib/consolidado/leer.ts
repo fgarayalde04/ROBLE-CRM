@@ -217,8 +217,11 @@ function leerPershingPosiciones(g: Grilla, nombre: string): ArchivoPosiciones {
   for (const a of Array.from(porClave.values())) {
     const t = sumarLotes(a.subtotal ? [a.subtotal] : a.lotes)
     const fechasCompra = fechasDe(a.lotes)
-    const clase = clasePershing(a.categoria, a.grupo)
     const info = parseDescription(a.desc)
+    let clase = clasePershing(a.categoria, a.grupo)
+    // ADR/ADS y acciones que el archivo deja bajo un grupo de renta fija: un
+    // bono siempre trae tasa en la descripción.
+    if (clase === 'Renta fija' && info.rate == null && /\b(ADRS?|ADS|SPONS(ORED)?|SHS|SHARES|COM|CL [A-Z])\b/.test(a.desc.toUpperCase())) clase = 'Acciones'
     posiciones.push({
       banco: 'Pershing',
       cuenta: a.cuenta,
