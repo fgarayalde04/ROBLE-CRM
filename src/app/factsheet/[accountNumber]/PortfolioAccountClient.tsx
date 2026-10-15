@@ -432,7 +432,7 @@ export default function PortfolioAccountClient({ accountNumber }: { accountNumbe
           />
         )}
         {tab === 'posiciones' && (
-          <PositionsTab positions={positions} totalValue={positionsValue} glByCusip={glByCusip} onImport={() => setShowImport(true)} onReclassified={load} />
+          <PositionsTab positions={positions} totalValue={positionsValue} glByCusip={glByCusip} custodianByPositionId={custodianByPositionId} onImport={() => setShowImport(true)} onReclassified={load} />
         )}
         {tab === 'rendimiento' && (
           <RendimientoTab accountNumber={accountNumber} history={history} performance={performance} onPerformanceImported={load} />

@@ -11,9 +11,13 @@ import type { DatosPdfPortafolio, FilaPdf } from '@/lib/portfolio/estadoCuenta'
 const iso = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s)
 const ddmmyyyy = (s: string) => (iso(s) ? `${s.slice(8, 10)}/${s.slice(5, 7)}/${s.slice(0, 4)}` : s)
 
-/** "Compra 31/07/2026" o "Compras 24/11/2025, 27/02/2026 y 31/07/2026". */
-function textoCompras(raw: string | null | undefined) {
-  const fechas = (raw ?? '').split(',').map((x) => x.trim()).filter(Boolean).map(ddmmyyyy)
+/** "Compra 31/07/2026" o "Compras 24/11/2025, 27/02/2026 y 31/07/2026".
+ *  Acepta ISO o dd/mm/aaaa separadas por coma; descarta las anteriores a 1950
+ *  (Morgan usa 12/31/1899 cuando no tiene la fecha). */
+export function textoCompras(raw: string | null | undefined) {
+  const fechas = Array.from(new Set((raw ?? '').split(',').map((x) => x.trim()).filter(Boolean)))
+    .filter((x) => { const y = Number(iso(x) ? x.slice(0, 4) : x.slice(-4)); return !(y < 1950) })
+    .map(ddmmyyyy)
   if (!fechas.length) return ''
   if (fechas.length === 1) return `Compra ${fechas[0]}`
   return `Compras ${fechas.slice(0, -1).join(', ')} y ${fechas[fechas.length - 1]}`
@@ -71,7 +75,7 @@ export function armarDatosPdf(a: {
       detalle.push(cupon != null && isFinite(cupon) ? `Cupón ${cupon.toFixed(3)}%` : 'Cupón s/d')
       detalle.push(p.maturity_date ? `Vto. ${ddmmyyyy(p.maturity_date)}` : 'Vto. s/d')
     }
-    const compras = textoCompras(p.purchase_date ?? gl?.purchase_date)
+    const compras = textoCompras(p.purchase_date || gl?.purchase_date)
     if (compras) detalle.push(compras)
     const costo = gl ? Number(gl.cost_basis) : null
     const resultado = gl ? Number(gl.gain_loss) : null

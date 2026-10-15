@@ -1,11 +1,10 @@
 'use client'
-import { useState, useMemo, Fragment } from 'react'
+import { useState, useMemo } from 'react'
 import type { PortfolioPositionRow, PortfolioUnrealizedGainLossRow } from '@/types/portfolio'
 import { fmtUSD2, fmtPct, fmtDate } from './PortfolioAccountClient'
 import { cleanDisplayName } from '@/lib/portfolio/theme'
 import { ASSET_CLASS_ES, assetClassRank } from '@/lib/portfolio/engine'
-
-type SortKey = 'name' | 'quantity' | 'price' | 'market_value' | 'accrued_interest' | 'weight_pct'
+import { textoCompras } from './datosPdf'
 
 function DetailRow({ label, value }: { label: string; value: string | null | undefined }) {
   if (value == null || value === '') return null
@@ -19,15 +18,62 @@ function DetailRow({ label, value }: { label: string; value: string | null | und
 
 const RECLASSIFY_OPTIONS = ['Cash', 'Fixed Income', 'Fixed Income Fund', 'Fund', 'Equity', 'ETF', 'Alternatives', 'Real Estate']
 
-export default function PositionsTab({ positions, totalValue, glByCusip, onImport, onReclassified }: { positions: PortfolioPositionRow[]; totalValue: number; glByCusip: Map<string, PortfolioUnrealizedGainLossRow>; onImport?: () => void; onReclassified?: () => void }) {
+// Mismos colores por clase que la Posición Consolidada.
+const COLOR_CLASE: Record<string, string> = {
+  Cash: '#94A3B8', 'Fixed Income': '#1B3A2B', 'Fixed Income Fund': '#2E7D52', Fund: '#2E7D52', ETF: '#4CAF72',
+  Equity: '#1E40AF', Alternatives: '#7C3AED', 'Real Estate': '#B45309',
+}
+const COLOR_CUSTODIO: Record<string, string> = { Pershing: '#0369A1', 'Morgan Stanley': '#0F766E' }
+
+const fmt = (n: number, d = 2) => n.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d })
+const signo = (v: number) => (v > 0 ? '+' : '')
+const colorResultado = (v: number | null) => (v == null ? 'text-gray-400' : v < 0 ? 'text-red-600' : v > 0 ? 'text-emerald-700' : 'text-gray-500')
+
+function Barra({ peso, color }: { peso: number; color: string }) {
+  return (
+    <div className="h-1.5 w-full rounded-full bg-gray-100">
+      <div className="h-1.5 rounded-full" style={{ width: `${Math.max(1.5, Math.min(100, peso * 100))}%`, background: color }} />
+    </div>
+  )
+}
+
+/** "Cupón 6.000% · Vto. 13/01/2035 · Compra 31/07/2026" */
+function detalleTitulo(p: PortfolioPositionRow, gl: PortfolioUnrealizedGainLossRow | undefined) {
+  const partes: string[] = []
+  if (p.asset_class === 'Fixed Income') {
+    const cupon = p.coupon != null && p.coupon !== '' ? Number(p.coupon) : null
+    partes.push(cupon != null && isFinite(cupon) ? `Cupón ${cupon.toFixed(3)}%` : 'Cupón s/d')
+    partes.push(p.maturity_date ? `Vto. ${fmtDate(p.maturity_date)}` : 'Vto. s/d')
+  }
+  const compras = textoCompras(p.purchase_date || gl?.purchase_date)
+  if (compras) partes.push(compras)
+  return partes.join(' · ')
+}
+
+/** "100,000 nominales a 101.288 · Costo 105,867.73" */
+function lineaCantidad(p: PortfolioPositionRow, gl: PortfolioUnrealizedGainLossRow | undefined) {
+  if (p.asset_class === 'Cash' || p.quantity == null) return ''
+  const q = Number(p.quantity)
+  const bono = p.asset_class === 'Fixed Income'
+  const unidad = bono ? 'nominales' : ['Fund', 'Fixed Income Fund'].includes(p.asset_class) ? (q === 1 ? 'cuotaparte' : 'cuotapartes') : 'acciones'
+  return [
+    `${fmt(q, Number.isInteger(q) ? 0 : 3)} ${unidad}${p.price != null ? ` a ${fmt(Number(p.price), bono ? 3 : 2)}` : ''}`,
+    gl ? `Costo ${fmt(Number(gl.cost_basis))}` : null,
+  ].filter(Boolean).join(' · ')
+}
+
+export default function PositionsTab({ positions, totalValue, glByCusip, custodianByPositionId, onImport, onReclassified }: {
+  positions: PortfolioPositionRow[]
+  totalValue: number
+  glByCusip: Map<string, PortfolioUnrealizedGainLossRow>
+  custodianByPositionId?: Map<string, string> | null
+  onImport?: () => void
+  onReclassified?: () => void
+}) {
   const hasGL = glByCusip.size > 0
-  // Cupón corrido (accrued interest) del custodio — solo bonos; la columna
-  // aparece únicamente si alguna posición lo trae.
-  const hasAccrued = positions.some(p => p.accrued_interest != null && Number(p.accrued_interest) !== 0)
+  const conCustodio = !!custodianByPositionId
   const [q, setQ] = useState('')
   const [assetFilter, setAssetFilter] = useState('')
-  const [sortKey, setSortKey] = useState<SortKey>('market_value')
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [selected, setSelected] = useState<PortfolioPositionRow | null>(null)
   const [reclassifying, setReclassifying] = useState(false)
   const [savingPurchaseDate, setSavingPurchaseDate] = useState(false)
@@ -85,68 +131,53 @@ export default function PositionsTab({ positions, totalValue, glByCusip, onImpor
 
   const assetClasses = useMemo(() => Array.from(new Set(positions.map(p => p.asset_class))).sort(), [positions])
 
-  const rows = useMemo(() => {
-    // Weight recalculado sobre el total real de la cuenta, no el guardado en el snapshot.
-    const withWeight = positions.map(p => ({ ...p, recalcWeight: totalValue > 0 ? (Number(p.market_value) / totalValue) * 100 : 0 }))
-    const term = q.trim().toLowerCase()
-    const filtered = withWeight.filter(p => {
-      if (assetFilter && p.asset_class !== assetFilter) return false
-      if (!term) return true
-      return p.name.toLowerCase().includes(term) || (p.symbol ?? '').toLowerCase().includes(term) ||
-        (p.isin ?? '').toLowerCase().includes(term) || (p.cusip ?? '').toLowerCase().includes(term)
-    })
-    const dir = sortDir === 'asc' ? 1 : -1
-    return filtered.sort((a, b) => {
-      if (sortKey === 'name') return a.name.localeCompare(b.name) * dir
-      const av = sortKey === 'weight_pct' ? a.recalcWeight : Number(a[sortKey] ?? 0)
-      const bv = sortKey === 'weight_pct' ? b.recalcWeight : Number(b[sortKey] ?? 0)
-      return (av - bv) * dir
-    })
-  }, [positions, totalValue, q, assetFilter, sortKey, sortDir])
+  // Total de la cuenta (con cupón corrido) — base del % de cada posición.
+  const totalConCorrido = useMemo(
+    () => positions.reduce((s, p) => s + Number(p.market_value) + Number(p.accrued_interest ?? 0), 0) || totalValue,
+    [positions, totalValue],
+  )
 
-  // Agrupado por clase de activo, con subtotales. El orden interno de cada
-  // grupo respeta el sort elegido (rows ya viene ordenado); los grupos van
-  // en ASSET_CLASS_ORDER y, a igualdad, por subtotal descendente.
+  const rows = useMemo(() => {
+    const term = q.trim().toLowerCase()
+    return positions
+      .filter(p => {
+        if (assetFilter && p.asset_class !== assetFilter) return false
+        if (!term) return true
+        return p.name.toLowerCase().includes(term) || (p.symbol ?? '').toLowerCase().includes(term) ||
+          (p.isin ?? '').toLowerCase().includes(term) || (p.cusip ?? '').toLowerCase().includes(term)
+      })
+      .map(p => {
+        const gl = p.cusip ? glByCusip.get(p.cusip) : undefined
+        const corrido = Number(p.accrued_interest ?? 0)
+        const total = Number(p.market_value) + corrido
+        return { p, gl, corrido, total, peso: totalConCorrido > 0 ? total / totalConCorrido : 0 }
+      })
+      .sort((a, b) => b.total - a.total)
+  }, [positions, q, assetFilter, glByCusip, totalConCorrido])
+
   type Row = typeof rows[number]
+  // Agrupado por clase de activo (orden ASSET_CLASS_ORDER y, a igualdad, por valor).
   const groups = useMemo(() => {
     const byClass = new Map<string, Row[]>()
-    for (const r of rows) {
-      const arr = byClass.get(r.asset_class) ?? []
-      arr.push(r)
-      byClass.set(r.asset_class, arr)
-    }
+    for (const r of rows) byClass.set(r.p.asset_class, [...(byClass.get(r.p.asset_class) ?? []), r])
     return Array.from(byClass.entries())
-      .map(([assetClass, groupRows]) => {
-        const subtotalValue = groupRows.reduce((s, p) => s + Number(p.market_value), 0)
+      .map(([assetClass, gRows]) => {
+        const conCosto = gRows.filter(r => r.gl)
         return {
-          subtotalAccrued: groupRows.reduce((s, p) => s + Number(p.accrued_interest ?? 0), 0),
           assetClass,
           label: ASSET_CLASS_ES[assetClass] ?? assetClass,
-          rows: groupRows,
-          subtotalValue,
-          subtotalWeight: groupRows.reduce((s, p) => s + p.recalcWeight, 0),
+          rows: gRows,
+          total: gRows.reduce((s, r) => s + r.total, 0),
+          peso: gRows.reduce((s, r) => s + r.peso, 0),
+          resultado: conCosto.length ? conCosto.reduce((s, r) => s + Number(r.gl!.gain_loss), 0) : null,
         }
       })
-      .sort((a, b) => {
-        const rk = assetClassRank(a.assetClass) - assetClassRank(b.assetClass)
-        return rk !== 0 ? rk : b.subtotalValue - a.subtotalValue
-      })
+      .sort((a, b) => assetClassRank(a.assetClass) - assetClassRank(b.assetClass) || b.total - a.total)
   }, [rows])
 
-  function toggleSort(key: SortKey) {
-    if (sortKey === key) { setSortDir(d => d === 'asc' ? 'desc' : 'asc'); return }
-    setSortKey(key); setSortDir('desc')
-  }
-
-  const cols: { key: SortKey; label: string; align?: 'right' }[] = [
-    { key: 'name', label: 'Activo' },
-    { key: 'quantity', label: 'Cantidad', align: 'right' },
-    { key: 'price', label: 'Precio', align: 'right' },
-    { key: 'market_value', label: 'Market Value', align: 'right' },
-    ...(hasAccrued ? [{ key: 'accrued_interest' as const, label: 'Cupón corrido', align: 'right' as const }] : []),
-    { key: 'weight_pct', label: '% Cartera', align: 'right' },
-  ]
-  const totalColSpan = cols.length + (hasGL ? 2 : 0)
+  const maxPeso = Math.max(...rows.map(r => r.peso), 0.0001)
+  const totMV = rows.reduce((s, r) => s + Number(r.p.market_value), 0)
+  const totCorrido = rows.reduce((s, r) => s + r.corrido, 0)
 
   return (
     <div className="space-y-4">
@@ -175,128 +206,92 @@ export default function PositionsTab({ positions, totalValue, glByCusip, onImpor
         )}
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead style={{ background: '#1B2E3C' }}>
-              <tr>
-                {cols.map(c => (
-                  <th key={c.key}
-                    onClick={() => toggleSort(c.key)}
-                    className={`px-4 py-2.5 text-[11px] font-semibold text-white/90 uppercase tracking-wide cursor-pointer select-none hover:text-white ${c.align === 'right' ? 'text-right' : 'text-left'}`}>
-                    {c.label}{sortKey === c.key ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''}
-                  </th>
-                ))}
-                {hasGL && (
-                  <>
-                    <th className="px-4 py-2.5 text-[11px] font-semibold text-white/90 uppercase tracking-wide text-right">Costo Total</th>
-                    <th className="px-4 py-2.5 text-[11px] font-semibold text-white/90 uppercase tracking-wide text-right">Unrealized G/L</th>
-                  </>
-                )}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {groups.map(group => {
-                const grpCost = group.rows.reduce((s, p) => s + (p.cusip && glByCusip.get(p.cusip) ? Number(glByCusip.get(p.cusip)!.cost_basis) : 0), 0)
-                const grpGL   = group.rows.reduce((s, p) => s + (p.cusip && glByCusip.get(p.cusip) ? Number(glByCusip.get(p.cusip)!.gain_loss) : 0), 0)
-                const grpGLPct = grpCost > 0 ? (grpGL / grpCost) * 100 : 0
-                return (
-                  <Fragment key={group.assetClass}>
-                    <tr className="bg-[#EEF2F1] border-y border-[#D8E3DE]">
-                      <td colSpan={totalColSpan} className="px-4 py-2 text-[11px] font-bold uppercase tracking-wide text-[#1B3A2B]">
-                        {group.label}
-                        <span className="ml-1.5 text-gray-400 font-medium normal-case">· {group.rows.length} {group.rows.length === 1 ? 'posición' : 'posiciones'}</span>
-                      </td>
-                    </tr>
-                    {group.rows.map((p, i) => {
-                      const clean = cleanDisplayName(p.name, p.isin, p.cusip, p.coupon, p.maturity_date)
-                      const gl = p.cusip ? glByCusip.get(p.cusip) : undefined
-                      return (
-                        <tr key={p.id} onClick={() => setSelected(p)} className={`cursor-pointer transition hover:bg-emerald-50/40 ${i % 2 === 1 ? 'bg-gray-50/60' : ''}`}>
-                          <td className="px-4 py-2.5 max-w-[260px]">
-                            <div className="text-gray-800 font-medium truncate">{clean.name}</div>
-                            {clean.detail && <div className="text-[10px] text-gray-400 truncate">{clean.detail}</div>}
-                            {(p.purchase_date || gl?.purchase_date) && <div className="text-[10px] text-gray-400 truncate">Compra: {p.purchase_date ?? gl?.purchase_date}</div>}
-                          </td>
-                          <td className="px-4 py-2.5 text-right text-gray-700 font-mono">{p.quantity != null ? Number(p.quantity).toLocaleString('en-US') : '—'}</td>
-                          <td className="px-4 py-2.5 text-right text-gray-700 font-mono">{p.price != null ? fmtUSD2(Number(p.price)) : '—'}</td>
-                          <td className="px-4 py-2.5 text-right font-semibold font-mono" style={{ color: '#1B3A2B' }}>{fmtUSD2(Number(p.market_value))}</td>
-                          {hasAccrued && <td className="px-4 py-2.5 text-right text-gray-700 font-mono">{p.accrued_interest != null && Number(p.accrued_interest) !== 0 ? fmtUSD2(Number(p.accrued_interest)) : '—'}</td>}
-                          <td className="px-4 py-2.5">
-                            <div className="flex items-center justify-end gap-2">
-                              <div className="w-12 h-1.5 bg-gray-100 rounded-full overflow-hidden hidden sm:block">
-                                <div className="h-full rounded-full" style={{ width: `${Math.min(p.recalcWeight, 100)}%`, background: '#2E7D52' }} />
-                              </div>
-                              <span className="text-gray-500 w-12 text-right shrink-0">{fmtPct(p.recalcWeight)}</span>
-                            </div>
-                          </td>
-                          {hasGL && (
-                            <>
-                              <td className="px-4 py-2.5 text-right text-gray-700 font-mono">{gl ? fmtUSD2(Number(gl.cost_basis)) : '—'}</td>
-                              <td className={`px-4 py-2.5 text-right font-mono font-semibold ${gl ? (Number(gl.gain_loss) >= 0 ? 'text-emerald-600' : 'text-red-600') : 'text-gray-400'}`}>
-                                {gl ? `${Number(gl.gain_loss) >= 0 ? '+' : ''}${fmtUSD2(Number(gl.gain_loss))} (${Number(gl.gain_loss_pct) >= 0 ? '+' : ''}${Number(gl.gain_loss_pct).toFixed(2)}%)` : '—'}
-                              </td>
-                            </>
-                          )}
-                        </tr>
-                      )
-                    })}
-                    <tr className="bg-[#F7FAF9] border-b-2 border-[#D8E3DE]">
-                      <td colSpan={3} className="px-4 py-2 text-right text-[11px] font-bold uppercase tracking-wide text-gray-500">Subtotal {group.label}</td>
-                      <td className="px-4 py-2 text-right text-xs font-bold font-mono text-[#1B3A2B]">{fmtUSD2(group.subtotalValue)}</td>
-                      {hasAccrued && <td className="px-4 py-2 text-right text-xs font-bold font-mono text-gray-500">{group.subtotalAccrued !== 0 ? fmtUSD2(group.subtotalAccrued) : '—'}</td>}
-                      <td className="px-4 py-2 text-right text-xs font-bold text-gray-500">{fmtPct(group.subtotalWeight)}</td>
-                      {hasGL && (
-                        <>
-                          <td className="px-4 py-2 text-right text-xs font-bold font-mono text-gray-500">{grpCost > 0 ? fmtUSD2(grpCost) : '—'}</td>
-                          <td className={`px-4 py-2 text-right text-xs font-bold font-mono ${grpCost > 0 ? (grpGL >= 0 ? 'text-emerald-600' : 'text-red-600') : 'text-gray-400'}`}>
-                            {grpCost > 0 ? `${grpGL >= 0 ? '+' : ''}${fmtUSD2(grpGL)} (${grpGLPct >= 0 ? '+' : ''}${grpGLPct.toFixed(2)}%)` : '—'}
-                          </td>
-                        </>
-                      )}
-                    </tr>
-                  </Fragment>
-                )
-              })}
-              {rows.length === 0 && (
-                <tr><td colSpan={totalColSpan} className="px-4 py-10 text-center text-sm text-gray-400">Sin resultados</td></tr>
-              )}
-            </tbody>
-            {rows.length > 0 && (
-              <tfoot>
-                <tr style={{ background: '#1B2E3C' }}>
-                  <td colSpan={3} className="px-4 py-2.5 text-right text-xs font-bold text-white/80">TOTAL</td>
-                  <td className="px-4 py-2.5 text-right text-sm font-bold text-white">{fmtUSD2(rows.reduce((s, p) => s + Number(p.market_value), 0))}</td>
-                  {hasAccrued && <td className="px-4 py-2.5 text-right text-sm font-bold text-white">{fmtUSD2(rows.reduce((s, p) => s + Number(p.accrued_interest ?? 0), 0))}</td>}
-                  <td className="px-4 py-2.5" />
-                  {hasGL && (
-                    <>
-                      <td className="px-4 py-2.5 text-right text-sm font-bold text-white">
-                        {fmtUSD2(rows.reduce((s, p) => s + (p.cusip && glByCusip.get(p.cusip) ? Number(glByCusip.get(p.cusip)!.cost_basis) : 0), 0))}
-                      </td>
-                      <td className="px-4 py-2.5 text-right text-sm font-bold text-white">
-                        {(() => {
-                          const totalCost = rows.reduce((s, p) => s + (p.cusip && glByCusip.get(p.cusip) ? Number(glByCusip.get(p.cusip)!.cost_basis) : 0), 0)
-                          const total = rows.reduce((s, p) => s + (p.cusip && glByCusip.get(p.cusip) ? Number(glByCusip.get(p.cusip)!.gain_loss) : 0), 0)
-                          const pct = totalCost > 0 ? (total / totalCost) * 100 : 0
-                          return `${total >= 0 ? '+' : ''}${fmtUSD2(total)} (${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%)`
-                        })()}
-                      </td>
-                    </>
-                  )}
-                </tr>
-                {hasAccrued && (
-                  <tr style={{ background: '#1B2E3C' }} className="border-t border-white/10">
-                    <td colSpan={3} className="px-4 py-2.5 text-right text-xs font-bold text-white/80">TOTAL CON CUPÓN CORRIDO</td>
-                    <td colSpan={2} className="px-4 py-2.5 text-right text-sm font-bold text-white">{fmtUSD2(rows.reduce((s, p) => s + Number(p.market_value) + Number(p.accrued_interest ?? 0), 0))}</td>
-                    <td colSpan={totalColSpan - 5} />
+      {rows.length === 0 && <p className="rounded-xl border border-gray-200 bg-white px-4 py-10 text-center text-sm text-gray-400">Sin resultados</p>}
+
+      {groups.map(g => {
+        const color = COLOR_CLASE[g.assetClass] ?? '#9CA3AF'
+        return (
+          <div key={g.assetClass} className="overflow-hidden rounded-xl border border-gray-200 bg-white" style={{ borderLeft: `4px solid ${color}` }}>
+            <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-gray-100 bg-gray-50/60 px-4 py-2.5">
+              <h3 className="text-sm font-semibold text-gray-800">{g.label} <span className="font-normal text-gray-400">· {g.rows.length} {g.rows.length === 1 ? 'posición' : 'posiciones'}</span></h3>
+              <p className="text-xs tabular-nums text-gray-500">
+                USD <b className="text-gray-800">{fmt(g.total)}</b> · {fmtPct(g.peso * 100)}
+                {g.resultado != null && <span className={`ml-2 ${colorResultado(g.resultado)}`}>{signo(g.resultado)}{fmt(g.resultado)}</span>}
+              </p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[820px] table-fixed text-xs">
+                <colgroup>
+                  <col style={{ width: conCustodio ? '36%' : '45%' }} />
+                  {conCustodio && <col style={{ width: '9%' }} />}
+                  <col style={{ width: '12%' }} /><col style={{ width: '11%' }} />
+                  <col style={{ width: '12%' }} /><col style={{ width: '10%' }} /><col style={{ width: '10%' }} />
+                </colgroup>
+                <thead>
+                  <tr className="text-[10px] uppercase tracking-wide text-gray-400">
+                    <th className="px-4 py-2 text-left font-medium">Instrumento</th>
+                    {conCustodio && <th className="px-2 py-2 text-left font-medium">Custodio</th>}
+                    <th className="px-2 py-2 text-right font-medium">Valor de mercado</th>
+                    <th className="px-2 py-2 text-right font-medium">Cupón corrido</th>
+                    <th className="px-2 py-2 text-right font-medium">Total</th>
+                    <th className="px-2 py-2 text-right font-medium">Resultado</th>
+                    <th className="px-4 py-2 text-right font-medium">% cuenta</th>
                   </tr>
-                )}
-              </tfoot>
-            )}
-          </table>
+                </thead>
+                <tbody>
+                  {g.rows.map(({ p, gl, corrido, total, peso }) => {
+                    const clean = cleanDisplayName(p.name, p.isin, p.cusip, p.coupon, p.maturity_date)
+                    const det = detalleTitulo(p, gl)
+                    const cant = lineaCantidad(p, gl)
+                    const custodio = custodianByPositionId?.get(p.id)
+                    const resultado = gl ? Number(gl.gain_loss) : null
+                    return (
+                      <tr key={p.id} onClick={() => setSelected(p)} className="cursor-pointer border-t border-gray-50 align-top hover:bg-emerald-50/40">
+                        <td className="px-4 py-2.5">
+                          <p className="font-semibold text-gray-900 truncate" title={p.name}>{clean.name}</p>
+                          {det && <p className="text-[11px] text-gray-500">{det}</p>}
+                          {cant && <p className="text-[11px] text-gray-400">{cant}</p>}
+                        </td>
+                        {conCustodio && (
+                          <td className="px-2 py-2.5">
+                            {custodio && <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold text-white" style={{ background: COLOR_CUSTODIO[custodio] ?? '#64748B' }}>{custodio}</span>}
+                          </td>
+                        )}
+                        <td className="px-2 py-2.5 text-right tabular-nums">{fmt(Number(p.market_value))}</td>
+                        <td className="px-2 py-2.5 text-right tabular-nums text-amber-700">{corrido ? fmt(corrido) : <span className="text-gray-300">—</span>}</td>
+                        <td className="px-2 py-2.5 text-right font-semibold tabular-nums">{fmt(total)}</td>
+                        <td className={`px-2 py-2.5 text-right tabular-nums ${colorResultado(resultado)}`}>
+                          {resultado == null ? '—' : `${signo(resultado)}${fmt(resultado)}`}
+                          {resultado != null && Number(gl!.cost_basis) ? <p className="text-[10px]">{signo(resultado)}{(resultado / Number(gl!.cost_basis) * 100).toFixed(2)}%</p> : null}
+                        </td>
+                        <td className="px-4 py-2.5">
+                          <p className="mb-1 text-right tabular-nums text-gray-600">{fmtPct(peso * 100)}</p>
+                          <Barra peso={peso / maxPeso} color={color} />
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )
+      })}
+
+      {rows.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-[#1B2A38] px-4 py-3 text-white">
+          <span className="text-sm font-semibold">{q || assetFilter ? 'Total filtrado' : 'Total de la cuenta'}</span>
+          <span className="text-xs tabular-nums text-slate-300">
+            Valor de mercado <b className="text-white">{fmt(totMV)}</b> · Cupón corrido <b className="text-white">{fmt(totCorrido)}</b> · Total <b className="text-base text-white">USD {fmt(totMV + totCorrido)}</b>
+            {hasGL && (() => {
+              const conGl = rows.filter(r => r.gl)
+              const res = conGl.reduce((s, r) => s + Number(r.gl!.gain_loss), 0)
+              return <> · Resultado <b className={res < 0 ? 'text-red-300' : 'text-emerald-300'}>{signo(res)}{fmt(res)}</b></>
+            })()}
+          </span>
         </div>
-      </div>
+      )}
+      <p className="text-[11px] text-gray-400">Hacé clic en una posición para ver el detalle, cargar la fecha de compra o reclasificarla.</p>
 
       {selected && (
         <div className="fixed inset-0 z-50 flex justify-end bg-black/30" onClick={() => setSelected(null)}>

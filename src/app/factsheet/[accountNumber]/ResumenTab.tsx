@@ -7,9 +7,9 @@ import DocumentUploadButton from '@/components/portfolio/DocumentUploadButton'
 import { COLORS, DONUT_COLORS } from '@/lib/portfolio/theme'
 import { computeInitialAccountValue } from '@/lib/portfolio/engine'
 
-function SectionCard({ title, subtitle, children, className = '' }: { title?: string; subtitle?: string; children: React.ReactNode; className?: string }) {
+function SectionCard({ title, subtitle, children, className = '', accent }: { title?: string; subtitle?: string; children: React.ReactNode; className?: string; accent?: string }) {
   return (
-    <div className={`bg-white rounded-2xl border border-gray-200 p-5 ${className}`}>
+    <div className={`bg-white rounded-2xl border border-gray-200 p-5 ${className}`} style={accent ? { borderTop: `3px solid ${accent}` } : undefined}>
       {title && (
         <div className="mb-4">
           <p className="text-sm font-bold text-gray-900">{title}</p>
@@ -113,16 +113,16 @@ export default function ResumenTab({
 
       {/* ── KPI row ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <SectionCard>
+        <SectionCard accent="#1B2A38">
           <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Posiciones</p>
           <p className="text-xl font-bold text-gray-900 mt-1">{sortedByValue.length}</p>
         </SectionCard>
-        <SectionCard>
+        <SectionCard accent="#2E7D52">
           <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Liquidez</p>
           <p className="text-xl font-bold text-gray-900 mt-1">{fmtUSD(liquidity.value)}</p>
           <p className="text-[11px] text-gray-400 mt-0.5">{fmtPct(liquidity.pct)} del portafolio</p>
         </SectionCard>
-        <SectionCard>
+        <SectionCard accent={unrealizedGLTotals && unrealizedGLTotals.gainLoss < 0 ? '#B91C1C' : '#15803D'}>
           <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Unrealized Gain/Loss</p>
           {unrealizedGLTotals ? (
             <>
@@ -141,7 +141,7 @@ export default function ResumenTab({
             </>
           )}
         </SectionCard>
-        <SectionCard>
+        <SectionCard accent="#B45309">
           <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Income próx. 12 meses</p>
           <p className="text-xl font-bold text-gray-900 mt-1">{cashProjImport ? fmtUSD(projectedIncome12m) : '—'}</p>
           {!cashProjImport && <p className="text-[11px] text-gray-400 mt-0.5">Sin cash projections importadas</p>}
