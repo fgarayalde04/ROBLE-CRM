@@ -68,6 +68,18 @@ function Tarjetas({ documentos }: { documentos: Doc[] }) {
           Flujo mensual de cupones de una cuenta a partir del Incoming Cash de Pershing. Excel y PDF, guardado en la ficha del cliente.
         </p>
       </Link>
+      <Link
+        href="/plantillas/consolidado"
+        className="group bg-white border border-gray-200 rounded-lg p-5 hover:border-[#2D3F52] hover:shadow-sm transition"
+      >
+        <div className="flex items-start justify-between gap-3">
+          <p className="text-base font-semibold text-[#2D3F52]">Posición Consolidada</p>
+          <span className="text-gray-300 group-hover:text-[#2D3F52] transition">→</span>
+        </div>
+        <p className="text-xs text-gray-500 mt-1.5">
+          Pershing + Morgan Stanley en un solo reporte: posiciones con cupón corrido, renta de los próximos 12 meses y movimientos. Excel y PDF.
+        </p>
+      </Link>
     </div>
   )
 }
