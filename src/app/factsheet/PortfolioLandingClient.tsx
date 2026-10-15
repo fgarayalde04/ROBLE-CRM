@@ -1,4 +1,6 @@
 'use client'
+
+import Link from 'next/link'
 import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import ImportPositionsModal from '@/components/portfolio/ImportPositionsModal'
@@ -96,6 +98,10 @@ export default function PortfolioLandingClient() {
               className="px-4 py-2 text-sm font-bold text-white bg-[#2E7D52] rounded-lg hover:bg-[#256841] transition">
               Nuevo Reporte
             </button>
+            <Link href="/factsheet/consolidado"
+              className="px-3 py-2 text-xs font-semibold text-[#2D3F52] border border-[#2D3F52]/30 rounded-lg hover:bg-slate-50 transition">
+              Posición consolidada
+            </Link>
             <button onClick={() => setShowImport(true)}
               className="px-3 py-2 text-xs font-semibold text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 transition">
               + Importar posiciones

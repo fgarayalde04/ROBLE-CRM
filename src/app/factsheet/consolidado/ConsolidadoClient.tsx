@@ -347,7 +347,7 @@ function CeldaCorrido({ l, manual, setManual }: { l: LineaPosicion; manual: numb
   )
 }
 
-export function VistaReporte({ r, cliente, variasCuentas, manuales, setManual }: {
+function VistaReporte({ r, cliente, variasCuentas, manuales, setManual }: {
   r: Reporte
   cliente: string
   variasCuentas: boolean

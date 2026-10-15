@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic'
 export async function POST(req: NextRequest) {
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-  if (!hasPermission(session.role, 'research', session.permissions)) return NextResponse.json({ error: 'Sin permiso' }, { status: 403 })
+  if (!hasPermission(session.role, 'factsheet', session.permissions)) return NextResponse.json({ error: 'Sin permiso' }, { status: 403 })
 
   const form = await req.formData().catch(() => null)
   const file = form?.get('file')

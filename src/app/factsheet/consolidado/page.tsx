@@ -6,17 +6,17 @@ import ConsolidadoClient from './ConsolidadoClient'
 export const dynamic = 'force-dynamic'
 export const metadata = { title: 'Posición Consolidada' }
 
-// /plantillas/consolidado → subir los reportes de Pershing y Morgan Stanley y
+// /factsheet/consolidado → subir los reportes de Pershing y Morgan Stanley y
 // armar la posición consolidada (con cupón corrido), renta y movimientos.
 export default async function PosicionConsolidadaPage() {
   const session = await getSession()
   if (!session) redirect('/login')
-  if (!hasPermission(session.role, 'research', session.permissions)) redirect('/')
+  if (!hasPermission(session.role, 'factsheet', session.permissions)) redirect('/')
 
   return (
     <div className="p-4 md:p-6 lg:p-8">
       <div className="flex items-center gap-2 text-xs text-gray-400 mb-4 print:hidden">
-        <Link href="/plantillas" className="hover:text-gray-600">Plantillas</Link>
+        <Link href="/factsheet" className="hover:text-gray-600">Portafolio</Link>
         <span>/</span>
         <span className="text-gray-600">Posición Consolidada</span>
       </div>
