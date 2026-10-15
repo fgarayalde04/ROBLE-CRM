@@ -773,6 +773,15 @@ function nombreParaCliente(p: Pick<Posicion, 'descripcion' | 'clase' | 'cusip' |
   return { nombre, detalle }
 }
 
+/** Identificador de una acción para reconocerla: símbolo si el banco lo da, si no ISIN (de la descripción) o CUSIP. */
+export function identificador(simbolo: string | null | undefined, cusip: string | null | undefined, descripcion = '', isin?: string | null) {
+  const s = simbolo?.trim()
+  if (s && s !== '-') return `Símbolo ${s.toUpperCase()}`
+  const i = isin?.trim() || descripcion.match(/ISIN#?\s*([A-Z]{2}[A-Z0-9]{9}\d)/i)?.[1]
+  if (i) return `ISIN ${i.toUpperCase()}`
+  return cusip?.trim() ? `CUSIP ${cusip.trim().toUpperCase()}` : ''
+}
+
 /** "Compra 31/07/2026" o "Compras 24/11/2025, 27/02/2026 y 31/07/2026". */
 export function textoCompras(fechas: string[] | undefined) {
   const fs = (fechas ?? []).map(ddmmyyyy)

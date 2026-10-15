@@ -5,6 +5,7 @@ import { fmtUSD2, fmtPct, fmtDate } from './PortfolioAccountClient'
 import { cleanDisplayName } from '@/lib/portfolio/theme'
 import { ASSET_CLASS_ES, assetClassRank } from '@/lib/portfolio/engine'
 import { textoCompras } from './datosPdf'
+import { identificador } from '@/lib/consolidado/calc'
 
 function DetailRow({ label, value }: { label: string; value: string | null | undefined }) {
   if (value == null || value === '') return null
@@ -44,6 +45,10 @@ function detalleTitulo(p: PortfolioPositionRow, gl: PortfolioUnrealizedGainLossR
     const cupon = p.coupon != null && p.coupon !== '' ? Number(p.coupon) : null
     partes.push(cupon != null && isFinite(cupon) ? `Cupón ${cupon.toFixed(3)}%` : 'Cupón s/d')
     partes.push(p.maturity_date ? `Vto. ${fmtDate(p.maturity_date)}` : 'Vto. s/d')
+  }
+  if (p.asset_class === 'Equity' || p.asset_class === 'ETF') {
+    const id = identificador(p.symbol, p.cusip, p.name, p.isin)
+    if (id) partes.push(id)
   }
   const compras = textoCompras(p.purchase_date || gl?.purchase_date)
   if (compras) partes.push(compras)

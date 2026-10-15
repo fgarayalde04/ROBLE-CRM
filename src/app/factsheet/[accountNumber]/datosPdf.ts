@@ -7,6 +7,7 @@ import type { PdfSections } from '@/components/portfolio/PdfOptionsModal'
 import { ASSET_CLASS_ES, assetClassRank, computeInitialAccountValue, computePerfValueSeries } from '@/lib/portfolio/engine'
 import { cleanDisplayName, monthLabel } from '@/lib/portfolio/theme'
 import type { DatosPdfPortafolio, FilaPdf } from '@/lib/portfolio/estadoCuenta'
+import { identificador } from '@/lib/consolidado/calc'
 
 const iso = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s)
 const ddmmyyyy = (s: string) => (iso(s) ? `${s.slice(8, 10)}/${s.slice(5, 7)}/${s.slice(0, 4)}` : s)
@@ -82,6 +83,10 @@ export function armarDatosPdf(a: {
       const cupon = p.coupon != null && p.coupon !== '' ? Number(p.coupon) : null
       detalle.push(cupon != null && isFinite(cupon) ? `Cupón ${cupon.toFixed(3)}%` : 'Cupón s/d')
       detalle.push(p.maturity_date ? `Vto. ${ddmmyyyy(p.maturity_date)}` : 'Vto. s/d')
+    }
+    if (p.asset_class === 'Equity' || p.asset_class === 'ETF') {
+      const id = identificador(p.symbol, p.cusip, p.name, p.isin)
+      if (id) detalle.push(id)
     }
     const compras = textoCompras(p.purchase_date || gl?.purchase_date)
     if (compras) detalle.push(compras)

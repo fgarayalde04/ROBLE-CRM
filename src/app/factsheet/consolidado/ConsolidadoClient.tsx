@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import {
-  ETIQUETA_FUENTE, armarReporte, bonosIncompletos, categoriaMovimiento, claveArchivo, clavePosicion, claveRanura, ddmmyyyy, etiquetaRanura, fechaSugerida, fmt, fmtPct,
+  ETIQUETA_FUENTE, armarReporte, bonosIncompletos, categoriaMovimiento, claveArchivo, clavePosicion, claveRanura, ddmmyyyy, etiquetaRanura, identificador, fechaSugerida, fmt, fmtPct,
   leerClave, mesCorto, ranurasDe, textoCompras,
   type Archivos, type LineaPosicion, type Ranura, type Reporte,
 } from '@/lib/consolidado/calc'
@@ -575,6 +575,10 @@ function detalleTitulo(l: LineaPosicion) {
   if (l.clase === 'Renta fija') {
     partes.push(l.tasa != null ? `Cupón ${(l.tasa * 100).toFixed(3)}%` : 'Cupón s/d')
     partes.push(l.vencimiento ? `Vto. ${ddmmyyyy(l.vencimiento)}` : l.perpetuo ? 'Perpetuo' : 'Vto. s/d')
+  }
+  if (l.clase === 'Acciones') {
+    const id = identificador(l.simbolo, l.cusip, l.descripcion)
+    if (id) partes.push(id)
   }
   const compras = textoCompras(l.fechasCompra)
   if (compras) partes.push(compras)

@@ -2,26 +2,30 @@
 // de cuenta: HTML autocontenido (A4 apaisado) que el Chromium headless imprime
 // a PDF. La paginación la hace el navegador: las filas nunca se parten entre
 // hojas, el encabezado de cada tabla se repite y cada hoja lleva el mismo
-// encabezado y pie (ver encabezadoPdf / piePdf). No incluye números de cuenta
-// ni identificadores.
+// encabezado y pie (ver encabezadoPdf / piePdf). No incluye números de cuenta;
+// de los títulos, solo el símbolo, ISIN o CUSIP de las acciones.
 
 import { ROBLE_DISCLAIMER } from '@/lib/disclaimers'
 import {
   BORDE, GRIS, NAVY, bloquesSinHuerfanos, colorRes, documento, esc, fechaLarga, graficoBarras, kpi, num, pct, signo, tablaBarras, usd,
 } from '@/lib/estadoCuenta/base'
-import { categoriaMovimiento, ddmmyyyy, mesCorto, textoCompras, type LineaPosicion, type Reporte } from './calc'
+import { categoriaMovimiento, ddmmyyyy, identificador, mesCorto, textoCompras, type LineaPosicion, type Reporte } from './calc'
 import { CLASES, type Banco, type Movimiento, type Periodos } from './types'
 
 const custodio = (b: Banco) => (b === 'Pershing' ? 'Pershing' : 'Morgan Stanley')
 
 // ─── Textos ─────────────────────────────────────────────────────────────────
 
-/** Línea de detalle: "Cupón 6.125% · Vto. 21/01/2031 · Compra 13/10/2026" (sin CUSIP ni cuenta). */
+/** Línea de detalle: "Cupón 6.125% · Vto. 21/01/2031 · Compra 13/10/2026"; en acciones, símbolo, ISIN o CUSIP. Nunca la cuenta. */
 function detalleBono(l: LineaPosicion) {
   const partes: string[] = []
   if (l.clase === 'Renta fija') {
     partes.push(l.tasa != null ? `Cupón ${(l.tasa * 100).toFixed(3)}%` : 'Cupón s/d')
     partes.push(l.vencimiento ? `Vto. ${ddmmyyyy(l.vencimiento)}` : l.perpetuo ? 'Perpetuo' : 'Vto. s/d')
+  }
+  if (l.clase === 'Acciones') {
+    const id = identificador(l.simbolo, l.cusip, l.descripcion)
+    if (id) partes.push(id)
   }
   const compras = textoCompras(l.fechasCompra)
   if (compras) partes.push(compras)
