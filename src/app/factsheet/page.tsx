@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
-import { getSession, hasPermission, isAdminRole } from '@/lib/auth'
+import { getSession, hasPermission } from '@/lib/auth'
 import { listConsolidados, type ConsolidadoRow } from '@/lib/db/consolidados'
 import ListaPortafolios from './ListaPortafolios'
 
@@ -14,11 +14,10 @@ export default async function FactsheetPage() {
   if (!session) redirect('/login')
   if (!hasPermission(session.role, 'factsheet', session.permissions)) redirect('/')
 
-  // Dirección ve todos; cada asesor, los que armó.
-  const creadoPor = isAdminRole(session.role) ? undefined : session.name
+  // Cada uno ve los que armó y los que le compartieron (dirección incluida).
   let guardados: ConsolidadoRow[] = []
   try {
-    guardados = await listConsolidados({ creadoPor })
+    guardados = await listConsolidados({ creadoPor: session.name, userId: session.id ?? null })
   } catch (err) {
     console.error('[portafolio] list', err)
   }
@@ -37,7 +36,7 @@ export default async function FactsheetPage() {
         </div>
       </div>
       <div className="mx-auto max-w-6xl p-4 md:p-6">
-        <ListaPortafolios guardados={guardados} />
+        <ListaPortafolios guardados={guardados} usuario={session.name} />
       </div>
     </div>
   )
