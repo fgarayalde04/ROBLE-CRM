@@ -176,18 +176,33 @@ async function searchExplorer(page: Page, query: string): Promise<string[][]> {
   }
   if (!cambio) await page.waitForTimeout(1000)
 
-  // Última fila del encabezado: si hay encabezados agrupados, ahí están los períodos.
-  const encabezados = (await page.locator('table thead tr').last().locator('th').allTextContents().catch(() => [] as string[]))
-    .map((t) => t.trim())
-  const rows = page.locator('table tbody tr')
-  const count = await rows.count()
+  // A cada celda se le asigna el encabezado que tiene arriba en pantalla (el
+  // <th> más angosto que contiene el centro de la celda). Contar posiciones no
+  // sirve: la fila del Explorador trae celdas sin <th> propio y encabezados
+  // agrupados, y un corrimiento de 3 dejaba el 2025 como 1A y el AUM como 2021.
+  const filas = await page.evaluate(() => {
+    const ths = Array.from(document.querySelectorAll('table thead th')).map((th) => {
+      const r = th.getBoundingClientRect()
+      return { l: r.left, r: r.right, w: r.width, t: (th.textContent ?? '').trim() }
+    }).filter((h) => h.w > 0)
+    return Array.from(document.querySelectorAll('table tbody tr')).slice(0, 25).map((tr) =>
+      Array.from(tr.querySelectorAll('td')).map((td) => {
+        const r = td.getBoundingClientRect()
+        const c = (r.left + r.right) / 2
+        const h = ths.filter((x) => c >= x.l && c <= x.r).sort((a, b) => a.w - b.w)[0]
+        return { texto: (td.textContent ?? '').trim(), encabezado: h?.t ?? '' }
+      })
+    )
+  })
+
   const out: string[][] = []
-  for (let i = 0; i < Math.min(count, 25); i++) {
-    const cells = (await rows.nth(i).locator('td').allTextContents()).map((t) => t.trim())
-    if (cells.length < 6) continue   // fila de "sin resultados"
+  for (const fila of filas) {
+    if (fila.length < 6) continue   // fila de "sin resultados"
+    const cells = fila.map((c) => c.texto)
+    const encabezados = fila.map((c) => c.encabezado)
     const alineada = alinearConEncabezado(encabezados, cells)
     if (!alineada) {
-      throw new Error(`Columnas de Davinci no reconocidas — encabezado: [${encabezados.join(' | ')}] · fila: [${cells.join(' | ')}]`)
+      throw new Error(`Columnas de Davinci no reconocidas — ${fila.map((c) => `${c.encabezado || '?'}=${c.texto}`).join(' | ')}`)
     }
     out.push(alineada)
   }
