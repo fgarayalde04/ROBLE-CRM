@@ -23,9 +23,14 @@ describe('cortes de rendimientos (15 y fin de mes)', () => {
 describe('vigencia de 15 días', () => {
   it('se usa lo guardado hasta 14 días, a los 15 se vuelve a buscar', async () => {
     const { vigente } = await import('./cortes')
-    expect(vigente('2026-10-15T12:00:00Z', '2026-10-29')).toBe(true)
-    expect(vigente('2026-10-15T12:00:00Z', '2026-10-30')).toBe(false)
-    expect(vigente('2026-10-15T12:00:00Z', '2026-10-31')).toBe(false)
+    expect(vigente('2026-10-31T12:00:00Z', '2026-11-14')).toBe(true)
+    expect(vigente('2026-10-31T12:00:00Z', '2026-11-15')).toBe(false)
+    expect(vigente('2026-10-31T12:00:00Z', '2026-11-16')).toBe(false)
     expect(vigente(null, '2026-10-31')).toBe(false)
+  })
+  it('lo bajado antes de corregir la lectura de Davinci no vale', async () => {
+    const { vigente } = await import('./cortes')
+    expect(vigente('2026-10-15T12:00:00Z', '2026-10-16')).toBe(false)
+    expect(vigente('2026-10-16T19:00:00Z', '2026-10-17')).toBe(true)
   })
 })

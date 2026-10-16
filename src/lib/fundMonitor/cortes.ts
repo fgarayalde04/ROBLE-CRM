@@ -30,10 +30,16 @@ export function fechaMontevideo(d: Date = new Date()): string {
 export const DIAS_VIGENCIA = 15
 
 /** true si el dato se bajó hace menos de DIAS_VIGENCIA días (por fecha de Montevideo). */
+// Lo bajado antes de esta fecha no se usa: el scraper leía a veces la tabla de
+// la búsqueda anterior (cada fondo con los rendimientos de otro). Se vuelve a
+// bajar una vez con la lectura corregida.
+export const CONFIABLE_DESDE = Date.parse('2026-10-16T18:30:00Z')
+
 export function vigente(bajado: Date | string | null | undefined, hoy: string = fechaMontevideo()): boolean {
   if (!bajado) return false
   const d = bajado instanceof Date ? bajado : new Date(bajado)
   if (Number.isNaN(d.getTime())) return false
+  if (d.getTime() < CONFIABLE_DESDE) return false
   const dias = (Date.parse(`${hoy}T00:00:00Z`) - Date.parse(`${fechaMontevideo(d)}T00:00:00Z`)) / 86400000
   return dias < DIAS_VIGENCIA
 }

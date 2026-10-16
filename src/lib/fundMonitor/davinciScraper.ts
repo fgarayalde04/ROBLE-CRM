@@ -113,6 +113,32 @@ function parseRow(cells: string[]): DavinciFundReturns | null {
   }
 }
 
+// Orden de columnas que espera parseRow, y cómo reconocer cada una por su
+// encabezado. Si Davinci agrega o mueve columnas, las celdas se reordenan
+// según el encabezado; si no se reconocen, se usa el orden de siempre.
+const COLUMNAS: [number, RegExp][] = [
+  [2, /^ytd$/], [3, /^1\s*(a|y|ano|anos|year)$/], [4, /^3\s*(a|y|ano|anos|years?)$/], [5, /^5\s*(a|y|ano|anos|years?)$/],
+  [6, /^2025$/], [7, /^2024$/], [8, /^2023$/], [9, /^2022$/], [10, /^2021$/],
+]
+
+/** Celdas de una fila del Explorador en el orden de parseRow, según los encabezados de la tabla. */
+export function alinearConEncabezado(encabezados: string[], cells: string[]): string[] {
+  if (encabezados.length !== cells.length) return cells
+  const h = encabezados.map((t) => norm(t))
+  const salida = [...cells]
+  while (salida.length < 16) salida.push('')
+  for (const [destino, re] of COLUMNAS) {
+    const i = h.findIndex((t) => re.test(t))
+    if (i < 0) return cells   // encabezado desconocido: orden de siempre
+    salida[destino] = cells[i]
+  }
+  const fecha = h.findIndex((t) => /^(fecha|date|cierre|al)\b/.test(t))
+  if (fecha >= 0) salida[15] = cells[fecha]
+  const aum = h.findIndex((t) => /^(aum|patrimonio)/.test(t))
+  if (aum >= 0) salida[13] = cells[aum]
+  return salida
+}
+
 async function searchExplorer(page: Page, query: string): Promise<string[][]> {
   // Se decide por la URL de la página y no por un flag de módulo: puede haber
   // dos sesiones a la vez (alta manual de un fondo mientras corre el sync
@@ -141,11 +167,12 @@ async function searchExplorer(page: Page, query: string): Promise<string[][]> {
   }
   if (!cambio) await page.waitForTimeout(1000)
 
+  const encabezados = await page.locator('table thead th').allTextContents().catch(() => [] as string[])
   const rows = page.locator('table tbody tr')
   const count = await rows.count()
   const out: string[][] = []
   for (let i = 0; i < Math.min(count, 25); i++) {
-    out.push(await rows.nth(i).locator('td').allTextContents())
+    out.push(alinearConEncabezado(encabezados, await rows.nth(i).locator('td').allTextContents()))
   }
   return out
 }
