@@ -1,5 +1,5 @@
 // Shared visual language for the Portfolio Report — used by both the live
-// dashboard (ResumenTab/PositionsTab) and the static PDF (AccountPdfReport),
+// dashboard (ResumenTab/PositionsTab) and the client-facing PDF,
 // so the two never drift apart.
 
 export const COLORS = {

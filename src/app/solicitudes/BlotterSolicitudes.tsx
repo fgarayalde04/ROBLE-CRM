@@ -406,6 +406,7 @@ const TIPO_CFG: Record<string, { label: string; cls: string }> = {
   fondo:    { label: 'Fondo',    cls: 'bg-emerald-50 text-emerald-700' },
   bono:     { label: 'Bono',     cls: 'bg-amber-50 text-amber-700' },
   accion:   { label: 'Acción',   cls: 'bg-blue-50 text-blue-700' },
+  opciones: { label: 'Opciones', cls: 'bg-violet-50 text-violet-700' },
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -415,6 +416,7 @@ function assetDisplay(a: any) {
     tipo === 'acciones' ? (a.nombre || a.ticker || '—')
     : tipo === 'fondos'  ? (a.fondo || '—')
     : tipo === 'bonos'   ? (a.descripcion || '—')
+    : tipo === 'opciones' ? (a.descripcion || a.subyacente || '—')
     : '—'
   const cantidad = tipo !== 'fondos' && a?.cantidad ? Number(a.cantidad) : null
   const monto    = tipo === 'fondos' && a?.monto    ? Number(a.monto)    : null
@@ -645,6 +647,7 @@ export default function BlotterSolicitudes({ isMesa, userName }: { isMesa: boole
             <option value="fondos">Fondos</option>
             <option value="bonos">Bonos</option>
             <option value="acciones">Acciones</option>
+            <option value="opciones">Opciones</option>
           </select>
 
           {isMesa && (

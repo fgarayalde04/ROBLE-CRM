@@ -57,6 +57,12 @@ export async function POST(req: NextRequest) {
       } else {
         resolvedCantidad = firstBlock.cantidad ? parseFloat(firstBlock.cantidad) : null
       }
+    } else if (firstBlock?.type === 'opciones') {
+      // Contratos; el monto es prima × 100 acciones por contrato
+      resolvedCantidad = firstBlock.cantidad ? parseFloat(firstBlock.cantidad) : null
+      if (firstBlock.precio !== 'mercado' && firstBlock.precioLimite && resolvedCantidad) {
+        resolvedMonto = parseFloat(firstBlock.precioLimite) * 100 * resolvedCantidad
+      }
     } else if (firstBlock?.type === 'bonos') {
       resolvedCantidad = firstBlock.cantidad ? parseFloat(firstBlock.cantidad) : null
       if (firstBlock.precio !== 'mercado' && firstBlock.precioLimite && resolvedCantidad) {

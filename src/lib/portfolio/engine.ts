@@ -11,8 +11,9 @@ import type { PortfolioPositionRow, PortfolioUnrealizedGainLossRow, PortfolioCas
 export const ASSET_CLASS_ES: Record<string, string> = {
   'Equity': 'Renta Variable',
   'ETF': 'Renta Variable (ETF)',
-  'Fixed Income': 'Bonos',
+  'Fixed Income': 'Renta Fija',
   'Fixed Income Fund': 'Fondos de Renta Fija',
+  'Fund': 'Fondos de Inversión',
   'Alternatives': 'Otros',
   'Real Estate': 'Otros',
   'Cash': 'Liquidez',

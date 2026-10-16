@@ -287,6 +287,9 @@ export function itemsDeSolicitud(sol: any): ItemOrden[] {
 
   return assets.map((a, index): ItemOrden | null => {
     if (a?.cancelada) return null
+    // Las opciones no se llevan como posición del cliente (no hay instrumento
+    // para el contrato) — sin esto caían como bono por el fallback de abajo.
+    if (a?.type === 'opciones') return null
     const total = String(a.cantidad ?? '').toUpperCase() === 'TOTAL'
     if (a.type === 'acciones') {
       const porMonto = a.cantidadTipo === 'monto'

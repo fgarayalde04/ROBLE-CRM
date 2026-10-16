@@ -47,6 +47,14 @@ function isSameSecurity(a: PortfolioPositionRow, b: PortfolioPositionRow): boole
   return false
 }
 
+// Fechas de compra de los dos custodios en una sola lista ("dd/mm/aaaa, ..."
+// o ISO), sin repetir y en orden cronológico.
+function unirFechas(listas: (string | null | undefined)[]): string | null {
+  const clave = (f: string) => /^\d{4}-/.test(f) ? f : f.split('/').reverse().join('-')
+  const fechas = Array.from(new Set(listas.flatMap(l => (l ?? '').split(',').map(x => x.trim()).filter(Boolean))))
+  return fechas.length ? fechas.sort((a, b) => clave(a).localeCompare(clave(b))).join(', ') : null
+}
+
 export interface ConsolidationResult {
   positions: ConsolidatedPosition[]
   totalMarketValue: number
@@ -85,6 +93,7 @@ export function consolidatePositions(
       accrued_interest: p.accrued_interest != null || match.accrued_interest != null
         ? String(Number(p.accrued_interest ?? 0) + Number(match.accrued_interest ?? 0))
         : null,
+      purchase_date: unirFechas([p.purchase_date, match.purchase_date]),
       quantity: null, // combining face values/share counts across two custodians isn't meaningful
       weight_pct: null, // recalculated live against the consolidated total, never trusted from either leg
       custodian: 'Pershing + Morgan',
@@ -125,6 +134,7 @@ export function consolidateUnrealizedGL(
       market_value: String(marketValue),
       gain_loss: String(gainLoss),
       gain_loss_pct: String(costBasis > 0 ? (gainLoss / costBasis) * 100 : 0),
+      purchase_date: unirFechas(rows.map(r => r.purchase_date)),
     })
   }
   return merged

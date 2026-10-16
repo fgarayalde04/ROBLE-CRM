@@ -1,6 +1,6 @@
 'use client'
 import { useState, useRef } from 'react'
-import type { ParsedPortfolioImport } from '@/lib/portfolio/parser'
+import type { ParsedPortfolioConGL } from '@/lib/portfolio/unrealizedCompleto'
 
 interface ResolvedAccount {
   accountNumber: string
@@ -11,7 +11,7 @@ interface ResolvedAccount {
 }
 
 interface ParseResponse {
-  parsed: ParsedPortfolioImport
+  parsed: ParsedPortfolioConGL
   account: ResolvedAccount | null
   existingImport: { id: string; createdAt: string; positionCount: number; totalMarketValue: number } | null
   fileName: string
@@ -34,17 +34,17 @@ export default function ImportPositionsModal({ accountNumber, onClose, onImporte
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState('')
   const [preview, setPreview] = useState<ParseResponse | null>(null)
-  const [manualAccount, setManualAccount] = useState('')
+  // Sin número de cuenta: el asesor escribe el nombre del cliente y la cuenta
+  // queda guardada con ese nombre (dentro de una cuenta ya abierta se usa esa).
+  const [clientName, setClientName] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
 
   // Cuenta nueva desde cero: los otros dos documentos (opcionales) se suben
   // junto con las posiciones para no forzar 3 pasos separados.
   const [cashFile, setCashFile] = useState<File | null>(null)
   const [perfFile, setPerfFile] = useState<File | null>(null)
-  const [glFile, setGlFile] = useState<File | null>(null)
   const cashFileRef = useRef<HTMLInputElement>(null)
   const perfFileRef = useRef<HTMLInputElement>(null)
-  const glFileRef = useRef<HTMLInputElement>(null)
   const [extraWarnings, setExtraWarnings] = useState<string[]>([])
 
   async function handleFile(file: File) {
@@ -57,7 +57,7 @@ export default function ImportPositionsModal({ accountNumber, onClose, onImporte
       const data = await res.json()
       if (!res.ok) { setError(data.error ?? 'Error al leer el archivo'); return }
       setPreview(data)
-      setManualAccount(data.parsed.accountNumber ?? accountNumber ?? '')
+      setClientName(data.account?.clientName ?? '')
       setStep('preview')
     } catch (e: any) {
       setError(e.message)
@@ -68,23 +68,21 @@ export default function ImportPositionsModal({ accountNumber, onClose, onImporte
 
   async function handleConfirm(replace = false) {
     if (!preview) return
-    const finalAccountNumber = manualAccount.trim().toUpperCase()
-    if (!finalAccountNumber) { setError('Ingresá el número de cuenta'); return }
+    const nombre = clientName.trim()
+    const finalAccountNumber = accountNumber || nombre.toUpperCase()
+    if (!finalAccountNumber) { setError('Escribí el nombre del cliente'); return }
     const parsed = { ...preview.parsed, accountNumber: finalAccountNumber }
     setStep('importing'); setError('')
     try {
       const res = await fetch('/api/portfolio/import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ parsed, fileName: preview.fileName, replace }),
+        body: JSON.stringify({ parsed, fileName: preview.fileName, replace, clientName: nombre || null }),
       })
       const data = await res.json()
       if (!res.ok) {
-        if (res.status === 409) {
-          setError('Ya existe un snapshot para esa cuenta y fecha.')
-          setStep('preview')
-          return
-        }
+        // Mismo cliente y fecha: se reemplaza lo anterior.
+        if (res.status === 409 && !replace) return handleConfirm(true)
         setError(data.error ?? 'Error al importar')
         setStep('preview')
         return
@@ -104,13 +102,6 @@ export default function ImportPositionsModal({ accountNumber, onClose, onImporte
           const fd = new FormData(); fd.append('file', perfFile)
           const r = await fetch(`/api/portfolio/${encodeURIComponent(finalAccountNumber)}/performance`, { method: 'POST', body: fd })
           if (!r.ok) warnings.push('No se pudo importar el PDF de Performance: ' + ((await r.json().catch(() => ({}))).error ?? 'error desconocido'))
-        })())
-      }
-      if (glFile) {
-        uploads.push((async () => {
-          const fd = new FormData(); fd.append('file', glFile)
-          const r = await fetch(`/api/portfolio/${encodeURIComponent(finalAccountNumber)}/unrealizedgl`, { method: 'POST', body: fd })
-          if (!r.ok) warnings.push('No se pudo importar el Excel de Unrealized Gain/Loss: ' + ((await r.json().catch(() => ({}))).error ?? 'error desconocido'))
         })())
       }
       if (uploads.length) await Promise.all(uploads)
@@ -146,8 +137,8 @@ export default function ImportPositionsModal({ accountNumber, onClose, onImporte
                 ) : (
                   <>
                     <div className="text-3xl mb-2">📊</div>
-                    <p className="text-sm font-medium text-gray-700">Subí el Excel de posiciones</p>
-                    <p className="text-xs text-gray-400 mt-1">.xlsx · .xls</p>
+                    <p className="text-sm font-medium text-gray-700">Subí el Unrealized Gain Loss de Pershing</p>
+                    <p className="text-xs text-gray-400 mt-1">Trae posiciones, costo y fechas de compra · .xlsx · .xls</p>
                   </>
                 )}
               </div>
@@ -160,33 +151,27 @@ export default function ImportPositionsModal({ accountNumber, onClose, onImporte
           {step === 'preview' && preview && (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3 text-sm">
-                <div>
-                  <p className="text-xs text-gray-400">Número de cuenta</p>
-                  {preview.parsed.accountNumber ? (
-                    <p className="font-semibold text-gray-800">{preview.parsed.accountNumber}</p>
-                  ) : (
-                    <input
-                      type="text"
-                      value={manualAccount}
-                      onChange={e => setManualAccount(e.target.value)}
-                      placeholder="Ej: ROJ902303"
-                      className="w-full border border-amber-300 rounded-lg px-2 py-1 text-sm font-semibold text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#2E7D52]/30"
-                    />
-                  )}
+                <div className="col-span-2">
+                  <p className="text-xs text-gray-400">Nombre del cliente</p>
+                  <input
+                    type="text"
+                    value={clientName}
+                    onChange={e => setClientName(e.target.value)}
+                    placeholder="Ej: Three Diamonds"
+                    className="w-full border border-gray-300 rounded-lg px-2 py-1 text-sm font-semibold text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#2E7D52]/30"
+                  />
                 </div>
-                <div><p className="text-xs text-gray-400">Cliente</p><p className="font-semibold text-gray-800">{preview.account?.clientName ?? '—'}</p></div>
                 <div><p className="text-xs text-gray-400">Fecha</p><p className="font-semibold text-gray-800">{preview.parsed.snapshotDate ?? '—'}</p></div>
                 <div><p className="text-xs text-gray-400">Moneda</p><p className="font-semibold text-gray-800">{preview.parsed.baseCurrency}</p></div>
                 <div><p className="text-xs text-gray-400">Cantidad de posiciones</p><p className="font-semibold text-gray-800">{preview.parsed.positions.length}</p></div>
                 <div><p className="text-xs text-gray-400">Valor total</p><p className="font-semibold text-gray-800">{fmtUSD(preview.parsed.totalMarketValue)}</p></div>
+                {preview.parsed.unrealizedGL && (
+                  <div><p className="text-xs text-gray-400">Costo y fechas de compra</p><p className="font-semibold text-emerald-700">Incluidos ({preview.parsed.unrealizedGL.rows.length})</p></div>
+                )}
                 {!!preview.parsed.totalAccruedInterest && (
                   <div><p className="text-xs text-gray-400">Cupón corrido (incluido)</p><p className="font-semibold text-gray-800">{fmtUSD(preview.parsed.totalAccruedInterest)}</p></div>
                 )}
               </div>
-              {!preview.parsed.accountNumber && (
-                <p className="text-[11px] text-amber-600 -mt-2">No se pudo detectar el número de cuenta en el archivo — completalo a mano para poder importar.</p>
-              )}
-
               {preview.existingImport && (
                 <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5 text-xs text-amber-800">
                   Ya existe un snapshot de esta cuenta para esta fecha ({preview.existingImport.positionCount} posiciones, {fmtUSD(preview.existingImport.totalMarketValue)}).
@@ -251,14 +236,6 @@ export default function ImportPositionsModal({ accountNumber, onClose, onImporte
                   </button>
                   <input ref={perfFileRef} type="file" accept=".pdf" className="hidden"
                     onChange={e => setPerfFile(e.target.files?.[0] ?? null)} />
-
-                  <button onClick={() => glFileRef.current?.click()}
-                    className="w-full flex items-center justify-between px-3 py-2 border border-gray-200 rounded-lg text-xs hover:border-[#2E7D52] transition">
-                    <span className="text-gray-600">{glFile ? glFile.name : 'Unrealized Gain Loss (Excel)'}</span>
-                    <span className="font-semibold text-[#2E7D52] shrink-0 ml-2">{glFile ? 'Cambiar' : 'Elegir archivo'}</span>
-                  </button>
-                  <input ref={glFileRef} type="file" accept=".xlsx,.xls" className="hidden"
-                    onChange={e => setGlFile(e.target.files?.[0] ?? null)} />
                 </div>
               </div>
 
@@ -295,7 +272,7 @@ export default function ImportPositionsModal({ accountNumber, onClose, onImporte
             {step === 'preview' && (
               <button
                 onClick={() => handleConfirm(!!preview?.existingImport)}
-                disabled={!manualAccount.trim()}
+                disabled={!accountNumber && !clientName.trim()}
                 className="flex-1 py-2.5 rounded-lg text-sm font-bold text-white bg-[#2E7D52] hover:bg-[#256841] disabled:opacity-40 disabled:cursor-not-allowed transition"
               >
                 {preview?.existingImport ? 'Reemplazar e importar' : 'Confirmar importación'}

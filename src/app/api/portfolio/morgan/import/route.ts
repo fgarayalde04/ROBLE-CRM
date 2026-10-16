@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
-  const body = await req.json() as { parsed: ParsedMorganHoldings; accountNumber?: string; fileName?: string; replace?: boolean }
+  const body = await req.json() as { parsed: ParsedMorganHoldings; accountNumber?: string; fileName?: string; replace?: boolean; clientName?: string | null }
   const { portfolio, unrealizedGL } = body.parsed ?? {}
   const accountNumber = (body.accountNumber ?? portfolio?.accountNumber)?.trim().toUpperCase()
   if (!accountNumber || !portfolio?.snapshotDate) {
@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
       parsed: portfolio,
       accountNumber,
       clientNumber: account.clientNumber,
-      clientName: account.clientName,
+      clientName: body.clientName?.trim() || account.clientName,
       advisor: account.advisor,
       fileName: body.fileName ?? 'holdings-cost-basis.xlsx',
       importedBy: session.name,
