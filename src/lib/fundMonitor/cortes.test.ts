@@ -31,6 +31,6 @@ describe('vigencia de 15 días', () => {
   it('lo bajado antes de corregir la lectura de Davinci no vale', async () => {
     const { vigente } = await import('./cortes')
     expect(vigente('2026-10-15T12:00:00Z', '2026-10-16')).toBe(false)
-    expect(vigente('2026-10-16T19:00:00Z', '2026-10-17')).toBe(true)
+    expect(vigente('2026-10-16T19:30:00Z', '2026-10-17')).toBe(true)
   })
 })

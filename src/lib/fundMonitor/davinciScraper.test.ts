@@ -16,8 +16,12 @@ describe('alinearConEncabezado', () => {
     expect(r[13]).toBe('1.2B')
     expect(r[15]).toBe('30/09/2026')
   })
-  it('sin encabezados reconocibles usa el orden de siempre', () => {
-    expect(alinearConEncabezado([], fila)).toEqual(fila)
-    expect(alinearConEncabezado(fila.map(() => 'x'), fila)).toEqual(fila)
+  it('columnas iniciales sin encabezado (checkbox) no corren los valores', () => {
+    expect(alinearConEncabezado(encabezados.slice(1), fila)).toEqual(fila)
+  })
+  it('sin encabezados reconocibles no devuelve nada (no adivina el orden)', () => {
+    expect(alinearConEncabezado([], fila)).toBeNull()
+    expect(alinearConEncabezado(fila.map(() => 'x'), fila)).toBeNull()
+    expect(alinearConEncabezado(['Nombre', '', '1M', '3M', '6M', '1A'], fila)).toBeNull()
   })
 })

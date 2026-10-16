@@ -115,21 +115,24 @@ function parseRow(cells: string[]): DavinciFundReturns | null {
 
 // Orden de columnas que espera parseRow, y cómo reconocer cada una por su
 // encabezado. Si Davinci agrega o mueve columnas, las celdas se reordenan
-// según el encabezado; si no se reconocen, se usa el orden de siempre.
+// según el encabezado. Si no se reconocen, null: volver al orden fijo guardaba
+// rendimientos de otro período (el 1M como 1A, etc.) con estado OK.
 const COLUMNAS: [number, RegExp][] = [
   [2, /^ytd$/], [3, /^1\s*(a|y|ano|anos|year)$/], [4, /^3\s*(a|y|ano|anos|years?)$/], [5, /^5\s*(a|y|ano|anos|years?)$/],
   [6, /^2025$/], [7, /^2024$/], [8, /^2023$/], [9, /^2022$/], [10, /^2021$/],
 ]
 
 /** Celdas de una fila del Explorador en el orden de parseRow, según los encabezados de la tabla. */
-export function alinearConEncabezado(encabezados: string[], cells: string[]): string[] {
-  if (encabezados.length !== cells.length) return cells
-  const h = encabezados.map((t) => norm(t))
+export function alinearConEncabezado(encabezados: string[], cells: string[]): string[] | null {
+  // Columnas iniciales sin <th> (checkbox, watchlist) corren los índices.
+  const offset = cells.length - encabezados.length
+  if (offset < 0) return null
+  const h = [...Array(offset).fill(''), ...encabezados.map((t) => norm(t))]
   const salida = [...cells]
   while (salida.length < 16) salida.push('')
   for (const [destino, re] of COLUMNAS) {
     const i = h.findIndex((t) => re.test(t))
-    if (i < 0) return cells   // encabezado desconocido: orden de siempre
+    if (i < 0) return null
     salida[destino] = cells[i]
   }
   const fecha = h.findIndex((t) => /^(fecha|date|cierre|al)\b/.test(t))
@@ -167,12 +170,20 @@ async function searchExplorer(page: Page, query: string): Promise<string[][]> {
   }
   if (!cambio) await page.waitForTimeout(1000)
 
-  const encabezados = await page.locator('table thead th').allTextContents().catch(() => [] as string[])
+  // Última fila del encabezado: si hay encabezados agrupados, ahí están los períodos.
+  const encabezados = (await page.locator('table thead tr').last().locator('th').allTextContents().catch(() => [] as string[]))
+    .map((t) => t.trim())
   const rows = page.locator('table tbody tr')
   const count = await rows.count()
   const out: string[][] = []
   for (let i = 0; i < Math.min(count, 25); i++) {
-    out.push(alinearConEncabezado(encabezados, await rows.nth(i).locator('td').allTextContents()))
+    const cells = (await rows.nth(i).locator('td').allTextContents()).map((t) => t.trim())
+    if (cells.length < 6) continue   // fila de "sin resultados"
+    const alineada = alinearConEncabezado(encabezados, cells)
+    if (!alineada) {
+      throw new Error(`Columnas de Davinci no reconocidas — encabezado: [${encabezados.join(' | ')}] · fila: [${cells.join(' | ')}]`)
+    }
+    out.push(alineada)
   }
   return out
 }

@@ -31,9 +31,10 @@ export const DIAS_VIGENCIA = 15
 
 /** true si el dato se bajó hace menos de DIAS_VIGENCIA días (por fecha de Montevideo). */
 // Lo bajado antes de esta fecha no se usa: el scraper leía a veces la tabla de
-// la búsqueda anterior (cada fondo con los rendimientos de otro). Se vuelve a
-// bajar una vez con la lectura corregida.
-export const CONFIABLE_DESDE = Date.parse('2026-10-16T18:30:00Z')
+// la búsqueda anterior (cada fondo con los rendimientos de otro), y si no
+// reconocía el encabezado tomaba las columnas por posición (el 1M como 1A,
+// etc.). Se vuelve a bajar una vez con la lectura corregida.
+export const CONFIABLE_DESDE = Date.parse('2026-10-16T19:25:00Z')
 
 export function vigente(bajado: Date | string | null | undefined, hoy: string = fechaMontevideo()): boolean {
   if (!bajado) return false
