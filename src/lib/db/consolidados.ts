@@ -21,12 +21,14 @@ export interface ConsolidadoRow {
   total_value: number
   accrued_interest: number
   created_by: string | null
+  /** Usuarios (crm_users.id) con los que se compartió. */
+  shared_with_ids: string[]
   created_at: string
   updated_at: string
 }
 
 const COLS = `id, client_name, cuentas, to_char(valuation_date, 'YYYY-MM-DD') as valuation_date, total_value::float8 as total_value,
-              accrued_interest::float8 as accrued_interest, created_by, created_at, updated_at`
+              accrued_interest::float8 as accrued_interest, created_by, shared_with_ids, created_at, updated_at`
 
 /** Inserta (sin id) o actualiza (con id). */
 export async function saveConsolidado(
@@ -57,14 +59,33 @@ export async function getConsolidado(id: string): Promise<(ConsolidadoRow & { da
   return rows[0] ?? null
 }
 
-/** `creadoPor` = solo los de ese usuario (asesores); sin él, todos. */
-export async function listConsolidados(filter: { creadoPor?: string; limit?: number } = {}): Promise<ConsolidadoRow[]> {
-  const { rows } = filter.creadoPor
-    ? await pool.query(`select ${COLS} from consolidated_positions where created_by = $1 order by updated_at desc limit $2`, [filter.creadoPor, filter.limit ?? 200])
-    : await pool.query(`select ${COLS} from consolidated_positions order by updated_at desc limit $1`, [filter.limit ?? 300])
+/** Los que armó ese usuario y los que le compartieron. */
+export async function listConsolidados(filter: { creadoPor: string; userId?: string | null; limit?: number }): Promise<ConsolidadoRow[]> {
+  const { rows } = await pool.query(
+      `select ${COLS} from consolidated_positions
+        where created_by = $1 or ($2::uuid is not null and $2::uuid = any(shared_with_ids))
+        order by updated_at desc limit $3`,
+      [filter.creadoPor, filter.userId ?? null, filter.limit ?? 300],
+    )
   return rows
 }
 
 export async function deleteConsolidado(id: string) {
   await pool.query(`delete from consolidated_positions where id = $1`, [id])
+}
+
+export async function setCompartido(id: string, userIds: string[]) {
+  await pool.query(`update consolidated_positions set shared_with_ids = $2::uuid[] where id = $1`, [id, userIds])
+}
+
+type Sesion = { name: string; id?: string | null }
+
+/** Lo ven y lo editan quien lo armó y los usuarios con los que lo compartió (dirección no ve todo). */
+export function puedeVerConsolidado(row: Pick<ConsolidadoRow, 'created_by' | 'shared_with_ids'>, s: Sesion) {
+  return row.created_by === s.name || (!!s.id && (row.shared_with_ids ?? []).includes(s.id))
+}
+
+/** Compartir y borrar: solo quien lo armó. */
+export function esDuenoConsolidado(row: Pick<ConsolidadoRow, 'created_by'>, s: Sesion) {
+  return row.created_by === s.name
 }

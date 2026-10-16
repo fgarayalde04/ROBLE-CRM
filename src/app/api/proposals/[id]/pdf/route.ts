@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession, createSession, SESSION_COOKIE } from '@/lib/auth'
-import { getProposalWithLines } from '@/lib/db/proposals'
+import { getProposalWithLines, accesoPropuesta } from '@/lib/db/proposals'
 import { getBrowser, closeBrowser } from '@/lib/fondos/browser'
 
 export const maxDuration = 60

@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
-import { getSession, hasPermission, isAdminRole } from '@/lib/auth'
-import { getConsolidado } from '@/lib/db/consolidados'
+import { getSession, hasPermission } from '@/lib/auth'
+import { getConsolidado, puedeVerConsolidado } from '@/lib/db/consolidados'
 import ConsolidadoClient from './ConsolidadoClient'
 
 export const dynamic = 'force-dynamic'
@@ -15,12 +15,11 @@ export default async function PosicionConsolidadaPage({ searchParams }: { search
   if (!session) redirect('/login')
   if (!hasPermission(session.role, 'factsheet', session.permissions)) redirect('/')
 
-  // Dirección ve todos; cada asesor, los que armó.
-  const creadoPor = isAdminRole(session.role) ? undefined : session.name
+  // Cada uno ve los que armó y los que le compartieron (dirección incluida).
   let guardado: Awaited<ReturnType<typeof getConsolidado>> = null
   try {
     guardado = searchParams.id ? await getConsolidado(searchParams.id) : null
-    if (guardado && creadoPor && guardado.created_by !== creadoPor) guardado = null
+    if (guardado && !puedeVerConsolidado(guardado, session)) guardado = null
   } catch (err) {
     console.error('[consolidado] get', err)
   }

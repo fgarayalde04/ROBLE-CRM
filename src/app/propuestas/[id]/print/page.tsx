@@ -1,6 +1,6 @@
 import { unstable_noStore as noStore } from 'next/cache'
 import { notFound } from 'next/navigation'
-import { getProposalWithLines } from '@/lib/db/proposals'
+import { getProposalWithLines, accesoPropuesta } from '@/lib/db/proposals'
 import { getSession } from '@/lib/auth'
 import ProposalPDFTemplate from '@/components/proposals/ProposalPDFTemplate'
 
@@ -21,6 +21,7 @@ export default async function ProposalPrintPage({
   noStore()
   const session = await getSession()
   if (!session) return null
+  if (!(await accesoPropuesta(params.id, session.id))) notFound()
 
   const { proposal, funds, bonds, equities } = await getProposalWithLines(params.id)
   if (!proposal) notFound()

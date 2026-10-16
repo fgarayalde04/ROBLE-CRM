@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { nextPosition, insertProposalLine, updateProposalLine, deleteProposalLine } from '@/lib/db/proposals'
+import { nextPosition, insertProposalLine, updateProposalLine, deleteProposalLine, accesoPropuesta } from '@/lib/db/proposals'
 import { getSession } from '@/lib/auth'
 
 const TABLE = 'proposal_bonds'
@@ -8,6 +8,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   try {
     const session = await getSession()
     if (!session) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    if (!(await accesoPropuesta(params.id, session.id))) return NextResponse.json({ error: 'No tenés acceso a esta propuesta' }, { status: 403 })
 
     const body = await req.json()
     const position = await nextPosition(TABLE, params.id)
@@ -43,6 +44,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   try {
     const session = await getSession()
     if (!session) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    if (!(await accesoPropuesta(params.id, session.id))) return NextResponse.json({ error: 'No tenés acceso a esta propuesta' }, { status: 403 })
 
     const { bond_id, ...fields } = await req.json()
     const allowed: Record<string, unknown> = {}
@@ -61,6 +63,7 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
   try {
     const session = await getSession()
     if (!session) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    if (!(await accesoPropuesta(params.id, session.id))) return NextResponse.json({ error: 'No tenés acceso a esta propuesta' }, { status: 403 })
 
     const { searchParams } = new URL(req.url)
     await deleteProposalLine(TABLE, searchParams.get('bond_id'), params.id)

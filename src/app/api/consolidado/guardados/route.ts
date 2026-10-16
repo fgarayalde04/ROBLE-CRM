@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession, hasPermission } from '@/lib/auth'
-import { getConsolidado, saveConsolidado, type DatosConsolidado } from '@/lib/db/consolidados'
+import { getConsolidado, puedeVerConsolidado, saveConsolidado, type DatosConsolidado } from '@/lib/db/consolidados'
 import { armarReporte } from '@/lib/consolidado/calc'
 
 export const dynamic = 'force-dynamic'
@@ -23,6 +23,10 @@ export async function POST(req: NextRequest) {
   if (id) {
     const prev = await getConsolidado(id).catch(() => null)
     if (!prev) id = null
+    // Solo lo modifican quien lo armó o con quien lo compartió.
+    else if (!puedeVerConsolidado(prev, session)) {
+      return NextResponse.json({ error: 'No tenés acceso a este portafolio' }, { status: 403 })
+    }
   }
   try {
     const fecha = typeof body?.fecha === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(body.fecha) ? body.fecha : new Date().toISOString().slice(0, 10)

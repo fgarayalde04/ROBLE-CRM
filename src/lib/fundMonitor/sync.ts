@@ -12,7 +12,7 @@ import { loginDavinci, searchFundReturns, openDavinciPage, type DavinciFundRetur
 import {
   listActiveFunds, upsertFundReturns, markFundSyncIssue, getSyncState, markSyncAttempt, setLookupCache, getReturnsFetched, getLookupCaches,
 } from '@/lib/db/fundMonitor'
-import { fechaMontevideo, proximoCorte, ultimoCorte, vigente } from '@/lib/fundMonitor/cortes'
+import { CONFIABLE_DESDE, fechaMontevideo, proximoCorte, ultimoCorte, vigente } from '@/lib/fundMonitor/cortes'
 import { claveNombreDavinci, getRankingMasOperado, mismoFondo } from '@/lib/db/masOperado'
 
 // vigente: no se bajó en esta corrida, se usó lo guardado (menos de 15 días)
@@ -53,8 +53,10 @@ export async function syncFundMonitor(opts?: { force?: boolean }): Promise<FundS
   if (!force) {
     const state = await getSyncState(SYNC_KEY)
     const now = Date.now()
-    if (state.last_success_at && fechaMontevideo(state.last_success_at) >= ultimoCorte(hoy)) {
-      return { skipped: true, reason: `last sync ${state.last_success_at.toISOString()} (next on ${proximoCorte(hoy)})` }
+    // Un sync anterior a la lectura corregida no cuenta: se corre de nuevo
+    const ultimoValido = state.last_success_at && state.last_success_at.getTime() >= CONFIABLE_DESDE
+    if (ultimoValido && fechaMontevideo(state.last_success_at!) >= ultimoCorte(hoy)) {
+      return { skipped: true, reason: `last sync ${state.last_success_at!.toISOString()} (next on ${proximoCorte(hoy)})` }
     }
     if (state.last_attempt_at && now - state.last_attempt_at.getTime() < DAY_MS) {
       return { skipped: true, reason: `last attempt failed ${state.last_attempt_at.toISOString()}, retry tomorrow` }
@@ -132,6 +134,14 @@ export async function syncFundMonitor(opts?: { force?: boolean }): Promise<FundS
     for (const fund of fondosABajar) {
       try {
         const data = await searchFundReturns(page, fund.isin, fund.nombre)
+        if (data && data.nombreDavinci && !mismoFondo(fund.nombre, data.nombreDavinci)) {
+          // Otro fondo: se borran los valores (pueden ser de otro fondo también) y queda anotado
+          console.warn(`[fund-monitor] Davinci devolvió otro fondo para ${fund.isin}: "${data.nombreDavinci}" (se buscaba "${fund.nombre}")`)
+          await upsertFundReturns(fund.id, aReturns({ ...data, ytd: null, r1a: null, r3a: null, r5a: null, y2025: null, y2024: null, y2023: null, y2022: null, y2021: null, asOfDate: null }))
+          await markFundSyncIssue(fund.id, 'no_source', `Davinci devolvió otro fondo ("${data.nombreDavinci}"): revisar ISIN o nombre`)
+          results.push({ isin: fund.isin, nombre: fund.nombre, status: 'no_source' })
+          continue
+        }
         if (!data) {
           console.warn(`[fund-monitor] Sin fuente: ${fund.isin} · ${fund.nombre}`)
           await markFundSyncIssue(fund.id, 'no_source', 'Fondo no encontrado en Davinci (ni por ISIN ni por nombre)')

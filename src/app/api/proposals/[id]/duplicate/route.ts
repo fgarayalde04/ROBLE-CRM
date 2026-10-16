@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
-import { getProposalWithLines, createProposal, insertProposalLine } from '@/lib/db/proposals'
+import { getProposalWithLines, createProposal, insertProposalLine, accesoPropuesta } from '@/lib/db/proposals'
 
 // POST /api/proposals/[id]/duplicate
 // Crea una copia completa de la propuesta (mismos fondos/bonos/acciones) para
@@ -13,6 +13,7 @@ export async function POST(
   try {
     const session = await getSession()
     if (!session) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    if (!(await accesoPropuesta(params.id, session.id))) return NextResponse.json({ error: 'No tenés acceso a esta propuesta' }, { status: 403 })
 
     const { proposal, funds, bonds, equities } = await getProposalWithLines(params.id)
     if (!proposal) return NextResponse.json({ error: 'No encontrada' }, { status: 404 })
