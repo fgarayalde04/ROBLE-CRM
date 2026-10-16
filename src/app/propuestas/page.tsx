@@ -10,8 +10,8 @@ export default async function ProposalsPage() {
   const session = await getSession()
   if (!session) return null
 
-  const isPrivileged = session.role === 'admin' || session.role === 'ceo'
-  const proposals = await listProposals(null, isPrivileged ? null : { advisorId: session.id })
+  // Cada uno ve las suyas y las que le compartieron (dirección incluida).
+  const proposals = await listProposals(null, { advisorId: session.id })
   const ids = proposals.map(p => p.id)
 
   const { funds, bonds, equities } = await getProposalAllocationsForIds(ids)

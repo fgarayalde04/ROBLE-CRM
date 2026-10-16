@@ -10,8 +10,8 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url)
     const status = searchParams.get('status')
 
-    const isPrivileged = session.role === 'admin' || session.role === 'ceo'
-    const data = await listProposals(status, isPrivileged ? null : { advisorId: session.id })
+    // Cada uno ve las suyas y las que le compartieron (dirección incluida).
+    const data = await listProposals(status, { advisorId: session.id })
     return NextResponse.json(data)
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 })

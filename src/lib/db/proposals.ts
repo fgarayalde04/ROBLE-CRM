@@ -99,3 +99,21 @@ export async function deleteProposalLine(table: string, id: string | null, propo
   if (!id) return
   await pool.query(`delete from ${table} where id = $1 and proposal_id = $2`, [id, proposalId])
 }
+
+/**
+ * Acceso a una propuesta: 'dueño' (la armó), 'compartida' (se la compartieron,
+ * a él o a todos) o null. Dirección no tiene acceso especial: cada uno ve lo
+ * suyo y lo que le comparten.
+ */
+export async function accesoPropuesta(id: string, userId: string | null | undefined): Promise<'dueño' | 'compartida' | null> {
+  if (!userId) return null
+  const { rows } = await pool.query(
+    `select advisor_id, shared_with_all, shared_with_user_ids from investment_proposals where id = $1`,
+    [id],
+  )
+  const p = rows[0]
+  if (!p) return null
+  if (p.advisor_id === userId) return 'dueño'
+  if (p.shared_with_all || (p.shared_with_user_ids ?? []).includes(userId)) return 'compartida'
+  return null
+}
