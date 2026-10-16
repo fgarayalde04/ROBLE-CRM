@@ -114,12 +114,14 @@ function parseRow(cells: string[]): DavinciFundReturns | null {
 }
 
 // Orden de columnas que espera parseRow, y cómo reconocer cada una por su
-// encabezado. Si Davinci agrega o mueve columnas, las celdas se reordenan
-// según el encabezado. Si no se reconocen, null: volver al orden fijo guardaba
-// rendimientos de otro período (el 1M como 1A, etc.) con estado OK.
-const COLUMNAS: [number, RegExp][] = [
-  [2, /^ytd$/], [3, /^1\s*(a|y|ano|anos|year)$/], [4, /^3\s*(a|y|ano|anos|years?)$/], [5, /^5\s*(a|y|ano|anos|years?)$/],
-  [6, /^2025$/], [7, /^2024$/], [8, /^2023$/], [9, /^2022$/], [10, /^2021$/],
+// encabezado. Todo se lee por encabezado, nunca por posición: el orden fijo
+// guardaba el 1M como 1A, o el AUM como 2021 cuando Davinci no trae ese año.
+// YTD y 1A son obligatorios (sin ellos el encabezado no es el esperado y la
+// fila se rechaza); el resto, si Davinci no lo muestra, queda vacío.
+const COLUMNAS: [number, RegExp, boolean][] = [
+  [2, /^ytd$/, true], [3, /^1\s*(a|y|ano|anos|year)$/, true],
+  [4, /^3\s*(a|y|ano|anos|years?)$/, false], [5, /^5\s*(a|y|ano|anos|years?)$/, false],
+  [6, /^2025$/, false], [7, /^2024$/, false], [8, /^2023$/, false], [9, /^2022$/, false], [10, /^2021$/, false],
 ]
 
 /** Celdas de una fila del Explorador en el orden de parseRow, según los encabezados de la tabla. */
@@ -128,11 +130,15 @@ export function alinearConEncabezado(encabezados: string[], cells: string[]): st
   const offset = cells.length - encabezados.length
   if (offset < 0) return null
   const h = [...Array(offset).fill(''), ...encabezados.map((t) => norm(t))]
-  const salida = [...cells]
-  while (salida.length < 16) salida.push('')
-  for (const [destino, re] of COLUMNAS) {
+  // Solo el nombre se toma por posición; lo que no tenga encabezado queda vacío.
+  const salida: string[] = Array(16).fill('')
+  salida[0] = cells[0]
+  for (const [destino, re, obligatoria] of COLUMNAS) {
     const i = h.findIndex((t) => re.test(t))
-    if (i < 0) return null
+    if (i < 0) {
+      if (obligatoria) return null
+      continue
+    }
     salida[destino] = cells[i]
   }
   const fecha = h.findIndex((t) => /^(fecha|date|cierre|al)\b/.test(t))

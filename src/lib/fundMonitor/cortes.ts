@@ -33,8 +33,8 @@ export const DIAS_VIGENCIA = 15
 // Lo bajado antes de esta fecha no se usa: el scraper leía a veces la tabla de
 // la búsqueda anterior (cada fondo con los rendimientos de otro), y si no
 // reconocía el encabezado tomaba las columnas por posición (el 1M como 1A,
-// etc.). Se vuelve a bajar una vez con la lectura corregida.
-export const CONFIABLE_DESDE = Date.parse('2026-10-16T19:25:00Z')
+// etc., o el AUM como 2021). Se vuelve a bajar una vez con la lectura corregida.
+export const CONFIABLE_DESDE = Date.parse('2026-10-16T19:38:00Z')
 
 export function vigente(bajado: Date | string | null | undefined, hoy: string = fechaMontevideo()): boolean {
   if (!bajado) return false

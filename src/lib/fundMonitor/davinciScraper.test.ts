@@ -19,9 +19,17 @@ describe('alinearConEncabezado', () => {
   it('columnas iniciales sin encabezado (checkbox) no corren los valores', () => {
     expect(alinearConEncabezado(encabezados.slice(1), fila)).toEqual(fila)
   })
+  it('si Davinci no trae 2021, queda vacío (no el AUM que viene después)', () => {
+    const h = ['Nombre', '', 'YTD', '1A', '3A', '5A', '2025', '2024', '2023', '2022', 'Sharpe 3A', 'Sharpe 5A', 'AUM', '', 'Fecha']
+    const c = [...fila.slice(0, 10), ...fila.slice(11)]
+    const r = alinearConEncabezado(h, c)!
+    expect(r.slice(2, 10)).toEqual(fila.slice(2, 10))
+    expect(r[10]).toBe('')
+    expect(r[13]).toBe('1.2B')
+  })
   it('sin encabezados reconocibles no devuelve nada (no adivina el orden)', () => {
     expect(alinearConEncabezado([], fila)).toBeNull()
     expect(alinearConEncabezado(fila.map(() => 'x'), fila)).toBeNull()
-    expect(alinearConEncabezado(['Nombre', '', '1M', '3M', '6M', '1A'], fila)).toBeNull()
+    expect(alinearConEncabezado(['Nombre', '', '1M', '3M', '6M', '1A'], fila)).toBeNull()   // sin YTD
   })
 })
